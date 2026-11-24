@@ -15,6 +15,7 @@
 
 #include "classic/q2_loop_merge.hpp"
 #include "classicenhance/cached.hpp"
+#include "classicenhance/shells.hpp"
 #include "core/math.hpp"
 #include "shooters_edge/profiles/remix_sounds.hpp"
 
@@ -94,6 +95,19 @@ const au::Pcm* DemoSounds::own(const DemoState& s, const DemoSound& d) {
 const au::Pcm* DemoSounds::by_name(const DemoState& s, const DemoSound& d) {
   const std::string name = d.name;
   if (!name.empty() && name[0] == '*') return own(s, name, d.entity);
+  // A spent case landing (ce_shells): made, not read, then kept by its name.
+  ge::classicenhance::Casing casing;
+  ge::detail::SurfaceClass on;
+  int variant = 0;
+  if (ge::classicenhance::parse_casing_sound(name, &casing, &on, &variant)) {
+    auto it = loaded_.find(name);
+    if (it == loaded_.end())
+      it = loaded_
+               .emplace(name, std::make_unique<au::Pcm>(
+                                  ge::classicenhance::casing_sound(casing, on, variant)))
+               .first;
+    return it->second.get();
+  }
   return load(name);  // read once, then kept by its name
 }
 

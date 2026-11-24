@@ -3,12 +3,14 @@
 // of a trigger beside him and the brake at a pit's lip.
 //
 // ge:summary The way through a map at the keys: dive, reach in, crawl, unwedge, touch, edge
-// ge:keywords way_dive way_reach_in way_touch unwedge way_edge crawl reach-in pit-edge
+// ge:keywords way_dive way_reach_in way_touch unwedge way_edge crawl reach-in closing-floor zombie
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <string_view>
 #include <vector>
 
 #include "core/libm/libm.hpp"
@@ -312,6 +314,145 @@ bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotVie
   cmd.side = static_cast<int16_t>(-cmd.side);
   cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
   return true;
+}
+
+bool way_through_floor(sh::Vec3f a, sh::Vec3f b, sh::Vec3f lo, sh::Vec3f hi) {
+  const float mid = (lo.z + hi.z) * 0.5f;
+  if (!((a.z > mid && b.z <= mid) || (a.z < mid && b.z >= mid))) return false;
+  const float t = (mid - a.z) / (b.z - a.z);
+  const auto over = [&](float x, float y) {
+    return x >= lo.x - 16 && x <= hi.x + 16 && y >= lo.y - 16 && y <= hi.y + 16;
+  };
+  const sh::Vec3f low = a.z < b.z ? a : b;
+  return over(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t) || over(low.x, low.y);
+}
+
+// A trigger hung in a shaft is reached by a fall through it onto a node this far under it, units.
+constexpr float kUnderShaft = 512;
+
+int32_t way_node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
+  const sh::Vec3f mid = (lo + hi) * 0.5f;
+  constexpr float kOnMover = 1e6f;
+  int32_t best = -1;
+  float best_d = 0;
+  for (size_t n = 0; n < g.nodes.size(); n++) {
+    const sh::Vec3f o = g.nodes[n].origin;
+    if (!touches(o, lo, hi)) continue;
+    // A node off any mover first: one on a door the trigger opens is shut until it is touched
+    // (e1m2's exit trigger right before its doors took a node on them and was never reached).
+    const float d = dist(o, mid) + (g.nodes[n].mover >= 0 ? kOnMover : 0.0f);
+    if (best < 0 || d < best_d) {
+      best = static_cast<int32_t>(n);
+      best_d = d;
+    }
+  }
+  if (best >= 0 && best_d < kOnMover) return best;
+  // None inside (a thin trigger up in a doorway, one over a pit) or only on a mover (e2m6's trigger
+  // round the pillar it lowers): the nearest in the box grown by a player's size, a step away
+  // (`way_touch` walks him in); none there, no node at all (a step no route leads to).
+  const sh::Vec3f grow{32, 32, 56};
+  for (size_t n = 0; n < g.nodes.size(); n++) {
+    const sh::Vec3f o = g.nodes[n].origin;
+    if (!touches(o, lo - grow, hi + grow)) continue;
+    // A node off any mover first: one on a door the trigger opens is shut until it is touched
+    // (e1m2's exit trigger right before its doors took a node on them and was never reached).
+    const float d = dist(o, mid) + (g.nodes[n].mover >= 0 ? kOnMover : 0.0f);
+    if (best < 0 || d < best_d) {
+      best = static_cast<int32_t>(n);
+      best_d = d;
+    }
+  }
+  if (best >= 0) return best;
+  const int32_t n = sb::nav_nearest(g, mid);
+  if (n >= 0 && dist(g.nodes[static_cast<size_t>(n)].origin, mid) < 256) return n;
+  // Hung in a shaft (base2's first exit, a trigger halfway down a pit under a hatch): fallen
+  // through, at the highest node standing under it.
+  for (size_t k = 0; k < g.nodes.size(); k++) {
+    const sh::Vec3f o = g.nodes[k].origin;
+    if (o.x < lo.x || o.x > hi.x || o.y < lo.y || o.y > hi.y || o.z > lo.z ||
+        o.z < lo.z - kUnderShaft)
+      continue;
+    if (best < 0 || o.z > g.nodes[static_cast<size_t>(best)].origin.z)
+      best = static_cast<int32_t>(k);
+  }
+  if (best >= 0) return best;
+  // The nearest node at all within reach (a trigger in a lift's shaft, passed riding it: e1m1's
+  // under its hidden plat opens the secret wall at the top; the nav's nearest looks for a floor).
+  for (size_t k = 0; k < g.nodes.size(); k++) {
+    const float d = dist(g.nodes[k].origin, mid);
+    if (d < 256 && (best < 0 || d < best_d)) {
+      best = static_cast<int32_t>(k);
+      best_d = d;
+    }
+  }
+  return best;
+}
+
+void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, const char* sf) {
+  if (e < 0 || !sf || (std::atoi(sf) & 1) == 0) return;
+  const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+  const sh::Vec3f size = d.absmax - d.absmin;
+  if (size.z < size.x && size.z < size.y) w.closers.push_back({e, d.origin, false, {}, {}});
+}
+
+bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s) {
+  const sb::NavGraph& g = nav.graph;
+  w.closed_shut.clear();
+  w.closed_from.clear();
+  for (WayThrough::Closer& c : w.closers) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(c.door)];
+    if (dist(d.origin, c.spawn) < 1) continue;
+    if (!c.known && d.velocity.x == 0 && d.velocity.y == 0 && d.velocity.z == 0) {
+      c.known = true;
+      for (size_t a = 0; a < g.nodes.size(); a++) {
+        const sb::NavNode& n = g.nodes[a];
+        for (int32_t k = 0; k < n.links; k++) {
+          const int32_t li = n.first_link + k;
+          const sb::NavLink& l = g.links[static_cast<size_t>(li)];
+          if (!way_through_floor(n.origin, g.nodes[static_cast<size_t>(l.to)].origin, d.absmin,
+                                 d.absmax))
+            continue;
+          c.links.push_back(li);
+          c.froms.push_back(static_cast<int32_t>(a));
+        }
+      }
+    }
+    w.closed_shut.insert(w.closed_shut.end(), c.links.begin(), c.links.end());
+    w.closed_from.insert(w.closed_from.end(), c.froms.begin(), c.froms.end());
+  }
+  const bool changed = w.closed_shut != w.closed_was;
+  w.closed_was = w.closed_shut;
+  return changed;
+}
+
+void way_blast_steps(WayThrough& w, const Fighter& f, const MapNav& nav,
+                     const ge::shooterbots::BotView& s) {
+  const sb::NavGraph& g = nav.graph;
+  if (w.complete && f.arsenal != nullptr && f.arsenal->blast_only != nullptr &&
+      f.arsenal->blast_pickup != nullptr) {
+    const auto model_of = [&](const sh::Edict& d) {
+      return d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size()
+                 ? std::string_view(s.models[static_cast<size_t>(d.modelindex)])
+                 : std::string_view();
+    };
+    bool undead = false;
+    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      undead = undead || (!d.free && d.health > 0 && f.arsenal->blast_only(model_of(d)));
+    }
+    for (int e = s.sv.set.maxclients + 1; undead && e < s.sv.num_edicts; e++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      if (d.free || !f.arsenal->blast_pickup(model_of(d))) continue;
+      WayStep st;
+      st.kind = WayKind::trigger;
+      st.lo = {d.origin.x - 16, d.origin.y - 16, d.origin.z};
+      st.hi = {d.origin.x + 16, d.origin.y + 16, d.origin.z + 32};
+      st.node = way_node_in(g, st.lo, st.hi);
+      st.name = "blast weapon";
+      st.first = true;
+      w.steps.push_back(st);
+    }
+  }
 }
 
 }  // namespace ge::shooterbots

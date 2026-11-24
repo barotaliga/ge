@@ -30,6 +30,7 @@
 
 #include "shooter/predict.hpp"
 #include "shooter/server.hpp"
+#include "shooter/teleport_ahead.hpp"
 
 namespace ge::classic {
 
@@ -63,8 +64,12 @@ void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int
 
 // Its own player: the acknowledged state with `count` later commands run through the original
 // step on the stand-in. The returned state's origin, velocity and ground are the predicted ones;
-// `each` (when given, `count` of them) the same after each command, in order.
+// `each` (when given, `count` of them) the same after each command, in order. `tele` (when given):
+// a teleporter the player's box reaches is taken as the server takes it (`skip` left out), the
+// first such command in `hit` (shooter/teleport_ahead.hpp).
 MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
-                                  const MoveCmd* cmds, int count, MoveState* each = nullptr);
+                                  const MoveCmd* cmds, int count, MoveState* each = nullptr,
+                                  const ge::shooter::Teleporters* tele = nullptr, int skip = -1,
+                                  ge::shooter::TeleHit* hit = nullptr);
 
 }  // namespace ge::classic

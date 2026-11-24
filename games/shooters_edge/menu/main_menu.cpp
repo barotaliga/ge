@@ -706,6 +706,14 @@ constexpr Entry kEntries[] = {
      .hint = "Each shot's flash and smoke from the barrel.",
      .needs = "ce_muzzles",
      .target = Target::client},
+    {.page = "weapon",
+     .id = "ce_shells",
+     .text = "SPENT SHELLS",
+     .kind = ItemKind::toggle,
+     .hint = "The shotguns and machine guns throw out their spent shells, which clatter to the "
+             "floor and lie there a while.",
+     .needs = "ce_shells",
+     .target = Target::client},
     {.page = "weapon", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     // CLASSIC ENHANCED: what the game adds to the classic picture, page by subject. Only what a

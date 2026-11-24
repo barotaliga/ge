@@ -314,6 +314,19 @@ bool endpoint_number(const gs::ServerConfig& c, const char* name, int most, int&
 }
 
 // Quake II's own names for the download settings, as its configs and admins write them.
+// `sv_modern` (engine/server's GameMeta): what a modern Quake II server is. Every shot and every
+// rocket, grenade and bolt meet the others where the shooter saw them, one frame further back as
+// the client drew them. The game's feel is never part of it: only how the network judges it. A
+// setting any layer names wins over it.
+constexpr gs::GameMeta kMetas[] = {
+    {"sv_modern", "0", "",
+     "Whether the server plays as a modern one: every shot judged where its shooter saw the "
+     "others.",
+     "0: as each setting says (the default); 1: sv_antilag 2, sv_antilag_projectiles 1 and "
+     "sv_antilag_interp 1"},
+    {"sv_modern", "1", "sv_antilag 2; sv_antilag_projectiles 1; sv_antilag_interp 1"},
+};
+
 constexpr gs::SettingName kSettingNames[] = {
     {"allow_download", "sv_download"},
     {"allow_download_players", "sv_download_players"},
@@ -1491,6 +1504,8 @@ const gs::ServerGame& make() {
     s.rule_count = static_cast<int>(all_rules().size());
     s.names = kSettingNames;
     s.name_count = static_cast<int>(std::size(kSettingNames));
+    s.metas = kMetas;
+    s.meta_count = static_cast<int>(std::size(kMetas));
     s.create = create;
     s.destroy = destroy;
     s.frame_seconds = frame_seconds;
