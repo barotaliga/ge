@@ -1016,11 +1016,7 @@ void timeout_turn(Game& g) {
     }
   b.said.clear();
   b.to.clear();
-  const bool want = gs::timeout_paused(b);
-  if (want != g.timeout_held) {
-    g.rules.pause(sv::kPauseByServer, want);
-    g.timeout_held = want;
-  }
+  sv::timeout_hold(b, g.rules, g.timeout_held);
 }
 
 // `timeout` and `timein` from a client; `pause` while one is on.
@@ -1380,11 +1376,7 @@ void lobby_words(Game& g) {
   sv::announce_phase(g.rules->localinfo, g.room->lobby.phase);
   if (g.qw != nullptr) {  // the match's `status` as other servers say it (a recording starts on it)
     const gs::LobbyPhase p = g.room->lobby.phase;
-    qw_set_serverinfo(*g.qw, "status",
-                      p == gs::LobbyPhase::warmup      ? "Standby"
-                      : p == gs::LobbyPhase::countdown ? "Countdown"
-                      : p == gs::LobbyPhase::match     ? "In progress"
-                                                       : "End");
+    qw_set_serverinfo(*g.qw, "status", sv::phase_status(p));
   }
   sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }

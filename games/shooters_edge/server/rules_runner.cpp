@@ -157,4 +157,17 @@ bool carry_server_state(const RulesCommon& from, const char* from_form, RulesCom
   return true;
 }
 
+void RulesCommon::take_turns() {
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    sh::Edict& ed = sv.edicts[static_cast<size_t>(i) + 1];
+    const bool living = clients[i].active && ed.health > 0;
+    if (clients[i].active && ed.fixangle) {
+      ed.v_angle = ed.angles;
+      ed.fixangle = false;
+      turns[i] = {true, alive[i] && living, ed.angles};
+    }
+    alive[i] = living;
+  }
+}
+
 }  // namespace shooters_edge::server

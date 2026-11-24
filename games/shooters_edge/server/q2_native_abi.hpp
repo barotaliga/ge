@@ -117,6 +117,12 @@ struct NativeEntityExt {
 
 inline constexpr int32_t kSolidNot = 0, kSolidTrigger = 1, kSolidBox = 2, kSolidBsp = 3;
 inline constexpr int32_t kSvfNoClient = 1, kSvfDeadMonster = 2, kSvfMonster = 4;
+// The newer flags a game with the protocol extensions sets (the server reads them only then): a
+// player and a projectile, clipped only by a mask asking for their contents bits, and an entity
+// sent to every client wherever it is.
+inline constexpr int32_t kSvfPlayer = 8, kSvfProjectile = 0x80, kSvfNoCull = 0x400;
+inline constexpr int32_t kContentsPlayer = 0x40000000;
+inline constexpr int32_t kContentsProjectile = static_cast<int32_t>(0x80000000u);
 
 // One movement command (16 bytes).
 struct NativeCmd {

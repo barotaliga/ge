@@ -70,7 +70,13 @@ struct BrushTracer::Sweep {
     }
     if (!starts_out) {
       r.start_solid = true;
-      if (!gets_out) r.all_solid = true;
+      if (!gets_out) {
+        r.all_solid = true;
+        if (t.extended()) {  // stopped where it stands, the brush named
+          r.fraction = 0;
+          r.contents = b.contents;
+        }
+      }
       return;
     }
     if (enter < leave && enter > -1 && enter < r.fraction && lead) {
@@ -93,7 +99,7 @@ struct BrushTracer::Sweep {
 
   void leaf_sweep(uint32_t leaf) {
     const Leaf& l = m.leaves[leaf];
-    if (!(l.contents & mask)) return;
+    if (!(t.leaf_contents(leaf) & mask)) return;
     for (uint32_t k = 0; k < l.brushes; ++k) {
       const uint32_t b = m.leaf_brushes[l.first_brush + k];
       if (!fresh(b)) continue;
@@ -194,7 +200,7 @@ struct BrushTracer::Sweep {
       stack.pop_back();
       if (num < 0) {
         const Leaf& l = m.leaves[size_t(-(num + 1))];
-        if (!(l.contents & mask)) continue;
+        if (!(t.leaf_contents(uint32_t(-(num + 1))) & mask)) continue;
         for (uint32_t k = 0; k < l.brushes; ++k) {
           const uint32_t b = m.leaf_brushes[l.first_brush + k];
           if (!fresh(b) || !inside(m.brushes[b])) continue;
@@ -269,7 +275,22 @@ int32_t BrushTracer::contents(const float p[3], uint32_t model) const {
     at = n.child[d < 0 ? 1 : 0];
   }
   if (at >= 0) return 0;
-  return m.leaves[size_t(-(at + 1))].contents;
+  return leaf_contents(uint32_t(-(at + 1)));
+}
+
+void BrushTracer::set_extended(bool on) {
+  wide_.clear();
+  if (!on) return;
+  const Map& m = *map_;
+  wide_.resize(m.leaves.size());
+  for (size_t i = 0; i < m.leaves.size(); ++i) {
+    const Leaf& l = m.leaves[i];
+    wide_[i] = l.contents;
+    if (i == 0) continue;  // the shared outside leaf keeps its own
+    for (uint32_t k = 0; k < l.brushes; ++k)
+      wide_[i] |= m.brushes[m.leaf_brushes[l.first_brush + k]].contents;
+  }
+  if (wide_.empty()) wide_.push_back(0);  // a map with no leaves: still marked extended
 }
 
 }  // namespace ge::brush
