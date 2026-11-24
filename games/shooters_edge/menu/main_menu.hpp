@@ -191,6 +191,11 @@ ge::ui::Menu build_menu(const MenuTable& table = classic_menu());
 // has no BACK rows (Escape goes back), dims them so the focus skips them.
 void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back = false);
 
+// How many of TEAMPLAY's words the host page offers with the packs' `maps`: off, no friendly fire
+// and friendly fire; with Dissolution of Eternity's maps (r1m1) its tag, capture the flag, one flag
+// and three team games too (teamplay 3 to 6).
+size_t teamplay_choices(std::span<const std::string> maps);
+
 // What an event asks of the game menu.
 // `bind_key`: a CUSTOMIZE CONTROLS row was pressed; the game menu waits for the key (the event's
 // item names the row). `load_game`: LOAD GAME, the window shows the desktop's folder chooser.
