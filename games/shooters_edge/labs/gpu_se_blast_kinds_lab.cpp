@@ -72,7 +72,7 @@ void run(gl::Lab& lab) {
   const uint32_t h = w * 9 / 16;
   const int settle = std::clamp(static_cast<int>(lab.arg_num("settle")), 1, 16);
   if (w < 64 || w > 2048) {
-    lab.fail("--width must be 64..2048", "Pass --width=480.");
+    lab.fail("--width must be 64..2048", "next: pass --width=480.");
     return;
   }
   const double floor_at[3] = {es::kMid, 0, 116}, up[3] = {0, 1, 0};
