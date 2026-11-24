@@ -14,7 +14,7 @@
 // for PRIVATE numbers only: without `--game` it notes that and stops, so CI never runs it.
 //
 // ge:summary Lab: a mission pack's monsters on every map of it, woken and watched: moved, attacked
-// ge:keywords lab se-q2-pack-monsters q2 mission-pack xatrix reckoning monsters census sweep
+// ge:keywords lab se-q2-pack-monsters q2 mission-pack xatrix reckoning rogue ground-zero monsters census sweep
 // ge:keywords start-solid woken moved attacked monster-verification
 // ge:skill shooter labs
 #include <algorithm>
@@ -50,6 +50,10 @@ const char* const kReckoningMaps[] = {"xswamp",   "xsewer1", "xsewer2",  "xcompn
                                       "xreactor", "xware",   "xintell",  "industry", "outbase",
                                       "refinery", "w_treat", "badlands", "xhangar1", "xhangar2",
                                       "xship",    "xmoon1",  "xmoon2"};
+// Ground Zero's single-player maps (its rdm maps are deathmatch's).
+const char* const kGroundZeroMaps[] = {"rmine1",  "rmine2",  "rlava1", "rlava2",   "rware1",
+                                       "rware2",  "rbase1",  "rbase2", "rhangar1", "rhangar2",
+                                       "rsewer1", "rsewer2", "rammo1", "rammo2",   "rboss"};
 
 constexpr float kMoved = 32;
 constexpr double kTic =
@@ -71,7 +75,7 @@ const ge::progs::Progs& progs() {
 
 // Map `name` started on the pack's rules and run 2 s in; null (with a note) when it will not.
 sv::Q2Server* start(gl::Lab& lab, const cl::SearchPath& files, const std::string& name,
-                    cl::Listen& l) {
+                    cl::Listen& l, sv::Q2Pack pack) {
   std::string error;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, name, error);
   cl::ListenOptions opt = shooters_edge::net::listen_options();
@@ -83,7 +87,7 @@ sv::Q2Server* start(gl::Lab& lab, const cl::SearchPath& files, const std::string
   }
   for (int i = 0; i < int(2 / kTic); i++) cl::listen_frame(l, {});
   sv::Q2Server* sq = sv::q2_of(*l.rules);
-  if (sq == nullptr || sq->opt.pack != sv::Q2Pack::reckoning) {
+  if (sq == nullptr || sq->opt.pack != pack) {
     lab.note("se-q2-pack-monsters: " + name + " did not start on the pack's rules");
     return nullptr;
   }
@@ -134,10 +138,10 @@ std::vector<std::string> row_of(const std::string& name, const Count& c) {
 
 // THE CENSUS of map `name`: each monster counted by kind, every one not waiting woken by a blow
 // and watched `seconds` for whether it moves off its spot (`moved`), into `c` and `kinds`.
-void census(gl::Lab& lab, const cl::SearchPath& files, const std::string& name, double seconds,
-            Count& c, std::map<std::string, Count>& kinds) {
+void census(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std::string& name,
+            double seconds, Count& c, std::map<std::string, Count>& kinds) {
   cl::Listen l;
-  sv::Q2Server* sq = start(lab, files, name, l);
+  sv::Q2Server* sq = start(lab, files, name, l, pack);
   if (sq == nullptr) return;
   const size_t n = sq->monsters.size();
   std::vector<sh::Vec3f> spot(n);
@@ -173,12 +177,12 @@ void census(gl::Lab& lab, const cl::SearchPath& files, const std::string& name, 
 // THE DUELS on map `name`: for each kind there, the map started again, every other monster
 // killed, the player stood `range` units off the first of the kind that stands in the open, and
 // the monster woken: `hurt` once a blow takes his health within `seconds`.
-void duels(gl::Lab& lab, const cl::SearchPath& files, const std::string& name, double seconds,
-           float range, Count& c, std::map<std::string, Count>& kinds) {
+void duels(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std::string& name,
+           double seconds, float range, Count& c, std::map<std::string, Count>& kinds) {
   std::vector<std::string> names;
   {
     cl::Listen l;
-    sv::Q2Server* sq = start(lab, files, name, l);
+    sv::Q2Server* sq = start(lab, files, name, l, pack);
     if (sq == nullptr) return;
     for (const sv::Q2Monster& m : sq->monsters) {
       const std::string& cn = sq->entities[size_t(m.entity)].classname;
@@ -188,7 +192,7 @@ void duels(gl::Lab& lab, const cl::SearchPath& files, const std::string& name, d
   }
   for (const std::string& kind : names) {
     cl::Listen l;
-    sv::Q2Server* sq = start(lab, files, name, l);
+    sv::Q2Server* sq = start(lab, files, name, l, pack);
     if (sq == nullptr) return;
     int target = -1;
     sh::Vec3f stand;
@@ -236,9 +240,10 @@ void run(gl::Lab& lab) {
     return;
   }
   const std::string mod = lab.arg("mod");
-  if (sv::q2_pack_of_folder(mod) != sv::Q2Pack::reckoning) {
+  const sv::Q2Pack pack = sv::q2_pack_of_folder(mod);
+  if (pack == sv::Q2Pack::base) {
     lab.fail("--mod=" + mod + " is not a pack this lab sweeps",
-             "Pass --mod=xatrix (The Reckoning). Skill: shooter.");
+             "Pass --mod=xatrix (The Reckoning) or --mod=rogue (Ground Zero). Skill: shooter.");
     return;
   }
   const pf::GameProfile& game = *pf::find_game("q2");
@@ -259,7 +264,10 @@ void run(gl::Lab& lab) {
       a = b + 1;
     }
   } else {
-    for (const char* m : kReckoningMaps) maps.emplace_back(m);
+    if (pack == sv::Q2Pack::reckoning)
+      for (const char* m : kReckoningMaps) maps.emplace_back(m);
+    else
+      for (const char* m : kGroundZeroMaps) maps.emplace_back(m);
   }
   const double seconds = lab.arg_num("seconds");
   const double duel = lab.arg_num("duel");
@@ -273,8 +281,8 @@ void run(gl::Lab& lab) {
   Count total;
   for (const std::string& name : maps) {
     Count c;
-    census(lab, files, name, seconds, c, kinds);
-    duels(lab, files, name, duel, range, c, kinds);
+    census(lab, files, pack, name, seconds, c, kinds);
+    duels(lab, files, pack, name, duel, range, c, kinds);
     by_map.rows.push_back(row_of(name, c));
     for (int Count::*f : {&Count::all, &Count::solid, &Count::waiting, &Count::woken, &Count::moved,
                           &Count::duels, &Count::hurt, &Count::died})
@@ -314,7 +322,7 @@ const gl::LabSpec kSpec{
     "by a blow and watched: did it move, did it attack, did it start inside a wall?",
     {
         {"game", "", "the folder holding Quake II's base folder and the pack's; empty: nothing"},
-        {"mod", "xatrix", "the pack's folder (xatrix: The Reckoning)"},
+        {"mod", "xatrix", "the pack's folder (xatrix: The Reckoning; rogue: Ground Zero)"},
         {"maps", "", "the maps, comma-separated (empty: every single-player map of the pack)"},
         {"seconds", "20", "seconds each map's woken monsters are watched"},
         {"wake", "sight",
