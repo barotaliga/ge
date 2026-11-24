@@ -84,7 +84,7 @@ maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and
 | hip.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (the scratched one) drawn by the se-attract lab with `--game=hipnotic` (2026-11-23) |
 | hip.endtext | `end2.bin`, the text screen shown on quitting | not taken |  | the DOS build alone showed one; the Windows and Linux builds, which base Quake here follows, quit with nothing shown, so the packs do the same (decided 2026-11-23; printing it to the terminal on quit is the way back if wanted) |
 | hip.dm | `hipdm1` played by bots on the pack's program | verify | 2 |  |
-| hip.coop | co-op on the pack's program, a companion beside the player | verify | 2 |  |
+| hip.coop | co-op on the pack's program, a companion beside the player | done | 2 | `labs se-q1-campaign --game=<dir>/id1 --mod=hipnotic --episodes=hip1m1 --party=2`: two bots in co-op on the pack's program, 24 of 58 monsters down in 240 s, no fault (2026-11-23) |
 | hip.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots' campaign module learns its monsters, weapons, items and traps |
 | hip.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the laser cannon as energy, Mjolnir as blast, the proximity gun as lobber, the wetsuit as protect; the empathy shields and the horn have no role and drop (tests/shooters_edge_remix_test.cpp) |
 | hip.ce | classic enhance's caches with the pack layered over the base packs (its textures, models, sounds) | verify | 2 |  |
@@ -95,95 +95,103 @@ Each row below is a classname the pack's maps place that no map of the base game
 many of the pack's maps place it and how many times. All of them are spawned by the pack's own
 program on our VM; a row turns `done` when a lab or a playthrough shows it as a player sees it.
 
+**The things lab** (2026-11-23): `labs se-campaign --game=<dir>/id1 --mod=hipnotic --map=<map>
+--things=1` on all 18 maps, each on its own at skill 1. Every thing the map's text placed is
+watched by its map class name (`QcServer::spawned_as`) while the map runs, while each weapon is
+picked up and fired, while each name the map targets is used and while each trigger is touched by
+the player (games/shooters_edge/labs/campaign_things.hpp). The pack's program faulted on none of
+them. It is a scripted look, not a playthrough: it says the pack's things work on our server, not
+that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pickups=1`.
+
 #### Monsters
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.monster_armagon | `monster_armagon` | Armagon, the final boss: a walker with rockets and lasers | 1 / 1 | verify | 1 | runs in the pack's program |
-| hip.ent.monster_gremlin | `monster_gremlin` | the gremlin: leaps, steals the player's weapon and fires it, multiplies by feeding on corpses | 9 / 74 | verify | 1 | runs in the pack's program |
-| hip.ent.monster_scourge | `monster_scourge` | the centroid: a scorpion-like walker firing nails from its tail | 9 / 46 | verify | 1 | runs in the pack's program |
+| hip.ent.monster_armagon | `monster_armagon` | Armagon, the final boss: a walker with rockets and lasers | 1 / 1 | done | 1 | the things lab: walks, turns, animates, sounds and throws its effects on hipend |
+| hip.ent.monster_gremlin | `monster_gremlin` | the gremlin: leaps, steals the player's weapon and fires it, multiplies by feeding on corpses | 9 / 74 | done | 1 | the things lab: all 62 animate, 30 woken walk and sound on 9 maps; the theft and the feeding are the program's own, not checked apart |
+| hip.ent.monster_scourge | `monster_scourge` | the centroid: a scorpion-like walker firing nails from its tail | 9 / 46 | done | 1 | the things lab: all 27 animate, 11 woken walk and sound on 9 maps |
 
 #### Weapons and items
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.item_artifact_empathy_shields | `item_artifact_empathy_shields` | empathy shields: half the damage taken is dealt back to the attacker | 12 / 12 | verify | 2 | runs in the pack's program; HUD row hip.hud.items |
-| hip.ent.item_artifact_wetsuit | `item_artifact_wetsuit` | the wetsuit: breathe and move freely under water for a while | 6 / 7 | verify | 2 | runs in the pack's program; HUD row hip.hud.items; remix role beside Quake II's rebreather |
-| hip.ent.item_hornofconjuring | `item_hornofconjuring` | the horn of conjuring: calls up a monster that fights on the player's side | 6 / 6 | verify | 2 | runs in the pack's program |
-| hip.ent.weapon_laser_gun | `weapon_laser_gun` | the laser cannon: laser bolts that bounce off walls, on cells | 17 / 19 | verify | 1 | runs in the pack's program; the HUD row hip.hud.weapons draws it |
-| hip.ent.weapon_mjolnir | `weapon_mjolnir` | Mjolnir: a hammer that strikes lightning across the floor, on cells | 15 / 17 | verify | 1 | runs in the pack's program; LIFT: the lightning drawn as Quake's beam (C465 and the lightning gun's own beam) |
-| hip.ent.weapon_proximity_gun | `weapon_proximity_gun` | the proximity gun: grenades that stick and wait for someone to come close, on rockets | 17 / 21 | verify | 1 | runs in the pack's program; LIFT: one proximity mine with Ground Zero's (gz.ent.weapon_proxlauncher) |
+| hip.ent.item_artifact_empathy_shields | `item_artifact_empathy_shields` | empathy shields: half the damage taken is dealt back to the attacker | 12 / 12 | done | 2 | se-campaign `--pickups`: taken (its model emptied) on all 8 maps; its effect is the program's |
+| hip.ent.item_artifact_wetsuit | `item_artifact_wetsuit` | the wetsuit: breathe and move freely under water for a while | 6 / 7 | done | 2 | se-campaign `--pickups`: taken on all 6 maps; its effect is the program's |
+| hip.ent.item_hornofconjuring | `item_hornofconjuring` | the horn of conjuring: calls up a monster that fights on the player's side | 6 / 6 | done | 2 | se-campaign `--pickups`: taken on all 6 maps; the monster it calls is the program's |
+| hip.ent.weapon_laser_gun | `weapon_laser_gun` | the laser cannon: laser bolts that bounce off walls, on cells | 17 / 19 | done | 1 | the things lab: picked up and fired on 6 maps (12 to 50 bolts in 3 s, their sounds, 4 to 29 cells spent); the HUD row hip.hud.weapons draws it |
+| hip.ent.weapon_mjolnir | `weapon_mjolnir` | Mjolnir: a hammer that strikes lightning across the floor, on cells | 15 / 17 | done | 1 | the things lab: picked up and fired on 4 maps (5 to 10 strikes, 15 to 30 cells spent); LIFT left: the lightning drawn as Quake's beam (C465) |
+| hip.ent.weapon_proximity_gun | `weapon_proximity_gun` | the proximity gun: grenades that stick and wait for someone to come close, on rockets | 17 / 21 | done | 1 | the things lab: picked up and fired on 5 maps (4 to 17 grenades, 4 or 5 rockets spent); LIFT left: one proximity mine with Ground Zero's |
 
 #### Rotating brushes
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.func_movewall | `func_movewall` | an invisible box that moves with a rotating group to block and push | 15 / 292 | verify | 1 | runs in the pack's program |
-| hip.ent.func_rotate_door | `func_rotate_door` | a door that swings open on a hinge | 13 / 47 | verify | 1 | runs in the pack's program; LIFT: our pushers rotate for Quake II's `func_rotating` (server/q2_map.hpp); a rotating brush's collision is the shared open gap (docs/porting/rules.md § Gaps) |
-| hip.ent.func_rotate_entity | `func_rotate_entity` | a brush model that turns continuously (fans, gears) | 6 / 13 | verify | 1 | runs in the pack's program; same LIFT as func_rotate_door |
-| hip.ent.func_rotate_train | `func_rotate_train` | a train that turns as it follows its path | 5 / 12 | verify | 1 | runs in the pack's program; same LIFT |
-| hip.ent.info_rotate | `info_rotate` | the point a rotating group turns about | 16 / 70 | verify | 1 | runs in the pack's program |
-| hip.ent.path_follow | `path_follow` | a path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program |
-| hip.ent.path_follow2 | `path_follow2` | the second kind of path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program |
-| hip.ent.path_rotate | `path_rotate` | a path corner that also sets a rotating train's turn | 6 / 46 | verify | 1 | runs in the pack's program |
-| hip.ent.rotate_object | `rotate_object` | a brush model turned by its group's centre | 16 / 77 | verify | 1 | runs in the pack's program; needs the client to draw brush models at their angles |
+| hip.ent.func_movewall | `func_movewall` | an invisible box that moves with a rotating group to block and push | 15 / 292 | done | 1 | the things lab: 287 of 291 move with their groups on 15 maps |
+| hip.ent.func_rotate_door | `func_rotate_door` | a door that swings open on a hinge | 13 / 47 | done | 1 | the things lab: all 47 swing (turned and sounded) on 13 maps; the window draws brush models turned by their angles (client/world_models.cpp `place_brushes`, brush/app/bsp.wgsl) |
+| hip.ent.func_rotate_entity | `func_rotate_entity` | a brush model that turns continuously (fans, gears) | 6 / 13 | done | 1 | the things lab: all 13 turn on 6 maps; drawn turned as func_rotate_door |
+| hip.ent.func_rotate_train | `func_rotate_train` | a train that turns as it follows its path | 5 / 12 | done | 1 | the things lab: all 11 run their paths, 10 turning, on 5 maps; drawn turned as func_rotate_door |
+| hip.ent.info_rotate | `info_rotate` | the point a rotating group turns about | 16 / 70 | done | 1 | the things lab: all 69 taken up by their groups at the start (removed), on 16 maps |
+| hip.ent.path_follow | `path_follow` | a path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program; the things lab: idle on its one map (nothing seen following it) |
+| hip.ent.path_follow2 | `path_follow2` | the second kind of path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program; the things lab: idle on its one map (nothing seen following it) |
+| hip.ent.path_rotate | `path_rotate` | a path corner that also sets a rotating train's turn | 6 / 46 | done | 1 | the things lab: the rotate trains run along them (their 11 move and turn) |
+| hip.ent.rotate_object | `rotate_object` | a brush model turned by its group's centre | 16 / 77 | done | 1 | the things lab: all 76 turn with their groups on 16 maps; drawn turned as func_rotate_door |
 
 #### Movers and walls
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.func_bobbingwater | `func_bobbingwater` | a water brush that bobs up and down | 2 / 5 | verify | 2 | runs in the pack's program |
-| hip.ent.func_breakawaywall | `func_breakawaywall` | a wall removed when triggered | 2 / 6 | verify | 1 | runs in the pack's program; LIFT: debris with Quake II's `func_explosive` |
-| hip.ent.func_clock | `func_clock` | a clock whose hands turn with the level's time | 1 / 3 | verify | 3 | runs in the pack's program |
-| hip.ent.func_rubble | `func_rubble` | throws rubble when triggered | 3 / 9 | verify | 2 | runs in the pack's program |
-| hip.ent.func_rubble1 | `func_rubble1` | throws the first kind of rubble | 4 / 10 | verify | 2 | runs in the pack's program |
-| hip.ent.func_rubble2 | `func_rubble2` | throws the second kind of rubble | 3 / 10 | verify | 2 | runs in the pack's program |
-| hip.ent.func_rubble3 | `func_rubble3` | throws the third kind of rubble | 2 / 24 | verify | 2 | runs in the pack's program |
-| hip.ent.func_togglewall | `func_togglewall` | a wall switched solid and back by a trigger | 3 / 4 | verify | 2 | runs in the pack's program |
-| hip.ent.func_train2 | `func_train2` | a train with its own speed and wait at each corner | 11 / 68 | verify | 1 | runs in the pack's program |
+| hip.ent.func_bobbingwater | `func_bobbingwater` | a water brush that bobs up and down | 2 / 5 | done | 2 | the things lab: all 5 bob on 2 maps |
+| hip.ent.func_breakawaywall | `func_breakawaywall` | a wall removed when triggered | 2 / 6 | done | 1 | the things lab: all 5 removed when used |
+| hip.ent.func_clock | `func_clock` | a clock whose hands turn with the level's time | 1 / 3 | done | 3 | the things lab: its 3 hands turn |
+| hip.ent.func_rubble | `func_rubble` | throws rubble when triggered | 3 / 9 | done | 2 | the things lab: used, it throws its rubble (14 pieces made) |
+| hip.ent.func_rubble1 | `func_rubble1` | throws the first kind of rubble | 4 / 10 | done | 2 | the things lab: used, they throw their rubble (75 pieces made) |
+| hip.ent.func_rubble2 | `func_rubble2` | throws the second kind of rubble | 3 / 10 | done | 2 | the things lab: used, they throw their rubble (52 pieces made) |
+| hip.ent.func_rubble3 | `func_rubble3` | throws the third kind of rubble | 2 / 24 | done | 2 | the things lab: used, they throw their rubble (43 pieces made) |
+| hip.ent.func_togglewall | `func_togglewall` | a wall switched solid and back by a trigger | 3 / 4 | done | 2 | the things lab: 3 of 4 switched and sounded when used |
+| hip.ent.func_train2 | `func_train2` | a train with its own speed and wait at each corner | 11 / 68 | done | 1 | the things lab: all 68 run and sound on 11 maps |
 
 #### Effects and sounds
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.ambient_fan_blowing | `ambient_fan_blowing` | a fan's looping sound | 6 / 28 | verify | 2 | runs in the pack's program |
-| hip.ent.ambient_flouro_buzz | `ambient_flouro_buzz` | a fluorescent light's buzz | 2 / 3 | verify | 2 | runs in the pack's program; ours names it (rules/common_quake.cpp) |
-| hip.ent.ambient_humming | `ambient_humming` | a machine's hum | 6 / 21 | verify | 2 | runs in the pack's program |
-| hip.ent.ambient_light_buzz | `ambient_light_buzz` | a light's buzz | 4 / 7 | verify | 2 | runs in the pack's program; ours names it (rules/common_quake.cpp) |
-| hip.ent.ambient_riftpower | `ambient_riftpower` | the rift's power hum | 1 / 1 | verify | 3 | runs in the pack's program |
-| hip.ent.ambient_running_water | `ambient_running_water` | running water | 4 / 13 | verify | 2 | runs in the pack's program |
-| hip.ent.ambient_rushing | `ambient_rushing` | rushing air or water | 1 / 2 | verify | 3 | runs in the pack's program |
-| hip.ent.effect_finale | `effect_finale` | the last level's end sequence | 1 / 7 | verify | 1 | runs in the pack's program |
-| hip.ent.effect_teleport | `effect_teleport` | a teleport's sparkle at a point | 1 / 2 | verify | 2 | runs in the pack's program |
-| hip.ent.func_earthquake | `func_earthquake` | shakes everyone standing while it is on | 7 / 21 | verify | 1 | runs in the pack's program; LIFT: one quake shake with Dissolution's and Quake II's `target_earthquake` |
-| hip.ent.func_exploder | `func_exploder` | an explosion when triggered | 7 / 94 | verify | 1 | runs in the pack's program |
-| hip.ent.func_multi_exploder | `func_multi_exploder` | a run of explosions over an area | 2 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.func_particlefield | `func_particlefield` | a field of sparkles while on (a force field's look) | 3 / 12 | verify | 2 | runs in the pack's program |
-| hip.ent.info_startendtext | `info_startendtext` | where the end text starts | 1 / 1 | verify | 2 | runs in the pack's program |
-| hip.ent.play_sound_triggered | `play_sound_triggered` | plays a sound when triggered | 5 / 16 | verify | 2 | runs in the pack's program |
-| hip.ent.random_thunder_triggered | `random_thunder_triggered` | thunder at random while on | 4 / 6 | verify | 3 | runs in the pack's program |
+| hip.ent.ambient_fan_blowing | `ambient_fan_blowing` | a fan's looping sound | 6 / 28 | done | 2 | the things lab: all 28 loops started at their places |
+| hip.ent.ambient_flouro_buzz | `ambient_flouro_buzz` | a fluorescent light's buzz | 2 / 3 | done | 2 | the things lab: all 3 loops started |
+| hip.ent.ambient_humming | `ambient_humming` | a machine's hum | 6 / 21 | done | 2 | the things lab: all 21 loops started |
+| hip.ent.ambient_light_buzz | `ambient_light_buzz` | a light's buzz | 4 / 7 | done | 2 | the things lab: all 7 loops started |
+| hip.ent.ambient_riftpower | `ambient_riftpower` | the rift's power hum | 1 / 1 | done | 3 | the things lab: its loop started |
+| hip.ent.ambient_running_water | `ambient_running_water` | running water | 4 / 13 | done | 2 | the things lab: all 13 loops started |
+| hip.ent.ambient_rushing | `ambient_rushing` | rushing air or water | 1 / 2 | done | 3 | the things lab: both loops started |
+| hip.ent.effect_finale | `effect_finale` | the last level's end sequence | 1 / 7 | done | 1 | the things lab: used on hipend, it makes its end sequence's things (48) |
+| hip.ent.effect_teleport | `effect_teleport` | a teleport's sparkle at a point | 1 / 2 | done | 2 | the things lab: both sound when used |
+| hip.ent.func_earthquake | `func_earthquake` | shakes everyone standing while it is on | 7 / 21 | done | 1 | the things lab: used on 7 maps, it shakes the player (his speed changed in 3 uses); LIFT left: one quake shake with Dissolution's and Quake II's |
+| hip.ent.func_exploder | `func_exploder` | an explosion when triggered | 7 / 94 | done | 1 | the things lab: all 94 appear, animate, sound and go when used, on 7 maps |
+| hip.ent.func_multi_exploder | `func_multi_exploder` | a run of explosions over an area | 2 / 3 | done | 2 | the things lab: all 3 throw their explosions (9 made) and go |
+| hip.ent.func_particlefield | `func_particlefield` | a field of sparkles while on (a force field's look) | 3 / 12 | verify | 2 | runs in the pack's program; the things lab: used, it made 4 things but no effect was seen near it |
+| hip.ent.info_startendtext | `info_startendtext` | where the end text starts | 1 / 1 | verify | 2 | runs in the pack's program; the things lab: used, it made 1 thing; with hip.endtext |
+| hip.ent.play_sound_triggered | `play_sound_triggered` | plays a sound when triggered | 5 / 16 | done | 2 | the things lab: all 16 sound when used |
+| hip.ent.random_thunder_triggered | `random_thunder_triggered` | thunder at random while on | 4 / 6 | done | 3 | the things lab: all 6 sound when used |
 
 #### Triggers and traps
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.func_counter | `func_counter` | counts its triggers and fires by the count | 11 / 25 | verify | 1 | runs in the pack's program |
-| hip.ent.func_oncount | `func_oncount` | fires when a counter reaches its number | 8 / 62 | verify | 1 | runs in the pack's program |
-| hip.ent.func_spawn | `func_spawn` | spawns a monster or an item when triggered | 9 / 304 | verify | 1 | runs in the pack's program |
-| hip.ent.func_spawn_small | `func_spawn_small` | spawns a small thing when triggered | 2 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.info_notnull | `info_notnull` | a named point with no class of its own (a target) | 5 / 34 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_gods_wrath | `trap_gods_wrath` | lightning on everyone in its area when triggered | 1 / 2 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_gravity_well | `trap_gravity_well` | pulls whoever is near toward it | 2 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_lightning_switched | `trap_lightning_switched` | a lightning arc switched on and off | 2 / 19 | verify | 2 | runs in the pack's program; LIFT: Quake's beam drawing |
-| hip.ent.trap_lightning_triggered | `trap_lightning_triggered` | a lightning arc fired when triggered | 5 / 17 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_shooter | `trap_shooter` | a shooter of spikes or lasers on a timer | 1 / 2 | verify | 2 | runs in the pack's program; ours names it |
-| hip.ent.trap_spike_mine | `trap_spike_mine` | a floating mine that drifts toward a player and bursts into spikes | 4 / 29 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_tesla_coil | `trap_tesla_coil` | a coil that zaps whoever comes close | 1 / 2 | verify | 2 | runs in the pack's program |
-| hip.ent.trigger_damagethreshold | `trigger_damagethreshold` | fires only after taking enough damage | 3 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.trigger_decoy_use | `trigger_decoy_use` | draws monsters to a decoy | 1 / 7 | verify | 2 | runs in the pack's program; LIFT: a decoy monsters chase, with Ground Zero's doppleganger |
-| hip.ent.trigger_setgravity | `trigger_setgravity` | sets the gravity of whoever is inside | 2 / 7 | verify | 1 | runs in the pack's program; the entity's gravity field is read by our physics (plugins/shooter/entity.hpp); LIFT with Quake II's trigger_gravity |
-| hip.ent.trigger_usekey | `trigger_usekey` | a trigger that needs a key | 1 / 2 | verify | 1 | runs in the pack's program |
-| hip.ent.trigger_waterfall | `trigger_waterfall` | pushes whoever is inside like falling water | 1 / 1 | verify | 2 | runs in the pack's program |
+| hip.ent.func_counter | `func_counter` | counts its triggers and fires by the count | 11 / 25 | verify | 1 | runs in the pack's program; the things lab: used without its count, 7 of 25 go; its count not walked |
+| hip.ent.func_oncount | `func_oncount` | fires when a counter reaches its number | 8 / 62 | verify | 1 | runs in the pack's program; the things lab: used alone it does nothing; its counter not walked |
+| hip.ent.func_spawn | `func_spawn` | spawns a monster or an item when triggered | 9 / 304 | done | 1 | the things lab: used, they make their monsters and items (9 uses made things), on 9 maps |
+| hip.ent.func_spawn_small | `func_spawn_small` | spawns a small thing when triggered | 2 / 3 | verify | 2 | runs in the pack's program; the things lab: 1 of 2 goes when used; nothing seen made |
+| hip.ent.info_notnull | `info_notnull` | a named point with no class of its own (a target) | 5 / 34 | done | 2 | the things lab: a named point the program's things aim at; nothing of its own to do |
+| hip.ent.trap_gods_wrath | `trap_gods_wrath` | lightning on everyone in its area when triggered | 1 / 2 | done | 2 | the things lab: strikes (its sound) when used |
+| hip.ent.trap_gravity_well | `trap_gravity_well` | pulls whoever is near toward it | 2 / 3 | verify | 2 | runs in the pack's program; the things lab: idle when used; whether it pulls is not seen |
+| hip.ent.trap_lightning_switched | `trap_lightning_switched` | a lightning arc switched on and off | 2 / 19 | done | 2 | the things lab: 15 of 19 strike when switched, making their bolts |
+| hip.ent.trap_lightning_triggered | `trap_lightning_triggered` | a lightning arc fired when triggered | 5 / 17 | done | 2 | the things lab: all 17 strike when used; LIFT left: Quake's beam drawing |
+| hip.ent.trap_shooter | `trap_shooter` | a shooter of spikes or lasers on a timer | 1 / 2 | verify | 2 | runs in the pack's program; ours names it; the things lab: idle on its map |
+| hip.ent.trap_spike_mine | `trap_spike_mine` | a floating mine that drifts toward a player and bursts into spikes | 4 / 29 | done | 2 | the things lab: all 14 turn, animate and sound on 4 maps |
+| hip.ent.trap_tesla_coil | `trap_tesla_coil` | a coil that zaps whoever comes close | 1 / 2 | verify | 2 | runs in the pack's program; the things lab: used, made 1 thing; whether it zaps is not seen |
+| hip.ent.trigger_damagethreshold | `trigger_damagethreshold` | fires only after taking enough damage | 3 / 3 | verify | 2 | runs in the pack's program; the things lab: 2 of 3 go when used; not shot |
+| hip.ent.trigger_decoy_use | `trigger_decoy_use` | draws monsters to a decoy | 1 / 7 | verify | 2 | runs in the pack's program; LIFT: a decoy monsters chase, with Ground Zero's doppleganger; the things lab: 2 of 7 go when used; no decoy seen |
+| hip.ent.trigger_setgravity | `trigger_setgravity` | sets the gravity of whoever is inside | 2 / 7 | done | 1 | the things lab: touched, it changes the player's gravity (4 touches) |
+| hip.ent.trigger_usekey | `trigger_usekey` | a trigger that needs a key | 1 / 2 | done | 1 | the things lab: touched without the key, it says so (its sound) |
+| hip.ent.trigger_waterfall | `trigger_waterfall` | pushes whoever is inside like falling water | 1 / 1 | verify | 2 | runs in the pack's program; the things lab: touched, the push on the player not seen |
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
 
