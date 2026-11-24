@@ -3,8 +3,11 @@
 // into a teleporter of a real map (`--basedir`, `--map`, `--tele`: the map's teleporter by its
 // order in the entity text; without --basedir the arena with its doorway made a teleporter) and
 // keeps walking forward on the far side, while the mouse turns the view a little the moment the
-// server teleports him. Each one-way latency in `--latencies` runs three ways:
+// server teleports him. Each one-way latency in `--latencies` runs four ways:
 //
+// - PREDICTED: the teleport foreseen (`cl_predict_teleport 1`, shooter/teleport_ahead.hpp): the
+//   window's prediction takes the level's teleporter the command he walks in, the far end drawn
+//   and the view turned at once; the high-lag teleport not asked for;
 // - FIXED: the high-lag teleport on both sides (`cl_pext_lagteleport 1`: the server's turn sent
 //   with its kind, the moves in flight turned on the server and in the window's prediction alike,
 //   classic/protocol/lag_turn.hpp);
@@ -13,7 +16,8 @@
 // - NO EXTENSION: neither side turns them (a server or client without it): the moves go the old
 //   way for a round trip.
 //
-// Each window frame from the server's teleport is sampled: where the window draws him against
+// Each window frame from the moment he walked in (the server's teleport less the one-way latency)
+// is sampled: where the window draws him against
 // where he faces (the angle between his drawn motion and his view), the prediction's correction,
 // and whether the view took the server's turn.
 //
@@ -24,6 +28,7 @@
 //
 // ge:summary Lab: walking through a teleporter joined to a server: control kept frame by frame
 // ge:keywords lab se-teleport teleport teleporter control lag-teleport cl_pext_lagteleport
+// ge:keywords cl_predict_teleport predict-teleport
 // ge:keywords setangle in-flight-commands prediction correction turn latency frames-lost
 // ge:skill net labs
 // ge:test tests/classic_lag_turn_test.cpp
@@ -36,6 +41,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "brush/read.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
@@ -112,12 +118,17 @@ struct Map {
   std::unique_ptr<cl::LoadedMap> loaded;  // a game folder's (null: the arena)
   sv::MapSpec spec;
   std::vector<sh::BrushModel> arena;
+  ge::brush::Map arena_level;             // the arena's entities and model boxes, as a BSP view
+  const ge::brush::Map* level = nullptr;  // the window's view of the level (its teleporters)
   std::vector<Tele> teles;
 };
 
-enum class Mode : uint8_t { fixed, window_behind, no_extension };
+enum class Mode : uint8_t { predicted, fixed, window_behind, no_extension };
 const char* mode_name(Mode m) {
-  return m == Mode::fixed ? "fixed" : m == Mode::window_behind ? "window behind" : "no extension";
+  return m == Mode::predicted       ? "predicted"
+         : m == Mode::fixed         ? "fixed"
+         : m == Mode::window_behind ? "window behind"
+                                    : "no extension";
 }
 
 bool open_session(Session& s, Map& m, double latency_ms, Mode mode, std::string& error) {
@@ -139,7 +150,8 @@ bool open_session(Session& s, Map& m, double latency_ms, Mode mode, std::string&
   cn::ClientConfig wc;
   wc.name = "window";
   wc.lag_turn = mode == Mode::fixed;
-  if (mode == Mode::no_extension) wc.ask[cn::ExtFamily::mvd] &= ~cn::kMvdTeleport;
+  if (mode == Mode::no_extension || mode == Mode::predicted)
+    wc.ask[cn::ExtFamily::mvd] &= ~cn::kMvdTeleport;
   cn::remote_start(s.remote, s.ct, gn::sim_address(0, cn::kPortServer), wc);
   return true;
 }
@@ -188,6 +200,8 @@ Run walk(Map& m, const Tele& tl, sh::Vec3f start, float yaw, double latency_ms, 
     window_frame(s, wall += window_us, window_us);
   if (s.remote.end.stage != cn::ClientStage::active) return out;
   cn::remote_world(s.remote, &m.spec.models);
+  s.remote.predict_teleports = mode == Mode::predicted;
+  cn::remote_teleporters(s.remote, mode == Mode::predicted ? m.level : nullptr);
   out.agreed = s.remote.end.ext.has(cn::ExtFamily::mvd, cn::kMvdTeleport);
   const int slot = s.remote.end.playernum;
   sh::Edict& me = s.rules->sv.edicts[static_cast<size_t>(slot) + 1];
@@ -200,43 +214,52 @@ Run walk(Map& m, const Tele& tl, sh::Vec3f start, float yaw, double latency_ms, 
   }
   s.remote.hands.forward = 400;
   const cl::DemoState& d = s.remote.demo.state;
+  // Every window frame kept, then read from the moment he walked in: the server's teleport less
+  // the one-way latency (the command that took him there was sent then).
+  struct Frame {
+    int64_t wall;
+    sh::Vec3f eye;
+    float yaw;
+    double correction;
+  };
+  std::vector<Frame> frames;
   sh::Vec3f last_server = me.origin;
   int64_t teleported_us = -1;
-  float yaw_at_teleport = 0;
-  sh::Vec3f eye_before = d.eye;
   for (int i = 0; i < 4 * fps; i++) {
     window_frame(s, wall += window_us, window_us);
     if (teleported_us < 0 && flat_distance(me.origin, last_server) > 96) {
       teleported_us = s.now;
       out.teleported = true;
-      // The mouse turns as he goes through: a player always does.
-      s.remote.view.y += kMouseTurn;
-      yaw_at_teleport = s.remote.view.y;
+      s.remote.view.y += kMouseTurn;  // the mouse turns as he goes through: a player always does
     }
     last_server = me.origin;
-    if (teleported_us >= 0) {
-      const double ms = static_cast<double>(wall - teleported_us) / 1000.0;
-      const sh::Vec3f eye = d.eye;
-      const float dx = eye.x - eye_before.x, dy = eye.y - eye_before.y;
-      const double speed = std::sqrt(dx * dx + dy * dy) * static_cast<double>(fps);
-      const bool far_end = flat_distance(eye, tl.dest) < flat_distance(eye, (tl.lo + tl.hi) * 0.5f);
-      if (out.frames_to_far_end < 0 && far_end)
-        out.frames_to_far_end = static_cast<int>(out.t.size());
-      double off = 0;
-      if (far_end && speed > kSettledSpeed && speed < 3000) {
-        const double moving = ge::core::libm::atan2(dy, dx) * 180 / kPi;
-        off = std::fabs(wrap180(static_cast<float>(moving - s.remote.view.y)));
-        if (off > kOffFacing) out.lost++;
-      } else if (!far_end) {
-        off = 180;  // still drawn at the near end: no control at all
-      }
-      out.t.push_back(ms);
-      out.off.push_back(off);
-      out.worst_correction = std::fmax(out.worst_correction,
-                                       static_cast<double>(sh::length(s.remote.smooth.correction)));
-      if (ms > kAfterS * 1000) break;
+    frames.push_back({wall, d.eye, s.remote.view.y,
+                      static_cast<double>(sh::length(s.remote.smooth.correction))});
+    if (teleported_us >= 0 && static_cast<double>(wall - teleported_us) > kAfterS * 1e6) break;
+  }
+  if (!out.teleported) return out;
+  const int64_t walked_in = teleported_us - static_cast<int64_t>(latency_ms * 1000);
+  for (size_t i = 1; i < frames.size(); i++) {
+    const Frame& f = frames[i];
+    if (f.wall < walked_in) continue;
+    const double ms = static_cast<double>(f.wall - walked_in) / 1000.0;
+    const float dx = f.eye.x - frames[i - 1].eye.x, dy = f.eye.y - frames[i - 1].eye.y;
+    const double speed = std::sqrt(dx * dx + dy * dy) * static_cast<double>(fps);
+    const bool far_end =
+        flat_distance(f.eye, tl.dest) < flat_distance(f.eye, (tl.lo + tl.hi) * 0.5f);
+    if (out.frames_to_far_end < 0 && far_end)
+      out.frames_to_far_end = static_cast<int>(out.t.size());
+    double off = 0;
+    if (far_end && speed > kSettledSpeed && speed < 3000) {
+      const double moving = ge::core::libm::atan2(dy, dx) * 180 / kPi;
+      off = std::fabs(wrap180(static_cast<float>(moving - f.yaw)));
+      if (off > kOffFacing) out.lost++;
+    } else if (!far_end) {
+      off = 180;  // still drawn at the near end: no control at all
     }
-    eye_before = d.eye;
+    out.t.push_back(ms);
+    out.off.push_back(off);
+    out.worst_correction = std::fmax(out.worst_correction, f.correction);
   }
   if (out.frames_to_far_end < 0) out.frames_to_far_end = static_cast<int>(out.t.size());
   out.yaw_after = s.remote.view.y;
@@ -244,7 +267,6 @@ Run walk(Map& m, const Tele& tl, sh::Vec3f start, float yaw, double latency_ms, 
   // mouse after the teleport (kMouseTurn when all of it is kept, 0 when the server's turn threw
   // it away).
   out.turn_kept = wrap180(out.yaw_after - tl.dest_yaw);
-  (void)yaw_at_teleport;
   out.ok = true;
   return out;
 }
@@ -346,7 +368,18 @@ void run(gl::Lab& lab) {
     m.spec.name = "arena";
     m.spec.models = m.arena;
     m.spec.entities = kArenaEntities;
+    std::string why;
+    ge::brush::parse_entities(kArenaEntities, &m.arena_level.entities, &why);
+    for (const sh::BrushModel& b : m.arena) {
+      ge::brush::Model bm;
+      for (int k = 0; k < 3; k++) {
+        bm.mins[k] = b.mins[k];
+        bm.maxs[k] = b.maxs[k];
+      }
+      m.arena_level.models.push_back(bm);
+    }
   }
+  m.level = m.loaded ? &m.loaded->bsp.map : &m.arena_level;
   teles_of(m);
   if (fps < 30 || latencies.empty() || which < 0 || which >= static_cast<int>(m.teles.size())) {
     lab.fail(
@@ -392,9 +425,10 @@ void run(gl::Lab& lab) {
   c.frame = {"THROUGH A TELEPORTER: WHERE YOU MOVE AGAINST WHERE YOU FACE",
              name + ", the window at " + std::to_string(fps) +
                  " fps; 180 while still drawn at the near end",
-             "since the server teleported him (ms)", "degrees off his facing"};
+             "since he walked in (ms)", "degrees off his facing"};
   for (double ms : latencies) {
-    for (const Mode mode : {Mode::fixed, Mode::window_behind, Mode::no_extension}) {
+    for (const Mode mode :
+         {Mode::predicted, Mode::fixed, Mode::window_behind, Mode::no_extension}) {
       const bool fixed = mode == Mode::fixed;
       const Run r = walk(m, tl, start, yaw, ms, mode, fps);
       if (!r.ok || !r.teleported) {
@@ -413,6 +447,15 @@ void run(gl::Lab& lab) {
       lab.metric(key + ".worst-correction", r.worst_correction, "units");
       lab.metric(key + ".turn-kept", r.turn_kept, "deg");
       c.traces.push_back({to_fixed(ms, 0) + " ms " + mode_name(mode), r.t, r.off});
+      if (mode == Mode::predicted &&
+          (r.frames_to_far_end > 2 || r.lost > 1 || std::fabs(r.turn_kept - kMouseTurn) > 1))
+        lab.fail("se-teleport: at " + to_fixed(ms, 0) +
+                     " ms each way with the teleport foreseen the far end came " +
+                     std::to_string(r.frames_to_far_end) + " frames after he walked in, " +
+                     std::to_string(r.lost) + " frames off his facing, and the view kept " +
+                     to_fixed(r.turn_kept, 1) + " of the mouse's " + to_fixed(kMouseTurn, 0) +
+                     " degrees",
+                 "next: build/debug/tests/shooter_teleport_ahead_test. Skill: net.");
       if (fixed && (!r.agreed || r.lost > 1 || std::fabs(r.turn_kept - kMouseTurn) > 1))
         lab.fail("se-teleport: at " + to_fixed(ms, 0) +
                      " ms each way with the high-lag "
@@ -424,14 +467,14 @@ void run(gl::Lab& lab) {
   }
   lab.table(t);
   sl::shoot(lab, "off-facing", gl::line_chart(c),
-            "Each window frame from the moment the server teleports him: the angle between where "
-            "the window draws him moving and where he faces. 180 while he is still drawn at the "
-            "near end (the round trip before the server's word arrives); on the far side, near 0 "
-            "is full control. Fixed, he goes where he faces from the first frame on the far side; "
-            "with the window behind, the correction pulls him off it; with no extension, the moves "
-            "he made before the turn reached him walk him the old way for a round trip.",
-            "every 'fixed' line drops to near 0 as it reaches the far end and stays there; the "
-            "others sit high for a round trip after it",
+            "Each window frame from the moment he walked in: the angle between where the window "
+            "draws him moving and where he faces. 180 while he is still drawn at the near end; on "
+            "the far side, near 0 is full control. Predicted, he is at the far end facing its way "
+            "from the frame he walks in; fixed, a round trip later and then where he faces; with "
+            "the window behind, the correction pulls him off it; with no extension, the moves he "
+            "made before the turn reached him walk him the old way for a round trip.",
+            "every 'predicted' line near 0 from the start; 'fixed' drops to near 0 a round trip "
+            "later; the others sit high for a while after it",
             in);
 }
 
@@ -447,8 +490,8 @@ const gl::LabSpec kSpec{
     {
         {"fps", "144", "the window's frames a second (the server runs 77)"},
         {"latencies", "0,25,50",
-         "one-way latencies, ms, three walks each (fixed, the window "
-         "behind, no extension)"},
+         "one-way latencies, ms, four walks each (predicted, fixed, the "
+         "window behind, no extension)"},
         {"basedir", "",
          "the folder that holds the game folder (\"\": the arena, its doorway a "
          "teleporter)"},
