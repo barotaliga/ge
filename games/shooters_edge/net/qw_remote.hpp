@@ -87,6 +87,7 @@
 #include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
 #include "shooter/speedjump_assist.hpp"
+#include "shooter/teleport_ahead.hpp"
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -238,8 +239,17 @@ struct Remote {
   client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
   int missiles_level = -1;       // the level they fly in (DemoState::levels)
   bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
-  uint32_t jump_played_to = 0;   // the newest command whose jump has played
-  int jumps_played = 0;          // jumps whose sound the prediction played (for the labs)
+  // cl_predict_teleport: the level's teleporters (classic/teleporters.hpp, `remote_teleporters`)
+  // taken in the prediction, so the window draws the far end and turns the view the command the
+  // player walks in; the guess the server has not answered (shooter/teleport_ahead.hpp). On, the
+  // high-lag teleport is not asked for: the moves after the teleport are made the new way already.
+  bool predict_teleports = true;
+  uint32_t jump_played_to = 0;  // the newest command whose jump has played
+  int jumps_played = 0;         // jumps whose sound the prediction played (for the labs)
+  int tele_hit_cmd = -1;        // the last main prediction's teleport: its place in the replay
+  int tele_hit_index = -1;
+  sh::Teleporters tele;
+  sh::TeleGuess tele_guess;
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;
@@ -358,9 +368,13 @@ void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
 // The level's brush models the prediction moves through ([0] the world), the window's once it
 // has loaded the level `remote_step` named (nullptr: nothing predicted); `brushes`, the level's
-// brushes, are what a server of Quake II's prediction traces.
+// brushes, are what a server of Quake II's prediction traces; `level`, its BSP view, gives the
+// teleporters it foresees (`remote_teleporters`; nullptr: left as they are).
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
-                  const ge::brush::Map* brushes = nullptr);
+                  const ge::brush::Map* brushes = nullptr, const ge::brush::Map* level = nullptr);
+// The level's teleporters the prediction foresees (classic/teleporters.hpp), off its BSP view
+// (nullptr: none), for a server of either game.
+void remote_teleporters(Remote& r, const ge::brush::Map* level);
 // Leaves: the server told (a disconnect, three times), the socket closed, the state cleared.
 void remote_disconnect(Remote& r);
 // One window frame of `wall_s` s: the ticks due run (each sending `r.hands` with `r.view`), every

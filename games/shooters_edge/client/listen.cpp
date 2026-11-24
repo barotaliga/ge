@@ -149,6 +149,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
         e.entity = d.entity;
         e.at = d.at;
         e.end = d.end;
+        e.flash = d.flash;
         l.effects.push_back(std::move(e));
       }
       return;
@@ -157,6 +158,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   Effect e;
   e.code = -1;
   e.name = ev.text;
+  if (monster_flash) {  // its gun's spent cases (shells.hpp)
+    e.flash = static_cast<int>(ev.values[3]);
+    e.flash_monster = true;
+  }
   if (ev.kind == sv::EventKind::trail_effect) {
     e.kind = EffectKind::named_trail;
     e.entity = ev.ent;
@@ -565,7 +570,7 @@ bool coop_on(const Listen& l) {
 
 // A companion seated now (in a campaign; a single-player one turns cooperative for it); false with
 // the line printed when it cannot be.
-bool seat_companion(Listen& l, sb::AimSkill skill) {
+bool seat_companion(Listen& l, sb::AimSkill skill, bool helper = false) {
   const bool turned = !coop_on(l);
   if (turned) {
     sv::campaign_set_coop(*l.campaign_host, true);
@@ -579,7 +584,7 @@ bool seat_companion(Listen& l, sb::AimSkill skill) {
     l.party->seed = l.opt.seed;
   }
   std::string error;
-  const int slot = party_add(*l.party, *l.campaign_host, l.map->spec, skill, error);
+  const int slot = party_add(*l.party, *l.campaign_host, l.map->spec, skill, error, helper);
   if (slot < 0) {
     if (turned) sv::campaign_set_coop(*l.campaign_host, false);
     l.prints.push_back("addbot: " + error);
@@ -596,7 +601,8 @@ bool seat_companion(Listen& l, sb::AimSkill skill) {
     l.companion_coop = true;
     l.prints.push_back("The game is cooperative while you have company.");
   }
-  l.prints.push_back(name + " (" + sb::aim_skill_name(skill) + ") joins the game");
+  l.prints.push_back(name + " (" + sb::aim_skill_name(skill) + (helper ? ", helper" : "") +
+                     ") joins the game");
   return true;
 }
 
@@ -1204,11 +1210,14 @@ bool listen_lobby(Listen& l, std::string_view line) {
     const size_t sp = line.find(' ');
     const std::string arg = sp == std::string_view::npos ? "" : std::string(line.substr(sp + 1));
     sb::AimSkill skill = l.opt.companion_skill;
-    if (!arg.empty() && !skill_named(arg, skill)) {
-      l.prints.push_back("addbot: unknown skill \"" + arg + "\" (use novice, average or expert)");
+    bool helper = false;
+    std::string bad;
+    if (!companion_words(arg, skill, helper, bad)) {
+      l.prints.push_back("addbot: unknown word \"" + bad +
+                         "\" (use novice, average or expert, and escort or helper)");
       return true;
     }
-    seat_companion(l, skill);
+    seat_companion(l, skill, helper);
     return true;
   }
   // A vote on the settings (engine/server/vote.hpp): the server's own words, with or without a

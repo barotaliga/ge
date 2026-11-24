@@ -41,23 +41,14 @@ a lab must show it before it is `done`), `missing` (rank 1: the campaign cannot 
 broken without it; 2: noticed in a normal game; 3: rare or cosmetic), `not-taken` (left out on
 purpose, the doc named). The missing count only goes down; a row found later is added here first.
 
-| Section | Rows | Done | Verify | Missing (rank 1 / 2 / 3) | Not taken |
-| --- | --- | --- | --- | --- | --- |
-| Taking the packs in (shared by all four) | 17 | 15 | 1 | 1 (0 / 1 / 0) | 0 |
-| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 8 | 64 | 1 (0 / 1 / 0) | 1 |
-| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 47 | 3 (0 / 2 / 1) | 1 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 21 | 3 | 16 (11 / 4 / 1) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 33 | 3 | 46 (18 / 25 / 3) | 0 |
-| **All** | **274** | **87** | **118** | **67 (29 / 33 / 5)** | **2** |
+Counts: `make ledger` counts this ledger's rows by section and the missing rows by rank (`porting/ledger-count.mjs`; `make ledger ARGS=--missing` for the missing count alone). No total is kept here by hand.
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **67 missing, 118 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's and Ground Zero's remix roles: 2 fewer; the end screens not taken: 2 fewer; The Reckoning's first part 18; Ground Zero's weapons 23, its campaign and saves 2).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows**; `make ledger` gives the count now (the PR that moves it says what it filled).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
 
 ## Taking the packs in (shared by all four)
-
-count: done 15, verify 1, missing 1 (0 / 1 / 0), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -80,8 +71,6 @@ count: done 15, verify 1, missing 1 (0 / 1 / 0), not-taken 0
 | imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | done | 2 | client/take_in.hpp `take_in_words`: the packs kept, "add Quake II too", the game playing left as it is |
 
 ## Scourge of Armagon (Quake, folder `hipnotic`)
-
-count: done 4, verify 67, missing 3 (0 / 1 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -108,8 +97,6 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 #### Monsters
 
-count: done 0, verify 3, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | hip.ent.monster_armagon | `monster_armagon` | Armagon, the final boss: a walker with rockets and lasers | 1 / 1 | verify | 1 | runs in the pack's program |
@@ -117,8 +104,6 @@ count: done 0, verify 3, missing 0, not-taken 0
 | hip.ent.monster_scourge | `monster_scourge` | the centroid: a scorpion-like walker firing nails from its tail | 9 / 46 | verify | 1 | runs in the pack's program |
 
 #### Weapons and items
-
-count: done 0, verify 6, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -130,8 +115,6 @@ count: done 0, verify 6, missing 0, not-taken 0
 | hip.ent.weapon_proximity_gun | `weapon_proximity_gun` | the proximity gun: grenades that stick and wait for someone to come close, on rockets | 17 / 21 | verify | 1 | runs in the pack's program; LIFT: one proximity mine with Ground Zero's (gz.ent.weapon_proxlauncher) |
 
 #### Rotating brushes
-
-count: done 0, verify 9, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -147,8 +130,6 @@ count: done 0, verify 9, missing 0, not-taken 0
 
 #### Movers and walls
 
-count: done 0, verify 9, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | hip.ent.func_bobbingwater | `func_bobbingwater` | a water brush that bobs up and down | 2 / 5 | verify | 2 | runs in the pack's program |
@@ -162,8 +143,6 @@ count: done 0, verify 9, missing 0, not-taken 0
 | hip.ent.func_train2 | `func_train2` | a train with its own speed and wait at each corner | 11 / 68 | verify | 1 | runs in the pack's program |
 
 #### Effects and sounds
-
-count: done 0, verify 16, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -186,8 +165,6 @@ count: done 0, verify 16, missing 0, not-taken 0
 
 #### Triggers and traps
 
-count: done 0, verify 17, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | hip.ent.func_counter | `func_counter` | counts its triggers and fires by the count | 11 / 25 | verify | 1 | runs in the pack's program |
@@ -209,8 +186,6 @@ count: done 0, verify 17, missing 0, not-taken 0
 | hip.ent.trigger_waterfall | `trigger_waterfall` | pushes whoever is inside like falling water | 1 / 1 | verify | 2 | runs in the pack's program |
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
-
-count: done 7, verify 50, missing 4 (0 / 2 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -245,8 +220,6 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 #### Monsters
 
-count: done 0, verify 10, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | rog1.ent.dragon_corner | `dragon_corner` | a corner of the dragon's flight | 1 / 36 | verify | 1 | runs in the pack's program |
@@ -262,8 +235,6 @@ count: done 0, verify 10, missing 0, not-taken 0
 
 #### Weapons and items
 
-count: done 0, verify 9, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | rog1.ent.item_lava_spikes | `item_lava_spikes` | lava nails: the nailguns fire lava spikes | 17 / 154 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
@@ -278,8 +249,6 @@ count: done 0, verify 9, missing 0, not-taken 0
 
 #### Game modes
 
-count: done 0, verify 7, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | verify | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token) |
@@ -291,8 +260,6 @@ count: done 0, verify 7, missing 0, not-taken 0
 | rog1.ent.item_flag_team2 | `item_flag_team2` | team two's flag | 15 / 15 | verify | 2 | runs in the pack's program |
 
 #### Movers and traps
-
-count: done 0, verify 13, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -311,8 +278,6 @@ count: done 0, verify 13, missing 0, not-taken 0
 | rog1.ent.trigger_earthquake_kill | `trigger_earthquake_kill` | stops the earthquake | 1 / 1 | verify | 2 | runs in the pack's program |
 
 ## The Reckoning (Quake II, folder `xatrix`)
-
-count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -343,8 +308,6 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 #### Weapons and items
 
-count: done 0, verify 0, missing 6, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | xat.ent.ammo_magslug | `ammo_magslug` | mag slugs for the phalanx | 25 / 88 | done |  | server/q2_items.hpp, q2_items.cpp (limits 50/75/100 under the pack) |
@@ -355,8 +318,6 @@ count: done 0, verify 0, missing 6, not-taken 0
 | xat.ent.weapon_phalanx | `weapon_phalanx` | the phalanx particle cannon: two magnesium slugs that burst | 24 / 35 | done |  | server/q2_combat.hpp, q2_fight.cpp (two balls, their splash), q2_choose.cpp (`use railgun`) |
 
 #### Monsters
-
-count: done 0, verify 0, missing 8, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -371,8 +332,6 @@ count: done 0, verify 0, missing 8, not-taken 0
 
 #### Map things
 
-count: done 0, verify 0, missing 7, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | xat.ent.func_object_repair | `func_object_repair` | a broken thing that sparks until the repair bot fixes it | 1 / 6 | done |  | server/q2_reckoning_things.cpp |
@@ -384,8 +343,6 @@ count: done 0, verify 0, missing 7, not-taken 0
 | xat.ent.target_mal_laser | `target_mal_laser` | a laser that pulses on and off | 1 / 32 | done |  | server/q2_targets.cpp (the laser's beam, pulsed) |
 
 ## Ground Zero (Quake II, folder `rogue`)
-
-count: done 33, verify 3, missing 46 (18 / 25 / 3), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -439,8 +396,6 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 #### Weapons and items
 
-count: done 16, verify 0, missing 5, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | gz.ent.ammo_disruptor | `ammo_disruptor` | rounds for the disruptor | 12 / 41 | done | 1 | server/q2_items.cpp; left off unless `g_disruptor` (server/q2_gz_rules.cpp) |
@@ -467,8 +422,6 @@ count: done 16, verify 0, missing 5, not-taken 0
 
 #### Monsters
 
-count: done 0, verify 0, missing 8, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | missing | 1 | not in our rules |
@@ -482,15 +435,11 @@ count: done 0, verify 0, missing 8, not-taken 0
 
 #### Game modes
 
-count: done 0, verify 0, missing 1, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | gz.ent.dm_tag_token | `dm_tag_token` | the tag game's token (`gamerules 2`) | 4 / 4 | missing | 2 | not in our rules; LIFT: one tag mode with Dissolution's |
 
 #### Map things
-
-count: done 0, verify 0, missing 10, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |

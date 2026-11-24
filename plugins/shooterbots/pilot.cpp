@@ -156,7 +156,10 @@ constexpr float kTryKin = 72;   // (`giveup`) a jump's run-ups counted together,
 constexpr int kRunUpTries = 4;  // a jump lined up for this many times and never made is given up
 constexpr float kClear = 4;     // a player waits this far clear of a mover's box, units
 constexpr float kPlatAtRest = 12;  // a plat this near its rest has not started up, units
-constexpr float kBrake = 0.25f;    // the least share of maxspeed walked into the goal
+constexpr float kCrushSlow =
+    60;  // running out from under a mover slower than this is held, units/s
+constexpr double kCrushHeld_s = 0.2;  // and held this long: out of its next side, s
+constexpr float kBrake = 0.25f;       // the least share of maxspeed walked into the goal
 // In the air (`air`): the aim kAirPast past the target toward the node after it within kAirCorner
 // of it, units; slower
 // than kAirSlow across, or the aim more than kAirGiveUp off the velocity, forward at it (the
@@ -316,6 +319,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       (p.mode == PilotMode::hop || (p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s)))
     p.hop_air_s = p.clock_s;
   see_movers(p, s);
+  p.crushing = over_him(p, s, kCrushNear) != nullptr;
+  if (!p.crushing) {
+    p.crush_try = 0;
+    p.crush_slow_s = 0;
+  }
   const NavGraph& g = *p.g;
   Want w;
   w.yaw = p.yaw;
@@ -1206,12 +1214,17 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       p.wait_s += dt;
       w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
       because = "a mover in the way";
-      // Waited for clear of the mover's box: a plat coming down on a player stops on him.
+      // Waited for clear of the mover's box: a plat coming down on a player stops on him. (Or
+      // another's coming down on him where he stands, `over_him`.)
       const NavMover* in = mover_of(g.movers, l.mover);
+      const NavMover* crush = over_him(p, s, kCrushNear);
+      if (crush != nullptr) in = crush;
       if (in != nullptr && !moving_platform(*in) &&
-          boxes_meet(s.origin + kPlayerMins - Vec3f{kClear, kClear, 0},
-                     s.origin + kPlayerMaxs + Vec3f{kClear, kClear, 0}, in->absmin,
-                     Vec3f{in->absmax.x, in->absmax.y, in->absmax.z + in->travel.z})) {
+          (crush != nullptr ||
+           boxes_meet(s.origin + kPlayerMins - Vec3f{kClear, kClear, 0},
+                      s.origin + kPlayerMaxs + Vec3f{kClear, kClear, 0}, in->absmin,
+                      Vec3f{in->absmax.x, in->absmax.y, in->absmax.z + in->travel.z}))) {
+        const float clear = crush != nullptr ? kCrushNear : kClear;
         const Vec3f mid{(in->absmin.x + in->absmax.x) * 0.5f, (in->absmin.y + in->absmax.y) * 0.5f,
                         s.origin.z};
         Vec3f away{s.origin.x - mid.x, s.origin.y - mid.y, 0};
@@ -1224,7 +1237,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           away = {away.x < 0 ? -1.0f : 1.0f, 0, 0};
         else
           away = {0, away.y < 0 ? -1.0f : 1.0f, 0};
-        if (p.set.under_plat && s.waterlevel < 2) {
+        if (p.set.under_plat && s.waterlevel < 2 && crush == nullptr) {
           // Toward the nearest node off it, outside its box (a plat in a shaft is walled on some
           // sides: under base2's raised lift to bunk1 he pressed the nearer side, a wall, and
           // standing in its field held it up for good; a trace from inside its box starts solid,
@@ -1232,23 +1245,42 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           float best = 1e30f;
           for (size_t k = 0; k < g.nodes.size(); k++) {
             const NavNode& c = g.nodes[k];
-            if (c.mover == l.mover || c.ride == l.mover || c.swim) continue;
+            if (c.mover == l.mover || c.ride == l.mover || c.mover == in->ent ||
+                c.ride == in->ent || c.swim)
+              continue;
             const Vec3f d = c.origin - s.origin;
             if (d.z > kStepHeight || d.z < -kStepHeight) continue;
-            if (c.origin.x + kPlayerMaxs.x > in->absmin.x - kClear &&
-                c.origin.x + kPlayerMins.x < in->absmax.x + kClear &&
-                c.origin.y + kPlayerMaxs.y > in->absmin.y - kClear &&
-                c.origin.y + kPlayerMins.y < in->absmax.y + kClear)
+            if (c.origin.x + kPlayerMaxs.x > in->absmin.x - clear &&
+                c.origin.x + kPlayerMins.x < in->absmax.x + clear &&
+                c.origin.y + kPlayerMaxs.y > in->absmin.y - clear &&
+                c.origin.y + kPlayerMins.y < in->absmax.y + clear)
               continue;
             const float dd = d.x * d.x + d.y * d.y;
-            if (dd < best) {
-              best = dd;
-              away = {d.x, d.y, 0};
+            if (dd >= best) continue;
+            // Not through a wall: bunk1's sinking floor fills a pit whose east side is a wall
+            // with a node past it, the nearest; pressed into it under the floor sinking onto
+            // him, he held it there for good.
+            if (s.world != nullptr) {
+              // Straight there, or a step's height up (a step on the way: the pit's floor 8 over
+              // the floor the sunk floor fills); the mover's own legs in the way are walls too
+              // (bunk1's floor stands on two: its way out through one pinned him). Started in a
+              // solid both ways (the mover on his head), the way is not known: taken.
+              const Vec3f up{0, 0, kStepHeight};
+              const HullTrace lo = player_trace(*s.world, s.origin, c.origin);
+              if (lo.startsolid || lo.fraction < 1) {
+                const HullTrace hi = player_trace(*s.world, s.origin + up, c.origin + up);
+                if (!(lo.startsolid && hi.startsolid) && (hi.startsolid || hi.fraction < 1))
+                  continue;
+              }
             }
+            best = dd;
+            away = {d.x, d.y, 0};
           }
-        } else if (p.set.floor_swim && s.world != nullptr) {
+        } else if ((p.set.floor_swim || crush != nullptr) && s.world != nullptr) {
           // Out of the side nearest the player that is open (a plat in a shaft is walled on
-          // some sides): the four, by how far each is from his box's edge to the mover's.
+          // some sides): the four, by how far each is from his box's edge to the mover's. (One
+          // coming down on him, too: the nearest node off it lay past one of the legs bunk1's
+          // floor stands on, which the world's trace does not hold, and he was pinned there.)
           const Vec3f sides[4] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
           const float gaps[4] = {in->absmax.x - (s.origin.x + kPlayerMins.x),
                                  (s.origin.x + kPlayerMaxs.x) - in->absmin.x,
@@ -1267,6 +1299,42 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         }
         w.yaw = unwrap(heading(away.x, away.y), p.yaw);
         w.forward = 0.5f;
+        if (crush != nullptr) {
+          // Coming down on him: run out at once whatever way he faces, the view held (turned
+          // first, the keys still forward ran him on into it, facing the plat he had waited
+          // for). Outside its box already (within kCrushNear), straight away from it.
+          const NavMover* cn = mover_of(s.movers, crush->ent);
+          if (cn != nullptr) {
+            const float nx = std::clamp(s.origin.x, cn->absmin.x, cn->absmax.x);
+            const float ny = std::clamp(s.origin.y, cn->absmin.y, cn->absmax.y);
+            if (nx != s.origin.x || ny != s.origin.y) {
+              away = {s.origin.x - nx, s.origin.y - ny, 0};
+            } else {
+              // Inside it: out of its sides nearest first, the next one each time he is held
+              // where he is (its legs, which the world's trace does not hold, wedged him by one
+              // of them under bunk1's floor).
+              const Vec3f sides[4] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
+              const float gaps[4] = {cn->absmax.x - s.origin.x, s.origin.x - cn->absmin.x,
+                                     cn->absmax.y - s.origin.y, s.origin.y - cn->absmin.y};
+              int order[4] = {0, 1, 2, 3};  // by gap, ties in side order (the same everywhere)
+              for (int i = 1; i < 4; i++)
+                for (int j = i; j > 0 && gaps[order[j]] < gaps[order[j - 1]]; j--)
+                  std::swap(order[j], order[j - 1]);
+              const float v2 = s.velocity.x * s.velocity.x + s.velocity.y * s.velocity.y;
+              p.crush_slow_s = v2 < kCrushSlow * kCrushSlow ? p.crush_slow_s + dt : 0;
+              if (p.crush_slow_s > kCrushHeld_s) {
+                p.crush_try++;
+                p.crush_slow_s = 0;
+              }
+              away = sides[order[p.crush_try % 4]];
+            }
+          }
+          w.yaw = p.yaw;
+          const double rel =
+              static_cast<double>(heading(away.x, away.y) - p.yaw) * (core::kPi / 180);
+          w.forward = static_cast<float>(core::libm::cos(rel));
+          w.side = static_cast<float>(-core::libm::sin(rel));
+        }
         because = "a mover in the way: stepping clear of it";
       }
       const NavMover* rest = mover_of(g.movers, l.mover);
