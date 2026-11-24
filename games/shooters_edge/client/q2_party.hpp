@@ -4,9 +4,12 @@
 // campaign host. The match path (net/qw_game.cpp) owns one once `addbot` is typed outside
 // deathmatch:
 //
-// - `addbot [novice|average|expert]` seats a companion in the lowest free slot of the rules (its
-//   player connected as a bot), the window's player (slot 0) its leader; `removebot` lets the
-//   highest one go;
+// - `addbot [novice|average|expert] [escort|helper]` seats a companion in the lowest free slot of
+//   the rules (its player connected as a bot), the window's player (slot 0) its leader;
+//   `removebot` lets the highest one go;
+// - an ESCORT (the default) keeps at the player's shoulder; a HELPER works the level near the
+//   people (shooterbots/party.hpp's `PartyWork`, as Quake's co-op party does: the helpers split
+//   the map by the walk, leave what lies beyond the leash and the exit to the people);
 // - the NAV is built off the map's brushes (shooterbots/map_nav.hpp, from `info_player_start`), and
 // the
 //   fighter reads Quake II's arsenal (shooterbots/bot_arsenal.hpp) and Quake II's monsters;
@@ -19,7 +22,7 @@
 //
 // ge:summary Quake II's companions: addbot seats a co-op escort on Quake II's own rules
 // ge:keywords q2 companion coop co-op addbot removebot escort party q2-party brushes-nav
-// ge:keywords q2_party_add q2_party_remove q2_party_enter q2_party_packets
+// ge:keywords q2_party_add q2_party_remove q2_party_enter q2_party_packets helper
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -33,6 +36,7 @@
 #include "shooterbots/aim.hpp"
 #include "shooterbots/fighter.hpp"
 #include "shooterbots/map_nav.hpp"
+#include "shooterbots/party.hpp"
 #include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -47,6 +51,7 @@ inline constexpr int kQ2MatesMost = 7;  // companions at most (a coop game's eig
 
 struct Q2Mate {
   bots::Fighter fighter;
+  std::unique_ptr<sb::PartyWork> work;  // a helper's (null: an escort)
   sb::AimSkill skill = sb::AimSkill::average;
   std::string name;
   sh::MoveCmd cmds[3];  // the three newest, oldest first
@@ -58,8 +63,12 @@ struct Q2Party {
   std::unique_ptr<bots::MapNav> nav;                           // the map's
   std::string entities;  // the map's entity text the fighters learn its items from
   uint32_t seed = 1;
-  int named = 0;             // companions ever seated (their names count up)
-  bool turned_coop = false;  // the game was single player until the first one came
+  int named = 0;                     // companions ever seated (their names count up)
+  bool turned_coop = false;          // the game was single player until the first one came
+  const sv::MapSpec* map = nullptr;  // the map the helpers' ways were read off
+  sb::Party share;                   // the helpers' split of the map (shooterbots/party.hpp)
+  std::vector<sb::PartyMember> members;
+  sb::PartyOptions people;
 };
 
 // How many companions are seated.
@@ -68,7 +77,7 @@ int q2_party_size(const Q2Party& p);
 // them and outside `held` (a bit a slot taken elsewhere): its slot, or -1 with `error` (the party
 // or the server full, or a map with no floor to walk).
 int q2_party_add(Q2Party& p, const sv::RulesRunner& rules, const sv::MapSpec& map,
-                 sb::AimSkill skill, uint32_t held, std::string& error);
+                 sb::AimSkill skill, uint32_t held, std::string& error, bool helper = false);
 // The highest companion's slot (its seat not yet let go), or -1 when none is seated.
 int q2_party_last(const Q2Party& p);
 // Companion `slot` forgotten (the caller drops its player).

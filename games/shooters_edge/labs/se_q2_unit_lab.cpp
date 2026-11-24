@@ -287,6 +287,7 @@ void run(gl::Lab& lab) {
   opt.partners.assign(
       static_cast<size_t>(std::clamp(static_cast<int>(lab.arg_num("partners")), 0, 3)),
       ge::shooterbots::AimSkill::expert);
+  opt.beside = !lab.arg("beside").empty();
   const bt::UnitReport r = bt::run_q2_unit(opt);
   if (!r.ok) {
     lab.fail(r.error, "Read the reason above. Skill: bots.");
@@ -313,6 +314,19 @@ void run(gl::Lab& lab) {
     finished += m.finished ? 1 : 0;
   }
   lab.table(t, det);
+  if (opt.beside) {
+    gl::LabTable h;
+    h.title = "Helpers beside him (a person's stand-in)";
+    h.columns = {"map",         "time (s)", "near share",  "farthest",
+                 "back to him", "gave way", "exits turned"};
+    for (const bt::UnitMap& m : r.maps)
+      h.rows.push_back({m.name, ge::core::num::to_fixed(m.seconds, 1),
+                        ge::core::num::to_fixed(m.helper_near_share, 3),
+                        ge::core::num::to_fixed(m.helper_farthest, 0),
+                        std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
+                        std::to_string(m.helper_exits_turned)});
+    lab.table(h, det);
+  }
   lab.metric("unit.done", r.unit_done ? 1 : 0, "bool", det);
   lab.metric("unit.maps", static_cast<double>(r.maps.size()), "count", det);
   lab.metric("unit.exits_taken", finished, "count", det);
@@ -362,7 +376,10 @@ const gl::LabSpec kSpec{
      {"complete", "", "any value: the 100% run (every monster and secret, then the exit)"},
      {"partners", "0",
       "0..3 partners beside him in co-op, the map's work split among them "
-      "(plugins/shooterbots/party.hpp); each partner's track in its own colour"}},
+      "(plugins/shooterbots/party.hpp); each partner's track in its own colour"},
+     {"beside", "",
+      "any value: he plays as a person would and the partners are helpers beside him (a hosted "
+      "game's `addbot helper`: leashed to him, the exit his); a table of how they kept to him"}},
     "",
     run,
 };
