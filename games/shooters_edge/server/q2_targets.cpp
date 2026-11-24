@@ -668,6 +668,7 @@ bool targets_spawn(Q2Server& s, int i) {
     case kGravity:
       if (key(s, e, "gravity").empty()) e.gone = true;  // said at load (q2_lines.cpp)
       e.random = static_cast<float>(std::atoi(key(s, e, "gravity").c_str()));  // whole numbers
+      gz_gravity_spawn(s, e);  // Ground Zero's: a fraction, and its flags
       return true;
     case kTempEntity:
       e.sounds = static_cast<int>(number(s, e, "style", 0));  // which effect
@@ -856,7 +857,8 @@ bool targets_spawn(Q2Server& s, int i) {
 }
 
 bool targets_use(Q2Server& s, int i, int activator) {
-  if (reckoning_use(s, i, activator) || gz_brain_use(s, i, activator)) return true;
+  if (reckoning_use(s, i, activator) || gz_brain_use(s, i, activator) || gz_gravity_use(s, i))
+    return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (k == kNone) return false;
@@ -1102,6 +1104,7 @@ void targets_frame(Q2Server& s) {
         if (e.on && e.tick_at > 0 && s.level_time + 0.001 >= e.tick_at) clock_think(s, i);
         break;
       case kBarrel:
+        gz_barrel_liquids(s, i);  // Ground Zero's: lava sets it off
         if (e.tick_at > 0 && s.level_time + 0.001 >= e.tick_at) {
           e.tick_at = 0;
           blow(s, i, e.activator, kSqByBarrel);
@@ -1197,7 +1200,7 @@ void targets_monster_touch(Q2Server& s, Q2Monster& m) {
   for (const Q2Entity& e : s.entities) {
     if (e.gone) continue;
     const Kind k = kind_of(e);
-    if (k != kMonsterJump && k != kGravity) continue;
+    if ((k != kMonsterJump && k != kGravity) || e.hidden) continue;
     if (!overlap(lo, hi, e.origin + e.mins, e.origin + e.maxs)) continue;
     if (k == kGravity) {
       m.gravity = e.random;

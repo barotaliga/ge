@@ -344,6 +344,7 @@ void go_to(Q2Server& s, Q2Monster& m, sh::Vec3f goal, float speed) {
   if (step(s, m, way * len)) return;
   if (gz_ledge_jump(s, m)) return;    // Ground Zero's: down or up a ledge toward its enemy
   if (gz_base_blocked(s, m)) return;  // Ground Zero's parasite drains instead
+  if (!afloat(kind(m)) && gz_plat_ride(s, m, way * len)) return;  // or brings a plat
   // Blocked: a step to one side, then the other.
   const sh::Vec3f side = sh::angle_vectors({0, m.ideal_yaw, 0}).right;
   const float sign = random01(s) < 0.5 ? 1.0f : -1.0f;

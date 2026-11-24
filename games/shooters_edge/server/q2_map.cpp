@@ -447,6 +447,7 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     }
     return;
   }
+  gz_plat_blocked(s, e, slot);  // Ground Zero's: a dead body crushed first
   crush();
   if (c == kPlat) {
     if (e.state == kGoing)
@@ -850,7 +851,7 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
       pack(p.move.velocity, held);
       p.old_fall = held.z;  // no fall from the push
       p.ground = -1;
-      if (s.level_time + 0.001 >= p.windfly_at + 1.5) {
+      if (!gz_push_silent(s, e) && s.level_time + 0.001 >= p.windfly_at + 1.5) {
         p.windfly_at = s.level_time;
         sound_at(s, slot + 1, unpack(p.move.origin), kWindfly);
       }
@@ -933,7 +934,7 @@ void explosion(Q2Server& s, int i, int activator, int depth) {
 
 void use(Q2Server& s, int target, int activator, int depth, int other) {
   Q2Entity& e = s.entities[size_t(target)];
-  if (e.gone && class_of(e) != kWall) return;
+  if ((e.gone && class_of(e) != kWall) || gz_push_use(s, e)) return;
   switch (class_of(e)) {
     case kDoor:
     case kDoorRotating:
@@ -1452,6 +1453,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       e.speed = number(s, e, "speed", 1000);
       e.dir = has_angle(s, e) ? way_of(s, e) : sh::Vec3f{};
       e.angles = {};
+      gz_push_spawn(s, e);
       return;
     case kHurt:
       e.trigger = (e.spawnflags & 1) == 0;

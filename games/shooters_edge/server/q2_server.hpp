@@ -322,10 +322,12 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
 };
 
 // Ground Zero's bad area (q2_gz_tesla.cpp): the box round a tesla that hurt a monster, which
-// monsters keep out of until `until` (level time); `at` the tesla.
+// monsters keep out of until `until` (level time); `at` the tesla. Or the box over a rising plat
+// (q2_gz_triggers.cpp), `plat` its entity, kept until the plat is down again.
 struct Q2BadArea {
   sh::Vec3f lo, hi, at;
   double until = 0;
+  int plat = -1;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
@@ -340,6 +342,9 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   int32_t time_budget_ms = 0;
   bool alive = false;
   float health = 0;
+  // Ground Zero's gravity factor (q2_gz_triggers.cpp): the level gravity's share his move takes,
+  // set by the trigger he stood in last frame; 1 everywhere else.
+  float gravity = 1;
   float frags = 0;
   double spawned_at = 0, died_at = 0;  // level time, s
   // The time `kill` (and a change to spectating) counts 5 s from: his last respawn's, 0 (the map's

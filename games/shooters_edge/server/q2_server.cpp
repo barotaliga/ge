@@ -669,7 +669,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
     pm.s.type = p.alive    ? ge::classic::Q2Type::normal
                 : p.gibbed ? ge::classic::Q2Type::gib  // his head: the gib's box, no input
                            : ge::classic::Q2Type::dead;
-  pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
+  pm.s.gravity = static_cast<int16_t>(float(s.cvars.find("sv_gravity")->integer()) * p.gravity);
   pm.cmd = ge::classic::q2_command(c);  // the jump button the up move (q2_move.hpp)
   if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
       pm.cmd.angles[1] == p.forced_angles[1] && pm.cmd.angles[2] == p.forced_angles[2]) {
@@ -702,6 +702,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
     p.old_fall = 0;
   }
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
+  gz_gravity_touch(s, slot);  // Ground Zero's gravity triggers, for his next move
   if (p.noclip) {
     if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
     if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {

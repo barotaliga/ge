@@ -55,7 +55,8 @@ bool gz_bad_area_refuses(const Q2Server& s, const Q2Monster& m, sh::Vec3f move) 
   const sh::Vec3f to = from + move;
   for (const Q2BadArea& a : s.bad_areas) {
     if (s.level_time > a.until || !inside(a, to)) continue;
-    if (!inside(a, from)) return true;                                     // never in
+    if (!inside(a, from)) return true;  // never in
+    if (a.plat >= 0) continue;          // a plat's: one inside moves freely
     if (flat_distance(to, a.at) < flat_distance(from, a.at)) return true;  // inside: only away
   }
   return false;

@@ -77,6 +77,7 @@ void gz_train_teams(Q2Server& s) {
 
 void gz_movers_frame(Q2Server& s) {
   if (!pack(s)) return;
+  gz_plat_areas(s);
   for (Q2Entity& m : s.entities) {  // a train's riders take its velocity for this frame's push
     if (m.gone || m.team_master < 0 || !rides(m)) continue;
     const Q2Entity& t = s.entities[size_t(m.team_master)];
