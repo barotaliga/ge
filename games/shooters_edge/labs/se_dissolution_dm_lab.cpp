@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "progs/file.hpp"
@@ -189,8 +191,8 @@ bool walk(Run& r, int k, sh::Vec3f to, double limit, Done done) {
   for (int i = 0; i < static_cast<int>(limit / kFrameS); i++) {
     const sh::Vec3f at = ed(r, k + 1).origin;
     const double dx = to.x - at.x, dy = to.y - at.y;
-    r.cmd[k].angles = {0, static_cast<float>(std::atan2(dy, dx) * 180.0 / kPi), 0};
-    r.cmd[k].forward = std::hypot(dx, dy) > 4 ? 320 : 0;
+    r.cmd[k].angles = {0, static_cast<float>(ge::core::libm::atan2(dy, dx) * 180.0 / kPi), 0};
+    r.cmd[k].forward = ge::core::hypot(dx, dy) > 4 ? 320 : 0;
     frame(r);
     if (done()) {
       r.cmd[k].forward = 0;
@@ -262,7 +264,7 @@ void runes(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
     const sh::Vec3f at = ed(r, k + 1).origin;
     for (const int e : with_model(r, "progs/end")) {
       const sh::Vec3f o = ed(r, e).origin;
-      const double d = std::hypot(o.x - at.x, o.y - at.y);
+      const double d = ge::core::hypot(o.x - at.x, o.y - at.y);
       if (d < bd) bd = d, best = e;
     }
     return best;
@@ -302,8 +304,9 @@ void runes(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
   std::string bo_said;
   for (int i = 0; i < static_cast<int>(30 / kFrameS) && !dead; i++) {
     const sh::Vec3f a = ed(r, 1).origin, b = ed(r, 2).origin;
-    const double d = std::hypot(a.x - b.x, a.y - b.y);
-    r.cmd[1].angles = {0, static_cast<float>(std::atan2(a.y - b.y, a.x - b.x) * 180.0 / kPi), 0};
+    const double d = ge::core::hypot(a.x - b.x, a.y - b.y);
+    r.cmd[1].angles = {
+        0, static_cast<float>(ge::core::libm::atan2(a.y - b.y, a.x - b.x) * 180.0 / kPi), 0};
     // Bo keeps 120 to 160 units off, so the rune she drops does not land on him.
     r.cmd[1].forward = static_cast<int16_t>(d > 160 ? 320 : d < 120 ? -320 : 0);
     r.cmd[1].buttons = d < 200 ? sh::kButtonAttack : 0;
@@ -335,7 +338,7 @@ void runes(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
   const std::vector<int> now = with_model(r, "progs/end");
   for (size_t i = 0; i < now.size() && i < before.size(); i++) {
     const sh::Vec3f o = ed(r, now[i]).origin;
-    if (std::hypot(o.x - before[i].x, o.y - before[i].y) > 1) moved++;
+    if (ge::core::hypot(o.x - before[i].x, o.y - before[i].y) > 1) moved++;
   }
   c.row("untaken runes move after two minutes",
         std::to_string(moved) + " of " + std::to_string(now.size()) + " moved",
@@ -368,7 +371,7 @@ void hook(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
   // Ana goes to (-416, 384) and faces east: the dividing wall stands at x = 128.
   walk(r, 0, {-416, 384, 24}, 6, [&] {
     const sh::Vec3f o = ed(r, 1).origin;
-    return std::hypot(o.x + 416, o.y - 384) < 8;
+    return ge::core::hypot(o.x + 416, o.y - 384) < 8;
   });
   idle(r, 0.5);
   r.cmd[0].angles = {0, 0, 0};
@@ -500,12 +503,12 @@ bool go(Run& r, int k, sh::Vec3f to, double limit, std::string& said, Done done)
     const sh::Vec3f at = ed(r, k + 1).origin;
     const bool across = (at.x < 128) != (to.x < 128);
     const sh::Vec3f aim =
-        across && std::hypot(at.x - door.x, at.y - door.y) > 24
+        across && ge::core::hypot(at.x - door.x, at.y - door.y) > 24
             ? (std::abs(at.y) > 40 ? sh::Vec3f{at.x < 128 ? 60.0f : 220.0f, 0, 24} : door)
             : to;
     const double dx = aim.x - at.x, dy = aim.y - at.y;
-    r.cmd[k].angles = {0, static_cast<float>(std::atan2(dy, dx) * 180.0 / kPi), 0};
-    r.cmd[k].forward = std::hypot(dx, dy) > 4 ? 320 : 0;
+    r.cmd[k].angles = {0, static_cast<float>(ge::core::libm::atan2(dy, dx) * 180.0 / kPi), 0};
+    r.cmd[k].forward = ge::core::hypot(dx, dy) > 4 ? 320 : 0;
     frame(r);
     said += heard(r, k);
     if (done()) {
@@ -575,7 +578,7 @@ void teams(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
     lab.metric("ctf.capture-frags", gained, "frags");
     const sh::Vec3f bf = ed(r, blue_flag).origin;
     c.row("the blue flag goes home", "at " + to_fixed(bf.x, 0) + " " + to_fixed(bf.y, 0),
-          std::hypot(bf.x - blue_home.x, bf.y - blue_home.y) < 2);
+          ge::core::hypot(bf.x - blue_home.x, bf.y - blue_home.y) < 2);
     // He takes it again and the blue player kills him: the flag falls; the blue player returns it.
     s.clear();
     go(r, red, blue_home, 15, s,
@@ -584,9 +587,9 @@ void teams(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
     bool dead = false;
     for (int i = 0; i < static_cast<int>(30 / kFrameS) && !dead; i++) {
       const sh::Vec3f a = ed(r, red + 1).origin, b = ed(r, blue + 1).origin;
-      const double d = std::hypot(a.x - b.x, a.y - b.y);
-      r.cmd[blue].angles = {0, static_cast<float>(std::atan2(a.y - b.y, a.x - b.x) * 180.0 / kPi),
-                            0};
+      const double d = ge::core::hypot(a.x - b.x, a.y - b.y);
+      r.cmd[blue].angles = {
+          0, static_cast<float>(ge::core::libm::atan2(a.y - b.y, a.x - b.x) * 180.0 / kPi), 0};
       r.cmd[blue].forward = static_cast<int16_t>(d > 160 ? 320 : d < 120 ? -320 : 0);
       r.cmd[blue].buttons = d < 200 ? sh::kButtonAttack : 0;
       frame(r);
