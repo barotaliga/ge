@@ -1,6 +1,12 @@
 # THE PORTING TARGETS. A working file: porting/ is deleted when porting ends, and the root
 # Makefile includes this only while it exists.
-.PHONY: golden golden-libm
+.PHONY: golden golden-libm ledger
+
+# The ledgers' counts from their rows (porting/ledger-count.mjs): every ledger by section, or
+# ARGS=--missing for the missing count alone, ARGS=<file.md> for one ledger. No ledger keeps a
+# total by hand.
+ledger:
+	node porting/ledger-count.mjs $(ARGS)
 
 # Rewrites tests/golden/core_* (bar quat and solar), loop_*, core_num* and racing_* from the
 # TypeScript oracle (needs Node 22+ and checkouts of oss-game-framework and game5 beside this

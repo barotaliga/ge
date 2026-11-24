@@ -22,8 +22,11 @@ namespace ge::shooterbots::pilot_parts {
 
 namespace {
 
-constexpr float kRideRest = 12;    // a ridden mover this far off its rest is away, units
-constexpr float kBoardRest = 1;    // a plat this near its rest is down, units
+constexpr float kCageFloor = 32;  // feet this near a mover's bottom stand on its floor (a car's is
+                                  // 16 thick, the client lags), units
+constexpr float kClearIn = 8;     // a player's middle this far inside a mover's box is in it, units
+constexpr float kRideRest = 12;   // a ridden mover this far off its rest is away, units
+constexpr float kBoardRest = 1;   // a plat this near its rest is down, units
 constexpr double kSilent_s = 0.3;  // and still this long is silent: stepped onto, s
 constexpr float kRideLag = 24;   // a moving plat's top this near a rider's feet carries him, units
 constexpr float kStepOver = 18;  // a mover's top this near a player's feet is a step up, units
@@ -89,7 +92,63 @@ bool aboard(const Pilot& p, const PilotSense& s, int32_t ent) {
 // with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
 // coming down onto him sends back up, so it would never come for him) is in his way too, and with
 // `under_plat` one he stands under on dry ground.
+const NavMover* over_him(const Pilot& p, const PilotSense& s, float margin) {
+  if (!p.set.under_plat) return nullptr;
+  const float feet = s.origin.z + kPlayerMins.z;
+  for (const NavMover& rm : p.g->movers) {
+    if (!ridden(rm) || moving_platform(rm) || silent(p, rm.ent)) continue;
+    const NavMover* nm = mover_of(s.movers, rm.ent);
+    if (nm == nullptr) continue;
+    const float up = nm->absmin.z - rm.absmin.z;
+    if ((up <= kRideRest && up >= -kRideRest) || aboard(p, s, rm.ent)) continue;
+    // Standing on its bottom (a car's floor inside its box: base2's lift down to bunk1, ridden
+    // in, is no plat coming down on him).
+    if (feet >= nm->absmin.z && feet <= nm->absmin.z + kCageFloor) continue;
+    if (s.origin.x + kPlayerMaxs.x > nm->absmin.x - margin &&
+        s.origin.x + kPlayerMins.x < nm->absmax.x + margin &&
+        s.origin.y + kPlayerMaxs.y > nm->absmin.y - margin &&
+        s.origin.y + kPlayerMins.y < nm->absmax.y + margin && nm->absmax.z > feet + kStepHeight &&
+        nm->absmin.z < s.origin.z + kPlayerMaxs.z)
+      return &rm;
+  }
+  return nullptr;
+}
+
 bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b) {
+  // (`under_plat`) Another ridden mover on its way, away from its rest, whose box takes the place
+  // the link goes to: waited for out of its reach (bunk1's floor that sinks, called by its button
+  // beside the pit: walked into as it came down, along nodes of the pit's rim the mover does not
+  // hold, he was pinned under it in its recess and it stalled on him for good).
+  if (p.set.under_plat) {
+    // One on its way near him now (`over_him`): no link is his until he is clear of it (the next
+    // link's place outside it, his way there crossed under it).
+    if (p.crushing) return true;
+    const NavNode& nb = node(*p.g, b);
+    for (const NavMover& rm : p.g->movers) {
+      if (!ridden(rm) || moving_platform(rm)) continue;
+      const NavMover* nm = mover_of(s.movers, rm.ent);
+      if (nm == nullptr) continue;
+      const float up = nm->absmin.z - rm.absmin.z;
+      if ((up <= kRideRest && up >= -kRideRest) || aboard(p, s, rm.ent)) continue;
+      // Already inside it (its middle over him): on out, never held there; held (to step clear)
+      // only while it comes down on him.
+      if (s.origin.x > nm->absmin.x + kClearIn && s.origin.x < nm->absmax.x - kClearIn &&
+          s.origin.y > nm->absmin.y + kClearIn && s.origin.y < nm->absmax.y - kClearIn) {
+        if (over_him(p, s, 0) == &rm) return true;
+        continue;
+      }
+      // On its way, a run's length short of it too: at a run he was a step inside before the
+      // link that went in was his.
+      const float m = silent(p, rm.ent) ? 0 : kCrushNear;
+      if (nb.origin.x + kPlayerMaxs.x > nm->absmin.x - m &&
+          nb.origin.x + kPlayerMins.x < nm->absmax.x + m &&
+          nb.origin.y + kPlayerMaxs.y > nm->absmin.y - m &&
+          nb.origin.y + kPlayerMins.y < nm->absmax.y + m &&
+          nm->absmax.z > nb.origin.z + kPlayerMins.z + kStepHeight &&
+          nm->absmin.z < nb.origin.z + kPlayerMaxs.z)
+        return true;
+    }
+  }
   if (l.mover < 0) return false;
   const NavMover* rest = mover_of(p.g->movers, l.mover);
   const NavMover* now = mover_of(s.movers, l.mover);

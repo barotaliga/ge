@@ -66,6 +66,10 @@ struct EpisodeOptions {
   // leader, one each, the map's work split among them (nearest takes it), the exit waiting for
   // all of it; players 2.. after the leader, before the companions.
   std::vector<sb::AimSkill> partners;
+  // (`partners`) BESIDE A PERSON: the leader plays as a person would (his own way through, not of
+  // the party) and the partners are HELPERS beside him, as a hosted co-op game's `addbot helper`
+  // (party.hpp's `PartyWork` round the people): leashed to him by kPartyLeash, the exit his.
+  bool beside = false;
   sb::AimSkill leader = sb::AimSkill::expert;
   int skill = 1;  // the campaign's `skill`
   uint32_t seed = 1;
@@ -107,6 +111,11 @@ struct EpisodeMap {
   sb::PartyStats party;        // the party's sharing
   int64_t partner_steps = 0;   // the steps the partners did
   int64_t left_to_mates = 0;   // plans that left a stop to a mate, the party's
+  // (`beside`) the helpers' share of the time within kPartyLeash of the leader, the farthest one
+  // was, the plans they went back to him and the steps they took off an exit.
+  double helper_near_share = 0;
+  float helper_farthest = 0;
+  int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
   int leader_deaths = 0, mate_deaths = 0;
   double near_share = 0;  // the companions' share of the time within kEscortFar of him
   float farthest = 0;

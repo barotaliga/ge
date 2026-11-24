@@ -146,7 +146,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       if (opt.complete) way_complete_init(f, nav, s, c.map);
       way_init(way, f, nav, s, c.map);
       if (opt.plan && k == 0) way.log = &em.plan;
-      m.members.push_back({&way, k + 1, true});
+      if (!opt.beside || k > 0) m.members.push_back({&way, k + 1, true});
     } else {
       escort_init(f, s, k, 0);
     }
@@ -285,6 +285,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     if (opt.census) census_look(census, em, c.server, true);
     std::vector<bool> alive(static_cast<size_t>(mates) + 1, true);
     int64_t near = 0, counted = 0;
+    int64_t helper_near = 0, helper_counted = 0;
+    sb::PartyOptions people;
     const int frames = static_cast<int>(opt.map_seconds * 72);
     int frame = 0;
     bool changed = false;
@@ -322,11 +324,23 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       if (partners > 0) {
         for (sb::PartyMember& pm : m.members)
           pm.alive = now.world.entities[static_cast<size_t>(pm.ent)].health > 0;
-        sb::party_share(m.party, m.members, *m.nav, now, {});
+        if (opt.beside) {  // round the leader, a person's stand-in (party.hpp)
+          people.humans.assign(1, now.world.entities[1].origin);
+          people.facing.assign(1, now.world.entities[1].view_angles.y);
+          people.leash = sb::kPartyLeash;
+          people.exit_held = true;
+        }
+        sb::party_share(m.party, m.members, *m.nav, now, people);
       }
-      for (int k = 0; k <= partners; k++)
-        way_plan(m.ways[static_cast<size_t>(k)], m.players[static_cast<size_t>(k)], *m.nav, now,
-                 k + 1, t);
+      for (int k = 0; k <= partners; k++) {
+        WayThrough& way = m.ways[static_cast<size_t>(k)];
+        const int64_t plans = way.stats.plans;
+        way_plan(way, m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, t);
+        if (opt.beside && k > 0 &&
+            sb::party_stay(m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, people) &&
+            way.stats.plans != plans)
+          em.helper_stays++;
+      }
       for (int k = 0; k <= mates; k++) {
         Recent& rc = recent[static_cast<size_t>(k)];
         rc.cmds[0] = rc.cmds[1];
@@ -336,6 +350,11 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
           WayThrough& way = m.ways[static_cast<size_t>(k)];
           way_dive(way, *m.nav, now, k + 1, rc.cmds[2]);
           way_touch(way, now, k + 1, rc.cmds[2]);  // its keys turned or not, he goes on
+          if (opt.beside && k > 0 && sb::party_give_way(now, k + 1, people.humans, rc.cmds[2]))
+            em.helper_gave_way++;
+          if (opt.beside && k > 0 &&
+              exits_keep_off(m.players[static_cast<size_t>(k)], now, k + 1, rc.cmds[2]))
+            em.helper_exits_turned++;
         }
         if (!m.players[static_cast<size_t>(k)].bot.pilot.pilot.climbing)  // held to his ladder
           unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
@@ -388,6 +407,12 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         const bool live = d.health > 0;
         if (alive[static_cast<size_t>(k)] && !live) em.mate_deaths++;
         alive[static_cast<size_t>(k)] = live;
+        if (opt.beside && live && leader_live && !ending && k <= partners) {  // a helper's
+          const float dd = dist(d.origin, L.origin);
+          helper_near += dd <= sb::kPartyLeash ? 1 : 0;
+          helper_counted++;
+          em.helper_farthest = std::max(em.helper_farthest, dd);
+        }
         if (live && leader_live && !ending && k > partners) {  // a companion's keeping near
           const float dd = dist(d.origin, L.origin);
           near += dd < kEscortFar ? 1 : 0;
@@ -448,6 +473,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     em.seconds = static_cast<double>(frame) / 72;
     if (!changed) em.end = "the time ran out";
     em.near_share = counted > 0 ? static_cast<double>(near) / static_cast<double>(counted) : 0;
+    em.helper_near_share =
+        helper_counted > 0 ? static_cast<double>(helper_near) / static_cast<double>(helper_counted)
+                           : 0;
     em.way = m.ways[0].stats;
     em.party = m.party.stats;
     for (int k = 1; k <= partners; k++) {

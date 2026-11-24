@@ -20,7 +20,9 @@
 // THE PARTY (`--party=1,2,3`): each map played again by a party of that many bots in co-op
 // (coop_episode.hpp's partners, plugins/shooterbots/party.hpp: each stop to the nearest bot, the
 // exit once nothing is left for any), so the table says how much sooner two or three clear it; a
-// party's picture draws each bot's track in its own colour.
+// party's picture draws each bot's track in its own colour. With `--beside=1` the leader plays as a
+// person would and the others are helpers beside him (a hosted game's `addbot helper`): a second
+// table says how near they kept to him and how much of the map they took off his hands.
 //
 // The table, a map a row: got out or not, the time to the exit (the intermission's start), the
 // level's own count of monsters killed and secrets found (the program's globals), the deaths, the
@@ -346,6 +348,7 @@ void run(gl::Lab& lab) {
     if (sizes.empty()) sizes.push_back(1);
   }
   const bool party_runs = sizes.size() > 1 || sizes[0] > 1;
+  const bool beside = lab.arg("beside") == "1";
   gl::LabTable t{"each map at 100%",
                  {"map", "bots", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths",
                   "given up", "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
@@ -363,6 +366,7 @@ void run(gl::Lab& lab) {
       // A party plays co-op (a party of one too, so the sizes compare on the same rules).
       o.single = !party_runs;
       o.partners.assign(static_cast<size_t>(size) - 1, sb::AimSkill::expert);
+      o.beside = beside;
       fb::EpisodeReport r = fb::run_coop_episode(o);
       if (!r.ok) {
         lab.fail("se-q1-campaign: " + leg.first + ": " + r.error,
@@ -456,6 +460,22 @@ void run(gl::Lab& lab) {
         ct.rows.push_back({k, "0", "0", "0", "0", "0", "0", "0"});
     lab.table(ct);
   }
+  if (beside) {
+    gl::LabTable h{"helpers beside the leader (a person's stand-in)",
+                   {"map", "bots", "exit s", "kills: his/helpers'", "near share", "farthest",
+                    "back to him", "gave way", "exits turned"},
+                   {}};
+    for (size_t i = 0; i < maps.size(); i++) {
+      const fb::EpisodeMap& m = maps[i];
+      h.rows.push_back(
+          {m.name, std::to_string(sizes_of[i]), m.exit_s >= 0 ? to_fixed(m.exit_s, 1) : "-",
+           std::to_string(m.killed_by_leader) + "/" + std::to_string(m.killed_by_partners),
+           to_fixed(m.helper_near_share, 3), to_fixed(m.helper_farthest, 0),
+           std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
+           std::to_string(m.helper_exits_turned)});
+    }
+    lab.table(h);
+  }
   lab.metric("maps.played", static_cast<double>(maps.size()), "count");
   lab.metric("maps.finished", finished, "count");
   lab.metric("maps.cleared", cleared, "count");
@@ -536,6 +556,10 @@ const gl::LabSpec kSpec{
         {"party", "1",
          "the party sizes each map is played by, a comma list (1..4: `1,2,3`); more than one bot, "
          "or more than one size, plays co-op"},
+        {"beside", "0",
+         "1: the leader plays as a person would and the rest of the party are helpers beside him "
+         "(a hosted game's `addbot helper`: leashed to him, the exit his), a table of how they "
+         "kept to him"},
     },
     "--map-seconds=60",
     run,
