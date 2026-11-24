@@ -83,6 +83,7 @@ struct Kind {
   bool corpse = false;  // a medic: given a corpse to raise
   bool pack = false;    // The Reckoning's (`--mod=xatrix`)
   float far = 1;        // the player stood this many times `--range` off (a big one, a beam's)
+  bool big = false;     // filmed over the player's shoulder: from beside its gun it fills the frame
 };
 constexpr Kind kKinds[] = {
     {"parasite", "monster_parasite", "base3,train,jail2,ware2,fact2", "draining tongue",
@@ -108,7 +109,7 @@ constexpr Kind kKinds[] = {
     {"chick-heat", "monster_chick_heat", "refinery", "heat rockets' flash", "te_monster_flash",
      false, true},
     {"boss5", "monster_boss5", "industry,xintell", "rockets' and guns' flash", "te_monster_flash",
-     false, true, 2.2f},
+     false, true, 1, true},
 };
 
 void pack(int32_t v[3], sh::Vec3f p) {
@@ -301,9 +302,9 @@ bool roomy(const cl::Listen& l, sh::Vec3f c, float r) {
 }
 
 // The camera: off to one side of the attack's line (from the monster to where it ends), a little
-// back and up, with room round it, looking at the line's middle; failing that, over the player's
-// shoulder.
-ge::camera::Pose side_camera(const Staged& g) {
+// back and up, with room round it, looking at the line's middle; failing that, or for a `big` one,
+// over the player's shoulder at its gun.
+ge::camera::Pose side_camera(const Staged& g, bool big) {
   const sh::Vec3f eye = {g.stand.x, g.stand.y, g.stand.z + 22};
   const sh::Vec3f a = g.shot_from, b = g.shot_to;
   const sh::Vec3f mid = {(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f, (a.z + b.z) * 0.5f};
@@ -317,7 +318,7 @@ ge::camera::Pose side_camera(const Staged& g) {
   const float fx_ = dx / len, fy = dy / len, sx = -fy, sy = fx_;
   sh::Vec3f cam = {eye.x - fx_ * 24, eye.y - fy * 24, eye.z + 8};
   if (!clear_line(g.l, cam, mid)) cam = eye;
-  bool found = false;
+  bool found = big;  // a big one: over the player's shoulder, where it stands whole in view
   const float reach = std::max(len, 64.f);
   for (const float side : {reach, reach * 0.6f, 192.f, 128.f, 96.f, 64.f})
     for (const float back : {0.3f, 0.0f, 0.6f})
@@ -332,7 +333,7 @@ ge::camera::Pose side_camera(const Staged& g) {
             found = true;
           }
         }
-  const sh::Vec3f look = found ? mid : a;
+  const sh::Vec3f look = found && !big ? mid : a;
   const double ex = look.x - cam.x, ey = look.y - cam.y, ez = look.z - cam.z;
   ge::camera::Pose pose;
   pose.eye = cl::engine_point(cam);
@@ -399,7 +400,9 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   sh::MoveCmd cmd;
   cmd.msec = 13;
   cmd.angles = {g.pitch, g.yaw, 0};
-  const ge::camera::Pose cam = side_camera(g);
+  // A big one (boss5's hull) is filmed over the player's shoulder: from beside its gun it fills
+  // the frame.
+  const ge::camera::Pose cam = side_camera(g, k.big);
   const int start = std::max(0, shot_at - int(s.before / kTic));
   const int end = shot_at + int(s.seconds / kTic);
   double t = 0, next_draw = -1;
