@@ -21,6 +21,7 @@ simulation code: libm only, no allocation in a decal's placement after the pool 
 | `detail/receivers.hpp` | `bin_receivers`, `triangles_in`, `raycast`, `buried_at` |
 | `detail/decals.hpp` | kinds, masks, looks by age, `bake_atlas`, the pool, `place_decal`, `expire` |
 | `detail/hits.hpp` | `shot_hit` (a round's hole where its ray lands), `bleed` (blood by the share of health lost) |
+| `detail/debris.hpp` | thrown debris (a game's spent shells): `DebrisShape`, the pool (oldest reused), `throw_debris`, `step_debris` (bounce, lie down, roll, rest, fade; landings heard), `turn_of_axes` |
 | `detail/surfaces.hpp` | `SurfaceClass`, `classify_name` (a texture's class by its name's words) |
 | `detail/test_hall.hpp` | the brush-built hall the tests and labs share |
 
