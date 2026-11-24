@@ -117,6 +117,9 @@ struct Placed {
   // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
   // by `player_skin_morph`); empty: none named.
   std::string skin_name;
+  // A picture it wears in place of its model's own skin, by its path in the game's files (Quake
+  // II's custom skin: the skin number naming a picture of the server's list); empty: its own.
+  std::string skin_picture;
   // A player's `model` (its user info's: the figure in `players/<model>/` it is drawn as, over the
   // game's own); empty: none named.
   std::string model_name;
@@ -342,6 +345,9 @@ struct WorldModels {
   } slots;
 };
 
+// The pictures `placed` wear (`Placed::skin_picture`) listed beside the skins the first time one is
+// seen, each read the first time it is worn (`worn_slot`).
+void list_worn_pictures(WorldModels& m, std::span<const Placed> placed);
 // The kind `p` is drawn as, and what it wears: a player in their own skin, a second-game player as
 // their own figure, the weapon they carry from its folder.
 const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn);

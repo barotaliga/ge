@@ -57,6 +57,13 @@ void add_shared_session_cvars(con::Cvars& v, Q2Session& s) {
             .kind = con::CvarKind::text,
             .values = r.values},
            r.field);
+  // Every game's cfgs set it; a game hosted from the window reads its own (the server's cvars).
+  v.add({.name = "developer",
+         .fallback = "0",
+         .help = "Whether developer lines reach the console.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .values = "0: they are left out (the default); 1 or more: printed"});
   v.bind({.name = "in_grab",
           .fallback = "1",
           .flags = con::kArchive,

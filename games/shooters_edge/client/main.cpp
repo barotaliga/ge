@@ -179,7 +179,6 @@ namespace sp = shooters_edge::profiles;
 
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
-
 }  // namespace
 
 int run_main(int argc, char** argv) {
@@ -408,6 +407,7 @@ int run_main(int argc, char** argv) {
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
+  remote.q2_game = [&args] { return sp::game_or_quake(args.profile).id == "q2"; };  // +connect's
   const uint64_t first_ns = ge::platform::now_ns();
   ge::console::add_clock_macros(
       console, {.local = [] { return cl::local_time(); },
@@ -862,7 +862,7 @@ int run_main(int argc, char** argv) {
     world.reset();
     world = cl::create_world_draw(*device, from, map, static_cast<uint32_t>(w),
                                   static_cast<uint32_t>(h), surface.format(), picture, weapons,
-                                  error, load);
+                                  error, load, adapter);  // the played game's palette and textures
     if (!world)
       out::error("shooters_edge: the world draw did not load: " + error +
                  "; see docs/rendering.md");
@@ -893,7 +893,7 @@ int run_main(int argc, char** argv) {
     const std::string list = cl::attract_list(game_menu.attract(), args.basedir, args.game,
                                               content_row(), adapter.game->attract);
     const std::vector<std::string> words = ge::console::tokenize(list);
-    if (words.empty() || cl::archive_paths(files).empty()) return false;
+    if (words.empty() || cl::archive_paths(files).empty() || remote.active) return false;
     bench_ask = words[attract_next++ % words.size()];
     play_ask = true;
     attract_asked = true;
@@ -1115,7 +1115,7 @@ int run_main(int argc, char** argv) {
     cl::hear_swap(synth, under_ear);                      // s_swapstereo
     cl::hear_ears(synth, under_ear);                      // s_hrtf
     picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
-    if (std::exchange(attract_at_start, false) && !start_attract())
+    if (std::exchange(attract_at_start, false) && !remote.active && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
       cl::start_begin(game_start, con_view, console, game_t,
@@ -1305,7 +1305,6 @@ int run_main(int argc, char** argv) {
         cl::resize_world(*device, *world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
       cl::resize_world(*device, *title, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
     }
-
     // A game folder asked for: LOAD GAME's chooser answered, or the console's `basedir`.
     if (game_menu.take_load())
       ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
@@ -1366,7 +1365,6 @@ int run_main(int argc, char** argv) {
         if (world && listen.server != nullptr && listen.map && !bench.active) load_listen_world(t);
       }
     }
-
     // A map started on the window's own server: its place names read (the same map keeps them).
     if (!remote.active && !bench.active && listen.map) {
       place_seen.on = false;
@@ -1375,7 +1373,6 @@ int run_main(int argc, char** argv) {
     // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
     cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                    next_map);
-
     // A map asked for (the console's `map`, or the mod's level change at its limits), read behind
     // the window (client/map_load.hpp): started on the server once read, its world made behind
     // the window, drawn once its pipelines are compiled. A measured run waits for each step.
@@ -1410,11 +1407,13 @@ int run_main(int argc, char** argv) {
       if (fresh) forget_seen();
       if (fresh && listen.map) cl::level_music(music, listen.map->spec.entities);
     }
-
     // A save asked for: the game it holds now playing (its world made behind the window, below).
     if (!load_ask.empty())
       console.print(cl::load_save_asked(listen, game_content, files, load_ask));
-
+    if (attract_asked && remote.active) {  // a game joined first: no title demo over it
+      bench_ask.clear();
+      attract_asked = play_ask = false;
+    }
     // A benchmark: vsync off, the listen server waits until it is done (a demo at pace keeps it).
     if (!bench_ask.empty()) {
       const bool quit_after = bench_ask == args.timedemo || bench_ask == args.playdemo;
@@ -1509,6 +1508,8 @@ int run_main(int argc, char** argv) {
       game_menu.show(menu_host);  // a server left with no game of our own behind: the title
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
+    cl::release_load_line(loader, load_line, con_view, game_start.loading || demo_hold,
+                          remote.active || bench.active);
     const bool stop = std::exchange(stop_demo, false);  // `stopdemo` with none playing: nothing
     if (bench.active && !bench.paced && (stop || input.tapped(ge::platform::Key::escape))) {
       if (!end_bench(stop ? "stopdemo" : "Escape pressed", t, true)) return 1;
@@ -1756,7 +1757,6 @@ int run_main(int argc, char** argv) {
       ++presented;
       continue;
     }
-
     cl::release_load_line(loader, load_line, con_view, game_start.loading);
     // The title (no world of the server's map yet, or the menu still up over the title): the
     // menu and the console over the night, the spinner while a map loads, the server waiting. A
@@ -1767,9 +1767,10 @@ int run_main(int argc, char** argv) {
         world_current = false;
         load_listen_world(t);
       }
-      std::string caption = cl::load_caption(loader);  // classic: in its console (map_load.hpp)
-      const bool console_load =
-          con_look.on() && cl::console_load_line(loader, load_line, console, con_view, t);
+      const bool own_load = !remote.active && !bench.active;  // no game joined, no demo
+      std::string caption = own_load ? cl::load_caption(loader) : std::string();  // or console
+      const bool console_load = own_load && con_look.on() &&
+                                cl::console_load_line(loader, load_line, console, con_view, t);
       if (console_load) caption.clear();
       if (!cl::busy(loader)) ge::audio::play_menu_music(music);  // no game: the menu's track
       title_frame(t, wall, caption, loader.since_s, false, console_load);
@@ -1946,7 +1947,6 @@ int run_main(int argc, char** argv) {
     con_view.frame(wall);
     cl::draw_console_shown(gpu_debug.shot.hiding(), overlay, con_view, con_look, t);
     cl::draw_loading(overlay, loader, listen, game_menu.art(), w, h, t);  // the next world made
-
     wgpu::TextureView target = acquire_frame();
     if (!target) continue;
     cl::apply_view_from(view_from, view,
