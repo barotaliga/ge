@@ -34,6 +34,7 @@
 #include "golden.hpp"
 #include "progs/vm.hpp"
 #include "save/file.hpp"
+#include "shooterbots/party.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -1048,6 +1049,48 @@ TEST(a_companion_joins_q2_s_single_player_game_and_follows_through_a_level_chang
   CHECK(!l.server->clients[1].active);
   CHECK(!coop());
   CHECK_MSG(said("You play alone again."), "no word that the game is single player again");
+}
+
+// A HELPER (`addbot expert helper`) works the level near the people rather than at the player's
+// shoulder (shooterbots/party.hpp): with nothing left near him in the hall it comes back to the
+// player, never runs off beyond the leash, and an unknown word is refused in the game's words.
+TEST(a_helper_joins_q2_s_coop_game_and_keeps_to_the_people) {
+  std::string error;
+  cl::SearchPath files;
+  const std::vector<uint8_t> hall = brush_hall();
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/hall.bsp", hall}}), error));
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0", "coop 0"};
+  cl::Listen l;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "hall", error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
+  if (l.rules == nullptr) return;
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  const auto said = [&](const std::string& part) {
+    for (const std::string& line : l.prints)
+      if (line.find(part) != std::string::npos) return true;
+    return false;
+  };
+  CHECK(cl::listen_lobby(l, "addbot expert sidekick"));
+  for (int i = 0; i < 4; i++) cl::listen_frame(l, {});
+  CHECK_MSG(said("unknown word \"sidekick\""), "no word that sidekick is not a role");
+  CHECK(!l.server->clients[1].active);
+  CHECK(cl::listen_lobby(l, "addbot helper expert"));
+  for (int i = 0; i < 4; i++) cl::listen_frame(l, {});
+  CHECK_MSG(said("mate1 (expert, helper) joins the game"), "no word of the helper joining");
+  CHECK(l.server->clients[1].active);
+  float farthest = 0;
+  for (int i = 0; i < 600; i++) {
+    cl::listen_frame(l, {});
+    const sh::Vec3f me = l.server->sv.edicts[1].origin, mate = l.server->sv.edicts[2].origin;
+    const float dx = me.x - mate.x, dy = me.y - mate.y;
+    farthest = std::max(farthest, std::sqrt(dx * dx + dy * dy));
+  }
+  CHECK_MSG(farthest < ge::shooterbots::kPartyLeash,
+            "the helper went " + std::to_string(farthest) + " units off");
+  CHECK(l.server->clients[1].active);
 }
 
 // A map of the family that carries brushes (version 38) plays on the rules that trace them: the

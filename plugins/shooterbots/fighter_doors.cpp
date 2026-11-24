@@ -170,7 +170,7 @@ void watch_bridges(Fighter& f, const ge::shooterbots::BotView& s, int me) {
     } else {
       // A bridge: a floor only all the way out where the map drew it, and not in the last
       // moments of its wait (it goes back from under whoever is on it: dm2's red armour's).
-      const bool out = dist(o, sh::Vec3f{}) < 1;
+      const bool out = dist(o, b.out_at) < 1;
       const bool down = dist(o, b.spawn) < 1;
       changed = changed || down != b.down;
       b.down = down;

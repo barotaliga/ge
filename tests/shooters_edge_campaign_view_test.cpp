@@ -234,6 +234,17 @@ TEST(a_coop_campaign_seats_companions_carries_them_and_lets_them_go) {
   CHECK(cl::listen_lobby(l, "addbot expert"));
   CHECK(cl::party_size(*l.party) == 1 + 1 &&
         l.party->mates[2]->skill == ge::shooterbots::AimSkill::expert);
+  CHECK(!l.party->mates[2]->work);  // an escort by default
+  // A helper (shooterbots/party.hpp): it works the map near the people, the exit left to them.
+  CHECK(cl::listen_lobby(l, "addbot helper"));
+  CHECK(cl::party_size(*l.party) == 3 && l.party->mates[3] && l.party->mates[3]->work);
+  CHECK(l.prints.back().find("helper") != std::string::npos);
+  for (int i = 0; i < 72; i++) cl::listen_frame(l, {});
+  CHECK(l.failed.empty());
+  CHECK(l.party->people.exit_held && l.party->people.humans.size() == 1);
+  CHECK(l.party->mates[3]->work->way.stats.plans > 0);
+  CHECK(cl::listen_lobby(l, "addbot average spy"));
+  CHECK(l.prints.back().find("unknown word \"spy\"") != std::string::npos);
 }
 
 TEST(a_companion_in_single_player_turns_the_game_cooperative_until_it_leaves) {

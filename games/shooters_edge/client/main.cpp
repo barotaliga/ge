@@ -681,8 +681,7 @@ int run_main(int argc, char** argv) {
   cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                  next_map);
 
-  // The held weapons: a classic game's own, else ours (the folder given, else the tree's;
-  // held.hpp).
+  // The held weapons (held.hpp): a classic game's own, else ours (the folder given, or the tree's).
   std::vector<ge::viewmodel::HeldModel> weapons;
   std::vector<std::string> model_dirs;
   if (!args.models.empty()) model_dirs.push_back(args.models);
@@ -1587,7 +1586,8 @@ int run_main(int argc, char** argv) {
         bench_fx_state = cl::fx_state_for(&places);  // a new level: nothing burning
         bench_demo_fx = {};
         if (drawn_remote)
-          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get());
+          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get(),
+                           &bench_map->bsp.map);
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
