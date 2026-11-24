@@ -148,7 +148,7 @@ std::shared_ptr<const br::Map> lab_map(gl::Lab& lab, std::string& name, std::str
   const pf::GameProfile& game = *pf::find_game("q2");
   const ge::classicenhance::Profile& content = pf::content_of(game);
   cl::SearchPath files;
-  const std::string mod = lab.arg("pack");  // a mission pack's folder beside the base one
+  const std::string& mod = lab.arg("pack");  // a mission pack's folder beside the base one
   if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod, files,
                          error, content))
     return nullptr;
