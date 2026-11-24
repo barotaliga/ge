@@ -104,8 +104,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
                          const std::filesystem::path& cache_root) {
   ClassicPictures out;
   out.enhanced = enhance;
-  if (enhance && !content_packs(files).empty())
-    out.cache = ge::classicenhance::find_cache(content_packs(files), cache_root);
+  if (enhance) out.cache = content_cache(files, cache_root);
   out.hud_why = "Quake II draws its own bar, from the program its rules send";
   uint32_t density = 0;
   const auto picture = [&](std::string_view name, ge::ui::Image img) {
