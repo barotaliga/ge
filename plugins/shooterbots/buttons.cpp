@@ -2,7 +2,7 @@
 //
 // ge:summary The map's buttons linked to doors and items; a novice's random shots and touches
 // ge:keywords buttons_init button_poke button_poke_cmd button_node door-keeps trigger_relay
-// ge:keywords relayed-button button_fires
+// ge:keywords relayed-button button_fires pressface into-face
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_footwork_test.cpp
 #include "shooterbots/buttons.hpp"
@@ -249,6 +249,13 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
     bs.at = middle(s.world.entities[static_cast<size_t>(bs.ent)]);
     const char* health = sb::block_value(b, "health");
     bs.shoot = health && std::atof(health) > 0;
+    const char* push_angle = sb::block_value(b, "angle");
+    const double yaw = push_angle ? std::atof(push_angle) : 0;
+    if (yaw != -1 && yaw != -2) {
+      const double a = yaw * ge::core::kPi / 180;
+      bs.push = {static_cast<float>(ge::core::libm::cos(a)),
+                 static_cast<float>(ge::core::libm::sin(a)), 0};
+    }
     bs.node = button_node(g, s, bs, bs.shoot ? 900.f : 256.f);
     const std::vector<std::string> fired = button_fires(blocks, target);
     const auto fires = [&](const sb::EntityBlock& d) {
@@ -437,13 +444,37 @@ namespace {
 // Whether a wall stands between `self` and button `b` on the straight line (a button on a ledge
 // pressed from its front: walked straight at from the side, bunk1's on the 232 ledge pressed him
 // into the wall beside it for good; the route's keys bring him round to its front instead).
+// A floor button (pressed down, `push` zero) is never walled: the line to its middle, set in the
+// floor, meets the floor round it (e3m3's plate by its stairs went untouched for the whole map).
 bool walled(const ge::shooterbots::BotView& s, int me, sh::Vec3f self, const ButtonSpot& b) {
+  if (b.push.x == 0 && b.push.y == 0) return false;
   const sh::HullTrace tr =
       sh::trace_move(s.sv, self, {0, 0, 0}, {0, 0, 0}, b.at, sh::kTraceNoMonsters, me);
   return tr.fraction < 1 && tr.ent == 0;
 }
 
 }  // namespace
+
+// (`pressface`) Into a touch button the way it is pressed: first to the place in front of its
+// face, then in along its push, the keys under the view the poke holds on it. Walked straight at
+// its middle from beside, he meets the wall it is set in: bunk1's walkway button, set in the south
+// face of a post, was run at from the west into the post's side, given up, and walked past off the
+// walkway's edge, again and again for minutes.
+constexpr float kFaceStand = 40;  // the place in front: this far out from its middle, units
+constexpr float kFaceNear = 12;   // and there once this near it
+
+void into_face(sh::MoveCmd& cmd, sh::Vec3f self, const ButtonSpot& b) {
+  const float dx = b.at.x - b.push.x * kFaceStand - self.x;
+  const float dy = b.at.y - b.push.y * kFaceStand - self.y;
+  const float off = std::sqrt(dx * dx + dy * dy);
+  const float wx = off < kFaceNear ? b.push.x : dx / off;
+  const float wy = off < kFaceNear ? b.push.y : dy / off;
+  const double yaw = static_cast<double>(cmd.angles.y) * (ge::core::kPi / 180);
+  const double c = ge::core::libm::cos(yaw);
+  const double sn = ge::core::libm::sin(yaw);
+  cmd.forward = static_cast<int16_t>(320 * (wx * c + wy * sn));
+  cmd.side = static_cast<int16_t>(320 * (wx * sn - wy * c));
+}
 
 void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
@@ -472,6 +503,9 @@ void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, doub
       cmd.forward = 0;
       cmd.side = 0;
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+    } else if (flat < 200 && !b.shoot && f.features[sb::Feature::pressface] &&
+               (b.push.x != 0 || b.push.y != 0)) {
+      into_face(cmd, self, b);
     } else if (flat < 200 && !walled(s, me, self, b)) {
       cmd.forward = 320;
       cmd.side = 0;
@@ -496,6 +530,9 @@ void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, doub
       cmd.side = 0;
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
     }
+  } else if (flat < 200 && !b.shoot && f.features[sb::Feature::pressface] &&
+             (b.push.x != 0 || b.push.y != 0)) {
+    into_face(cmd, self, b);
   } else if (flat < 200 && !walled(s, me, self, b)) {
     cmd.forward = 320;  // into it: a touch presses it
     cmd.side = 0;

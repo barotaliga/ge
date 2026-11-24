@@ -323,6 +323,16 @@ void run(gl::Lab& lab) {
   lab.metric("unit.digest_low", static_cast<double>(r.digest & 0xffffffu), "hash", det);
   for (const bt::UnitMap& m : r.maps)
     for (const std::string& line : m.plan) lab.note(m.name + ": " + line);
+  if (!lab.arg("track").empty()) {
+    // The track holds a point every 0.2 s (bots/q2_unit.hpp); --track=1 notes one a second.
+    const size_t every = static_cast<size_t>(std::max(1.0, lab.arg_num("track") * 5 + 0.5));
+    for (const bt::UnitMap& m : r.maps)
+      for (size_t i = 0; i < m.track.size(); i += every)
+        lab.note(m.name + ": track " + ge::core::num::to_fixed(0.2 * static_cast<double>(i), 1) +
+                 " s " + ge::core::num::to_fixed(m.track[i].x, 0) + " " +
+                 ge::core::num::to_fixed(m.track[i].y, 0) + " " +
+                 ge::core::num::to_fixed(m.track[i].z, 0));
+  }
   if (own && (!r.unit_done || keys_taken != keys || goals_found != goals))
     lab.fail("the script did not play the fixture unit through: " + std::to_string(finished) +
                  " exits, " + std::to_string(keys_taken) + " of " + std::to_string(keys) +
@@ -359,6 +369,8 @@ const gl::LabSpec kSpec{
      {"maps", "12", "at most this many maps entered"},
      {"seconds", "600", "a map's time before it is called unfinished, s"},
      {"plan", "", "any value: note every change of the script's plan"},
+     {"track", "",
+      "seconds: note where he was every so often (0.2 at the finest), to read beside --plan"},
      {"complete", "", "any value: the 100% run (every monster and secret, then the exit)"},
      {"partners", "0",
       "0..3 partners beside him in co-op, the map's work split among them "

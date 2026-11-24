@@ -32,6 +32,7 @@ namespace ge::shooterbots {
 namespace {
 
 constexpr int kKeySilver = 131072, kKeyGold = 262144;  // the keys' item bits
+constexpr float kGateWide = 64;      // an explosive narrower both ways is no way's gate, units
 constexpr float kButtonClose = 320;  // at a button's spot this near, he presses it, units
 constexpr double kPressFor_s = 4;    // and gives the press this long
 constexpr float kWayShotFrom = 600;  // (`complete`) a secret wall is shot from this near, units
@@ -194,10 +195,12 @@ sh::Vec3f spawned_at(const sb::EntityBlock& b) {
 
 // Whether locked door `k` has moved off where it stood shut (a turning bridge: turned; a bridge
 // slid out of the floor, `kLockedOut`: all the way out to where the map drew it, `locked_at`, so
-// one still rising or sinking again, as e2m6's pool bridges do on their clock, is still shut).
+// one still rising or sinking again, as e2m6's pool bridges do on their clock, is still shut), or
+// is gone.
 bool locked_moved(const WayThrough& w, const ge::shooterbots::BotView& s, size_t k) {
   const sh::Edict& d = s.sv.edicts[static_cast<size_t>(w.locked[k])];
   const uint8_t kind = k < w.locked_turns.size() ? w.locked_turns[k] : 0;
+  if (d.free) return true;  // gone: a field turned off, a wall blown away
   if (kind == kLockedOut) return dist(d.origin, w.locked_at[k]) < 1;
   return dist(kind != 0 ? d.angles : d.origin, w.locked_at[k]) >= 1;
 }
@@ -467,6 +470,40 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   std::string error;
   if (!sb::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
   name_linked_doors(s, spec, blocks);
+  // The edict of a gate (`gates` below) at the start: a named wall, explosive or waiting train
+  // standing in the world; -1 for anything else. One out of the world at the start bars nothing:
+  // a wall or an explosive that appears when fired (spawnflag 1), a toggled wall not on (a wall's
+  // 1 or 2 without 4). A small explosive (a crate, a lamp: base3's four that a button breaks) is
+  // walked round, no gate.
+  const auto gate_of = [&](const sb::EntityBlock& d) -> int {
+    const char* dc = sb::block_value(d, "classname");
+    const char* dm = sb::block_value(d, "model");
+    const char* dsf = sb::block_value(d, "spawnflags");
+    const int flags = dsf ? std::atoi(dsf) : 0;
+    if (!dc || !dm || dm[0] != '*' || !sb::block_value(d, "targetname")) return -1;
+    const bool wall = std::strcmp(dc, "func_wall") == 0;
+    const bool blast = std::strcmp(dc, "func_explosive") == 0;
+    const bool train = std::strcmp(dc, "func_train") == 0 && (flags & 1) == 0;
+    if (!wall && !blast && !train) return -1;
+    if (wall ? (flags & 3) != 0 && (flags & 4) == 0 : blast && (flags & 1) != 0) return -1;
+    const int dmi = std::atoi(dm + 1);
+    const size_t models = !spec.models.empty() ? spec.models.size()
+                          : spec.brushes       ? spec.brushes->models.size()
+                                               : 0;
+    if (dmi <= 0 || static_cast<size_t>(dmi) >= models) return -1;
+    sh::Vec3f glo, ghi;
+    if (!spec.models.empty()) {
+      glo = spec.models[static_cast<size_t>(dmi)].mins;
+      ghi = spec.models[static_cast<size_t>(dmi)].maxs;
+    } else {
+      const ge::brush::Model& gm = spec.brushes->models[static_cast<size_t>(dmi)];
+      glo = {gm.mins[0], gm.mins[1], gm.mins[2]};
+      ghi = {gm.maxs[0], gm.maxs[1], gm.maxs[2]};
+    }
+    if (blast && std::fmax(ghi.x - glo.x, ghi.y - glo.y) < kGateWide) return -1;
+    const int e = edict_of(s, dm);
+    return e >= 0 && !s.sv.edicts[static_cast<size_t>(e)].free ? e : -1;
+  };
   // What opens a door only something else opens: a name a shut door answers to, or a counter's,
   // a relay's or a door's whose own target does (two hops).
   const auto names_door = [&](const std::string& t, std::vector<int>& out) {
@@ -477,8 +514,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const char* dm = sb::block_value(d, "model");
       const char* sf = sb::block_value(d, "spawnflags");
       if (!dc || !dn || t != dn) continue;
-      if ((std::strcmp(dc, "func_door") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) ||
-          std::strcmp(dc, "func_door_secret") == 0 || std::strcmp(dc, "func_plat") == 0) {
+      if (const int gate = gate_of(d); gate >= 0) {
+        any = true;  // a gate (a field, rubble, a waiting train): open once gone or moved
+        out.push_back(gate);
+      } else if ((std::strcmp(dc, "func_door") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) ||
+                 std::strcmp(dc, "func_door_secret") == 0 || std::strcmp(dc, "func_plat") == 0) {
         any = true;
         const int e = dm ? edict_of(s, dm) : -1;
         if (e >= 0) out.push_back(e);
@@ -699,6 +739,39 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         w.plats.push_back(e);
       }
       continue;
+    } else if (brush && name && gate_of(b) >= 0) {
+      // A wall with a name standing at the start (a force field something turns off) and one that
+      // something blows up: shut to him until they are gone (bunk1's field across the door of its
+      // button room, walked into for minutes; the rubble a button blows open). The nav leaves them
+      // out of its world (a plain wall it keeps: map_nav's add_walls). A train that waits for its
+      // name is shut the same way until it moves (bunk1's over the pit of a secret: a drop through
+      // it stood him still for minutes). What fires one opens it (`names_door`).
+      const int e = gate_of(b);
+      {  // (its rest)
+        // A train rests with its least corner on its first corner's place: it may not stand
+        // there yet when he starts (it finds its corner a moment after the map spawns).
+        sh::Vec3f rest = s.sv.edicts[static_cast<size_t>(e)].origin;
+        if (std::strcmp(cn, "func_train") == 0 && target)
+          for (const sb::EntityBlock& c : blocks) {
+            const char* cname = sb::block_value(c, "targetname");
+            const char* corg = sb::block_value(c, "origin");
+            if (cname && corg && std::strcmp(cname, target) == 0) {
+              const sh::Vec3f lo =
+                  !spec.models.empty()
+                      ? spec.models[static_cast<size_t>(m)].mins
+                      : sh::Vec3f{spec.brushes->models[static_cast<size_t>(m)].mins[0],
+                                  spec.brushes->models[static_cast<size_t>(m)].mins[1],
+                                  spec.brushes->models[static_cast<size_t>(m)].mins[2]};
+              rest = origin_of(corg) - lo;
+              break;
+            }
+          }
+        w.locked.push_back(e);
+        w.locked_at.push_back(rest);
+        w.locked_turns.push_back(0);
+        gates.push_back(e);
+      }
+      continue;
     } else if (std::strcmp(cn, "func_door_secret") == 0 && brush) {
       // A secret wall stays shut to a walk: its trigger, its button or a shot opens it (the nav's
       // links through it waited there for ever: e1m1's wall by the slime pit stood him still for
@@ -800,13 +873,26 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     } else if (std::strcmp(cn, "func_door_rotating") == 0 && name && brush) {
       // A turning bridge still turned up is shut to him (its nodes are where it turns down to).
       const int e = edict_of(s, model);
+      bool bridge = false;
       for (const NavBridge& br : nav.bridges)
         if (br.turns && br.ent == e) {
+          bridge = true;
           w.locked.push_back(e);
           w.locked_at.push_back(br.spawn_angles);
           w.locked_turns.push_back(1);
           for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
         }
+      // Any other is shut across the links through it till it turns (bunk1's hatch over the
+      // ladder up to the top floor, turned open by a button up there: the climb from below met
+      // it for minutes).
+      // One that starts open (spawnflag 1, base3's) is turned open already: shut by a move.
+      const char* rsf = sb::block_value(b, "spawnflags");
+      if (!bridge && e >= 0 && !(rsf && (std::atoi(rsf) & 1) != 0)) {
+        w.locked.push_back(e);
+        w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].angles);
+        w.locked_turns.push_back(1);
+        gates.push_back(e);
+      }
       continue;
     } else {
       continue;
@@ -1349,6 +1435,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   };
   reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
   way_trigger_sides(w, g);
+  if (f.features[sb::Feature::shotplace]) way_shot_sides(w, f, g, s, t);
   // A place is gone to while he can come back from it, or go on from it to an exit: a one-way drop
   // into a pit to touch a trigger or look about held him there for the rest of the map (e1m6's
   // pit, from 13 s; e1m1's flooded secret). Only with nothing else to do is a one-way place gone
@@ -1384,6 +1471,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   const auto reach = [&](int32_t n) {
     return w.search.reached(n) && (!strict_work || round_trip(n));
   };
+
   // A car's button to press before the exit it carries him to.
   bool car_first = false;
   for (const WayStep& st : w.steps)
