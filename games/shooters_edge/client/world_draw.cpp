@@ -464,9 +464,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   // The enhanced cache, when this pack's were enhanced (the in-game menu's ENHANCE): keyed by the
   // packs' bytes, looked up once for the textures, the rebake and the skins.
   const bool any = picture.ce.textures || picture.ce.rebake || picture.ce.models;
-  const std::filesystem::path cache = any && !content_packs(files).empty()
-                                          ? ge::classicenhance::find_cache(content_packs(files))
-                                          : std::filesystem::path{};
+  const std::filesystem::path cache = any ? content_cache(files) : std::filesystem::path{};
   // ce_textures: the enhanced textures.
   ba::TextureSource source;
   if (picture.ce.textures && !cache.empty()) {

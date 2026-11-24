@@ -1692,7 +1692,11 @@ every pass, and judged by captioned screenshots:
   (`client/world_extras.hpp`) the modern look also draws the water, the lava and the slime as
   real liquids, the torches' burning gas and the weather through the open sky, and the map's
   textures come from classic-enhance's cache when the pack was enhanced, each behind its `ce_`
-  switch; `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
+  switch. A mission pack is enhanced laid over its base game (`ge tool classicenhance -- run
+  <install>/hipnotic` finds `id1` beside it): its cache is keyed by the base game's packs then the
+  pack's, the key the window reads with the pack mounted (`content_cache`), falling back to the
+  base game's own cache until the pack's is made (M63b);
+  `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
   both looks, for private pictures only. The `se-world` lab pictures every named view in both. The player sets the picture with
   cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
   effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and

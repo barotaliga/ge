@@ -157,6 +157,12 @@ bool add_later_packs(const std::string& dir, Source* out, std::string* error,
     out->later.push_back(std::move(p));
   }
   if (out->later.empty()) return true;
+  return merge_later(out, error);
+}
+
+bool merge_later(Source* out, std::string* error) {
+  out->merged.clear();
+  const std::string first = out->content_zip ? out->zip_sha256 : out->pack_sha256;
   // Every path once, at its first place, holding its latest copy.
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
   std::map<std::string, size_t> at;
@@ -378,6 +384,52 @@ bool open_source(const std::string& path, Source* out, std::string* error,
                  std::span<const KnownFile> packs, std::span<const KnownSet> sets) {
   *out = Source{};
   if (!open_any(path, out, error, packs)) return false;
+  // A mission pack: laid over its base game, found beside the pack's folder.
+  // By its first pack's digest, or by its folder's name when the pack has no palette of its own
+  // (a copy of the pack the player changed).
+  const Profile* game = nullptr;
+  const MissionPack* mission =
+      out->content_zip ? nullptr : known_pack(out->pack.size(), out->pack_sha256, &game);
+  const fs::path mod_dir = fs::path(out->path).parent_path();
+  if (mission == nullptr && !out->content_zip && !out->pack.empty()) {
+    vfs::Pak pak;
+    std::string why;
+    for (const Profile& p : kProfiles) {
+      if (mission != nullptr) break;
+      const MissionPack* m = find_pack(p, mod_dir.filename().string());
+      if (m != nullptr && vfs::read_pak(out->pack, &pak, &why) &&
+          vfs::pak_find(pak, p.palette) == nullptr) {
+        mission = m;
+        game = &p;
+      }
+    }
+  }
+  if (mission != nullptr && game != nullptr) {
+    const fs::path base_dir =
+        child_any_case(mod_dir.parent_path(), lower(std::string(game->base_dir)));
+    if (base_dir.empty()) {
+      *error = std::string(mission->name) +
+               " is a mission pack: it needs its base game beside it (" +
+               std::string(game->base_dir) + " next to " + mod_dir.filename().string() +
+               "); pass the mission pack's folder in an install that has both";
+      return false;
+    }
+    Source base;
+    if (!open_any(base_dir.string(), &base, error, packs)) return false;
+    match_known_set(&base, sets);  // the release the base game is, before the pack is laid on
+    LaterPack first;
+    first.name = fs::path(out->path).filename().string();
+    first.path = out->path;
+    first.sha256 = out->pack_sha256;
+    first.bytes = std::move(out->pack);
+    base.later.push_back(std::move(first));
+    for (LaterPack& p : out->later) base.later.push_back(std::move(p));
+    if (!merge_later(&base, error)) return false;
+    base.mission = mission;
+    base.route = out->route;
+    *out = std::move(base);
+    return true;
+  }
   match_known_set(out, sets);
   return true;
 }
