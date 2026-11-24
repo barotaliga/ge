@@ -270,7 +270,7 @@ The game fills its part when a match ends (`ServerGame::match_report`, asked aft
 true once per match) and `engine/server` adds its own (the id, the game and its version, the
 server's name and address, the start in Unix seconds); the server keeps its last 16 on
 `Server::reports`, newest last. The bytes refuse a report past their limits (64 players, 16 teams,
-64 columns) rather than cut it, since a report that says less than the match is worse than none.
+96 columns) rather than cut it, since a report that says less than the match is worse than none.
 
 Shooter's Edge tallies a deathmatch off the rules' world every frame
 (`games/shooters_edge/net/qw_report.hpp`), since the rules keep only the frags: a player whose
@@ -315,7 +315,7 @@ The stats are the same for every classic game (the maintainer, 2026-11-23): one 
 `games/shooters_edge/server/match_stats.hpp`, holds the columns, the counting rules and the lines
 a player reads, and each game only finds its events. QuakeWorld (and Quake) reads them off the QC
 server every frame (`games/shooters_edge/net/qw_stats.hpp`, changing nothing there) and sends them
-as the report's columns; Quake II's rules call them as blows land
+as the report's columns; Quake II's rules call them as blows land, and its server reports each match the same way
 (`games/shooters_edge/server/q2_stats.hpp`), with its own eleven weapons (bl, sg, ssg, mg, cg, gl,
 rl, hb, rg, bfg, hg), its armours (`ja`, `ca`, `ba`) and power-ups (`quad`, `invuln`, `power`) in
 the same places. They are what a classic match's statistics keep (the facts in

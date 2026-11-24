@@ -1192,6 +1192,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   }
   q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
   q2_match_open(game.match, *game.net, game.rules, game.match_cfg);  // its words before the votes'
+  if (game.login) game.match.logins = &game.login->logins;           // a report's accounts
   return true;
 }
 
@@ -1512,6 +1513,9 @@ const gs::ServerGame& make() {
     s.tv_keyframe = tv_state;
     s.player_view = player_view;
     s.phase = phase;
+    s.match_report = [](void* game, ge::net::MatchReport& out) {
+      return q2_match_report(static_cast<Game*>(game)->match, out);
+    };
     s.console_lines = console_lines;
     s.console = console_line;
     s.words = kQ2ServerWords;
