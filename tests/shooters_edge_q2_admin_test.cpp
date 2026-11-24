@@ -633,7 +633,7 @@ TEST(the_operators_words_reach_one_client_or_all_in_the_servers_words) {
   // The version probe: its answer kept and listed.
   CHECK_MSG(has(rcon(*r, "rcon letmein status v"), "  1 eve             q2 test 1.0\n"),
             rcon(*r, "rcon letmein status v"));
-  CHECK(r->server.clients[0].version_heard && r->server.clients[0].version.empty());
+  CHECK(r->server.clients[0].version_heard && r->server.clients[0].version == cn::kProgramVersion);
   CHECK(has(rcon(*r, "rcon letmein status x"), "Usage: status [d|l|p|s|t|v]\nCurrent map: hall"));
   CHECK(
       has(rcon(*r, "rcon letmein status p"), "  1 eve                34     0   1390  no   old\n"));

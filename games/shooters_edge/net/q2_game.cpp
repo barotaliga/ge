@@ -1216,6 +1216,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   }
   q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
   q2_match_open(game.match, *game.net, game.rules, game.match_cfg);  // its words before the votes'
+  if (game.login) game.match.logins = &game.login->logins;           // a report's accounts
   return true;
 }
 
@@ -1499,6 +1500,13 @@ void player_view(const void* g, int player, std::vector<uint8_t>& out) {
   q2_player_view(*static_cast<const Game*>(g)->rules, player, out);
 }
 
+// The match's phase (sv_lobby), else the match: what the core's features act on (sv_autorecord
+// records each match from its first frame to its last).
+gs::LobbyPhase phase(const void* g) {
+  const Game& game = *static_cast<const Game*>(g);
+  return game.match.on ? game.match.lobby.phase : gs::LobbyPhase::match;
+}
+
 const gs::ServerGame& make() {
   static gs::ServerGame g = [] {
     gs::ServerGame s;
@@ -1530,6 +1538,10 @@ const gs::ServerGame& make() {
     s.tv_frame = tv_state;
     s.tv_keyframe = tv_state;
     s.player_view = player_view;
+    s.phase = phase;
+    s.match_report = [](void* game, ge::net::MatchReport& out) {
+      return q2_match_report(static_cast<Game*>(game)->match, out);
+    };
     s.console_lines = console_lines;
     s.console = console_line;
     s.words = kQ2ServerWords;

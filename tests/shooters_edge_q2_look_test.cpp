@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include "check.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 
@@ -205,6 +206,21 @@ TEST(the_disguise_wears_its_folders_disguise_skin) {
   CHECK(cl::q2_disguised("female/athena") == "female/disguise");
   CHECK(cl::q2_disguised("cyborg/oni911") == "cyborg/disguise");
   CHECK(cl::q2_disguised("") == "male/disguise");
+}
+
+// The custom skin bit: the skin number names a picture of the server's list, worn in place of the
+// model's own skin, read only from an extended server or recording.
+TEST(a_custom_skin_wears_a_picture_of_the_servers_list) {
+  CHECK(cl::q2_picture_path("i_health") == "pics/i_health.pcx");
+  CHECK(cl::q2_picture_path("/models/x/skin.pcx") == "models/x/skin.pcx");
+  CHECK(cl::q2_picture_path("\\players/a.pcx") == "players/a.pcx");
+  const std::vector<std::string> images = {"", "/models/x/skin.pcx", ""};
+  CHECK(cl::q2_custom_skin(cl::kRfCustomSkin, 1, images) == "models/x/skin.pcx");
+  CHECK(cl::q2_custom_skin(0, 1, images).empty());                  // the bit clear
+  CHECK(cl::q2_custom_skin(cl::kRfCustomSkin, 2, images).empty());  // no name there
+  CHECK(cl::q2_custom_skin(cl::kRfCustomSkin, 3, images).empty());  // past the list
+  CHECK(cl::q2_custom_skin(cl::kRfCustomSkin, 0, images).empty());  // the list's empty first
+  CHECK(cl::q2_extended(3434) && cl::q2_extended(3436) && !cl::q2_extended(34));
 }
 
 }  // namespace

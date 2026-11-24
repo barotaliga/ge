@@ -19,6 +19,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_stats.hpp"
 
 namespace shooters_edge::server {
 
@@ -119,6 +120,7 @@ int reckoning_toggle(const Q2Server& s, int slot, int w, std::string& refused) {
 }  // namespace
 
 void fight_took(Q2Server& s, int slot, int item, int before) {
+  stats_item(s, slot, item);
   const int w = sq_weapon_of_item(item);
   Q2Player& p = s.players[slot];
   const SqItem& it = kSqItems[item];
