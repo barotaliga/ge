@@ -34,7 +34,8 @@
 // cvar under a second name: `find` answers the target, so a cfg line, the console and a program's
 // reads and writes all reach it. A PART synonym is one word of a target that holds several ("N S
 // T"): `set` by its name replaces that word and `synonym_value` reads it. A MAPPED synonym is a
-// game's spelling with its own values (`add_mapped_synonym`). Synonyms are not listed by `sorted`.
+// game's spelling with its own values (`add_mapped_synonym`), a SCALED one in its own unit
+// (`add_scaled_synonym`: `fixedtime` ms). Synonyms are not listed by `sorted`.
 //
 // META-CVARS (`add_meta`, docs/servers.md § Meta-cvars): a cvar whose value names a LEVEL that
 // sets a group of others, declared as data beside the feature that owns it (`sv_modern 1`: the
@@ -208,8 +209,12 @@ struct Synonym {
   int part = -1;      // -1: the whole value; else the index of the word it names
   std::string layer;  // the layer that named it: `drop_layer` takes it away (LAYERS above)
   std::vector<SynonymValue> values;  // a mapped synonym's values (SYNONYMS above); empty: none
+  double scale = 0;    // a scaled synonym: its value is the target's times this; 0: not scaled
+  bool cheat = false;  // set by this name only while cheats are on; the target reset with them
+  // Its values differ from the target's (mapped or scaled): `set` and the console translate.
+  bool mapped() const { return !values.empty() || scale != 0; }
   // The target under another name, its values its own: what `find` answers.
-  bool whole() const { return part < 0 && values.empty(); }
+  bool whole() const { return part < 0 && !mapped(); }
 };
 
 // One member of a meta-cvar's level: a cvar and the value the level gives it, or another meta's
@@ -252,7 +257,7 @@ enum class SetResult : uint8_t {
   refused,    // the server may not set a player's own cvar
   bad_name,   // a name with a character outside [a-z0-9_+.-]
   locked,     // held by a lock, or kept inside its range (LOCKS above): its `why` says by whom
-  unmapped,   // a mapped synonym's value its map lacks (SYNONYMS above)
+  unmapped,   // a mapped synonym's value its map lacks, a scaled one's not a number (SYNONYMS)
 };
 
 // One line saying why `r` refused `name`, with the next action; empty for changed, same and
@@ -336,9 +341,17 @@ class Cvars {
   // maps the target's back; `find` does not answer it. False as add_synonym, or for no values.
   bool add_mapped_synonym(std::string_view name, std::string_view target,
                           std::vector<SynonymValue> values);
-  // A mapped synonym's value as the target's ("" when its map lacks it).
+  // A game's spelling in another unit: its value is the target's times `scale` (`fixedtime` 50 is
+  // `host_framerate` 0.05 at 1000). `cheat`: set by this name only while cheats are on (refused as
+  // `SetResult::cheat`), and the target back to its default when they go off, as a cheat's is.
+  // `set` refuses a value that is not a number (`SetResult::unmapped`). False as add_synonym, or
+  // for a scale that is 0 or not finite.
+  bool add_scaled_synonym(std::string_view name, std::string_view target, double scale,
+                          bool cheat = false);
+  // A mapped or scaled synonym's value as the target's ("" when its map lacks it).
   std::string mapped_value(const Synonym& s, std::string_view theirs) const;
-  // The words a mapped synonym's help shows: "1 (scr_draw2d 2); 0 (scr_draw2d 0)".
+  // The words a mapped synonym's help shows: "1 (scr_draw2d 2); 0 (scr_draw2d 0)"; a scaled one's
+  // "a number (host_framerate's times 1000)".
   static std::string mapped_words(const Synonym& s);
   // The synonym `name` (whole or part), or null.
   const Synonym* synonym(std::string_view name) const;
@@ -398,6 +411,7 @@ class Cvars {
   Cvar& meet(Cvar& c, const CvarSpec& spec, CvarTarget target);   // an earlier layer's name
   void define(Cvar& c, const CvarSpec& spec, CvarTarget target);  // the spec, at its default
   Cvar* find_any(std::string_view name);                          // retired ones too
+  void reset_cheats();  // every cheat, and what a cheat synonym reaches, back to its default
   std::string layer_ = "engine";
   std::vector<CvarClash> clashes_;
   std::string scope_;

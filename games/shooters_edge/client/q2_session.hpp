@@ -9,9 +9,11 @@
 // server is joined or this window hosts one; its map is the one the server names. They keep their
 // text when another game is loaded.
 //
-// THE CLOCK: `timescale` speeds or slows a game this window runs (2 twice as fast) and `fixedtime`
-// moves it a fixed number of milliseconds each frame; both are cheats (only while sv_cheats is 1),
-// and `host_framerate` (seconds a frame) goes first when set.
+// THE CLOCK: `timescale` speeds or slows a game this window runs (2 twice as fast). `fixedtime`
+// moves it a fixed number of milliseconds each frame: it is every game's `host_framerate` (seconds
+// a frame, the window's) under Quake II's name and unit, a scaled synonym (`fixedtime 50` is
+// `host_framerate 0.05`). `timescale` and `fixedtime` are cheats (only while sv_cheats is 1), and
+// what `fixedtime` set goes back to 0 when cheats go off.
 //
 // `cl_autopause` 1 (the default, as every other game does) holds a game played alone while the
 // console or a menu is up; 0 lets it run on.
@@ -77,7 +79,6 @@ struct Q2Session {
   std::string change_cmd;      // cl_changemapcmd
   std::string disconnect_cmd;  // cl_disconnectcmd
   double timescale = 1;        // timescale: the game's speed
-  double fixed_ms = 0;         // fixedtime: milliseconds a frame, 0 the real time
   bool autopause = true;       // cl_autopause: a game played alone waits under the menu
   bool third_person = false;   // cl_thirdperson (a cheat)
   double third_angle = 0;      // cl_thirdperson_angle, degrees round the player
@@ -112,8 +113,8 @@ int q2_fps_rounded(int fps);
 // The warning above, once per change of `cl_maxfps` while in a game (q2_session_step calls it).
 void q2_fps_warning(ge::console::Console& con, Q2Session& s);
 
-// The game's step for one frame of `wall` seconds: host_framerate's seconds when set, else
-// fixedtime's milliseconds when set, else `wall`; times timescale.
+// The game's step for one frame of `wall` seconds: host_framerate's seconds when set (fixedtime's
+// too), else `wall`; times timescale.
 double q2_game_dt(const Q2Session& s, double host_framerate, double wall);
 
 // One frame: the map commands run on what changed since the last (left the game: the disconnect

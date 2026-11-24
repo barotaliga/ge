@@ -124,7 +124,7 @@ const Cvar* cvar_named(const Console& c, std::string_view name, Setting& s) {
   if (const Synonym* syn = c.cvars().synonym(name); syn != nullptr && syn->target != nullptr) {
     s.synonym = true;
     s.part = syn->part;
-    s.mapped = !syn->values.empty();
+    s.mapped = syn->mapped();
     return syn->target;
   }
   const Cvar* v = c.cvars().find(name);
