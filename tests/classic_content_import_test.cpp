@@ -472,3 +472,30 @@ TEST(a_pack_on_a_disc_image_or_in_a_zip_in_the_store_folders_is_offered_as_itsel
   offers = content::find_offers({lib.string()}, data.string());
   CHECK(offers.size() == 1 && offers[0].pack->folder == "hipnotic");
 }
+
+TEST(import_takes_both_quake_packs_off_their_cd_image) {
+  // The Quake packs' CD: one raw data track (its sheet beside it) holding both packs' folders in
+  // upper case and no base folder; each pack lands beside Quake's base folder, the game needed.
+  const fs::path src = fresh("qpacks"), data = fresh("qpacks_data");
+  const Files files = {{"HIPNOTIC/PAK0.PAK", pak("hip1m1")},
+                       {"ROGUE/PAK0.PAK", pak("r1m1")},
+                       {"ROGUE/PROGS.DAT", {'p'}},
+                       {"SETUP.EXE", {'M', 'Z'}}};
+  save(src / "QPacks.BIN", vfs::raw_sectors(vfs::write_iso(files, false)));
+  std::ofstream(src / "QPacks.cue") << "FILE \"QPacks.BIN\" BINARY\nTRACK 01 MODE1/2352\nINDEX 01 "
+                                       "00:00:00\n";
+  save(data / "q1/taken.txt", {'x'});
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game((src / "QPacks.cue").string(), data.string(), &r, &error), error);
+  CHECK(!r.base && r.game != nullptr && r.game->id == "q1" && r.packs.size() == 2);
+  CHECK(r.notes.size() == 1 && r.notes[0].find("Quake itself") != std::string::npos);
+  CHECK(fs::exists(data / "q1/hipnotic/pak0.pak") && fs::exists(data / "q1/rogue/pak0.pak"));
+  CHECK(!fs::exists(data / "q1/rogue/progs.dat") && !fs::exists(data / "q1/setup.exe"));
+  // The image alone, its sheet lost: the raw sectors are read as the disc.
+  const fs::path bare = fresh("qpacks_bare"), into = fresh("qpacks_bare_data");
+  fs::copy_file(src / "QPacks.BIN", bare / "QPacks.BIN");
+  content::ImportReport b;
+  CHECK_MSG(content::import_game((bare / "QPacks.BIN").string(), into.string(), &b, &error), error);
+  CHECK(b.packs.size() == 2 && fs::exists(into / "q1/rogue/pak0.pak"));
+}
