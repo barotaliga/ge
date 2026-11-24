@@ -1401,10 +1401,13 @@ bool mate_words(Game& g, int slot, const std::string& line) {
     return true;
   }
   sb::AimSkill skill = sb::AimSkill::average;
+  bool helper = false;
+  std::string bad;
   const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
-  if (!named.empty() && !cl::skill_named(named, skill)) {
+  if (!cl::companion_words(named, skill, helper, bad)) {
     client_print(cs, slot, 2,
-                 "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
+                 "addbot: unknown word \"" + bad +
+                     "\" (use novice, average or expert, and escort or helper)\n");
     return true;
   }
   const bool turned = coop == nullptr || !coop->on();
@@ -1413,7 +1416,7 @@ bool mate_words(Game& g, int slot, const std::string& line) {
   for (int i = 0; i < sh::kMaxClients; i++)
     if (cs.clients[i].state != ConnState::free) held |= 1u << i;
   std::string error;
-  const int at = cl::q2_party_add(p, g.rules, g.map->spec, skill, held, error);
+  const int at = cl::q2_party_add(p, g.rules, g.map->spec, skill, held, error, helper);
   if (at < 0 || !qw_add_local(cs, at, p.mates[static_cast<size_t>(at)]->name, error)) {
     if (at > 0) {
       g.rules.drop(at);
@@ -1428,7 +1431,9 @@ bool mate_words(Game& g, int slot, const std::string& line) {
     client_print(cs, slot, 2, "The game is cooperative while you have company.\n");
   }
   const cl::Q2Mate& m = *p.mates[static_cast<size_t>(at)];
-  client_print(cs, slot, 2, m.name + " (" + sb::aim_skill_name(skill) + ") joins the game\n");
+  client_print(cs, slot, 2,
+               m.name + " (" + sb::aim_skill_name(skill) + (helper ? ", helper" : "") +
+                   ") joins the game\n");
   return true;
 }
 
