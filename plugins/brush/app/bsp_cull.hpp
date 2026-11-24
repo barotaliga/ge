@@ -46,6 +46,8 @@ struct BspCull {
   // Each brush model's offset (engine metres) and 1 in w when it is hidden (bsp_draw.hpp's
   // `set_movers`); `moved` until prepare_bsp_cull has moved the chunks' boxes with them.
   std::vector<std::array<float, 4>> moves;
+  // Each brush model's turn about the map's origin (a quaternion x y z w; `set_movers`).
+  std::vector<std::array<float, 4>> turns;
   bool moved = false;
   wgpu::Buffer src, chunk_buf, pvs, dst, words, args, params;  // words: size, state a chunk
   std::vector<uint32_t> args_reset;

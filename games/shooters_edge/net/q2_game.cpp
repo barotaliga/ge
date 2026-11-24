@@ -314,6 +314,19 @@ bool endpoint_number(const gs::ServerConfig& c, const char* name, int most, int&
 }
 
 // Quake II's own names for the download settings, as its configs and admins write them.
+// `sv_modern` (engine/server's GameMeta): what a modern Quake II server is. Every shot and every
+// rocket, grenade and bolt meet the others where the shooter saw them, one frame further back as
+// the client drew them. The game's feel is never part of it: only how the network judges it. A
+// setting any layer names wins over it.
+constexpr gs::GameMeta kMetas[] = {
+    {"sv_modern", "0", "",
+     "Whether the server plays as a modern one: every shot judged where its shooter saw the "
+     "others.",
+     "0: as each setting says (the default); 1: sv_antilag 2, sv_antilag_projectiles 1 and "
+     "sv_antilag_interp 1"},
+    {"sv_modern", "1", "sv_antilag 2; sv_antilag_projectiles 1; sv_antilag_interp 1"},
+};
+
 constexpr gs::SettingName kSettingNames[] = {
     {"allow_download", "sv_download"},
     {"allow_download_players", "sv_download_players"},
@@ -1192,6 +1205,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   }
   q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
   q2_match_open(game.match, *game.net, game.rules, game.match_cfg);  // its words before the votes'
+  if (game.login) game.match.logins = &game.login->logins;           // a report's accounts
   return true;
 }
 
@@ -1475,6 +1489,13 @@ void player_view(const void* g, int player, std::vector<uint8_t>& out) {
   q2_player_view(*static_cast<const Game*>(g)->rules, player, out);
 }
 
+// The match's phase (sv_lobby), else the match: what the core's features act on (sv_autorecord
+// records each match from its first frame to its last).
+gs::LobbyPhase phase(const void* g) {
+  const Game& game = *static_cast<const Game*>(g);
+  return game.match.on ? game.match.lobby.phase : gs::LobbyPhase::match;
+}
+
 const gs::ServerGame& make() {
   static gs::ServerGame g = [] {
     gs::ServerGame s;
@@ -1491,6 +1512,8 @@ const gs::ServerGame& make() {
     s.rule_count = static_cast<int>(all_rules().size());
     s.names = kSettingNames;
     s.name_count = static_cast<int>(std::size(kSettingNames));
+    s.metas = kMetas;
+    s.meta_count = static_cast<int>(std::size(kMetas));
     s.create = create;
     s.destroy = destroy;
     s.frame_seconds = frame_seconds;
@@ -1504,6 +1527,10 @@ const gs::ServerGame& make() {
     s.tv_frame = tv_state;
     s.tv_keyframe = tv_state;
     s.player_view = player_view;
+    s.phase = phase;
+    s.match_report = [](void* game, ge::net::MatchReport& out) {
+      return q2_match_report(static_cast<Game*>(game)->match, out);
+    };
     s.console_lines = console_lines;
     s.console = console_line;
     s.words = kQ2ServerWords;

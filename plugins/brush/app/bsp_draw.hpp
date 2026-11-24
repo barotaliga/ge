@@ -320,11 +320,13 @@ struct GpuJob {
 };
 
 // A brush model as the shaders move it: its run of vertices (first, end), 1 hidden, its texture
-// frame + 1 (0: on the clock), and its offset; [0] the world's, its offset's w the textures' frames
-// a second (0: kFrameRate).
+// frame + 1 (0: on the clock), its offset and its turn (a quaternion, x y z w, about the map's
+// origin, before the offset); [0] the world's, its offset's w the textures' frames a second
+// (0: kFrameRate).
 struct GpuMover {
   uint32_t range[4];
   float offset[4];
+  float rotation[4] = {0, 0, 0, 1};
 };
 
 struct GpuBsp {
@@ -475,10 +477,12 @@ void set_shadow_casters(BspDraw& draw, std::span<const float> triangles,
 // entity the game removed). A model not named keeps its last place; all start at the map's.
 // `frame` steps its animated textures from each face's own place in its sequence (frame mod the
 // sequence's length; an entity's frame, as a family that drives them so asks); -1 turns them on
-// the map's clock as the world's.
+// the map's clock as the world's. `rotation` (a unit quaternion x, y, z, w in the engine's frame)
+// turns it about the map's own origin before the offset: a rotating door, a turning fan.
 struct Mover {
   uint32_t model = 0;
   double offset[3] = {0, 0, 0};
+  float rotation[4] = {0, 0, 0, 1};
   bool hidden = false;
   int32_t frame = -1;
 };
