@@ -540,6 +540,15 @@ void teams(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
               said[1].find("You have been assigned to") != std::string::npos && ta != tb &&
               (ta == 5 || ta == 14) && (tb == 5 || tb == 14));
     const int red = ta == 5 ? 0 : 1, blue = 1 - red;
+    {
+      const sh::Vec3f pr = ed(r, red + 1).origin, pb = ed(r, blue + 1).origin;
+      const bool red_at = pr.x == -416 && (pr.y == 384 || pr.y == -384);
+      const bool blue_at = pb.x == 416 && (pb.y == 256 || pb.y == -96);
+      c.row("each starts at his team's spot",
+            "red at " + to_fixed(pr.x, 0) + " " + to_fixed(pr.y, 0) + ", blue at " +
+                to_fixed(pb.x, 0) + " " + to_fixed(pb.y, 0),
+            red_at && blue_at);
+    }
     const int red_flag = find_class(r, "item_flag_team1");
     const int blue_flag = find_class(r, "item_flag_team2");
     c.row("both team flags stand", std::to_string(red_flag) + ", " + std::to_string(blue_flag),

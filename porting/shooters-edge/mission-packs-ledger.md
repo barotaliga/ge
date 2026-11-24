@@ -260,13 +260,13 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | verify | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token) |
+| rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | done | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token); the se-dissolution-dm lab (`--packs`, 2026-11-24): the token stands at `teamplay 3` and a player takes it ("got the tag token!") |
 | rog1.ent.func_ctf_wall | `func_ctf_wall` | a wall that stands only in some team modes | 14 / 185 | verify | 2 | runs in the pack's program |
-| rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
-| rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_flag_team1 | `item_flag_team1` | team one's flag | 15 / 15 | verify | 2 | runs in the pack's program; LIFT: one capture the flag with Quake II's CTF |
-| rog1.ent.item_flag_team2 | `item_flag_team2` | team two's flag | 15 / 15 | verify | 2 | runs in the pack's program |
+| rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): red's spots, the red joiners' starts |
+| rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): blue's spots, the blue joiners' starts |
+| rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): the neutral flag stands at `teamplay 5`, the team flags gone to bases, and is taken and captured at the enemy base |
+| rog1.ent.item_flag_team1 | `item_flag_team1` | team one's flag | 15 / 15 | done | 2 | runs in the pack's program; LIFT: one capture the flag with Quake II's CTF; the se-dissolution-dm lab (`--packs`, 2026-11-24): red's flag at its base, a carrier's capture there for 15 |
+| rog1.ent.item_flag_team2 | `item_flag_team2` | team two's flag | 15 / 15 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): blue's flag taken, captured, sent home, dropped by a killed carrier and returned |
 
 #### Movers and traps
 
