@@ -38,7 +38,8 @@ int model_index(const dc::DemoState& d, const char* name) {
   return 0;
 }
 
-// The server's copy of a predicted sound, on the player's own entity: dropped.
+// A sound of the kind the prediction plays, on the player's own entity: the server's copy of one
+// it played is dropped, any other plays late.
 bool predicted_copy(const RemoteWeapon& w, const dc::DemoState& d, const dc::DemoSound& s, int me) {
   if (s.entity != me + 1 || s.name != nullptr || w.sound_mask == 0) return false;
   if (s.sound <= 0 || static_cast<size_t>(s.sound) >= d.sounds.size()) return false;
@@ -81,10 +82,24 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
   w.fired.clear();
   if (!w.on) {
     w.played_to = acked;
+    w.copies_from = 0;
     return;
   }
-  // The server's copies of what the prediction plays, dropped before its own are added.
-  std::erase_if(d.started, [&](const dc::DemoSound& snd) { return predicted_copy(w, d, snd, me); });
+  // The server's copies of what the prediction played, matched by kind among the commands the
+  // server ran since the last pass and dropped; a copy that matches none plays late. The window
+  // reaches 8 commands back and 4 ahead: the server's shot can fall a few commands off the
+  // predicted one (its clock is the frame's, the prediction's the command's), and a window of the
+  // acknowledged commands alone let 2 of 3 copies through twice at 75 ms each way. Done before this
+  // pass's own are added.
+  if (w.copies_from == 0) w.copies_from = acked;
+  const auto lo = static_cast<int32_t>(w.copies_from - 8), hi = static_cast<int32_t>(acked + 4);
+  std::erase_if(d.started, [&](const dc::DemoSound& snd) {
+    if (!predicted_copy(w, d, snd, me)) return false;
+    if (weapon_played_match_within(w.played, lo, hi, snd.sound)) return true;
+    w.filled_late++;
+    return false;
+  });
+  w.copies_from = acked;
   // The shown command: `buffer` + 1 before the next to send, within the commands in flight.
   const uint32_t shown = weapon_shown_command(acked, next, w.buffer);
   if (static_cast<int32_t>(w.played_to - acked) < 0) w.played_to = acked;
@@ -123,6 +138,7 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
       snd.attenuation = 0;
       snd.origin = origin;
       d.started.push_back(snd);
+      if (snd.sound != 0) weapon_played_add(w.played, static_cast<int32_t>(q), snd.sound);
     }
   }
   if (static_cast<int32_t>(shown - w.played_to) > 0) w.played_to = shown;

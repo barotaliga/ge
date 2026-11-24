@@ -4,7 +4,7 @@
 // ge:summary Quake II's wire for protocols 35 and 36: the frame top, the server data, streams
 // ge:keywords protocol-35 protocol-36 frame-top extra-flags long-solid gamestate
 // ge:keywords configstring-stream baseline-stream client-settings nogun noblend nogibs
-// ge:keywords nofootsteps noprediction
+// ge:keywords nofootsteps noprediction noflares
 // ge:skill shooter net
 // ge:test tests/shooters_edge_q2_wire_ext_test.cpp
 #include <cstring>
@@ -27,8 +27,9 @@ constexpr uint8_t kXGunOffset = 1 << 0, kXGunAngles = 1 << 1, kXVelocityZ = 1 <<
                   kXOriginZ = 1 << 3, kXRoll = 1 << 4, kXStats = 1 << 5, kXClient = 1 << 6;
 
 constexpr uint8_t kNoPrediction = 64;  // the move's flag: the client does not predict
-constexpr uint32_t kEffectGib = 0x2, kEffectGreenGib = 0x00200000;
-constexpr int kEventFootstep = 2;
+constexpr uint32_t kEffectGib = 0x2, kEffectGreenGib = 0x00200000, kEffectRocket = 0x10;
+constexpr uint32_t kRenderFlare = 0x00200000;  // a flare, left out for a client asking no flares
+constexpr int kEventFootstep = 2, kEventOtherFootstep = 8, kEventLadderStep = 9;
 
 struct Out {
   std::vector<uint8_t>& b;
@@ -88,11 +89,23 @@ void q2_server_data_tail(std::vector<uint8_t>& out, const Q2WireOptions& opt) {
 
 void q2_entity_for_ext(const Q2Wire& w, int number, const Q2EntityState& base, Q2EntityState& s) {
   if (!s.present) return;
-  if (w.asked.no_gibs && (s.effects & (kEffectGib | kEffectGreenGib)) != 0) {
+  const bool extended = w.opt.ext > 0;  // a game with the protocol extensions
+  if (w.asked.no_gibs) {
+    // A gib trail on a rocket is a newer game's projectile, kept on an extended server.
+    const bool gib = (s.effects & kEffectGib) != 0 && !(extended && (s.effects & kEffectRocket));
+    if (gib || (s.effects & kEffectGreenGib) != 0) {
+      s.present = false;
+      return;
+    }
+  }
+  if (extended && w.asked.no_flares && (s.renderfx & kRenderFlare) != 0) {
     s.present = false;
     return;
   }
-  if (w.asked.no_footsteps && s.event == kEventFootstep) s.event = 0;
+  if (w.asked.no_footsteps &&
+      (s.event == kEventFootstep ||
+       (extended && (s.event == kEventOtherFootstep || s.event == kEventLadderStep))))
+    s.event = 0;
   if (w.opt.protocol == 36 && !w.asked.recording && number == w.slot + 1 &&
       alive(w.last_player)) {  // his client places itself: what it holds is kept
     keep3(s.origin, base.origin);

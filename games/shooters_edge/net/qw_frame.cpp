@@ -536,6 +536,20 @@ void send_frames(QwServer& s) {
         write_byte(w, c.chokecount > 255 ? 255 : c.chokecount);
         c.chokecount = 0;
       }
+      // The server's turn of him, unreliable as every classic server sends it; under the high-lag
+      // teleport with its kind, and his moves in flight turned until this packet is acknowledged.
+      if (c.turn_pending) {
+        c.turn_pending = false;
+        SvcMsg turn;
+        turn.id = svc::setangle;
+        const cp::TurnKind kind = c.turn_teleport ? cp::TurnKind::teleport : cp::TurnKind::respawn;
+        turn.ints = {static_cast<int>(kind)};
+        turn.floats = {c.turn_to.x, c.turn_to.y, c.turn_to.z};
+        write_svc(w, turn, ctx_of(c));
+        if (c.ext.has(ExtFamily::mvd, kMvdTeleport))
+          cp::lag_turn_sent(c.lag, kind, seq, c.ch.incoming_sequence, c.last_yaw, c.turn_to.y,
+                            nullptr);
+      }
       for (int k = 0; k < sh::kMaxClients; k++) {
         if (!s.clients[k].rules_active || s.clients[k].spectator) continue;
         if (!s.game->sv.clients[static_cast<size_t>(k)].active) continue;

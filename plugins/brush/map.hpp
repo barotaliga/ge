@@ -108,9 +108,15 @@ struct Texture {
   // - `alpha`: how opaque the face is drawn, where the family stores it (38: a third with the
   //   flag 0x10, two thirds with 0x20, else whole; the least of the name's faces); -1 where it
   //   stores none (29, BSP2, 46).
+  // - `lamp`: how strongly its faces light the room, where the family marks a texture as a
+  //   light's panel (38: the light flag 0x1 with its texinfo's value, the most of the name's
+  //   faces); 0 on any other (29 lights its rooms from entities alone).
+  // - `flowing`: its faces' picture slides along them (38: the flag 0x40).
   bool sky = false;
+  bool flowing = false;
   Liquid liquid = Liquid::none;
   int32_t next = -1;
+  int32_t lamp = 0;
   float alpha = -1;
 };
 
