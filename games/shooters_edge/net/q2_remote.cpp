@@ -289,8 +289,17 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
                                       static_cast<float>(v.origin[2]) * 0.125f};
   }
   sh::Vec3f drawn;
+  ahead.teleports = r.predict_teleports;  // cl_predict_teleport
   const bool predicted = !r.nopred && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
+  // A teleport the prediction foresaw turns the view with it (the server's own delta angles,
+  // classic/teleporters.hpp), not a round trip later.
+  if (predicted && ahead.teleported) {
+    turn = {angle16(ahead.delta_angles[0]), angle16(ahead.delta_angles[1]),
+            angle16(ahead.delta_angles[2])};
+    st.angles = r.view + turn;
+    st.angles.y = st.angles.y + r.jump_aid.shown;
+  }
   if (ahead.misses != ahead.misses_told) {  // cl_showmiss
     if (ahead.show_misses && r.trace.print)
       r.trace.print("prediction miss on " + std::to_string(ahead.miss_frame) + ": " +

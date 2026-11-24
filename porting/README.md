@@ -18,7 +18,8 @@ golden`, which regenerates the committed tables in `tests/golden/`.
 | `shooters-edge/` | Shooter's Edge's working notes (the game compatible with QuakeWorld): the survey of existing implementations, the clean-room rules, the specifications the building sessions read (`docs/shooters-edge.md` is the design) |
 | `milestones.md` | The porting notes behind docs/goals.md's rows (what was skipped, the speed against the reference) |
 | `parity/` | The golden generators: Node scripts that run the reference and write `tests/golden/` |
-| `porting.mk` | `make golden` and `make golden-libm` (included by the root Makefile while this directory exists) |
+| `porting.mk` | `make golden`, `make golden-libm` and `make ledger` (included by the root Makefile while this directory exists) |
+| `ledger-count.mjs` | Every ledger's counts from its rows, by section and the missing rows by rank (`make ledger`); no ledger keeps a total by hand |
 
 **When porting ends**: confirm no file outside `porting/` and the `port` skill names
 anything in here but `make golden`, delete `porting/` and `.agents/skills/port/`, drop the
