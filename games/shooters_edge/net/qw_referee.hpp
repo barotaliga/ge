@@ -28,6 +28,12 @@
 // - `lock`: nobody joins as a player for 15 seconds ("<name> locked server for 15 seconds"; a
 //   joining player reads "server is temporary locked: N second(s)" and watches instead); `lock`
 //   again opens it ("<name> unlocked server"), and so does the time ("server unlocked").
+// - `mkick <id> [id ...] [reason]`: each user id kicked as `kick` does; the first word that is
+//   not a number starts the reason; an id nobody has: "mkick: client <id> not found".
+// - `kick` alone: KICK MODE ("Kicking process started"): every other player and spectator in
+//   turn, "Kick player <name>?"; `y` kicks him, `n` goes on; `kick` again (with or without a name)
+//   leaves it ("Kicking process terminated"), as do the end of the list and giving up admin; 60
+//   seconds: "Your kick mode has timed out"; nobody there: "Can't find anybody to kick".
 // - `acommands`: the words.
 // The engine's other words (`tl`, `ban`, `mute`, `shuffle`, `readyall`) are not QuakeWorld's and
 // are left to the mod. A program of the server's own runs these; a mod's program (a `.dat`, a
@@ -83,6 +89,9 @@ struct QwReferee {
   QwRefereeGame last;             // the game as the last frame saw it (the hooks' view)
   uint32_t typing = 0;            // a bit a slot typing the code on the number keys
   std::array<std::string, ge::server::kLobbySeats> digits{};  // the digits typed so far
+  int kick_by = -1;                                           // the admin in kick mode (-1: none)
+  int kick_at = -1;                                           // the slot he is asked about
+  double kick_ends = 0;                                       // kick mode times out
 };
 
 // QuakeWorld's words for the engine's book.

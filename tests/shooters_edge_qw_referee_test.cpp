@@ -2,13 +2,15 @@
 // server, two classic clients over the simulated network. `k_admins 0` has no admins; a wrong code
 // is refused and holds the next try 5 seconds; the right one makes the admin, told to everyone;
 // the admin kicks the other player with a reason and forces a map change, and an unknown map is
-// refused; `lock` turns a joining player into a spectator for 15 seconds; `forcestart` in the
+// refused; kick mode asks about each other player and `y` kicks him; `mkick` names the ids it
+// cannot find; `lock` turns a joining player into a spectator for 15 seconds; `forcestart` in the
 // lobby's warmup counts down and drops the player who is not ready, and the match it starts
 // refuses `forcemap`; a player who is not the admin
 // is told so.
 //
 // ge:summary Tests: QuakeWorld's admin in the game: the code, kick, forcemap, lock, forcestart
-// ge:keywords test qw-referee k_admincode k_admins forcestart forcemap kick lock admin
+// ge:keywords test qw-referee k_admincode k_admins forcestart forcemap kick lock admin mkick
+// ge:keywords kick-mode
 // ge:skill net shooter testing
 #include <array>
 #include <string>
@@ -160,6 +162,31 @@ TEST(qw_referee_the_admin_kicks_and_forces_the_map) {
   CHECK(ben.stage != se::ClientStage::active);
   CHECK(printed(ana, "ana forces a map change to arena!"));
   CHECK(ana.stage == se::ClientStage::active);
+}
+
+TEST(qw_referee_kick_mode_and_mkick) {
+  Two r;
+  run(r, arena(), 600,
+      {{150, "admin 4321"},
+       {170, "mkick"},
+       {180, "mkick 99 7 for camping"},
+       {200, "kick"},
+       {220, "n"},
+       {240, "kick"},
+       {260, "y"}},
+      {});
+  CHECK_MSG(r.opened, r.error);
+  const se::QwClientEnd& ana = r.clients[0];
+  const se::QwClientEnd& ben = r.clients[1];
+  CHECK(printed(ana, "mkick <id1 [id2 [id3 ...]] [reason]>"));
+  CHECK(printed(ana, "mkick: client 99 not found"));
+  CHECK(printed(ana, "mkick: client 7 not found"));
+  CHECK(printed(ana, "Kicking process started"));
+  CHECK(printed(ana, "Type y to kick, n for next, kick to leave"));
+  CHECK(printed(ana, "Kick player ben?"));
+  CHECK(printed(ana, "Kicking process terminated"));
+  CHECK(printed(ana, "ben was kicked by ana"));
+  CHECK(printed(ben, "You were kicked from the server"));
 }
 
 TEST(qw_referee_lock_turns_a_joining_player_into_a_spectator) {

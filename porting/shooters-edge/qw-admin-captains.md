@@ -444,17 +444,17 @@ not-taken (why named). Our own program runs these; a mod's program keeps its own
 | A9 | `forcebreak`: "<name> forces a break!", silent outside a match | done | the book's `endmatch` | |
 | A10 | `forcemap <map>`: refused in a match, usage, an unknown map, the line | done | the book's `changemap`; without sv_lobby always taken | |
 | A11 | `kick <id or name> [reason]`: the lines, the reason, a 30-second ban | done | user id first, then the exact name; an admin is not kicked (ours) | |
-| A12 | `kick` alone: kick mode, `y`/`n` through every player | missing | | 3 |
-| A13 | `mkick <id> [id ...] [reason]` | missing | | 3 |
+| A12 | `kick` alone: kick mode, `y`/`n` through every player | done | net/qw_referee.cpp; the end of the list leaves it as `kick` does (derived) | |
+| A13 | `mkick <id> [id ...] [reason]` | done | each id through the book's `kick` | |
 | A14 | `forcestart`: the 10-second count, "Get ready!", the unready dropped, cancelled by the admin's break | done | needs sv_lobby; ours hands over to the lobby's countdown | |
 | A15 | `lock`: joins refused 15 seconds, the lines | done | a joining player watches instead (as sv_lockjoin) | |
 | A16 | `force_spec`: a player made a spectator or back | missing | | 2 |
 | A17 | `lockmap`, `prewar`, `exclusive`, `infolock` toggles | missing | `sv_prewar` and `sv_lockjoin` are settings already | 3 |
 | A18 | admins' votes as a veto | missing | | 3 |
 | A19 | captain mode: `captain` elections, numbered picks in turn A B B A, the lines | done | net/qw_captains.hpp on the engine's election and draft; numbers as frags, picks by `impulse N`, no fire and no team change while picking; our fire line reads "Nobody fires while the captains pick" | |
-| A22 | team picking un-readies every waiting player | done | `qw_captains.cpp` un-readies each numbered player through the lobby; `shooters_edge_qw_captains_test` | 2 |
+| A22 | team picking un-readies every waiting player | done | `qw_captains.cpp` un-readies each numbered player through the lobby; `shooters_edge_qw_captains_test` | |
 | A23 | `status1`'s "Team picking in progress" and "N captain present" | missing | | 3 |
-| A24 | the team name's refusals out of captain mode: no change during a match or its countdown, no empty team for a ready player | done | `qw_captains_info` refuses and puts the player's own back; `shooters_edge_qw_captains_test` | 2 |
+| A24 | the team name's refusals out of captain mode: no change during a match or its countdown, no empty team for a ready player | done | `qw_captains_info` refuses and puts the player's own back; `shooters_edge_qw_captains_test` | |
 | A20 | coaches | missing | | 3 |
 | A21 | the engine's other referee words (`tl`, `ban`, `mute`, `shuffle`, `readyall`) | not-taken | not QuakeWorld's: left to a mod | |
 

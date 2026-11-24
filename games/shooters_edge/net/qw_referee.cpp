@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 #include "core/num_text.hpp"
 #include "net/address.hpp"
@@ -57,8 +58,8 @@ gs::RefereeWords make_words() {
   w.wait = "Wait {n} {seconds}!";
   w.not_one = "You are not an admin";
   w.list =
-      "Admin: forcestart, forcebreak, forcemap <map>, kick <id or name> [reason], lock; admin "
-      "again gives it up.";
+      "Admin: forcestart, forcebreak, forcemap <map>, kick <id or name> [reason], kick alone, "
+      "mkick <ids> [reason], lock; admin again gives it up.";
   w.map_in_match = "Match currently in progress. Use break or forcebreak to terminate.";
   w.map_usage = "Usage: forcemap <mapname>";
   w.map_unknown = "Map {map} not available on this server.";
@@ -386,6 +387,83 @@ bool start_typing(QwReferee& r, const QwRefereeGame& g, int slot) {
   return tell(s, slot, "Use numbers or impulses to enter code"), true;
 }
 
+// Kick mode's next one after `from`: another seated or watching client (-1: none left).
+int next_to_kick(const QwServer& s, int admin, int from) {
+  for (int i = from + 1; i < gs::kLobbySeats && i < ge::shooter::kMaxClients; i++) {
+    const QwClient& c = s.clients[i];
+    if (i != admin && c.state != ConnState::free && !c.local) return i;
+  }
+  return -1;
+}
+
+void kick_end(QwReferee& r, QwServer& s, const char* line) {
+  if (r.kick_by >= 0 && line != nullptr) tell(s, r.kick_by, line);
+  r.kick_by = r.kick_at = -1;
+}
+
+// Kick mode asks about the next one, or ends when nobody is left.
+void kick_ask(QwReferee& r, QwServer& s, int from) {
+  r.kick_at = next_to_kick(s, r.kick_by, from);
+  if (r.kick_at < 0) return kick_end(r, s, "Kicking process terminated");
+  const QwClient& c = s.clients[r.kick_at];
+  tell(s, r.kick_by,
+       std::string("Kick ") + (c.spectator ? "spectator " : "player ") + c.name + "?");
+}
+
+// Kick mode's words from the admin in it: true when taken.
+bool kick_mode(QwReferee& r, const QwRefereeGame& g, int slot, const std::string& line) {
+  QwServer& s = *g.qw;
+  if (r.kick_by != slot) {
+    if (line != "kick" || !gs::referee_is(r.book, slot)) return false;
+    r.kick_by = slot;
+    r.kick_ends = g.now + 60;
+    if (next_to_kick(s, slot, -1) < 0) return kick_end(r, s, "Can't find anybody to kick"), true;
+    tell(s, slot, "Kicking process started");
+    tell(s, slot, "----------------------");
+    tell(s, slot, "Type y to kick, n for next, kick to leave");
+    return kick_ask(r, s, -1), true;
+  }
+  if (line == "kick" || line.starts_with("kick "))
+    return kick_end(r, s, "Kicking process terminated"), true;
+  if (line != "y" && line != "n") return false;
+  const int at = r.kick_at;
+  if (line == "y" && at >= 0 && s.clients[at].state != ConnState::free) {
+    r.kick_by = -1;  // the kick itself goes through the book, as `kick <id>`
+    qw_referee_line(r, g, slot, "kick " + std::to_string(s.clients[at].userid));
+    r.kick_by = slot;
+  }
+  return kick_ask(r, s, at), true;
+}
+
+// `mkick <id> [id ...] [reason]`: each id kicked as `kick` does.
+bool mkick(QwReferee& r, const QwRefereeGame& g, int slot, const std::string& line) {
+  QwServer& s = *g.qw;
+  if (!gs::referee_is(r.book, slot)) return tell(s, slot, "You are not an admin"), true;
+  std::vector<std::string> ids;
+  size_t at = 5;
+  while (at < line.size()) {
+    while (at < line.size() && line[at] == ' ') at++;
+    size_t end = at;
+    while (end < line.size() && line[end] >= '0' && line[end] <= '9') end++;
+    if (end == at || (end < line.size() && line[end] != ' ')) break;
+    ids.push_back(line.substr(at, end - at));
+    at = end;
+  }
+  if (ids.empty()) return tell(s, slot, "mkick <id1 [id2 [id3 ...]] [reason]>"), true;
+  const std::string reason = at < line.size() ? " " + line.substr(at) : std::string();
+  for (const std::string& id : ids) {
+    bool found = false;
+    for (int i = 0; i < ge::shooter::kMaxClients; i++)
+      found |= s.clients[i].state != ConnState::free && !s.clients[i].local &&
+               std::to_string(s.clients[i].userid) == id;
+    if (!found)
+      tell(s, slot, "mkick: client " + id + " not found");
+    else
+      qw_referee_line(r, g, slot, "kick " + id + reason);
+  }
+  return true;
+}
+
 }  // namespace
 
 const gs::RefereeWords& qw_referee_words() {
@@ -410,6 +488,8 @@ bool qw_referee_line(QwReferee& r, const QwRefereeGame& g, int slot, const std::
   if (line == "admin" && !gs::referee_is(r.book, slot) && rule_on(g, "k_admins", true))
     return start_typing(r, g, slot);
   if (qw_captains_line(r.captains, captains_game(r, g), slot, line)) return true;
+  if (kick_mode(r, g, slot, line)) return true;
+  if (line == "mkick" || line.starts_with("mkick ")) return mkick(r, g, slot, line);
   if (line == "forcestart") return force_start(r, g, slot);
   if (line == "lock") return lock(r, g, slot);
   std::array<int, gs::kLobbySeats> ids{};
@@ -454,6 +534,12 @@ void qw_referee_frame(QwReferee& r, const QwRefereeGame& g) {
   qw_captains_frame(r.captains, captains_game(r, g));
   take_elected(r, g);
   force_frame(r, g);
+  if (r.kick_by >= 0 && g.qw->clients[r.kick_by].state == ConnState::free)
+    kick_end(r, *g.qw, nullptr);
+  else if (r.kick_by >= 0 && !gs::referee_is(r.book, r.kick_by))
+    kick_end(r, *g.qw, "Kicking process terminated");
+  else if (r.kick_by >= 0 && g.now >= r.kick_ends)
+    kick_end(r, *g.qw, "Your kick mode has timed out");
   if (r.locked_until > 0 && g.now >= r.locked_until) {
     r.locked_until = 0;
     tell(*g.qw, -1, "server unlocked");
