@@ -41,6 +41,9 @@ void fight_choose(Q2Server& s, int slot, int w);
 // deathmatch, always outside it; grenades with none held before (`grenades_before`, -1 unknown:
 // the count now a box's own) take the hand grenade the same way.
 void fight_took(Q2Server& s, int slot, int item, int grenades_before = -1);
+// How far the bottom of player `slot`'s box is above the floor straight under him (the world
+// only): a mid-air's height.
+float fight_floor_gap(const Q2Server& s, int slot);
 // The player's `use`, `weapnext` and `weapprev` commands; false when `cmd` is none of them.
 bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::string& arg);
 
