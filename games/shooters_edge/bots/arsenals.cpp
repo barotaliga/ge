@@ -199,27 +199,40 @@ int q2_item_ammo(ItemKind kind) {
       return 4;
     case ItemKind::slugs:
       return 5;
+    case ItemKind::ammo_more1:  // a pack's first own: The Reckoning's mag slugs
+      return 6;
+    case ItemKind::ammo_more2:  // its second: The Reckoning's traps
+      return 7;
     default:
       return -1;
   }
 }
 
+// The bots' kind of an ammunition of the rules (`none` for one they have no index for).
+ItemKind q2_ammo_kind(server::SqAmmo a) {
+  const ItemKind kinds[] = {ItemKind::health,   ItemKind::shells,     ItemKind::nails,
+                            ItemKind::grenades, ItemKind::rockets,    ItemKind::cells,
+                            ItemKind::slugs,    ItemKind::ammo_more1, ItemKind::ammo_more2};
+  const auto i = static_cast<size_t>(a);
+  return i < std::size(kinds) ? kinds[i] : ItemKind::health;
+}
+
 void q2_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
   st.items = n.carried;
   st.weapon = n.held;
-  for (int k = 0; k < 6; k++) st.ammo[k] = n.stock[k];
+  for (int k = 0; k < kMaxAmmo; k++) st.ammo[k] = n.stock[k];
 }
 
 // Quake II's items as the bots' rows, off its rules' own item table (server/q2_items.hpp):
 // armour by its tier, health (the mega health apart), the weapons by their bit, the ammunitions,
-// the quad and the shield; the rest (keys, the other powers, packs) left out, and the mission
-// packs' own rows (the bots play the base game's).
-const shooters_edge::profiles::ItemTables& q2_tables() {
-  static const std::vector<shooters_edge::profiles::ItemRow> rows = [] {
-    std::vector<shooters_edge::profiles::ItemRow> out;
+// the quad and the shield; the rest (keys, the other powers, packs) left out. A mission pack's own
+// rows come in with `pack` (its weapons, its ammunitions; its other items as the rest).
+std::vector<shooters_edge::profiles::ItemRow> q2_rows(server::Q2Pack pack) {
+  std::vector<shooters_edge::profiles::ItemRow> out;
+  {
     for (int i = 0; i < server::kSqItemCount; i++) {
       const server::SqItem& it = server::kSqItems[i];
-      if (it.pack != server::Q2Pack::base) continue;
+      if (!server::q2_pack_has(pack, it.pack)) continue;
       shooters_edge::profiles::ItemRow r;
       r.class_name = it.classname;
       r.name = it.pickup;
@@ -244,14 +257,10 @@ const shooters_edge::profiles::ItemTables& q2_tables() {
           r.weapon = w >= 0 ? 1 << w : 0;
           break;
         }
-        case server::SqKind::ammo: {
-          const ItemKind kinds[] = {ItemKind::health,   ItemKind::shells,  ItemKind::nails,
-                                    ItemKind::grenades, ItemKind::rockets, ItemKind::cells,
-                                    ItemKind::slugs};
-          r.kind = kinds[static_cast<int>(it.ammo)];
-          keep = it.ammo != server::SqAmmo::none;
+        case server::SqKind::ammo:
+          r.kind = q2_ammo_kind(it.ammo);
+          keep = it.ammo != server::SqAmmo::none && r.kind != ItemKind::health;
           break;
-        }
         case server::SqKind::powerup:
           keep = std::string_view(it.classname) == "item_quad" ||
                  std::string_view(it.classname) == "item_invulnerability";
@@ -263,50 +272,58 @@ const shooters_edge::profiles::ItemTables& q2_tables() {
       }
       if (keep) out.push_back(r);
     }
-    return out;
-  }();
-  static const shooters_edge::profiles::ItemTables tables{rows, {}, {}, {}};
-  return tables;
+  }
+  return out;
 }
 
 struct Q2Arsenal {
-  std::array<BotWeapon, 10> weapons;
+  std::vector<BotWeapon> weapons;
+  std::vector<shooters_edge::profiles::ItemRow> rows;
+  shooters_edge::profiles::ItemTables tables;
   BotArsenal arsenal;
 };
 
 // How each of Quake II's weapons is aimed and scored: its shot's speed, its curve, how wide the
-// trigger takes the target, the range it is fired within, whether it streams, and its worth.
-Q2Arsenal make_q2() {
-  struct Use {
-    float speed, aim_dz, width, range;
-    bool stream, blast;
-    WeaponCurve curve;
-    float worth, arms;
-  };
-  const Use uses[10] = {
-      {1000, 0, 20, 1000, false, false, WeaponCurve::spiker, 0, 1},        // blaster
-      {0, 0, 24, 1200, false, false, WeaponCurve::scatter, 30, 1.1f},      // shotgun
-      {0, 0, 32, 350, false, false, WeaponCurve::double_, 45, 1.3f},       // super shotgun
-      {0, 0, 20, 1500, true, false, WeaponCurve::hitscan, 40, 1.2f},       // machinegun
-      {0, 0, 24, 1500, true, false, WeaponCurve::heavy, 70, 1.5f},         // chaingun
-      {600, -20, 40, 500, false, true, WeaponCurve::lob, 40, 1.5f},        // grenade launcher
-      {650, -20, 96, 1200, false, true, WeaponCurve::rocket, 30, 2},       // rocket launcher
-      {1000, 0, 24, 1000, true, false, WeaponCurve::beam, 70, 1.6f},       // hyperblaster
-      {0, 0, 12, 4000, false, false, WeaponCurve::rail, 90, 2},            // railgun
-      {400, -20, 128, 1500, false, true, WeaponCurve::big_blast, 100, 2},  // BFG
-  };
+// trigger takes the target, the range it is fired within, whether it streams, and its worth. By
+// the rules' weapon index; the hand grenade and the trap (thrown, not aimed) are left out.
+struct Q2Use {
+  int weapon;
+  float speed, aim_dz, width, range;
+  bool stream, blast;
+  WeaponCurve curve;
+  float worth, arms;
+};
+constexpr Q2Use kQ2Uses[] = {
+    {0, 1000, 0, 20, 1000, false, false, WeaponCurve::spiker, 0, 1},        // blaster
+    {1, 0, 0, 24, 1200, false, false, WeaponCurve::scatter, 30, 1.1f},      // shotgun
+    {2, 0, 0, 32, 350, false, false, WeaponCurve::double_, 45, 1.3f},       // super shotgun
+    {3, 0, 0, 20, 1500, true, false, WeaponCurve::hitscan, 40, 1.2f},       // machinegun
+    {4, 0, 0, 24, 1500, true, false, WeaponCurve::heavy, 70, 1.5f},         // chaingun
+    {5, 600, -20, 40, 500, false, true, WeaponCurve::lob, 40, 1.5f},        // grenade launcher
+    {6, 650, -20, 96, 1200, false, true, WeaponCurve::rocket, 30, 2},       // rocket launcher
+    {7, 1000, 0, 24, 1000, true, false, WeaponCurve::beam, 70, 1.6f},       // hyperblaster
+    {8, 0, 0, 12, 4000, false, false, WeaponCurve::rail, 90, 2},            // railgun
+    {9, 400, -20, 128, 1500, false, true, WeaponCurve::big_blast, 100, 2},  // BFG
+    // The Reckoning's: the ion ripper's bolt (500 a second, it bounces: best in rooms), the
+    // phalanx's two balls (725 a second, each a blast).
+    {11, 500, 0, 32, 700, false, false, WeaponCurve::spiker, 50, 1.4f},    // ion ripper
+    {12, 725, -20, 80, 1200, false, true, WeaponCurve::rocket, 60, 1.8f},  // phalanx
+};
+
+Q2Arsenal make_q2(server::Q2Pack pack) {
   Q2Arsenal out;
-  for (int i = 0; i < 10; i++) {
-    const server::SqWeaponRow& r = server::kSqWeapons[i];
-    const Use& u = uses[i];
+  for (const Q2Use& u : kQ2Uses) {
+    const server::SqWeaponRow& r = server::kSqWeapons[u.weapon];
+    if (!server::q2_pack_has(pack, r.pack)) continue;
     // From one shot to the next: the frames from its first firing frame to its last, a tenth of a
     // second each (a stream fires every frame).
     const float refire = u.stream ? 0.1f : 0.1f * static_cast<float>(r.last_fire - r.last_activate);
-    out.weapons[static_cast<size_t>(i)] =
-        row(1 << i, i + 1, r.name, r.ammo == server::SqAmmo::none ? -1 : q2_ammo(r.ammo),
-            static_cast<float>(r.per_shot), u.speed, u.aim_dz, u.width, u.range, refire, u.stream,
-            u.blast, u.curve, u.worth, u.arms);
+    out.weapons.push_back(row(1 << u.weapon, u.weapon + 1, r.name,
+                              r.ammo == server::SqAmmo::none ? -1 : q2_ammo(r.ammo),
+                              static_cast<float>(r.per_shot), u.speed, u.aim_dz, u.width, u.range,
+                              refire, u.stream, u.blast, u.curve, u.worth, u.arms));
   }
+  out.rows = q2_rows(pack);  // its tables are pointed at them where it rests (q2_arsenal)
   BotArsenal& a = out.arsenal;
   a.ammo_count = 6;
   a.item_ammo = q2_item_ammo;
@@ -317,9 +334,15 @@ Q2Arsenal make_q2() {
   a.launcher_ammo = 3;
   const float most[6] = {100, 200, 50, 50, 200, 50};
   for (int k = 0; k < 6; k++) a.ammo_max[k] = most[k];
-  a.tables = &q2_tables();
   const float shorts[6] = {20, 100, 10, 20, 100, 10};
   for (int k = 0; k < 6; k++) a.short_of[k] = shorts[k];
+  if (server::q2_pack_has(pack, server::Q2Pack::reckoning)) {  // mag slugs and traps
+    a.ammo_count = 8;
+    a.ammo_max[6] = 50;
+    a.ammo_max[7] = 5;
+    a.short_of[6] = 10;
+    a.short_of[7] = 1;
+  }
   a.read = q2_read;
   a.monster = q2_monster;
   a.heard = &shooters_edge::profiles::kQ1Tables;  // as before the seam; its own words next
@@ -336,14 +359,23 @@ const BotArsenal& first_arsenal() {
   return a;
 }
 
-const BotArsenal& q2_arsenal() {
-  static const Q2Arsenal s = make_q2();
-  static const BotArsenal a = [] {
-    BotArsenal x = s.arsenal;
-    x.weapons = s.weapons;
-    return x;
+const BotArsenal& q2_arsenal(server::Q2Pack pack) {
+  // One a pack, built once and never moved: its spans point into it.
+  static std::array<Q2Arsenal, 3> all = {make_q2(server::Q2Pack::base),
+                                         make_q2(server::Q2Pack::reckoning),
+                                         make_q2(server::Q2Pack::ground_zero)};
+  static const std::array<BotArsenal, 3> arsenals = [] {
+    std::array<BotArsenal, 3> out;
+    for (size_t k = 0; k < out.size(); k++) {
+      all[k].tables = shooters_edge::profiles::ItemTables{all[k].rows, {}, {}, {}};
+      out[k] = all[k].arsenal;
+      out[k].weapons = all[k].weapons;
+      out[k].tables = &all[k].tables;
+    }
+    return out;
   }();
-  return a;
+  const auto k = static_cast<size_t>(pack);
+  return arsenals[k < arsenals.size() ? k : 0];
 }
 
 }  // namespace shooters_edge::bots

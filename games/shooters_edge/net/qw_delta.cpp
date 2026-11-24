@@ -227,7 +227,7 @@ void write_weapon_state(gn::Writer& w, const ge::classic::WeaponState& s) {
   write_byte(w, s.known ? 1 : 0);
   if (!s.known) return;
   write_byte(w, clamp_byte(s.impulse));
-  write_short(w, s.weapon < -32768 ? -32768 : s.weapon > 32767 ? 32767 : s.weapon);
+  write_short(w, ge::classic::weapon_on_wire(s.weapon));
   write_float(w, s.clock);
   write_float(w, s.attack_finished);
   write_float(w, s.next_think);
@@ -242,7 +242,7 @@ ge::classic::WeaponState read_weapon_state(gn::Reader& r) {
   s.known = read_byte(r) != 0;
   if (!s.known) return s;
   s.impulse = read_byte(r);
-  s.weapon = read_short(r);
+  s.weapon = ge::classic::weapon_off_wire(read_short(r));
   s.clock = read_float(r);
   s.attack_finished = read_float(r);
   s.next_think = read_float(r);

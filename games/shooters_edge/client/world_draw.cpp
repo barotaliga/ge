@@ -481,6 +481,8 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   const std::vector<ge::brush::MapPicture> pictures =
       map_game.map_textures(map_game, files, map.name, map.file, picture_store);
   source.pictures = &pictures;
+  source.lamps =
+      picture.ce.glow;  // ce_glow: a lamp's bright texels glow (Quake II's surface lights)
   // The map's coloured light, a .lit file beside it or in lits/, over the light it carries.
   std::vector<uint8_t> lit_store;
   std::string lit_path, lit_refused;
@@ -514,6 +516,9 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
     }
   }
   r->has_map = true;
+  // A Quake II map's sky is its box: our sky's style is picked by what the box shows.
+  if (r->scene.map.family == ge::brush::Family::v38 && r->scene.sky_box_face > 0)
+    r->scene.sky_colours = ba::sky_box_colours(r->scene);
   r->sky = ba::pick_sky(r->scene.sky_colours, map.name);
   r->night = r->sky;
   ba::night_over(r->night, map.name);

@@ -292,7 +292,7 @@ void player_info(Demo& d, DemoMsg& m) {
     if ((d.ext_mvd & kMvdWeaponPred) != 0 && m.u8() != 0) {
       weapon.known = true;
       weapon.impulse = m.u8();
-      weapon.weapon = m.i16();
+      weapon.weapon = ge::classic::weapon_off_wire(m.i16());
       weapon.clock = m.f32();
       weapon.attack_finished = m.f32();
       weapon.next_think = m.f32();

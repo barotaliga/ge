@@ -34,6 +34,7 @@
 #include "shooterbots/party.hpp"
 #include "shooterbots/way_through.hpp"
 #include "shooters_edge/bots/arsenals.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
@@ -48,8 +49,9 @@ struct UnitOptions {
   UnitMapLoader load = nullptr;
   void* load_ctx = nullptr;
   std::string first = "base1";
-  int maps = 12;             // at most this many maps entered
-  double map_seconds = 600;  // a map's time before it is called unfinished, s
+  server::Q2Pack pack = server::Q2Pack::base;  // the rules played: the base game's or a pack's
+  int maps = 12;                               // at most this many maps entered
+  double map_seconds = 600;                    // a map's time before it is called unfinished, s
   sb::AimSkill skill = sb::AimSkill::expert;
   int game_skill = 1;  // the rules' `skill`
   uint32_t seed = 1;
@@ -62,6 +64,10 @@ struct UnitOptions {
   // co-op (the rules' `coop` 1), one each, the map's work split among them (nearest takes it) and
   // the exit waiting for all of it.
   std::vector<sb::AimSkill> partners;
+  // (`partners`) BESIDE A PERSON: he plays as a person would (not of the party) and the partners
+  // are HELPERS beside him, as a hosted co-op game's `addbot helper`: leashed to him by
+  // kPartyLeash, the exit his (party.hpp).
+  bool beside = false;
 };
 
 struct UnitMap {
@@ -89,6 +95,11 @@ struct UnitMap {
   std::vector<sh::Vec3f> exits;               // the exits' middles
   std::vector<sh::Vec3f> keys_at;             // every key where it lay
   std::vector<std::string> plan;              // his changes of plan (UnitOptions::plan)
+  // (`beside`) the helpers' share of the time within kPartyLeash of him, the farthest one was,
+  // the plans they went back to him, the steps they took off an exit.
+  double helper_near_share = 0;
+  float helper_farthest = 0;
+  int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
 };
 
 struct UnitReport {

@@ -15,7 +15,8 @@
 // the third has a secret and the exit out of the unit. With `--game=<folder>` (the folder holding
 // Quake II's base folder) the unit comes from its packs (`--first`, the full game's first map by
 // default; `--first=base2$base1` starts on base2 as if arrived from base1), for PRIVATE pictures
-// only. Built on the release preset a map's run takes seconds, not the debug build's minutes.
+// only. `--mod=xatrix` plays The Reckoning's rules over its maps from its own first map. Built on
+// the release preset a map's run takes seconds, not the debug build's minutes.
 //
 // ge:summary Lab: a unit of Quake II played start to end by a script: exits, keys, objectives
 // ge:keywords lab se-q2-unit q2 unit play-through scripted-playthrough run_q2_unit
@@ -259,6 +260,7 @@ void run(gl::Lab& lab) {
   cl::SearchPath files;
   const bool own = lab.arg("game").empty();
   std::string first = "unit1";
+  sv::Q2Pack pack = sv::Q2Pack::base;
   if (own) {
     std::vector<uint8_t> pak;
     if (!unit(pak, error) || !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
@@ -266,12 +268,15 @@ void run(gl::Lab& lab) {
       return;
     }
   } else {
-    if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content)) {
+    const std::string mod = lab.arg("mod");
+    if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod,
+                           files, error, content)) {
       lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
                           "/pak0.pak>. Skill: shooter.");
       return;
     }
-    first = "base1";
+    pack = sv::q2_pack_of_folder(mod);
+    first = pack == sv::Q2Pack::base ? "base1" : std::string(sv::q2_pack_start_map(pack));
   }
   if (!lab.arg("first").empty()) first = lab.arg("first");
   Loader loader;
@@ -280,6 +285,7 @@ void run(gl::Lab& lab) {
   opt.load = &load;
   opt.load_ctx = &loader;
   opt.first = first;
+  opt.pack = pack;
   opt.maps = static_cast<int>(lab.arg_num("maps"));
   opt.map_seconds = lab.arg_num("seconds");
   opt.plan = !lab.arg("plan").empty();
@@ -287,6 +293,7 @@ void run(gl::Lab& lab) {
   opt.partners.assign(
       static_cast<size_t>(std::clamp(static_cast<int>(lab.arg_num("partners")), 0, 3)),
       ge::shooterbots::AimSkill::expert);
+  opt.beside = !lab.arg("beside").empty();
   const bt::UnitReport r = bt::run_q2_unit(opt);
   if (!r.ok) {
     lab.fail(r.error, "Read the reason above. Skill: bots.");
@@ -313,6 +320,19 @@ void run(gl::Lab& lab) {
     finished += m.finished ? 1 : 0;
   }
   lab.table(t, det);
+  if (opt.beside) {
+    gl::LabTable h;
+    h.title = "Helpers beside him (a person's stand-in)";
+    h.columns = {"map",         "time (s)", "near share",  "farthest",
+                 "back to him", "gave way", "exits turned"};
+    for (const bt::UnitMap& m : r.maps)
+      h.rows.push_back({m.name, ge::core::num::to_fixed(m.seconds, 1),
+                        ge::core::num::to_fixed(m.helper_near_share, 3),
+                        ge::core::num::to_fixed(m.helper_farthest, 0),
+                        std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
+                        std::to_string(m.helper_exits_turned)});
+    lab.table(h, det);
+  }
   lab.metric("unit.done", r.unit_done ? 1 : 0, "bool", det);
   lab.metric("unit.maps", static_cast<double>(r.maps.size()), "count", det);
   lab.metric("unit.exits_taken", finished, "count", det);
@@ -355,14 +375,19 @@ const gl::LabSpec kSpec{
     "its first map to the exit out of it, taking every key and reaching every objective on the "
     "way?",
     {{"game", "", "the folder holding Quake II's base folder (none: a fixture unit of three)"},
-     {"first", "", "the unit's first map (default unit1; base1 with --game)"},
+     {"mod", "", "with --game: a mission pack's folder beside the base one (xatrix: its rules)"},
+     {"first", "",
+      "the unit's first map (default unit1; base1 with --game, the pack's own with --mod)"},
      {"maps", "12", "at most this many maps entered"},
      {"seconds", "600", "a map's time before it is called unfinished, s"},
      {"plan", "", "any value: note every change of the script's plan"},
      {"complete", "", "any value: the 100% run (every monster and secret, then the exit)"},
      {"partners", "0",
       "0..3 partners beside him in co-op, the map's work split among them "
-      "(plugins/shooterbots/party.hpp); each partner's track in its own colour"}},
+      "(plugins/shooterbots/party.hpp); each partner's track in its own colour"},
+     {"beside", "",
+      "any value: he plays as a person would and the partners are helpers beside him (a hosted "
+      "game's `addbot helper`: leashed to him, the exit his); a table of how they kept to him"}},
     "",
     run,
 };

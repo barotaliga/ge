@@ -119,8 +119,9 @@ inline constexpr ItemSpawn kQ1Spawns[] = {
     {ItemRole::stealth, "item_artifact_invisibility", 0},
 };
 
-// Quake II's items. Its stimpack and box of ten both lay down as the other game's small health,
-// its adrenaline and the ancient head as a mega health, its power armours by the armour they match.
+// Quake II's items (and The Reckoning's, read only). Its stimpack and box of ten both lay down as
+// the other game's small health, its adrenaline and the ancient head as a mega health, its power
+// armours by the armour they match.
 inline constexpr ItemReading kQ2Reads[] = {
     {"weapon_shotgun", 0, ItemRole::scatter},
     {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
@@ -170,6 +171,14 @@ inline constexpr ItemReading kQ2Reads[] = {
     {"item_enviro", 0, ItemRole::protect},
     {"item_breather", 0, ItemRole::protect},
     {"item_silencer", 0, ItemRole::quiet},
+    // The Reckoning's own (a map of the pack played in another game): the Ionripper is the rapid
+    // energy weapon, the Phalanx the launcher (its blasts), its mag slugs the launcher's
+    // ammunition, the traps thrown like grenades, DualFire the damage powerup.
+    {"weapon_boomer", 0, ItemRole::energy},
+    {"weapon_phalanx", 0, ItemRole::launcher},
+    {"ammo_magslug", 0, ItemRole::ammo_explosive},
+    {"ammo_trap", 0, ItemRole::ammo_lobber},
+    {"item_quadfire", 0, ItemRole::damage},
 };
 // Quake's stealth lays down as Quake II's adrenaline: Quake II has none.
 inline constexpr ItemSpawn kQ2Spawns[] = {
@@ -382,19 +391,15 @@ struct PackItem {
   std::string_view game, pack, class_name;
 };
 inline constexpr PackItem kPackItems[] = {
-    {"q1", "hipnotic", "weapon_laser_gun"},
-    {"q1", "hipnotic", "weapon_mjolnir"},
-    {"q1", "hipnotic", "weapon_proximity_gun"},
-    {"q1", "hipnotic", "item_artifact_wetsuit"},
-    {"q2", "rogue", "weapon_etf_rifle"},
-    {"q2", "rogue", "weapon_heatbeam"},
-    {"q2", "rogue", "weapon_plasmabeam"},
-    {"q2", "rogue", "weapon_proxlauncher"},
-    {"q2", "rogue", "weapon_disintegrator"},
-    {"q2", "rogue", "ammo_flechettes"},
-    {"q2", "rogue", "ammo_prox"},
-    {"q2", "rogue", "ammo_disruptor"},
-    {"q2", "rogue", "item_double"},
+    {"q1", "hipnotic", "weapon_laser_gun"},     {"q1", "hipnotic", "weapon_mjolnir"},
+    {"q1", "hipnotic", "weapon_proximity_gun"}, {"q1", "hipnotic", "item_artifact_wetsuit"},
+    {"q2", "xatrix", "weapon_boomer"},          {"q2", "xatrix", "weapon_phalanx"},
+    {"q2", "xatrix", "ammo_magslug"},           {"q2", "xatrix", "ammo_trap"},
+    {"q2", "xatrix", "item_quadfire"},          {"q2", "rogue", "weapon_etf_rifle"},
+    {"q2", "rogue", "weapon_heatbeam"},         {"q2", "rogue", "weapon_plasmabeam"},
+    {"q2", "rogue", "weapon_proxlauncher"},     {"q2", "rogue", "weapon_disintegrator"},
+    {"q2", "rogue", "ammo_flechettes"},         {"q2", "rogue", "ammo_prox"},
+    {"q2", "rogue", "ammo_disruptor"},          {"q2", "rogue", "item_double"},
 };
 struct PackSpawn {
   std::string_view game, pack;

@@ -99,8 +99,11 @@ module (a QuakeWorld server's print filter, a Quake client's demo pause).
 - Each row built: `done`, the last column the file of ours that does it. A row you find wrong
   (ours already did it, the reference does something else): fix it and say so in the PR.
 - `not-taken` only with a doc that decides it (name the doc), never because it is hard.
-- Update the count line under each table and the totals at the top; put the missing count before
-  and after in the PR description and the report ("Quake II ledger: 956 missing, now 902").
+- Never write a count into a ledger: no totals table, no count line under a table, no "now N
+  missing" sentence (hand totals went stale and conflicted in every PR that touched a ledger).
+  `make ledger` counts the rows (`make ledger ARGS=--missing` prints each ledger's missing count by
+  rank); run it on `origin/main` and on your branch and put both in the PR description and the
+  report ("Quake II ledger: 956 missing, now 902").
 - Update the system's page in `docs/porting/` and `ledger.md` as `porting-games.md` asks.
 
 ## 5. A game or a system without a ledger
@@ -123,9 +126,11 @@ Before the first line of a new game's port (or a system the ledger lacks), write
    already in `porting/` into rows instead of reading the source again.
 5. **Check what they wrote**: the screen for code (`clean-room`), no paths under a home directory,
    rows whose status was taken by a name match marked `verify`.
-6. A totals table at the top, the count line under each table, recounted by grep after each
-   fill; write down the starting missing count so progress reads as missing going down. Commit the
-   ledger with the work that starts from it and report its counts.
+6. Every table has a `status` column (and a `rank` column where missing rows are ranked), so
+   `make ledger` counts it; name the file `<game>-ledger-<half>.md` (or pass it to `make ledger`).
+   Write down the starting missing count once, in the header, so progress reads as missing going
+   down; no other count goes in the file. Commit the ledger with the work that starts from it and
+   report `make ledger`'s counts.
 
 ## What is not a check
 

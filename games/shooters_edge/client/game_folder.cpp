@@ -20,6 +20,7 @@
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 
 namespace sb = ge::shooterbots;
 
@@ -352,6 +353,12 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   std::vector<uint8_t> store;
   out.registered = !find_file(files, content.full_game, store).empty();
   out.start_map = std::string(content.start_map);
+  // A Quake II mission pack starts on its own first map (its own `newgame`).
+  if (game.id == "q2")
+    if (const std::string_view first = shooters_edge::server::q2_pack_start_map(
+            shooters_edge::server::q2_pack_of_folder(files.folder));
+        !first.empty())
+      out.start_map = std::string(first);
   out.episodes.start_map = out.start_map;
   out.episodes.first_maps.assign(game.episode_maps.begin(), game.episode_maps.end());
   out.first_map =

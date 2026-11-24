@@ -548,6 +548,10 @@ void drop_items(Q2Server& s) {
       continue;
     }
     e.origin = t.end;
+    // Its row too (built as the map started, before the drop): drawn where it lies, as a loaded
+    // game, whose rows are built after the drop, draws it.
+    if (const size_t row = 1 + sh::kMaxClients + i; row < s.world.entities.size())
+      s.world.entities[row].origin = e.origin;
   }
   // Item teams (items sharing a `team`): every member hidden as they land, and 0.1 s later the
   // team's first entity (when it is an item) shows one of them at random.

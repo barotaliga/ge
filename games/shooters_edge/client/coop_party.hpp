@@ -1,13 +1,18 @@
 // THE CO-OP PARTY ON THE LISTEN SERVER: companions (shooterbots/companion.hpp) playing a campaign
 // in coop beside the player, in his own process. The listen (listen.hpp) owns one in a campaign:
 //
-// - `addbot [novice|average|expert]` (or `coopgame <n>`'s bots) seats a companion in the lowest
-//   free slot: it joins the campaign (server/campaign.hpp's `campaign_join`), so the host carries
-//   it from map to map like any player, its inventory in its spawn parms; `removebot` lets the
-//   highest one go;
+// - `addbot [novice|average|expert] [escort|helper]` (or `coopgame <n>`'s bots) seats a companion
+//   in the lowest free slot: it joins the campaign (server/campaign.hpp's `campaign_join`), so the
+//   host carries it from map to map like any player, its inventory in its spawn parms; `removebot`
+//   lets the highest one go;
 // - every map entered (a level change, a restart, a new game) builds the companions' NAV off the
 //   map (shooterbots/map_nav.hpp: its doors, plats, teleporters and water) and makes each companion
 //   afresh on it, the player (slot 0) its leader;
+// - an ESCORT (the default) keeps at the player's shoulder (shooterbots/companion.hpp); a HELPER
+//   works the level near the people (shooterbots/party.hpp's `PartyWork`): the helpers split the
+//   map's buttons, keys, secrets and monsters between them by the walk, leave whatever lies beyond
+//   the leash round the people and the exit to them, and come back to the nearest person when
+//   nothing near is left;
 // - each frame a companion's packet goes into the campaign's frame after the player's, in slot
 //   order, made from what its client is sent like the player's.
 //
@@ -15,7 +20,7 @@
 //
 // ge:summary The co-op party: companions seated in a campaign, carried and rebuilt map to map
 // ge:keywords coop co-op party companion addbot removebot coopgame listen-server campaign
-// ge:keywords party_add party_remove party_enter party_packets nav-graph
+// ge:keywords party_add party_remove party_enter party_packets nav-graph helper escort
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_campaign_view_test.cpp
 #pragma once
@@ -30,6 +35,7 @@
 #include "shooterbots/fighter.hpp"
 #include "shooterbots/map_nav.hpp"
 #include "shooterbots/nav.hpp"
+#include "shooterbots/party.hpp"
 #include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
@@ -44,6 +50,7 @@ inline constexpr int kPartyMost = 7;  // companions at most (a coop game's eight
 
 struct PartyMate {
   bots::Fighter fighter;
+  std::unique_ptr<sb::PartyWork> work;  // a helper's (null: an escort)
   sb::AimSkill skill = sb::AimSkill::average;
   std::string name;
   sh::MoveCmd cmds[3];  // the three newest, oldest first
@@ -58,6 +65,9 @@ struct Party {
   uint32_t seed = 1;
   int named = 0;                    // companions ever seated (their names count up)
   std::vector<sh::Packet> packets;  // a frame's, the player's first (reused)
+  sb::Party share;                  // the helpers' split of the map (shooterbots/party.hpp)
+  std::vector<sb::PartyMember> members;
+  sb::PartyOptions people;
 };
 
 // How many companions are seated.
@@ -65,7 +75,7 @@ int party_size(const Party& p);
 // A companion of `skill` seated in the campaign `c` (playing `map`) now: its slot, or -1 with
 // `error` (the party full, or a map with no floor to walk).
 int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sb::AimSkill skill,
-              std::string& error);
+              std::string& error, bool helper = false);
 // The highest companion let go. False when none is seated.
 bool party_remove(Party& p, sv::Campaign& c);
 // A map entered (`c`'s history moved on): the graph rebuilt and every companion made afresh on it.

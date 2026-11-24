@@ -32,6 +32,10 @@ enum class Q2Pack : uint8_t { base, reckoning, ground_zero };
 // last part is the folder), else the base game.
 Q2Pack q2_pack_of_folder(std::string_view folder);
 
+// The map a new single-player game of the pack starts on ("" the base game's own start map):
+// The Reckoning's `xswamp`, Ground Zero's `rmine1`, as each pack's own `newgame` names it.
+std::string_view q2_pack_start_map(Q2Pack pack);
+
 // The pack's name as a player reads it ("Quake II", "The Reckoning", "Ground Zero").
 std::string_view q2_pack_name(Q2Pack pack);
 
