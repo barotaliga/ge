@@ -118,6 +118,12 @@ constexpr gs::GameRule kEndpointRules[] = {
      nullptr, "0: nobody; 1: whoever gives k_admincode (the default)"},
     {"k_admincode", "The code a player gives in the game (admin <code>) to become the admin.",
      nullptr, "\"\": nobody can (the default); none: nobody can; TEXT: that code, exactly", false},
+    {"k_allowvoteadmin", "Whether the players may elect an admin (elect).", nullptr,
+     "0: no; 1: yes (the default)"},
+    {"k_vp_admin", "The share of the players whose yes elects an admin, in percent.", nullptr,
+     "51..100 (51 the default; at least 2 votes)"},
+    {"k_vp_captain", "The share of the players whose yes elects a captain, in percent.", nullptr,
+     "51..100 (51 the default; at least 2 votes)"},
     // The coop campaign in place of a match (qw_coop_game.hpp): the endpoint's, never a mod's.
     {"sv_coop", "Whether the server plays the game folder's campaign in coop, not a match.",
      nullptr, "0: a match (the default); 1: the campaign in coop"},

@@ -6,7 +6,11 @@
 // alone (and the server's log), then "Wait N second(s)!" for 5 seconds. The right one: "<name>
 // gains admins status!" to everyone. `admin` again gives it up ("<name> is no longer an admin").
 // It lasts across map changes and goes when the player leaves (a reconnect logs in again). A
-// player who is not one reads "You are not an admin".
+// player who is not one reads "You are not an admin". `admin` alone: "Use numbers or impulses to
+// enter code", the code typed on the number keys (six digits, "N more to go" after each of the
+// first five, `admin` again: "admin code canceled"). ELECTED: `elect` opens the server's one
+// election for him (`k_allowvoteadmin`, unset 1; `k_vp_admin` percent, 51; "<name> has requested
+// admin rights!", the others' `yes`), and a pass makes him an admin as the code does.
 //
 // THE WORDS (each the engine's act; a player named by user id, then by his exact name):
 // - `forcebreak`: the match ends now ("<name> forces a break!"; nothing outside a match).
@@ -77,6 +81,8 @@ struct QwReferee {
   ge::server::Election election;  // the server's one election, whatever role (election.hpp)
   QwCaptains captains;            // captain mode (qw_captains.hpp)
   QwRefereeGame last;             // the game as the last frame saw it (the hooks' view)
+  uint32_t typing = 0;            // a bit a slot typing the code on the number keys
+  std::array<std::string, ge::server::kLobbySeats> digits{};  // the digits typed so far
 };
 
 // QuakeWorld's words for the engine's book.

@@ -10,6 +10,7 @@
 // ge:summary Tests: QuakeWorld's admin in the game: the code, kick, forcemap, lock, forcestart
 // ge:keywords test qw-referee k_admincode k_admins forcestart forcemap kick lock admin
 // ge:skill net shooter testing
+#include <array>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +48,7 @@ struct Two {
   gn::Transport server_port, ports[2];
   Server s;
   se::QwClientEnd clients[2];
+  std::array<int, 2> key{};  // the number key each client presses on its next move
   std::string error;
   bool opened = false;
 };
@@ -72,11 +74,21 @@ void run(Two& r, const ServerConfig& c, int frames, const Lines& ana, const Line
     for (int i = 0; i < 2; i++) {
       if (f == (i == 0 ? 0 : ben_at)) {
         cc.name = names[i];
+        int* key = &r.key[static_cast<size_t>(i)];
+        cc.brain = [key](int tick) {
+          ge::shooter::MoveCmd m = se::default_script(tick, 0);
+          m.impulse = static_cast<uint8_t>(*key);
+          *key = 0;
+          return m;
+        };
         se::client_start(r.clients[i], r.ports[i], gn::sim_address(0, kPort), cc,
                          static_cast<double>(now) / 1e6);
       }
       for (const auto& [at, line] : i == 0 ? ana : ben)
-        if (f == at) se::client_command(r.clients[i], line);
+        if (f == at && line.starts_with('#'))  // a number key
+          r.key[static_cast<size_t>(i)] = line[1] - '0';
+        else if (f == at)
+          se::client_command(r.clients[i], line);
       if (f >= (i == 0 ? 0 : ben_at)) se::client_tick(r.clients[i], now);
     }
     server_frame(r.s);
@@ -178,4 +190,40 @@ TEST(qw_referee_forcestart_drops_the_unready_and_starts_the_match) {
   const std::string status = server_status(r.s);
   CHECK_MSG(status.find("matches=1") != std::string::npos, status);
   CHECK(printed(ana, "Match currently in progress. Use break or forcebreak to terminate."));
+}
+
+TEST(qw_referee_an_admin_by_election_and_by_the_number_keys) {
+  ServerConfig c = arena();
+  c.rules["k_admincode"] = "123456";
+  Two r;
+  run(r, c, 1200,
+      {{150, "elect"},
+       {300, "admin"},
+       {320, "admin"},
+       {340, "admin"},
+       {350, "admin"},
+       {360, "#1"},
+       {380, "#2"},
+       {400, "#3"},
+       {420, "#4"},
+       {440, "#5"},
+       {460, "#6"}},
+      {{170, "yes"}, {200, "elect"}, {220, "elect"}, {600, "admin"}, {620, "#9"}, {640, "elect"}});
+  CHECK_MSG(r.opened, r.error);
+  const se::QwClientEnd& ana = r.clients[0];
+  const se::QwClientEnd& ben = r.clients[1];
+  CHECK(printed(ben, "ana has requested admin rights!"));
+  CHECK(printed(ben, "Type yes in console to approve"));
+  CHECK(printed(ana, "ana gains admins status!"));
+  CHECK(printed(ana, "Please give up admin rights when you're done"));
+  CHECK(printed(ben, "Admin election is not allowed on this server") == false);
+  // ana gives it up, then types the code on the number keys: canceled once, then all six.
+  CHECK(printed(ana, "ana is no longer an admin"));
+  CHECK(printed(ana, "Use numbers or impulses to enter code"));
+  CHECK(printed(ana, "admin code canceled"));
+  CHECK(printed(ana, "5 more to go"));
+  CHECK(printed(ana, "1 more to go"));
+  CHECK(printed(ben, "ana gains admins status!"));
+  CHECK(printed(ben, "ben aborts election!"));
+  CHECK(printed(ben, "Finish entering the code first"));
 }

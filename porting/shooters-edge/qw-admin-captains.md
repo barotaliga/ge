@@ -439,8 +439,8 @@ not-taken (why named). Our own program runs these; a mod's program keeps its own
 | A4 | success and giving it up, the lines to everyone and to the admin | done | "gains admins status!", "is no longer an admin"; the admin is pointed at `acommands` | |
 | A5 | "You are not an admin" for an admin's word | done | | |
 | A6 | admin kept across a map change, lost on a reconnect | done | forgotten when the slot frees or another user id takes it | |
-| A7 | `admin` with no code: the code typed on the number keys | missing | the code is typed after the word | 3 |
-| A8 | `elect`: an admin by vote (`k_allowvoteadmin`, `k_vp_admin`), elected admins' limits | missing | the engine's election (engine/server/election.hpp) holds the vote | 2 |
+| A7 | `admin` with no code: the code typed on the number keys | done | six keys, "N more to go", `admin` again cancels; a key does nothing else meanwhile (net/qw_referee.cpp) | |
+| A8 | `elect`: an admin by vote (`k_allowvoteadmin`, `k_vp_admin`), elected admins' limits | done | the server's one election (engine/server/election.hpp); unset `k_allowvoteadmin` reads 1 as the example config; an elected admin kicks no admin, as no admin does here | |
 | A9 | `forcebreak`: "<name> forces a break!", silent outside a match | done | the book's `endmatch` | |
 | A10 | `forcemap <map>`: refused in a match, usage, an unknown map, the line | done | the book's `changemap`; without sv_lobby always taken | |
 | A11 | `kick <id or name> [reason]`: the lines, the reason, a 30-second ban | done | user id first, then the exact name; an admin is not kicked (ours) | |

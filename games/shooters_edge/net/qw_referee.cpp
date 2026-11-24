@@ -14,6 +14,7 @@
 #include "core/num_text.hpp"
 #include "net/address.hpp"
 #include "server/bans.hpp"
+#include "server/election.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 
 namespace shooters_edge::net {
@@ -268,6 +269,123 @@ QwCaptainsGame captains_game(QwReferee& r, const QwRefereeGame& g) {
   return c;
 }
 
+// A server rule's text ("" unset).
+std::string rule(const QwRefereeGame& g, const char* key) {
+  if (g.settings == nullptr) return {};
+  const auto it = g.settings->rules.find(key);
+  return it == g.settings->rules.end() ? std::string() : it->second;
+}
+
+// A rule read as on or off, `unset` when it is not set.
+bool rule_on(const QwRefereeGame& g, const char* key, bool unset) {
+  const std::string v = rule(g, key);
+  return v.empty() ? unset : std::strtod(v.c_str(), nullptr) != 0;
+}
+
+std::string with_name(std::string line, const std::string& name) {
+  for (size_t at = line.find("{name}"); at != std::string::npos; at = line.find("{name}", at))
+    line.replace(at, 6, name);
+  return line;
+}
+
+// Said line by line ("\n" splits one).
+void tell_lines(QwServer& s, int to, const std::string& text) {
+  size_t start = 0;
+  while (start <= text.size()) {
+    const size_t nl = text.find('\n', start);
+    const std::string part = text.substr(start, nl == std::string::npos ? nl : nl - start);
+    if (!part.empty()) tell(s, to, part);
+    if (nl == std::string::npos) break;
+    start = nl + 1;
+  }
+}
+
+const gs::ElectionWords& admin_election_words() {
+  static const gs::ElectionWords w = [] {
+    gs::ElectionWords x;
+    x.requested = "{name} has requested admin rights!";
+    x.approve = "Type yes in console to approve";
+    x.abort_hint = "Type elect to abort election";
+    x.gives = "{name} gives his vote";
+    x.more = "{n} more {votes} needed";
+    x.still_good = "--- your vote is still good ---";
+    x.not_self = "You cannot vote for yourself";
+    x.withdraws = "{name} withdraws his vote";
+    x.aborted = "{name} aborts election!";
+    return x;
+  }();
+  return w;
+}
+
+uint32_t players_of(const QwServer& s) {
+  uint32_t v = 0;
+  for (int i = 0; i < ge::shooter::kMaxClients; i++) {
+    const QwClient& c = s.clients[i];
+    if (c.state != ConnState::free && !c.spectator && info_get(c.userinfo, "*bot").empty())
+      v |= 1u << i;
+  }
+  return v;
+}
+
+void election_said(QwReferee& r, QwServer& s) {
+  for (size_t i = 0; i < r.election.said.size(); i++) tell(s, r.election.to[i], r.election.said[i]);
+  r.election.said.clear();
+  r.election.to.clear();
+}
+
+// An elected admin made one, as the code makes one.
+void take_elected(QwReferee& r, const QwRefereeGame& g) {
+  if (r.election.passed.slot < 0 || r.election.passed.name != "admin") return;
+  const int slot = r.election.passed.slot;
+  r.election.passed = {};
+  QwServer& s = *g.qw;
+  if (s.clients[slot].state == ConnState::free) return;
+  r.book.referees |= 1u << slot;
+  r.ids[static_cast<size_t>(slot)] = s.clients[slot].userid;
+  const std::string& name = s.clients[slot].name;
+  tell_lines(s, -1, with_name(qw_referee_words().became, name));
+  tell_lines(s, slot, with_name(qw_referee_words().became_me, name));
+}
+
+bool elect(QwReferee& r, const QwRefereeGame& g, int slot) {
+  QwServer& s = *g.qw;
+  const std::string& name = s.clients[slot].name;
+  gs::Election& e = r.election;
+  if (gs::election_running(e) && e.open.slot == slot && e.open.name == "admin") {
+    gs::election_abort(e, admin_election_words(), slot, name, g.now);
+    election_said(r, s);
+    return true;
+  }
+  if (((r.typing >> slot) & 1u) != 0) return tell(s, slot, "Finish entering the code first"), true;
+  if (gs::referee_is(r.book, slot)) return tell(s, slot, "You are already an admin"), true;
+  if (!rule_on(g, "k_admins", true)) return tell(s, slot, qw_referee_words().none), true;
+  if (!rule_on(g, "k_allowvoteadmin", true))
+    return tell(s, slot, "Admin election is not allowed on this server"), true;
+  if (s.clients[slot].spectator && g.in_match && g.lobby != nullptr) return true;
+  const std::string percent = rule(g, "k_vp_admin");
+  e.settings.percent = percent.empty() ? 51 : std::atoi(percent.c_str());
+  gs::election_open(e, admin_election_words(), {"admin", -1, slot}, name, players_of(s), g.now);
+  election_said(r, s);
+  take_elected(r, g);
+  return true;
+}
+
+// `admin` alone: the code typed on the number keys, or that typing called off.
+bool start_typing(QwReferee& r, const QwRefereeGame& g, int slot) {
+  QwServer& s = *g.qw;
+  const uint32_t bit = 1u << slot;
+  if (gs::election_running(r.election) && r.election.open.slot == slot &&
+      r.election.open.name == "admin")
+    return tell(s, slot, "Abort election first"), true;
+  if ((r.typing & bit) != 0) {
+    r.typing &= ~bit;
+    return tell(s, slot, "admin code canceled"), true;
+  }
+  r.typing |= bit;
+  r.digits[static_cast<size_t>(slot)].clear();
+  return tell(s, slot, "Use numbers or impulses to enter code"), true;
+}
+
 }  // namespace
 
 const gs::RefereeWords& qw_referee_words() {
@@ -280,6 +398,17 @@ bool qw_referee_line(QwReferee& r, const QwRefereeGame& g, int slot, const std::
       slot >= ge::shooter::kMaxClients)
     return false;
   forget_gone(r, *g.qw);
+  if (line == "elect") return elect(r, g, slot);
+  if ((line == "yes" || line == "no") && gs::election_running(r.election) &&
+      r.election.open.name == "admin") {
+    gs::election_vote(r.election, admin_election_words(), slot, g.qw->clients[slot].name,
+                      line == "yes", players_of(*g.qw), g.now);
+    election_said(r, *g.qw);
+    take_elected(r, g);
+    return true;
+  }
+  if (line == "admin" && !gs::referee_is(r.book, slot) && rule_on(g, "k_admins", true))
+    return start_typing(r, g, slot);
   if (qw_captains_line(r.captains, captains_game(r, g), slot, line)) return true;
   if (line == "forcestart") return force_start(r, g, slot);
   if (line == "lock") return lock(r, g, slot);
@@ -320,7 +449,10 @@ void qw_referee_frame(QwReferee& r, const QwRefereeGame& g) {
   if (g.qw == nullptr || g.rules == nullptr) return;
   forget_gone(r, *g.qw);
   r.last = g;
+  for (int i = 0; i < gs::kLobbySeats && i < ge::shooter::kMaxClients; i++)
+    if (g.qw->clients[i].state == ConnState::free) r.typing &= ~(1u << i);
   qw_captains_frame(r.captains, captains_game(r, g));
+  take_elected(r, g);
   force_frame(r, g);
   if (r.locked_until > 0 && g.now >= r.locked_until) {
     r.locked_until = 0;
@@ -338,10 +470,33 @@ uint8_t qw_referee_buttons(QwReferee& r, const QwRefereeGame& g, int slot, uint8
   return qw_captains_buttons(r.captains, captains_game(r, g), slot, buttons);
 }
 
+namespace {
+
+// A number key while the code is typed: "N more to go", and at the sixth the code given.
+void type_digit(QwReferee& r, int slot, uint8_t digit) {
+  std::string& d = r.digits[static_cast<size_t>(slot)];
+  d.push_back(static_cast<char>('0' + digit));
+  if (d.size() < 6) {
+    tell(*r.last.qw, slot, std::to_string(6 - d.size()) + " more to go");
+    return;
+  }
+  r.typing &= ~(1u << slot);
+  const std::string code = d;
+  d.clear();
+  qw_referee_line(r, r.last, slot, "admin " + code);
+}
+
+}  // namespace
+
 void qw_referee_hooks(QwServer& s, QwReferee& r) {
   s.move_ctx = &r;
-  s.impulse = [](void* ctx, int slot, uint8_t impulse, bool fresh) {
+  s.impulse = [](void* ctx, int slot, uint8_t impulse, bool fresh) -> uint8_t {
     QwReferee& me = *static_cast<QwReferee*>(ctx);
+    if (slot >= 0 && slot < gs::kLobbySeats && ((me.typing >> slot) & 1u) != 0) {
+      if (fresh && impulse >= 1 && impulse <= 9 && me.last.qw != nullptr)
+        type_digit(me, slot, impulse);
+      return 0;
+    }
     return qw_captains_impulse(me.captains, captains_game(me, me.last), slot, impulse, fresh);
   };
   s.info_rule = [](void* ctx, int slot, const std::string& key, const std::string& value) {
