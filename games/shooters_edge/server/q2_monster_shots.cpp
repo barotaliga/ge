@@ -133,8 +133,8 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
   switch (a.fire) {
     case Fire::bolt:
       for (int i = 0; i < a.count; i++)
-        fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, aim(s, m, a, from), a.damage, a.speed,
-                             cause_of(m));
+        fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, aim(s, m, a, from),
+                             a.damage, a.speed, cause_of(m));
       return;
     case Fire::grenade:
       fight_monster_launch(s, m.entity, SqShot::grenade, from, aim(s, m, a, from), a.damage,
@@ -196,7 +196,8 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
       const sh::Vec3f across = forward_of(e.angles.y + offset) * level;
       d = sh::Vec3f{across.x, across.y, d.z};
       sh::normalize(d);
-      fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, d, a.damage, a.speed, cause_of(m));
+      fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, d, a.damage, a.speed,
+                           cause_of(m));
       return;
     }
     case Fire::leap: {  // off the ground at the enemy

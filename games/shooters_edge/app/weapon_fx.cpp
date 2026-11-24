@@ -1064,7 +1064,8 @@ void blaster_hit(const double p[3], uint32_t seed, Particles* out, bool green) {
     q.size = float(rnd(r, 0.02, 0.035));
     out->push_back(q);
   }
-  for (int i = 0; i < 6; ++i) out->push_back(shine(p, green ? kBfgRgb : kBoltRgb, 3.0, 0.08, 0.15, r));
+  for (int i = 0; i < 6; ++i)
+    out->push_back(shine(p, green ? kBfgRgb : kBoltRgb, 3.0, 0.08, 0.15, r));
 }
 
 void bfg_burst(const double p[3], uint32_t seed, Particles* out) {
