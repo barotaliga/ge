@@ -726,7 +726,9 @@ from where it stopped (a `Range` request, three tries), holds every fetch togeth
 The console's download bar follows the fetch (`web_progress`).
 
 The `se-fastdl` lab times both ways on a real map: `make lab LAB=se-fastdl
-ARGS=--map=<path>/aerowalk.bsp`.
+ARGS=--map=<path>/aerowalk.bsp`, or a Quake II map with `--game=q2`. Quake II's channel sends one
+piece of a packet's room for each `nextdl` the client answers, so a map comes at about 13 kB a
+second whichever protocol the client speaks; HTTPS is what makes it fast there.
 
 ## Open for extension
 
