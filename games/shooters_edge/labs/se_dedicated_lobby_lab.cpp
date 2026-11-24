@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "console/cvar.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
@@ -82,13 +83,17 @@ int phase_of(const std::string& status) {
 }
 
 Session run_session(uint32_t seed, int bots, double seconds, double match_s, double countdown_s,
-                    double intermission_s) {
+                    double intermission_s, const std::string& modern) {
   Session r;
   gn::LinkConditions lan;
   gn::SimNetwork net = gn::make_sim_network(seed, lan);
   gn::Transport port;
   gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
   gs::ServerConfig c;
+  // The server's console over the config, so `sv_modern` sets what it means for this game.
+  ge::console::Cvars cvars;
+  gs::add_server_cvars(cvars, c, se::qw_game());
+  cvars.set("sv_modern", modern, ge::console::Source::local);
   c.hostname = "Lobby Night";
   c.map = "arena";
   c.maxclients = 8;
@@ -248,14 +253,15 @@ void run(gl::Lab& lab) {
   const double match_s = lab.arg_num("match");
   const double countdown_s = lab.arg_num("countdown");
   const double intermission_s = lab.arg_num("intermission");
+  const std::string modern = lab.arg("modern");
   if (bots < 0 || bots > 5) {
     lab.fail("--bots=" + lab.arg("bots") + " does not leave the two clients their seats",
              "Pick 0 to 5 bots (the lab's server has 8 slots, slot 0 kept for a player); "
              "skill: net.");
     return;
   }
-  const Session a = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s);
-  const Session b = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s);
+  const Session a = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s, modern);
+  const Session b = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s, modern);
   if (!a.error.empty()) {
     lab.fail("the dedicated server did not open: " + a.error,
              "Fix what the error names in games/shooters_edge/net/qw_game.cpp's create, then "
@@ -373,6 +379,7 @@ const gl::LabSpec kSpec{
         {"intermission", "0",
          "the scores up after each match before the next map, s (sv_intermission)"},
         {"match", "15", "each match's length (the mod's timelimit), s"},
+        {"modern", "0", "sv_modern: 1 every shot and projectile rewound, as a modern server"},
         {"seconds", "60", "server time to run, s"},
         {"seed", "1", "the network's and the game's stream"},
     },

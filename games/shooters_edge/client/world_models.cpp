@@ -25,6 +25,7 @@
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
 #include "classicenhance/replace.hpp"
+#include "classicenhance/shells.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
 #include "render/sprite_shapes.hpp"
@@ -719,6 +720,12 @@ void place_returning(const Listen& l, double within_s, std::vector<Returning>& o
   }
 }
 
+int made_case(std::string_view name) {
+  for (int k = 0; k < ge::classicenhance::kCasings; ++k)
+    if (name == kEffectModels[size_t(EffectModel::case_hull) + size_t(k)]) return k;
+  return -1;
+}
+
 Placed hologram_of(const Placed& item, const ge::classicenhance::HologramLook& h) {
   Placed p = item;
   p.alpha = h.alpha;
@@ -798,12 +805,17 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       continue;
     }
     if (i == 1 || name.empty()) continue;
+    k.path = name;
     const ge::classicenhance::Replacement* rep = ge::classicenhance::replacement_of(name);
     if (rep != nullptr) k.effect = rep->effect;
     OpenedModel opened;
     std::string error;
-    if (!game.open_model(game, files, name, opened, error) &&
-        !(vwep && stand_in(name, opened, skin_of[i]))) {
+    if (const int made = own ? made_case(name) : -1; made >= 0) {  // the spent cases: made here
+      opened.form = ModelForm::morph;
+      opened.morph =
+          ge::classicenhance::casing_model(static_cast<ge::classicenhance::Casing>(made), palette);
+    } else if (!game.open_model(game, files, name, opened, error) &&
+               !(vwep && stand_in(name, opened, skin_of[i]))) {
       // Not in the files (the map itself is not in the packs by this name either) or refused.
       if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
       continue;
@@ -814,7 +826,10 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       // The visible weapons' body wears each player's skin and colours as the figure does.
       k.player = name == kPlayerModel || (vwep && i == vwep_at);
       if (k.player)
-        for (const mo::Frame& fr : model.frames) m.player_frames.push_back(fr.name);
+        for (const mo::Frame& fr : model.frames) {
+          m.player_frames.push_back(fr.name);
+          k.frame_names.push_back(fr.name);
+        }
       k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
       if (k.player || k.figure) {  // where a body lies still (cl_deadbodyfilter)
         std::vector<std::string> frame_names;

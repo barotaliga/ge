@@ -681,8 +681,7 @@ int run_main(int argc, char** argv) {
   cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                  next_map);
 
-  // The held weapons: a classic game's own, else ours (the folder given, else the tree's;
-  // held.hpp).
+  // The held weapons (held.hpp): a classic game's own, else ours (the folder given, or the tree's).
   std::vector<ge::viewmodel::HeldModel> weapons;
   std::vector<std::string> model_dirs;
   if (!args.models.empty()) model_dirs.push_back(args.models);
@@ -1588,7 +1587,8 @@ int run_main(int argc, char** argv) {
         bench_fx_state = cl::fx_state_for(&places);  // a new level: nothing burning
         bench_demo_fx = {};
         if (drawn_remote)
-          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get());
+          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get(),
+                           &bench_map->bsp.map);
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
@@ -1617,6 +1617,7 @@ int run_main(int argc, char** argv) {
         std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
         cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
         if (drawn_remote) joined_heard = {ds.started, ds.stopped, ds.voice, ds.prints, ds.centre};
+        cl::hear_fx(bench_fx, (drawn_remote ? joined_heard : bench.heard).started);  // ce_shells
         if (hearing.frame(ds, drawn_remote ? joined_heard : bench.heard, static_cast<float>(wall),
                           lines, hud.centre, &chat_lines))
           hud.centre_until = t + picture.centre_time;  // scr_centertime
@@ -1724,6 +1725,7 @@ int run_main(int argc, char** argv) {
       in_hand.recording = !drawn_remote;  // r_viewmodellastfired plays back alone
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
+      cl::held_cases(bench_fx_state.cases, held_fire, hand, bench_fx_state.on.shells, t);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 || own_behind > 0
                       ? nullptr
@@ -1894,11 +1896,9 @@ int run_main(int argc, char** argv) {
     shooters_edge::view::HandFrame hand = cl::step_held(
         listen, shown, in_hand, view_settings, weapons, t - hand_paused, paused ? 0 : wall);
     if (listen.server != nullptr) cl::quick_hand(controls.quick, hand);
-    if (hand.flashing && picture.muzzle_flash == 1)  // cl_muzzleflash 2 and 0: unlit
-      fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
-    // ce_muzzles in the modern look: each shot's flame, smoke and sparks from the barrel (off, or
-    // the classic look: the weapon's own flash and its light alone).
-    cl::fire_held(held_fire, hand, fx_state.on.muzzles, view.time_s, fx);
+    // The hand's flash lit (cl_muzzleflash 1), its fire (ce_muzzles) and cases (ce_shells).
+    cl::hand_fx(fx_state, held_fire, hand, picture.muzzle_flash == 1, view.time_s, t, fx,
+                listen.sounds, cl::kMostListenSounds);
     overlay.begin(w, h);
     const shooters_edge::server::Q2Server* q2 =
         listen.rules ? shooters_edge::server::q2_of(*listen.rules) : nullptr;

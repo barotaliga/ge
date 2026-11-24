@@ -140,6 +140,9 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // pack has only its own, so the other draws nothing).
 // `figure_q2`: what a Quake II player's model 255 ("the client's own") is drawn as, in the look his
 // slot names (`Placed::skin_name`), when a recording or a joined server sends one.
+// `case_hull`, `case_brass`, `case_heavy`: the guns' spent cases (ce_shells, shells.hpp), made by
+// classic enhance (classicenhance/shells.hpp's `casing_model`, in the game's palette), in
+// classicenhance::Casing's order; never read from the packs.
 // `q2_fx` on: Quake II's model effects (q2_model_fx.hpp's Q2FxModel, in its order).
 enum class EffectModel : uint8_t {
   explosion,
@@ -149,6 +152,9 @@ enum class EffectModel : uint8_t {
   place_q1,
   place_q2,
   figure_q2,
+  case_hull,
+  case_brass,
+  case_heavy,
   q2_fx
 };
 inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
@@ -158,6 +164,9 @@ inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
                                                 "progs/h_player.mdl",
                                                 "models/items/c_head/tris.md2",
                                                 "players/male/tris.md2",
+                                                "ce/case_hull",
+                                                "ce/case_brass",
+                                                "ce/case_heavy",
                                                 "models/objects/r_explode/tris.md2",
                                                 "models/objects/explode/tris.md2",
                                                 "models/objects/smoke/tris.md2",
@@ -250,6 +259,8 @@ struct ModelKind {
   // A Quake player's figure from another game: its folder's `weapon.md2` (an index into the
   // figure kinds, in its own picture), drawn in its hand on the same frame; kNone: none.
   uint32_t held = kNone;
+  std::string path;  // its file in the game's files ("progs/soldier.mdl"), as the list names it
+  std::vector<std::string> frame_names;  // the players' own figure's frames' names (`player`)
 };
 
 // THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`

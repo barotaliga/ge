@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/teleporters.hpp"
 #include "shooter/brush_contents.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooters_edge/net/q2_client.hpp"
@@ -103,9 +104,14 @@ sh::Vec3f origin_of(const gc::Q2State& s) {
 }
 
 // The moves sent after `acked` run from `s`; false when the ring no longer holds them.
+// A teleporter of `tele` (none when null, `skip` left out) the player's box reaches is taken as
+// the server takes it (classic/teleporters.hpp); the first such move's index and teleporter in
+// `hit`.
 bool run_ahead(gc::Q2State& s, uint32_t acked, const Q2ClientEnd& c, const gc::Q2Feel& feel,
                const gc::Q2World& world, int& replayed, bool* on_ground = nullptr,
-               int* water_level = nullptr, float* view_height = nullptr) {
+               int* water_level = nullptr, float* view_height = nullptr,
+               const sh::Teleporters* tele = nullptr, int skip = -1, sh::TeleHit* hit = nullptr,
+               uint32_t* hit_move = nullptr) {
   const uint32_t newest = c.ch.outgoing_sequence;  // the next packet's: not yet sent
   if (newest - acked >= static_cast<uint32_t>(kSqSentRing)) return false;
   // The moves made after the acknowledged packet's, sent or still waiting for the next packet.
@@ -119,6 +125,17 @@ bool run_ahead(gc::Q2State& s, uint32_t acked, const Q2ClientEnd& c, const gc::Q
     gc::q2_feel(pm, feel);
     gc::q2_move(pm, world);
     s = pm.s;
+    if (tele != nullptr && s.type == gc::Q2Type::normal && (s.flags & gc::kSqTimeTeleport) == 0) {
+      const int t =
+          sh::teleporter_at(*tele, origin_of(s), pm.mins, pm.maxs, sh::kTeleLinkGrow, skip);
+      if (t >= 0) {
+        gc::q2_teleport_state(s, (*tele)[static_cast<size_t>(t)], pm.cmd.angles);
+        if (hit != nullptr && hit->cmd < 0) {
+          *hit = {replayed, t};
+          if (hit_move != nullptr) *hit_move = k;
+        }
+      }
+    }
     replayed++;
     if (on_ground != nullptr) *on_ground = pm.ground_entity >= 0;
     if (water_level != nullptr) *water_level = pm.water_level;
@@ -155,6 +172,8 @@ void q2_predict_map(Q2Predict& p, const ge::brush::Map* map) {
   if (map == p.map) return;
   p.map = map;
   p.tracer = map != nullptr ? std::make_unique<ge::brush::BrushTracer>(*map) : nullptr;
+  p.tele = map != nullptr ? gc::q2_teleporters(*map) : sh::Teleporters{};
+  p.guess = {};
   p.smooth = {};
   p.have_base = false;
 }
@@ -187,15 +206,17 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
   const gc::Q2World world{&mw, mover_trace, mover_contents};
   const gc::Q2Feel feel = q2_feel_of(d);
   const uint32_t acked = c.ch.incoming_acknowledged;
+  const sh::Teleporters* tele = p.teleports && !p.tele.empty() ? &p.tele : nullptr;
   // A new frame: the newest move predicted from the old base too, the difference folded into the
   // correction.
   const bool fresh = !p.have_base || c.frames != p.base_frames;
   if (fresh && p.have_base) {
     gc::Q2State old = p.base;
     int n = 0;
-    if (run_ahead(old, p.base_acked, c, feel, world, n)) {
+    if (run_ahead(old, p.base_acked, c, feel, world, n, nullptr, nullptr, nullptr, tele,
+                  p.guess.skip)) {
       gc::Q2State now = state_of(v, ms);
-      if (run_ahead(now, acked, c, feel, world, n)) {
+      if (run_ahead(now, acked, c, feel, world, n, nullptr, nullptr, nullptr, tele, p.guess.skip)) {
         ge::shooter::smoothing_frame(p.smooth, origin_of(old), origin_of(now));
         const float miss = ge::shooter::length(origin_of(old) - origin_of(now));
         if (miss > 0) {
@@ -217,8 +238,22 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
   // The eye's height as the frame has it (standing or ducked), the predicted one replacing it.
   const float framed = (v.pm_flags & gc::kSqDucked) != 0 ? gc::kSqViewDucked : gc::kSqViewStand;
   float ahead = framed;
-  if (!run_ahead(s, p.base_acked, c, feel, world, p.replayed, &p.on_ground, &p.water_level, &ahead))
+  sh::TeleHit hit;
+  uint32_t hit_move = 0;
+  if (!run_ahead(s, p.base_acked, c, feel, world, p.replayed, &p.on_ground, &p.water_level, &ahead,
+                 tele, p.guess.skip, &hit, &hit_move))
     return false;
+  // The teleport foreseen: settled by the server's state (a no leaves that teleporter out while
+  // the server has him in it), a new one taken; the view turns with the predicted delta angles.
+  if (tele != nullptr) {
+    sh::Vec3f unused;
+    const uint32_t first = c.made_at[p.base_acked & (kSqSentRing - 1)];
+    sh::tele_guess_acked(p.guess, *tele, first, origin_of(p.base), sh::kPlayerMins, sh::kPlayerMaxs,
+                         unused);
+    if (hit.cmd >= 0) sh::tele_guess_hit(p.guess, *tele, hit_move + 1, hit.index, {}, unused);
+  }
+  p.teleported = hit.cmd >= 0;
+  for (int i = 0; i < 3; i++) p.delta_angles[i] = s.delta_angles[i];
   const bool crouch = p.crouch == 2 || (p.crouch == 1 && d.feel_told);
   p.eye_shift = crouch ? ahead - framed : 0;
   ge::shooter::smoothing_decay(p.smooth, dt);
