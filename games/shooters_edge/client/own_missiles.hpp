@@ -50,6 +50,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "classic/weapon_predict.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -106,10 +107,10 @@ struct OwnShot {
 struct OwnMissile {
   OwnMissileKind kind = OwnMissileKind::nail;
   sh::Vec3f origin, velocity, angles;
-  sh::Vec3f aim;        // the plasma ball's way once it goes
-  double go_s = -1;     // the plasma ball waits still until then
-  bool stuck = false;   // a proximity grenade landed
-  double at_s = 0;  // the time `origin` is for
+  sh::Vec3f aim;       // the plasma ball's way once it goes
+  double go_s = -1;    // the plasma ball waits still until then
+  bool stuck = false;  // a proximity grenade landed
+  double at_s = 0;     // the time `origin` is for
   double show_s = 0, end_s = 0;
   int id = 0;
   int adopted = 0;  // the server's copy (its entity number) hidden while this flies; 0 none
@@ -129,6 +130,12 @@ struct OwnMissiles {
   // hit a wall.
   int thrown = 0, handed = 0, ended = 0, walled = 0;
 };
+
+// What a predicted shot throws (net/qw_weapon.hpp's `fired`): the shot's sound, its copies, the
+// weapon in hand and the rules give the stand-ins' kind and how many (the laser cannon's twin
+// bolts 2, the multi rockets 4); 0 for a shot that throws none.
+int own_shot_kind(ge::classic::WeaponSound sound, int copies, int weapon,
+                  ge::classic::WeaponRules rules, OwnMissileKind& kind);
 
 // A shot thrown at `now_s`: `latency_s` the round trip, `ping_ms` the server's measure of it (0:
 // none thrown); `player` the player's place now, for the replacement. False when none was thrown.

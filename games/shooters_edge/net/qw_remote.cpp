@@ -396,10 +396,11 @@ void predict_others(Remote& r, double now_s) {
 
 // THE PLAYER'S OWN JUMP AND MISSILES, at the weapon prediction's shown command: a jump the
 // predicted move took on a command shown for the first time plays its sound at once (the server's
-// copy on the player dropped, `cl_predict_jump`); each nail, rocket or grenade the weapon pass
-// fired is thrown ahead of the server (client/own_missiles.hpp, `cl_predict_projectiles`) from
-// the player's predicted place and view on its command; then every stand-in flies to `now_s`, is
-// handed to the server's copy near it and is drawn into the demo's state.
+// copy on the player dropped, `cl_predict_jump`); each nail, rocket, grenade or pack missile the
+// weapon pass fired is thrown ahead of the server (client/own_missiles.hpp,
+// `cl_predict_projectiles`) from the player's predicted place and view on its command; then every
+// stand-in flies to `now_s`, is handed to the server's copy near it and is drawn into the demo's
+// state.
 void own_ahead(Remote& r, client::DemoState& d, double now_s) {
   const QwClientEnd& c = r.end;
   const int me = c.playernum;
@@ -442,40 +443,10 @@ void own_ahead(Remote& r, client::DemoState& d, double now_s) {
   const int ping = me >= 0 && me < 32 ? c.players[me].weapon.ping_ms : 0;
   const bool deathmatch = info_get(c.serverinfo, "deathmatch") != "0";
   for (const RemoteWeapon::Fired& f : r.weapon.fired) {
-    namespace wc = ge::classic;
-    const bool lava = f.rules == wc::WeaponRules::dissolution &&
-                      (f.weapon == wc::kItLavaNailgun || f.weapon == wc::kItLavaSuperNailgun);
-    const bool multi = f.rules == wc::WeaponRules::dissolution &&
-                       (f.weapon == wc::kItMultiGrenade || f.weapon == wc::kItMultiRocket);
     client::OwnShot shot;
-    int throws = 1;  // the stand-ins this shot throws
-    switch (f.shot.sound) {
-      case wc::WeaponSound::nailgun:
-        shot.kind = lava ? client::OwnMissileKind::lava_nail : client::OwnMissileKind::nail;
-        break;
-      case wc::WeaponSound::super_nailgun:
-        shot.kind = lava ? client::OwnMissileKind::lava_nail : client::OwnMissileKind::super_nail;
-        break;
-      case wc::WeaponSound::rocket:
-        shot.kind = multi ? client::OwnMissileKind::multi_rocket : client::OwnMissileKind::rocket;
-        throws = multi ? 4 : 1;
-        break;
-      case wc::WeaponSound::grenade:
-        shot.kind = multi ? client::OwnMissileKind::multi_grenade : client::OwnMissileKind::grenade;
-        break;
-      case wc::WeaponSound::laser:  // the twin bolts one to each side, the single one between
-        shot.kind = client::OwnMissileKind::laser;
-        throws = f.shot.copies > 1 ? 2 : 1;
-        break;
-      case wc::WeaponSound::proximity:
-        shot.kind = client::OwnMissileKind::prox;
-        break;
-      case wc::WeaponSound::plasma:
-        shot.kind = client::OwnMissileKind::plasma;
-        break;
-      default:
-        continue;
-    }
+    const int throws =
+        client::own_shot_kind(f.shot.sound, f.shot.copies, f.weapon, f.rules, shot.kind);
+    if (throws == 0) continue;
     shot.deathmatch = deathmatch;
     shot.origin = r.prediction;
     for (int i = 0; i < r.ahead_count; i++)

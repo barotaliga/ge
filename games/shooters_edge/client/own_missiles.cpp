@@ -114,6 +114,39 @@ bool fly(OwnMissile& o, const sh::Hull* world, float gravity, double t) {
 
 }  // namespace
 
+int own_shot_kind(ge::classic::WeaponSound sound, int copies, int weapon,
+                  ge::classic::WeaponRules rules, OwnMissileKind& kind) {
+  namespace wc = ge::classic;
+  const bool pack = rules == wc::WeaponRules::dissolution;
+  const bool lava = pack && (weapon == wc::kItLavaNailgun || weapon == wc::kItLavaSuperNailgun);
+  const bool multi = pack && (weapon == wc::kItMultiGrenade || weapon == wc::kItMultiRocket);
+  switch (sound) {
+    case wc::WeaponSound::nailgun:
+      kind = lava ? OwnMissileKind::lava_nail : OwnMissileKind::nail;
+      return 1;
+    case wc::WeaponSound::super_nailgun:
+      kind = lava ? OwnMissileKind::lava_nail : OwnMissileKind::super_nail;
+      return 1;
+    case wc::WeaponSound::rocket:
+      kind = multi ? OwnMissileKind::multi_rocket : OwnMissileKind::rocket;
+      return multi ? 4 : 1;
+    case wc::WeaponSound::grenade:
+      kind = multi ? OwnMissileKind::multi_grenade : OwnMissileKind::grenade;
+      return 1;
+    case wc::WeaponSound::laser:  // the twin bolts one to each side, the single one between
+      kind = OwnMissileKind::laser;
+      return copies > 1 ? 2 : 1;
+    case wc::WeaponSound::proximity:
+      kind = OwnMissileKind::prox;
+      return 1;
+    case wc::WeaponSound::plasma:
+      kind = OwnMissileKind::plasma;
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 bool own_missile_fire(OwnMissiles& m, const OwnShot& shot, double now_s, double latency_s,
                       int ping_ms, const sh::Vec3f& player) {
   if (!m.on || ping_ms <= 0) return false;
@@ -157,8 +190,7 @@ bool own_missile_fire(OwnMissiles& m, const OwnShot& shot, double now_s, double 
   o.at_s = now_s - shot.age_s;
   if (shot.kind == OwnMissileKind::plasma) o.go_s = o.at_s + kPlasmaWaitS;
   o.show_s = now_s + std::max(0.0, latency_s - kOwnMissileLeadS - ping_ms * 0.001) - shot.age_s;
-  o.end_s = now_s + latency_s + (falls(shot.kind) ? 0 : kOwnMissileLeadS) +
-            kOwnMissileWaitS;
+  o.end_s = now_s + latency_s + (falls(shot.kind) ? 0 : kOwnMissileLeadS) + kOwnMissileWaitS;
   if (static_cast<int>(m.flying.size()) >= kOwnMissilesMost) {
     auto far = std::max_element(
         m.flying.begin(), m.flying.end(), [&](const OwnMissile& a, const OwnMissile& b) {

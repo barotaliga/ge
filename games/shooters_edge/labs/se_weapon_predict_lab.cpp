@@ -321,8 +321,7 @@ int missiles_drawn(const dc::DemoState& d) {
       "progs/missile.mdl",  "progs/grenade.mdl"};
   for (const dc::DemoEntity& e : d.entities) {
     if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= d.models.size()) continue;
-    for (const std::string_view m : kMissiles)
-      n += d.models[static_cast<size_t>(e.model)] == m;
+    for (const std::string_view m : kMissiles) n += d.models[static_cast<size_t>(e.model)] == m;
   }
   return n;
 }
@@ -470,11 +469,12 @@ void run_packs(gl::Lab& lab, const std::string& root, double ms, int fps, int pr
                   "press to firing frame drawn (ms)", "drawn", "press to missile drawn (ms)",
                   "thrown", "server copies played late"},
                  {}};
-  gl::LabTable launched{"what each pack gun throws: the missiles new in the first frame after "
-                        "one press, level, facing +x (place off the player's origin, units; "
-                        "velocity, units/s)",
-                        {"gun", "model", "ahead", "left", "up", "vx", "vy", "vz"},
-                        {}};
+  gl::LabTable launched{
+      "what each pack gun throws: the missiles new in the first frame after "
+      "one press, level, facing +x (place off the player's origin, units; "
+      "velocity, units/s)",
+      {"gun", "model", "ahead", "left", "up", "vx", "vy", "vz"},
+      {}};
   std::string loaded;
   std::vector<uint8_t> program;
   for (const PackGun& g : kPackGuns) {
