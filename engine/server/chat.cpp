@@ -45,7 +45,8 @@ ChatLine chat_route(std::span<const ChatSeat> seats, int slot, bool team, bool r
   const int n = static_cast<int>(seats.size() < 32 ? seats.size() : 32);
   if (slot < 0 || slot >= n) return out;
   const ChatSeat& c = seats[static_cast<size_t>(slot)];
-  const bool to_specs = c.spectator && (team || (in_match && !s.spectalk));
+  const bool coach_team = c.spectator && c.coach && team;  // a coach's line to his team
+  const bool to_specs = c.spectator && !coach_team && (team || (in_match && !s.spectalk));
   const int when = s.sayteam_to_spec;
   const bool specs_read = !c.spectator && team && report &&
                           (when == 3 || (when == 1 && in_match) || (when == 2 && !in_match));
@@ -57,7 +58,7 @@ ChatLine chat_route(std::span<const ChatSeat> seats, int slot, bool team, bool r
       reads = d.spectator;
     } else if (!team) {
       reads = true;
-    } else if (!d.spectator || k == slot) {
+    } else if (!d.spectator || k == slot || d.coach) {
       reads = d.team == c.team;
     } else {  // a spectator reading a player's team report
       const int t = d.follows;
@@ -66,9 +67,10 @@ ChatLine chat_route(std::span<const ChatSeat> seats, int slot, bool team, bool r
     }
     if (reads) out.to |= 1u << k;
   }
-  out.text = (to_specs ? "[SPEC] " + c.name
-              : team   ? "(" + c.name + ")"
-                       : c.name) +
+  out.text = (to_specs     ? "[SPEC] " + c.name
+              : coach_team ? "(Coach " + c.name + ")"
+              : team       ? "(" + c.name + ")"
+                           : c.name) +
              ": " + text + "\n";
   return out;
 }
