@@ -256,6 +256,9 @@ struct DemoEffect {
   int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
                       // first colour (`count` its run's length); a Quake II puff's run's first
   int q2_specks = 0;  // Quake II: a hit's puff of this many specks off `way` (q2_temp_fx.hpp)
+  // Quake II: the gun's flash value a named flash is of (-1 none), and whether a monster's.
+  int flash = -1;
+  bool flash_monster = false;
 };
 
 inline constexpr double kNeverFlashed = -1e9;
