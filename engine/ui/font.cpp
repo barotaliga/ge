@@ -107,9 +107,10 @@ float scale_of(const stbtt_fontinfo& info, float size) {
   return stbtt_ScaleForPixelHeight(&info, size);
 }
 
-// The cell height a grid font draws at `size`: a pixel face's at a whole multiple of its grid.
+// The cell height a grid font draws at `size`: a pixel face's at a whole multiple of its grid, a
+// snapped face's at a whole multiple of its snap.
 float grid_cell(const std::vector<GridFace>& faces, float size) {
-  const int pixel_h = faces.front().pixel_h;
+  const int pixel_h = faces.front().pixel_h > 0 ? faces.front().pixel_h : faces.front().snap_h;
   if (pixel_h <= 0) return size;
   const float h = static_cast<float>(pixel_h);
   return std::max(1.0f, std::floor(size / h)) * h;

@@ -99,7 +99,9 @@ fs::path find_cache(std::span<const std::span<const uint8_t>> packs, const fs::p
   std::vector<std::string> digests;
   for (const std::span<const uint8_t> p : packs) digests.push_back(pack_digest(p));
   const fs::path dir = pack_dir(base, set_key(digests));
-  return recorded_key(dir, "textures").empty() ? fs::path{} : dir;
+  // A cache that holds either the textures or the pictures (a run of one stage alone) is found.
+  const bool any = !recorded_key(dir, "textures").empty() || !recorded_key(dir, "pictures").empty();
+  return any ? dir : fs::path{};
 }
 
 bool cached_texture(const fs::path& dir, std::string_view name, uint32_t w, uint32_t h,
