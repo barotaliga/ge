@@ -152,6 +152,10 @@ void escort_sense(Fighter& f, const ge::shooterbots::BotView& s, int me, double 
 // The think (in place of a fighter's mode and goal): the mode, and the pilot's goal for it.
 void escort_think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
                   ge::ai::Why* why);
+// A step that would carry the fighter into an exit's box (where it is a moment on, its box grown
+// by a margin) turned back, away from the box's middle, the jump let go: the exit is the people's.
+// Every companion's command and a party member's beside people (party.hpp). True when it turned.
+bool exits_keep_off(const Fighter& f, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd);
 // The command after the bot's own: a button pressed, the boredom's view and keys, the view
 // turned at a person's rate.
 void escort_command(Fighter& f, const ge::shooterbots::BotView& s, int me, double t, int msec,

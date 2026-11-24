@@ -432,6 +432,19 @@ void button_poke_look(Fighter& f, const ge::shooterbots::BotView& s, int me, dou
   f.poke_looked = true;
 }
 
+namespace {
+
+// Whether a wall stands between `self` and button `b` on the straight line (a button on a ledge
+// pressed from its front: walked straight at from the side, bunk1's on the 232 ledge pressed him
+// into the wall beside it for good; the route's keys bring him round to its front instead).
+bool walled(const ge::shooterbots::BotView& s, int me, sh::Vec3f self, const ButtonSpot& b) {
+  const sh::HullTrace tr =
+      sh::trace_move(s.sv, self, {0, 0, 0}, {0, 0, 0}, b.at, sh::kTraceNoMonsters, me);
+  return tr.fraction < 1 && tr.ent == 0;
+}
+
+}  // namespace
+
 void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
@@ -459,7 +472,7 @@ void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, doub
       cmd.forward = 0;
       cmd.side = 0;
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
-    } else if (flat < 200) {
+    } else if (flat < 200 && !walled(s, me, self, b)) {
       cmd.forward = 320;
       cmd.side = 0;
     }
@@ -483,7 +496,7 @@ void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, doub
       cmd.side = 0;
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
     }
-  } else if (flat < 200) {
+  } else if (flat < 200 && !walled(s, me, self, b)) {
     cmd.forward = 320;  // into it: a touch presses it
     cmd.side = 0;
   }

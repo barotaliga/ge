@@ -80,10 +80,16 @@ const char* way_kind_name(WayKind k);
 struct WayStep {
   sh::Vec3f lo, hi;  // its box (the item's spot grown a little)
   std::string target, name;
-  int32_t node = -1;  // where it is reached from
-  int button = -1;    // a button's index in the fighter's spots
-  int key_bit = 0;    // a key's item bit (Quake's), or
-  int ent = -1;       // the key lying on the map (Quake II's: taken when it is gone)
+  // A trigger that waits for something to make it live (Quake II's TRIGGERED: bunk1's strip by
+  // its locked doors, live once the button beside it is pressed): its name and the names that fire
+  // it in turn (a trigger the button fires), left for good until a step with one as its target is
+  // done.
+  std::vector<std::string> gate;
+  bool repeats = false;  // a trigger_multiple: it fires each time he walks in
+  int32_t node = -1;     // where it is reached from
+  int button = -1;       // a button's index in the fighter's spots
+  int key_bit = 0;       // a key's item bit (Quake's), or
+  int ent = -1;          // the key lying on the map (Quake II's: taken when it is gone)
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;
