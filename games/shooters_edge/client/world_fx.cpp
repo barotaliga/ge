@@ -1284,7 +1284,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       m.warp = player_dust(m.origin, m.angles, m.entity).warp;
       m.warp.shown = float(shown);
     }
-    out.held_shown = own > 0 ? float(arrival_shown(s.warps, own, t)) : 1;
+    out.held_shown = 1;  // his own weapon is never warped: he fights on at once
     // His own arrival's warp of the whole view, in the colour of the pack's teleport fog (its
     // specks' brightest, 7..14), made as bright as a colour goes.
     out.arrival_s = -1;
@@ -1302,14 +1302,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     for (const Warp& w : s.warps.live) {
       const double age = t - w.t0, was = w.t0 >= t ? -1 : std::max(t - dt - w.t0, 0.0);
       if (w.arriving) {
+        // His own arrival throws no ash: it would gather before his eyes as he must aim.
+        if (w.entity == own) continue;
         // Onto his body as it stands now.
         const Placed m = placed_of(w.entity);
         fx::Dust d = player_dust(m.origin, m.angles, w.entity);
         if (s.models != nullptr && body_triangles(*s.models, m, t, s.skin)) d.skin = s.skin;
-        if (w.entity == own) {
-          d.keep_off_eye = true;
-          put(l.pose.eye, d.eye);
-        }
         warp_dust(w, d, was, age, s.seed++, &out.births);
         continue;
       }

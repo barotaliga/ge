@@ -477,6 +477,7 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
   }
   if (damage - saved > 0) mark_hit(s, p, 1, damage - saved);
   fight_dealt(s, attacker, target + 1, damage);
+  stats_blow(s, attacker, target, weapon, damage);
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -1002,6 +1003,7 @@ void fire(Q2Server& s, int slot, int shots) {
   if (p.silencer_shots > 0) p.silencer_shots--;
   if (quad > 1) body_sound(s, slot, kItemChannel, fight_multiplier_sound(quad));
   weapon_kick(s, slot, w, view_forward);
+  stats_shot(s, slot, w, r.shot == SqShot::bullet ? shots : 1);
   switch (r.shot) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
@@ -1343,6 +1345,8 @@ void fight_step(Q2Server& s, int slot, bool attack) {
   if (!fightable(s, slot)) return;
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
+  if (const ge::console::Cvar* fast = s.cvars.find("g_fast_weap_switch"); fast != nullptr)
+    sq_hand_hasten(p.hand, fast->integer());
   // Dual fire (q2_powers.hpp) steps the hand twice a frame, every weapon but the thrown ones.
   const int steps = p.dual_fire_until > s.level_time && !sq_thrown(p.hand.weapon) ? 2 : 1;
   for (int i = 0; i < steps; i++) {
@@ -1535,6 +1539,7 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
     else
       line = sq_obituary(victim, other ? name_of(s, killer) : std::string(), killer == slot, weapon,
                          s.blow_how, gender, &by_killer);
+    stats_death(s, slot, other ? killer : -1, weapon, other && fight_teammates(s, killer, slot));
     if (deathmatch(s) && !fight_midair(s)) {
       if (by_killer)
         s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;

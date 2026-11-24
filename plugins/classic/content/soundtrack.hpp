@@ -81,7 +81,7 @@ std::string music_file(const std::string& game_dir, std::string_view name);
 int level_track(std::string_view entities);
 // Quake II's mission packs' disc tracks as the digital release numbers them (`ogg_remap_tracks`):
 // in game folder `rogue` tracks 2..11 are 12..21, in `xatrix` 9, 13, 14, 7, 16, 2, 15, 3, 4, 18;
-// any other folder or track is itself.
+// any other folder or track is itself. The folder is matched by its last name in any case.
 int q2_remap_track(std::string_view game_folder, int track);
 
 // Samples as a source decodes them.

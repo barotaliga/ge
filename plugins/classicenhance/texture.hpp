@@ -90,6 +90,8 @@ struct EnhanceOptions {
   // Where the network runs: the CPU when null, else this device (a picture it refuses runs on the
   // CPU).
   UpscaleDevice* device = nullptr;
+  // The first fullbright palette index (`Profile::fullbright_first`): those texels glow. 256: none.
+  int fullbright_first = kFullbrightFirst;
 };
 
 struct Enhanced {

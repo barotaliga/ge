@@ -154,6 +154,19 @@ int sq_best_weapon(const SqBody& body) {
   return int(SqWeapon::blaster);
 }
 
+void sq_hand_hasten(SqHand& h, int mode) {
+  if (mode <= 0) return;
+  const SqWeaponRow& r = row_of(h.weapon);
+  if (h.state == SqHandState::ready && h.pending >= 0 && h.pending != h.weapon) {
+    h.state = SqHandState::dropping;
+    h.frame = r.last_deactivate;  // lowered: this step swaps
+  } else if (h.state == SqHandState::dropping) {
+    h.frame = r.last_deactivate;
+  } else if (mode >= 2 && h.state == SqHandState::activating) {
+    h.frame = r.last_activate;  // raised: this step makes it ready
+  }
+}
+
 bool sq_choose(SqHand& hand, const SqBody& body, int w) {
   if (!sq_holds(body, w)) return false;
   if (w == hand.weapon && hand.pending < 0) return false;

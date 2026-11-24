@@ -13,6 +13,7 @@
 #include <cstring>
 #include <utility>
 
+#include "classic/protocol/lag_turn.hpp"
 #include "classic/rulesets.hpp"
 #include "net/voice_trial.hpp"
 #include "progs/text.hpp"
@@ -29,6 +30,8 @@ namespace cl = shooters_edge::client;
 namespace pg = ge::progs;
 
 namespace wd = ge::classic::content;
+
+namespace cp = ge::classic::protocol;
 
 namespace {
 
@@ -765,10 +768,23 @@ void apply(QwClientEnd& c, const SvcMsg& m) {
         c.player_at[m.player.slot] = c.now;
       }
       break;
-    case svc::setangle:
+    case svc::setangle: {
       for (size_t i = 0; i < 3 && i < m.floats.size(); i++) c.set_angles[i] = m.floats[i];
+      c.set_kind = m.ints.empty() ? -1 : m.ints[0];
+      c.set_turn = 0;
+      // A teleport or a respawn under the high-lag teleport: the commands in flight turned as the
+      // server turns them, so the prediction walks him where the server will.
+      const auto kind = static_cast<cp::TurnKind>(c.set_kind < 0 ? 0 : c.set_kind);
+      if (c.set_kind > 0 && c.cfg.lag_turn) {
+        sh::Vec3f view;  // from 0: what comes back is the turn alone
+        cp::lag_turn_client(kind, {c.set_angles[0], c.set_angles[1], c.set_angles[2]},
+                            c.ch.incoming_acknowledged, c.ch.outgoing_sequence, c.sent, c.sent_seq,
+                            view);
+        if (kind == cp::TurnKind::teleport) c.set_turn = view.y;
+      }
       c.setangles++;
       break;
+    }
     case svc::download:
       on_download(c, m);
       break;

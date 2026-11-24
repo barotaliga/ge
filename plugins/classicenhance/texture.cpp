@@ -384,8 +384,8 @@ Enhanced enhance_texture(std::string_view name, Material material, std::span<con
       src.r.at(x, y) = srgb8_to_linear(palette.rgb[size_t(k) * 3]);
       src.g.at(x, y) = srgb8_to_linear(palette.rgb[size_t(k) * 3 + 1]);
       src.b.at(x, y) = srgb8_to_linear(palette.rgb[size_t(k) * 3 + 2]);
-      glow.at(x, y) = k >= kFullbrightFirst ? 1.0f : 0.0f;
-      if (k >= kFullbrightFirst) out.glows = true;
+      glow.at(x, y) = k >= o.fullbright_first ? 1.0f : 0.0f;
+      if (k >= o.fullbright_first) out.glows = true;
     }
   }
   Plane src_lum(width, height);
