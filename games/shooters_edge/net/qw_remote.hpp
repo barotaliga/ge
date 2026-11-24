@@ -368,9 +368,10 @@ void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
 // The level's brush models the prediction moves through ([0] the world), the window's once it
 // has loaded the level `remote_step` named (nullptr: nothing predicted); `brushes`, the level's
-// brushes, are what a server of Quake II's prediction traces.
+// brushes, are what a server of Quake II's prediction traces; `level`, its BSP view, gives the
+// teleporters it foresees (`remote_teleporters`; nullptr: left as they are).
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
-                  const ge::brush::Map* brushes = nullptr);
+                  const ge::brush::Map* brushes = nullptr, const ge::brush::Map* level = nullptr);
 // The level's teleporters the prediction foresees (classic/teleporters.hpp), off its BSP view
 // (nullptr: none), for a server of either game.
 void remote_teleporters(Remote& r, const ge::brush::Map* level);

@@ -880,7 +880,8 @@ void remote_teleporters(Remote& r, const ge::brush::Map* level) {
 }
 
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
-                  const ge::brush::Map* brushes) {
+                  const ge::brush::Map* brushes, const ge::brush::Map* level) {
+  if (level != nullptr) remote_teleporters(r, level);
   r.world = models;
   r.smooth = sh::Smoothing{};
   q2_predict_map(r.q2_ahead, brushes);
