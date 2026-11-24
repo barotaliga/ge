@@ -546,6 +546,9 @@ struct Demo {
 // (demo_pack.hpp: `layers`, `inner_name` and `truncated` say what was peeled), positioned at its
 // first frame. False with the reason and the next step when it is none.
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error);
+// A Quake II protocol number of the extended recordings and servers (3434 to 3436), whose extra
+// bits (custom skins, the view's teleport bit) are read.
+bool q2_extended(int protocol);
 
 enum class DemoRead : uint8_t { frame, end, error };
 

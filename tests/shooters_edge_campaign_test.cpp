@@ -166,3 +166,15 @@ TEST(the_single_player_clock_thinks_once_a_frame) {
   for (int i = 0; i < 10; i++) CHECK(sv::campaign_frame(fx.c, nullptr, 0, fx.error));
   CHECK(fx.f(counter, kF.frags) == settled + 10);
 }
+
+// A player joins on team 1, never the monsters' 0, and keeps it through a level change: with
+// teamplay on, a program that guards friendly fire by an equal team alone (Dissolution of
+// Eternity's) let no shot of a co-op player's hurt a monster.
+TEST(a_player_is_never_on_the_monsters_team) {
+  Fixture fx;
+  CHECK_MSG(fx.start("first", {"coop 1", "teamplay 1"}), fx.error);
+  sv::campaign_join(fx.c, 0, "player");
+  CHECK(fx.f(1, kF.team) == 1);
+  CHECK_MSG(fx.run_until_change(200) > 0, "no level change");
+  CHECK(fx.f(1, kF.team) == 1);
+}

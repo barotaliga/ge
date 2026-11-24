@@ -158,6 +158,14 @@ std::vector<std::string> list_demos(const GameAdapter& self, const SearchPath& f
 bool find_demo(const GameAdapter& self, const SearchPath& files, const std::string& name,
                std::vector<uint8_t>& out, std::string& found, std::string& error) {
   if (client::find_demo(files, name, self.game->demo_extensions, out, found, error)) return true;
+  // A leading slash names the file from the top of the game's files, past its demo folder.
+  if (name.size() > 1 && name[0] == '/') {
+    std::string why;
+    if (!client::find_demo(files, name.substr(1), self.game->demo_extensions, out, found, why))
+      return false;
+    error.clear();
+    return true;
+  }
   // A game that keeps its recordings in a folder of their own finds a bare name there too.
   if (self.game->demo_folder.empty() || name.find('/') != std::string::npos) return false;
   std::string why;
