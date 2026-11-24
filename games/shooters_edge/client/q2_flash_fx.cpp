@@ -63,6 +63,8 @@ bool q2_flash_fx(int value, bool monster, int entity, sh::Vec3f origin, sh::Vec3
   e.entity = entity;
   e.at = at;
   e.end = at + ax.forward * 16.0f;
+  e.flash = value;
+  e.flash_monster = monster;
   effects.push_back(e);
   return true;
 }
