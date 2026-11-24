@@ -971,7 +971,7 @@ void run(gl::Lab& lab) {
        "A door of the map's own brushes shut, then where the mod opens it to.",
        "the door filling its frame, then slid away showing the room behind"},
   };
-  double movers_found = 0;
+  double movers_found = 0, turned_shot = 0;
   for (const Mover& mv : kMovers) {
     // The first of the class with a brush model the server placed and a clear view of it.
     int ent = -1;
@@ -1024,6 +1024,7 @@ void run(gl::Lab& lab) {
     lab.note(std::string(mv.classname) + ": entity " + std::to_string(ent) + ", eye " +
              std::to_string(int(e[0])) + " " + std::to_string(int(e[1])) + " " +
              std::to_string(int(e[2])));
+    const sh::Vec3f shut_origin = l.server->sv.edicts[size_t(ent)].origin;
     for (int stage = 0; stage < 2; stage++) {
       if (stage == 1) {
         sh::Vec3f to{};
@@ -1033,8 +1034,30 @@ void run(gl::Lab& lab) {
       cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
       shoot(mv.id[stage], mv.title[stage], mv.caption, mv.look_for, v);
     }
+    if (std::string(mv.classname) != "func_door") continue;
+    // The same door shut and turned by its angles, as a rotating model is (a swinging door, a
+    // fan): the window turns a brush model about the map's origin, so the origin is moved to keep
+    // the door's middle where it stood (yaw counter-clockwise from +x toward +y seen from above).
+    sh::Edict& door = l.server->sv.edicts[size_t(ent)];
+    const sh::Vec3f was_origin = door.origin, was_angles = door.angles;
+    const double yaw = 20 * 3.14159265358979323846 / 180;
+    const double cy = lm::cos(yaw), sy = lm::sin(yaw);
+    const double mx = c.x - shut_origin.x, my = c.y - shut_origin.y;
+    door.origin = {float(shut_origin.x + mx - (mx * cy - my * sy)),
+                   float(shut_origin.y + my - (mx * sy + my * cy)), shut_origin.z};
+    door.angles = {0, 20, 0};
+    cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+    shoot(
+        "door-turned", "THE SAME DOOR, TURNED",
+        "The shut door given a yaw of 20 degrees about its middle: the window draws a brush model "
+        "turned by its entity's angles, as a rotating door or fan needs.",
+        "the door swung 20 degrees across its frame, its faces lit as they now face", v);
+    door.origin = was_origin;
+    door.angles = was_angles;
+    turned_shot = 1;
   }
   lab.metric("movers.shot", movers_found, "count");
+  if (movers_found > 0) lab.metric("movers.turned", turned_shot, "count");
 
   // The map's liquids as the window draws them: each kind's largest pool from over its top, and
   // the water from under it (the window's own view under the surface).

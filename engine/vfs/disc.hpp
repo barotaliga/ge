@@ -10,6 +10,10 @@
 //   44.1 kHz 16-bit stereo, little-endian, as an image stores them. A track runs from its `INDEX
 //   01` to the next track's `INDEX 01` in the same file (a gap goes with the track before it, as
 //   rips keep it), the last one to the end of its file.
+// - **an `.mdf` with its `.mds` sheet** (a disc copier's pair; the sheet found beside the image by
+//   its name, any case, or opened itself): every track, data and audio, its sectors 2048, 2352 or
+//   2448 bytes (2352 and the 96 bytes of subchannel); a data track's user data placed by its first
+//   sector's mode byte; an audio track's sound the first 2352 bytes of each sector.
 // - **a `.bin`, `.img` or `.mdf` alone** (no sheet): raw sectors when the first carries the sync
 //   pattern (its mode byte placing the user data), 2448 bytes each when the second sector's sync
 //   falls there (96 bytes of subchannel after each, as a disc copier's `.mdf` keeps them), else
@@ -25,8 +29,8 @@
 // ge:summary Reads a disc image (.iso, .cue with .bin, raw .bin/.img): ISO 9660 files, audio tracks
 // ge:keywords disc iso iso9660 joliet cue bin img image cd cd-rom cdda audio-track track mode1
 // ge:keywords mode2 raw-sector 2352 2048 2448 mdf subchannel sync data-track open_disc read_file
-// ge:keywords read_audio
-// ge:keywords write_iso write_cue_bin fixture
+// ge:keywords read_audio mds media-descriptor
+// ge:keywords write_iso write_cue_bin write_mds fixture
 // ge:skill vfs
 // ge:test tests/vfs_disc_test.cpp
 #pragma once
@@ -95,5 +99,10 @@ std::vector<uint8_t> write_iso(
     const std::string& volume = "GE_DISC");
 // The same data track as raw `MODE1/2352` sectors (sync, header, user data; no error codes).
 std::vector<uint8_t> raw_sectors(const std::vector<uint8_t>& iso);
+// A disc copier's `.mds` sheet for `tracks` in one image named `image` ("*.mdf": the sheet's own
+// name): each track's number, kind, sector size, its first sector's byte offset (`start`) and
+// length; every track but the first has a 150-sector pregap held in the image just before it.
+std::vector<uint8_t> write_mds(const std::vector<DiscTrack>& tracks,
+                               const std::string& image = "*.mdf");
 
 }  // namespace ge::vfs

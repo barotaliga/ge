@@ -36,9 +36,10 @@
 // player end the match, set the time limit, change the map, kick, ban, mute and shuffle the teams
 // without a vote. A muted player's chat is held back.
 //
-// STATS (server/q2_stats.hpp): counted by the rules while the match is on; `stats [player]` shows
-// the table (another team's only once the match is over), `teamstats` both teams' totals, and
-// `laststats` (`oldstats`) the last match's.
+// STATS (server/q2_stats.hpp, the columns every classic game shares): counted by the rules while
+// the match is on and shown to everyone when it ends, as QuakeWorld shows its own; `stats [player]`
+// shows one player's (another team's only once the match is over), `teamstats` both teams'
+// totals, and `laststats` (`oldstats`) the last match's.
 //
 // THE PHASE is in the rules' local info (`ge_phase`) for the rules to read (the warmup's loadout,
 // q2_server.hpp) and in the server's `status` text as `match` (Standby, Countdown, In progress).
@@ -59,6 +60,7 @@
 
 #include "server/captains.hpp"
 #include "server/coach.hpp"
+#include "server/login.hpp"
 #include "server/match.hpp"
 #include "server/referee.hpp"
 #include "server/server.hpp"
@@ -100,6 +102,10 @@ struct Q2Match {  // NOLINT(clang-analyzer-optin.performance.Padding): one a ser
   std::array<sv::Q2SlotStats, 32> last_stats{};  // the last match's (`laststats`)
   std::array<std::string, 32> last_names{};
   bool has_last = false;
+  const ge::server::Logins* logins = nullptr;  // the server's logins: a player's account (or none)
+  ge::net::MatchReport report;                 // the match just ended, for the master
+  bool report_ready = false;                   // until the server takes it
+  bool end_said = false;  // this map's match end said (at the intermission or the change)
   bool (*prior)(void* ctx, int slot, const std::string& line) = nullptr;
   void* prior_ctx = nullptr;
 };
@@ -113,6 +119,8 @@ void q2_match_open(Q2Match& m, Q2NetServer& net, sv::RulesRunner& rules,
 void q2_match_frame(Q2Match& m, const std::string& map, double now);
 // A map change about to happen: the match over unless it is a restart.
 void q2_match_map_change(Q2Match& m, bool restart, double now);
+// The match that just ended, once (net/report.hpp): false when none is waiting.
+bool q2_match_report(Q2Match& m, ge::net::MatchReport& out);
 // The phase as the server's status says it ("" with no lobby).
 std::string q2_match_status(const Q2Match& m);
 

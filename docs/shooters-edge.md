@@ -332,7 +332,8 @@ ammo|pairs|row`, `hud_guns_all`, `hud_ammo_all`; the weapon in hand raised over 
 while they show; drawn in the packs' own pictures when
 a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
-models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
+models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, turned
+by its angles about the map's origin (a swinging door, a fan, a rotating train: M63b), and one
 the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
 `set_movers`, fed each frame by `client/world_models.hpp`'s `place_brushes`; their shadows in the
 modern look stay where the map built them. Not yet: sounds and the network (the rest of M18h,
@@ -588,7 +589,17 @@ teleport (the demo family's bit 0x02, `cl_pext_lagteleport`, on by default;
 turn reached him are turned to where he now faces on the server and in the window's prediction
 alike, so he never walks the old way for a round trip and the two agree; the mouse's turning
 during that round trip is kept. `make lab LAB=se-teleport ARGS="--basedir=<base> --map=dm6"` walks
-through a teleporter and counts the frames off where he faces, on and off. Your own eye rides the same clock as the models: drawn one server frame behind, between
+through a teleporter and counts the frames off where he faces, on and off. The client goes further
+and FORESEES the teleport (`cl_predict_teleport`, on by default; `shooter/teleport_ahead.hpp` and
+`classic/teleporters.hpp`): the level's own teleporters (Quake's `trigger_teleport` to an
+`info_teleport_destination`, Quake II's `misc_teleporter` pad) are taken in the window's prediction
+the command the player's box reaches one, so the far end is drawn and the view turned the frame he
+walks in, on any server that runs the game's own rules. Its moves after that are made the new way,
+so the high-lag teleport is not asked for while it is on; a server that does not teleport him
+(a teleporter waiting to be switched on, a mod's own rule) is believed two commands later, the
+turn taken back and that teleporter left out while he stands in it, and a server's turn to the
+same facing is the guess's own. `make lab LAB=se-teleport` and `make lab LAB=se-q2-teleport
+ARGS="--game=<base> --map=city1"` measure it. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder
@@ -739,7 +750,7 @@ server's frames go on under it). Its pages are Quake's:
 | OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
-| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
+| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`), SPENT SHELLS (`ce_shells`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
 | LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
