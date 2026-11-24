@@ -121,6 +121,10 @@ struct Options {
   // faces by their gloss (the relief's roughness, else a polished stone's), at this strength; 0
   // none. The frame group must bind the kept scene.
   double reflections = 0;
+  // AMBIENT OCCLUSION over the frame (render/ao.hpp, applied after the map and its models are
+  // drawn: `encode_ao_apply`): the share of the light a closed corner loses, 0 none (the pass not
+  // run), and how far a surface still shades another, m. Read by the frame that draws the map.
+  double ao = 0, ao_radius_m = 1.2;
   // THE SHADOWS IN THE MAP DRAWN AGAIN FOR ITS WATER (bsp_views.hpp: the mirror, the view up):
   // 2 as the frame's own, 1 the walls' kept cubes alone, 0 none. The views draw no model, so a
   // figure's shadow there would be cast by nothing: 1 by default (the same price as 2, measured
