@@ -98,8 +98,9 @@ into the tree); in this repository's container fetch them into the scratchpad an
 In Shooter's Edge the player runs none of this: OPTIONS ▸ CLASSIC ENHANCED ▸ LOAD GAME (or
 `basedir <folder>`) opens their install and runs the pipeline on it in the background at once
 (`ce_auto`), the game mounting only the menu's enhancing page (`games/shooters_edge/menu/
-game_menu.hpp`, `client/game_folder.hpp`). The window's run uses the kernel upscaler; the tool's
-default is the trained network.
+game_menu.hpp`, `client/game_folder.hpp`). The window's run upscales by the trained network on the CPU when the cache already holds the
+published weights (the tool fetched them: `open_cached_upscaler`, `RunOptions::cached_network`,
+TRAINED UPSCALER on), else by the kernel; it never fetches. The tool's default is the network.
 
 `<path>` is the shareware release zip as published, an installed game folder (its `id1/pak0.pak`
 and any later packs, in any case), the pack file itself, or a folder holding the release zip. In this repository's

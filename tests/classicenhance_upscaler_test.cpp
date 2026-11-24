@@ -10,8 +10,12 @@
 // ge:skill classicenhance testing
 #include <cmath>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
+#include <vector>
 
+#include "assets/sha256.hpp"
 #include "check.hpp"
 #include "classicenhance/safetensors.hpp"
 #include "classicenhance/texture.hpp"
@@ -138,4 +142,24 @@ TEST(texture_enhancer_uses_the_network_in_place_of_the_kernel) {
   kernel.scale = 2;
   CHECK(ce::enhance_texture("wall", indexed, 16, 8, palette, net).albedo.rgba ==
         ce::enhance_texture("wall", indexed, 16, 8, palette, kernel).albedo.rgba);
+}
+
+TEST(the_cache_s_weights_open_only_when_they_are_the_ones_asked_for) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "ge_classicenhance_cached_weights";
+  fs::remove_all(root);
+  ce::Upscaler u;
+  std::string why;
+  CHECK(!ce::open_cached_upscaler(root, u, &why));
+  CHECK_MSG(why.find("no trained upscaler") != std::string::npos, why.c_str());
+  const std::vector<uint8_t> bytes = ce::write_safetensors(ce::seeded_upscaler_weights(7));
+  fs::create_directories(ce::cached_weights(root).parent_path());
+  std::ofstream(ce::cached_weights(root), std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+  CHECK(!ce::open_cached_upscaler(root, u, &why));  // not the published weights
+  CHECK_MSG(why.find("remove them") != std::string::npos, why.c_str());
+  const std::string sha = ge::assets::sha256_hex(bytes);
+  CHECK_MSG(ce::open_cached_upscaler(root, u, &why, sha), why.c_str());
+  CHECK(u.digest == sha && u.scale == 4);
+  fs::remove_all(root);
 }

@@ -113,6 +113,15 @@ class UpscaleDevice {
 bool open_upscaler(const std::filesystem::path& file, Upscaler& out, bool* known,
                    std::string& error);
 
+// Where the cache keeps the published weights: `<root>/weights/<kUpscalerWeights.file>` (the tool
+// fetches them there on its first run).
+std::filesystem::path cached_weights(const std::filesystem::path& root);
+// The network in the cache's weights (`cached_weights(root)`) when they are there and their
+// SHA-256 is `sha256` (the published weights'); false, nothing fetched, with the reason in
+// `*why` (no weights yet, other weights, a file that does not load) when they are not.
+bool open_cached_upscaler(const std::filesystem::path& root, Upscaler& out, std::string* why,
+                          std::string_view sha256 = kUpscalerWeights.sha256);
+
 // `rgb` (3 channels, 0..1, as stored: not linearised) made `scale` times larger. Not clamped.
 net::Map upscale(const Upscaler& net, const net::Map& rgb);
 

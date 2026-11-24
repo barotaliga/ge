@@ -268,6 +268,34 @@ bool open_upscaler(const std::filesystem::path& file, Upscaler& out, bool* known
   return true;
 }
 
+std::filesystem::path cached_weights(const std::filesystem::path& root) {
+  return root / "weights" / std::string(kUpscalerWeights.file);
+}
+
+bool open_cached_upscaler(const std::filesystem::path& root, Upscaler& out, std::string* why,
+                          std::string_view sha256) {
+  const std::filesystem::path file = cached_weights(root);
+  std::error_code ec;
+  if (!std::filesystem::exists(file, ec)) {
+    *why = "no trained upscaler's weights in " + file.parent_path().string() +
+           "; the classicenhance tool fetches them on its first run";
+    return false;
+  }
+  Upscaler net;
+  std::string error;
+  if (!open_upscaler(file, net, nullptr, error)) {
+    *why = error;
+    return false;
+  }
+  if (net.digest != sha256) {
+    *why = "the weights in " + file.string() + " have the SHA-256 " + net.digest + ", not " +
+           std::string(sha256) + "; remove them and run the classicenhance tool to fetch them again";
+    return false;
+  }
+  out = std::move(net);
+  return true;
+}
+
 namespace {
 
 net::Map channels(const net::Map& x, int from, int count) {

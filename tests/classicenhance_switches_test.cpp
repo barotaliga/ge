@@ -11,6 +11,7 @@
 
 #include "check.hpp"
 #include "classicenhance/switches.hpp"
+#include "classicenhance/upscaler.hpp"
 #include "console/cvar.hpp"
 
 namespace ce = ge::classicenhance;
@@ -69,11 +70,13 @@ TEST(the_bake_switches_reach_the_pipeline_options) {
   ce::RunOptions opts;
   ce::apply_bakes(values, &opts);
   CHECK(opts.models.round == 0);
+  CHECK(opts.cached_network == ce::kUpscalerWeights.sha256);  // the cache's weights, when there
   values.rounded = true;
   values.upscaler = false;
   ce::apply_bakes(values, &opts);
   CHECK(opts.models.round == 4);
   CHECK(opts.textures.network == nullptr);
+  CHECK(opts.cached_network.empty());
   int bakes = 0;
   for (const ce::SwitchSpec& s : ce::switches()) bakes += s.bake;
   CHECK(bakes == 2);
