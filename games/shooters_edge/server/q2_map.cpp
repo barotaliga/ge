@@ -584,6 +584,7 @@ void train_next(Q2Server& s, Q2Entity& e) {
       return;
     }
     Q2Entity& corner = s.entities[size_t(c)];
+    gz_train_corner(s, e, e.owner);  // Ground Zero: the speeds of the corner it leaves
     e.wait = number(s, corner, "wait", 0);
     e.target = corner.target;
     e.pathtarget = key(s, corner, "pathtarget");
@@ -945,6 +946,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       secret_use(s, e);
       return;
     case kRotating:  // toggles: stops at once, or starts at full speed
+      if (gz_fan_use(s, e, activator)) return;
       if (e.avelocity.x != 0 || e.avelocity.y != 0 || e.avelocity.z != 0)
         e.avelocity = {};
       else
@@ -1312,6 +1314,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       if ((e.spawnflags & 2) != 0) e.axis = e.axis * -1;
       e.angles = {};
       if ((e.spawnflags & 1) != 0) e.avelocity = e.axis * e.speed;
+      gz_fan_spawn(s, e);
       return;
     case kAreaPortal: {
       e.hidden = true;  // never drawn, never solid
@@ -1703,6 +1706,7 @@ void map_spawn(Q2Server& s) {
       e.modelindex = disc_model(s);
     }
   link_doors(s);
+  gz_train_teams(s);
   map_loops(s);
 }
 
@@ -1774,6 +1778,7 @@ void map_frame(Q2Server& s) {
     else
       fire_targets(s, d.entity, d.activator, 0, true);
   }
+  gz_movers_frame(s);  // Ground Zero: a train's riders, the fans that ramp
   // Each mover pushes, then steps; a blocked push skips the step (its schedule slides).
   std::vector<TeamFrame> teams;
   for (size_t i = 0; i < s.entities.size(); i++) {
