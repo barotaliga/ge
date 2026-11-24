@@ -11,6 +11,9 @@
 //   `report`) also reaches the spectators following a player on that team, or following nobody
 //   with that team as their own, when `sv_sayteam_to_spec` allows it in this phase: 0 never, 1 in a
 //   match (the default), 2 outside one, 3 always. A team line typed by hand stays private.
+// - A team's COACH (coach.hpp: a spectator seat with `coach` and his team as `team`) is in his
+//   team's team chat both ways: he reads every `say_team` of its players, and his own `say_team`
+//   reaches its players and him as "(Coach <name>): <text>". His `say` is a spectator's.
 //
 // THE SETTINGS (`add_chat_settings`, read by `chat_settings`): `sv_spectalk` and
 // `sv_sayteam_to_spec`, on whichever console the game's chat reads them from.
@@ -34,7 +37,8 @@ struct ChatSeat {
   bool active = false;  // someone holds the seat
   bool spectator = false;
   std::string name, team;
-  int follows = -1;  // the seat a spectator follows (-1 none)
+  int follows = -1;    // the seat a spectator follows (-1 none)
+  bool coach = false;  // a spectator coaching `team` (coach.hpp)
 };
 
 struct ChatSettings {

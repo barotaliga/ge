@@ -515,6 +515,18 @@ full. The book asks the game to seat or unseat a player and says every line; the
 the seats again from a seed. Quake II's server plays it with `dmflags` 64 or 128, every player
 in his team's look.
 
+## Coaches
+
+`engine/server/coach.hpp`. A spectator who wants to help one team asks for it in the warmup of a
+team match (`coach <team>`); the seated players answer `yes` (`no` takes it back) and he is elected
+when the yes reach 51 % of them, 2 at least, within 60 s. One coach a team, at least 3 players on
+the server, one election at a time and never beside a vote; a candidate who withdraws or runs out
+of time waits 30 s. A coach is in his team's team chat both ways (his lines read "(Coach <name>)",
+`engine/server/chat.hpp`) and his chase camera follows only his team's players; nothing else: no
+captain's word. He stops with `coach` again, by leaving or by taking a seat; he stays through the
+match and the map's change. The referee names one with no vote (`coach <team> <player>`) and takes
+one off (`uncoach <team>`); `coaches` lists them. Quake II's server plays it.
+
 ## The referee
 
 `engine/server/referee.hpp`. A player who gives the server's administrator password in the game

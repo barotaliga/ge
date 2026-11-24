@@ -5,12 +5,12 @@
 // sidelines. Then the rules' switches: the faster weapon switch, the weapons and powerups a match
 // server removes (their ammunition with them), the warmup's loadout, and the spawn modes. The
 // shared rules (server/match_rules.hpp): prewar on a game whose jump is not a button, the phase's
-// words.
+// words. A coach elected by the players, in his team's chat and on its players only.
 //
 // ge:summary Test: our Quake II server's match: ready, countdown, timeouts, lock, the switches
 // ge:keywords test q2-match lobby ready unready countdown timeout time lock-join
 // ge:keywords g_fast_weap_switch g_removed_weapons g_removed_powerups g_warmup_loadout g_spawn_mode
-// ge:keywords prewar_buttons phase_status warmup_hold
+// ge:keywords prewar_buttons phase_status warmup_hold coach
 // ge:skill net shooter testing
 #include <algorithm>
 #include <memory>
@@ -385,6 +385,42 @@ TEST(a_team_match_seats_captains_dresses_the_teams_and_names_the_winner) {
   CHECK(!cn::q2_match_report(r->match, again));  // once
 
   CHECK(!r->match.teams.side[1].locked);  // the locks end with the match
+}
+
+TEST(the_players_elect_a_coach_who_talks_to_his_team_and_follows_only_it) {
+  auto r = rig(lobby_config());
+  r->rules.console("dmflags 64");
+  r->rules.console("g_team_a_name Wolves");
+  cn::Q2ClientEnd& a = join(*r, "ana");
+  cn::Q2ClientEnd& b = join(*r, "ben");
+  cn::Q2ClientEnd& d = join(*r, "dee");
+  cn::Q2ClientEnd& e = join(*r, "eve");
+  run(*r, 200);
+  r->rules.user_info(3, "spectator", "1");
+  run(*r, 500);  // the switch to watching, 5 s after the respawn
+  CHECK(r->rules->clients[3].spectator && !r->match.lobby.seats[3].used);
+  cn::q2_client_command(e, "coach wolves");
+  run(*r, 20);
+  CHECK(heard(a, "eve asks to coach 'Wolves'. Players, type yes to agree (2 needed)."));
+  cn::q2_client_command(a, "yes");
+  cn::q2_client_command(b, "yes");
+  run(*r, 20);
+  CHECK(heard(d, "eve now coaches 'Wolves'."));
+  CHECK(gs::coach_team(r->match.coaches, 3) == gs::Team::red);
+  cn::q2_client_command(a, "say_team rush quad");
+  run(*r, 20);
+  CHECK(heard(e, "(ana): rush quad") && !heard(b, "rush quad"));
+  cn::q2_client_command(e, "say_team stack mid");
+  run(*r, 20);
+  CHECK(heard(a, "(Coach eve): stack mid") && heard(d, "(Coach eve): stack mid"));
+  CHECK(!heard(b, "stack mid"));
+  sv::Q2Server& s = *sv::q2_of(r->rules);
+  s.players[3].chase = 1;  // ben plays for the other team
+  run(*r, 2);
+  CHECK_MSG(s.players[3].chase == 2 || s.players[3].chase == 0, std::to_string(s.players[3].chase));
+  cn::q2_client_command(e, "coach");
+  run(*r, 20);
+  CHECK(heard(a, "eve no longer coaches 'Wolves'.") && r->match.coaches.coach[0] == -1);
 }
 
 TEST(a_referee_sets_the_time_limit_mutes_and_kicks_without_a_vote) {

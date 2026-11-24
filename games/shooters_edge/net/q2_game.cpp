@@ -1264,7 +1264,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   }
   q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
   q2_match_open(game.match, *game.net, game.rules, game.match_cfg);  // its words before the votes'
-  if (game.login) game.match.logins = &game.login->logins;           // a report's accounts
+  game.match.votes = &game.votes.book;
+  if (game.login) game.match.logins = &game.login->logins;  // a report's accounts
   return true;
 }
 
