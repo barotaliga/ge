@@ -44,6 +44,7 @@
 // ge:keywords followip trigger untrigger cl_nofake tp_soundtrigger cl_queries f_version f_server
 // ge:keywords version-query msg_trigger lastip sound-trigger fake-name chat_line_teamplay
 // ge:keywords scr_chathud scr_chathud_lines scr_chathud_time clearchathud chat-hud
+// ge:keywords scr_chathud_x scr_chathud_y add_q2_chat_place
 // ge:skill net shooter
 // ge:test tests/shooters_edge_chat_ignore_test.cpp
 #pragma once
@@ -79,6 +80,7 @@ struct ChatExtras {
   int hud = 0;                         // scr_chathud
   int hud_lines = 4;                   // scr_chathud_lines
   double hud_time = 0;                 // scr_chathud_time (0: never fades)
+  double hud_x = 8, hud_y = -64;       // Quake II's scr_chathud_x and _y: its 2D pixels
   ge::hud::Feed feed{4, -1, 1, 0.15};  // the chat HUD's lines
   std::vector<std::string> seen;       // the addresses chat lines named, newest last (followip)
   struct Trigger {
@@ -107,6 +109,11 @@ void chat_reply_due(ChatExtras& x, double now_s, std::string_view version);
 
 // Quake II's own `cl_chat_sound` on `x` (its layer: cvar_layers.cpp's add_q2).
 void add_q2_chat_sound(ge::console::Console& con, ChatExtras& x);
+// Quake II's own place for the chat lines on screen, in its layer: `scr_chathud_x` (8) and
+// `scr_chathud_y` (-64), pixels of its 2D drawing (scr_scale screen px each), y up from the bottom
+// when negative. Its bar's chat lines are drawn there (hud/layout.hpp `place_chat_px`); every
+// other game places them by our `hud_chat_x` and `hud_chat_y`.
+void add_q2_chat_place(ge::console::Console& con, ChatExtras& x);
 
 // The sound a chat line plays under Quake II's `cl_chat_sound` `named` (nullptr: none).
 const char* q2_chat_sound(const std::string& named);

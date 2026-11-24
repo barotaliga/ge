@@ -59,8 +59,8 @@ count); `missing` not in our tree or different where it matters (ranked in its n
 | The game library interface | 66 | 0 | 22 | 88 |
 | Messages a player sees (refusals, drops, prints), quoted exactly | 63 | 0 | 9 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 30 | 0 | 6 | 36 |
-| Server features beyond single words | 44 | 1 | 11 | 56 |
-| **all** | 517 | 1 | 147 | 665 |
+| Server features beyond single words | 45 | 0 | 11 | 56 |
+| **all** | 518 | 0 | 147 | 665 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -285,7 +285,7 @@ done 113, missing 0, not-taken 57
 | cvar.sv_mvd_enable | `sv_mvd_enable` = `0` (latched) | Multi-view recorder: 1 local, 2 also TCP viewers. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: 1 recordings, 2 the TCP stream on the game port |
 | cvar.sv_mvd_maxclients | `sv_mvd_maxclients` = `8` (latched) | TCP viewers. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: the TCP slots |
 | cvar.sv_mvd_bufsize | `sv_mvd_bufsize` = `2` (latched) | Viewer send buffer. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: 32 KiB units unsent before `overflowed` |
-| cvar.sv_mvd_password | `sv_mvd_password` = `` (private) | Viewer password. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
+| cvar.sv_mvd_password | `sv_mvd_password` = `` (private) | Viewer password. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: Quake II's spelling of the classic servers' shared `qtv_password` (settings lift, 2026-11-23) |
 | cvar.sv_mvd_maxsize | `sv_mvd_maxsize` = `0` | Recording size limit. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp; held by `tests/shooters_edge_q2_mvd_server_test.cpp` |
 | cvar.sv_mvd_maxtime | `sv_mvd_maxtime` = `0` | Recording time limit (minutes). | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp; held by `tests/shooters_edge_q2_mvd_server_test.cpp` |
 | cvar.sv_mvd_maxmaps | `sv_mvd_maxmaps` = `1` | Map changes before a recording stops. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
@@ -743,7 +743,7 @@ done 30, missing 0, not-taken 6
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 44, missing 1, not-taken 11
+done 45, missing 0, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -800,6 +800,6 @@ done 44, missing 1, not-taken 11
 | feat.save.dedicated | saves on a dedicated server | | done | games/shooters_edge/net/q2_game.cpp: save, autosave and load on the dedicated server, the level-start autosave kept as `save0` |
 | feat.save.autosave | level-start autosave into `save0` at each level change in a unit (not in deathmatch) | | not-taken | Our design: ours autosaves as a level is entered (`q2_native_save.cpp`, our rules too) in our own save format; the dedicated server keeps it as `saves/save0.save` (games/shooters_edge/net/q2_game.cpp, `keep_autosave`) |
 | feat.spectator-fly | extended clients' spectators fly faster, with the fly fix | | done | plugins/classic/q2_move (`fly_time`, `fly_friction`, `fly_glide`, `q2_fly_for_protocol`): a stock 35 or 36 client's spectator flies at twice the time, a 36 client's with friction 4 gliding on; a 34 client's keeps the original step; ours and bots fly as before. Our rules by `ClientInfo::protocol`, a hosted library by the thinking slot (`NativeHost::thinking`). Facts: porting/shooters-edge/q2-server-batch13-facts.md |
-| feat.ext-behaviours | what an extended server does beyond the wire | With the extensions: the map's extended contents in traces, a box starting all-solid stopped at once, players and projectiles clipped only by masks asking for them, entities flagged no-cull always sent, looping sounds culled by distance, the low-priority render flag dropped first when a frame overflows, a client's no-flares setting, the newer footstep and ladder events. | missing | Batch 13 facts § B 3-4 (porting/shooters-edge/q2-server-batch13-facts.md) |
+| feat.ext-behaviours | what an extended server does beyond the wire | With the extensions: the map's extended contents in traces, a box starting all-solid stopped at once, players and projectiles clipped only by masks asking for them, entities flagged no-cull always sent, looping sounds culled by distance, the low-priority render flag dropped first when a frame overflows, a client's no-flares setting, the newer footstep and ladder events. | done | plugins/brush/trace.cpp (`set_extended`: each leaf's contents with its brushes', a sweep that stays inside a brush stopped at 0 with its contents), server/q2_native_calls.cpp (players and projectiles flagged by the game clipped only by a mask asking for them), server/q2_wire.cpp (`Q2Sight::extended`: a looping sound by the hearing set and its reach; no-cull linked everywhere), server/q2_wire_ext.cpp (no flares, the newer steps, the rocket's gib trail kept). Not taken: the low-priority render flag (our hosted frames are uncapped, `cvar.sv_prioritize_entities` not taken). Facts: q2-server-batch13-facts.md § B 10 |
 | feat.recycle | quit telling clients to reconnect | | not-taken | `q2-server-gaps.md` row 15 |
 | feat.master | classic heartbeat (status text) every 300 s, first 5 s after a game starts; `shutdown` on quit | done | `plugins/classic/protocol/masters.cpp` (only while public and dedicated) |

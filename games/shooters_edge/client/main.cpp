@@ -105,6 +105,7 @@
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
+#include "shooters_edge/client/entity_debug.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
@@ -304,7 +305,7 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   console.cvars().set_layer(cl::kLayerShell);  // the menus and the attract loop (menu_attract)
-  game_menu.add_cvars(console);
+  game_menu.add_cvars(console, args.recipes);  // -recipes: a recipe's commands too
   // The console in the loaded classic game's own letters and background (menu/classic_console.hpp).
   shooters_edge::menu::ClassicConsole con_look;
   console.cvars().set_layer(cl::kLayerEngine);  // the engine's again (screenshots, the console)
@@ -407,6 +408,13 @@ int run_main(int argc, char** argv) {
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
+  const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
                                                    args.plus, {series, outside});
       ran.passed_over > 0)
@@ -518,13 +526,6 @@ int run_main(int argc, char** argv) {
     return 1;
   }
   ge::ui::DrawList overlay;
-  const uint64_t first_ns = ge::platform::now_ns();
-  ge::console::add_clock_macros(
-      console, {.local = [] { return cl::local_time(); },
-                .uptime_s =
-                    [first_ns] {
-                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -570,6 +571,7 @@ int run_main(int argc, char** argv) {
   playback.places = &places;       // the demo's players' table names their places
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
   cl::add_place_queries(console, places, listen, place_seen, adapter, files);
+  if (args.recipes) cl::add_entity_debug_commands(console, place_seen);  // entlist, enthide
   ge::render::add_gpu_debug(console, gpu_debug, device.get(), [&] {
     return cl::gpu_debug_notes({&view_from, &listen, &place_seen, &picture.look, &w, &h});
   });
@@ -712,8 +714,7 @@ int run_main(int argc, char** argv) {
   cl::bind_remix(console.cvars(), &remix_settings);
   loader.remix = &remix;
   // Quake II's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
-  // Under Quake II's own bar: the chat lines on screen (scr_chathud) alone of the HUD, in the
-  // bar's letters (scr_font).
+  // Under it: the chat lines on screen (scr_chathud) alone of the HUD, in its letters (scr_font).
   se::HudArt chat_art;  // its letters, copied again when scr_font's picture changes
   const ge::ui::Image* chat_font = nullptr;
   const auto q2_chat_lines = [&](cl::Q2Bar& bar, const se::Status& status) {
@@ -724,7 +725,11 @@ int run_main(int argc, char** argv) {
     }
     se::fill_hud(hud, status, chat_art);
     se::keep_chat_only(hud);
-    hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style(chat_art));
+    const ge::hud::Frame f = hud.layout.frame(w, h, se::hud_style());
+    const cl::ChatExtras& x = remote.ignore.chat;  // at Quake II's scr_chathud_x and _y
+    const auto kept = se::place_chat_px(hud, f, x.hud_x, x.hud_y, cl::q2_bar_scale(bar, w, h));
+    if (console.cvars().find("scr_chathud_x") == nullptr) se::restore_chat(hud, kept);  // remix
+    hud.layout.draw(overlay, f, se::hud_style(chat_art)), se::restore_chat(hud, kept);
   };
   // cl_thirdperson's doors and platforms: the map's brush models where the last frame drew them.
   std::vector<cl::BehindMover> behind_scratch;
@@ -761,18 +766,18 @@ int run_main(int argc, char** argv) {
     picture.all_figures = remix.figure != nullptr ? std::string(remix.figure->folder) : "";
     console.print(cl::worn_line(remix));
   };
-  bool remix_enabled = false;
+  std::pair<bool, bool> remix_open{false, true};  // cr_enabled and cr_expansions as opened
   std::string remix_for;
   cl::RemixParts remix_items{};  // remix.hpp's `remix_parts`
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
-    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
-        cl::remix_parts(remix_settings) == remix_items)
-      return;
+    const auto open = std::pair(remix_settings.enabled, remix_settings.expansions);
+    const bool same_files = open == remix_open && remix_for == args.basedir;
+    if (same_files && cl::remix_parts(remix_settings) == remix_items) return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
     remix_items = cl::remix_parts(remix_settings);
-    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return remix_wear();
-    remix_enabled = remix_settings.enabled;
+    if (same_files) return remix_wear();
+    remix_open = open;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
                                               cl::known_games(prefs, args.profile, args.basedir));
@@ -886,8 +891,8 @@ int run_main(int argc, char** argv) {
   bool demo_hold = false;
   constexpr double kDemoSettle = 0.5;
   const auto start_attract = [&] {
-    const std::string list =
-        game_menu.attract() == "auto" ? std::string(adapter.game->attract) : game_menu.attract();
+    const std::string list = cl::attract_list(game_menu.attract(), args.basedir, args.game,
+                                              content_row(), adapter.game->attract);
     const std::vector<std::string> words = ge::console::tokenize(list);
     if (words.empty() || cl::archive_paths(files).empty()) return false;
     bench_ask = words[attract_next++ % words.size()];
@@ -1543,10 +1548,8 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
-      cl::demo_music(music, ds);  // the track its server names
-      place_seen.on = !ds.map.empty();
-      place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
-      place_seen.angles = ds.angles;
+      cl::demo_music(music, ds);     // the track its server names
+      cl::see_from(place_seen, ds);  // where it stands, looks, and what it draws
       place_seen.map = bench_map ? &bench_map->bsp : nullptr;
       // The place names the recording kept (or the server stuffed) are the ones it played with:
       // they stand in for any file while its level lasts.

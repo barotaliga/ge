@@ -147,7 +147,8 @@ inline constexpr ProgramFile kQ2Programs[] = {
     {.name = "gamex86.dll", .form = ProgramForm::game_library},
     {.name = "gamex86_64.so", .form = ProgramForm::game_library},
     {.name = "gamei386.so", .form = ProgramForm::game_library}};
-inline constexpr std::string_view kQ2Demos[] = {".dm2", ".mvd2"};
+// Gzipped recordings play as they are (open_demo peels them), so a bare name finds them too.
+inline constexpr std::string_view kQ2Demos[] = {".dm2", ".mvd2", ".dm2.gz", ".mvd2.gz"};
 // By Quake II's weapon keys (1 blaster, 2 shotgun, 3 super shotgun, 4 machinegun, 5 chaingun,
 // 6 hand grenades, 7 grenade launcher, 8 rocket launcher, 9 hyperblaster, 10 railgun, 11 BFG):
 // 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the shotguns,

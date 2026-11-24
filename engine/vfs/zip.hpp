@@ -8,7 +8,7 @@
 //
 // ge:summary Reads a zip archive from memory: the checked directory and stored or deflated entries
 // ge:keywords zip archive central directory deflate stored crc32 entry unpack refuse lzma zstd
-// ge:keywords bzip2
+// ge:keywords bzip2 zip-listing
 // ge:skill vfs
 // ge:test tests/vfs_zip_test.cpp
 #pragma once
@@ -34,6 +34,10 @@ struct Zip {
 
 // The directory of the zip in `bytes`; false with the reason in `*error`.
 bool read_zip(std::span<const uint8_t> bytes, Zip* out, std::string* error);
+// The names and sizes of the zip at `path`, read from its end record and central directory alone
+// (a few seeks, never the whole file): enough to tell what a large archive holds before reading
+// it. `data` stays 0 and nothing is checked past the directory; false with the reason.
+bool list_zip_file(const std::string& path, std::vector<ZipEntry>* out, std::string* error);
 // The entry whose name equals `name` ignoring ASCII case and treating '\\' as '/', or nullptr.
 const ZipEntry* zip_find(const Zip& zip, std::string_view name);
 // An entry's bytes, unpacked and checked against its CRC-32; false with the reason.

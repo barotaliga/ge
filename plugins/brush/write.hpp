@@ -74,6 +74,10 @@ Fixture weather_fixture();
 // pool of lava and a pond sunk in the yard for water.
 Fixture fog_fixture();
 
+// A version 38 fixture's lamp: a texture named `lamp...` lights the room this strongly (its
+// texinfo's value; `Texture::lamp`).
+inline constexpr int32_t kFixtureLamp = 300;
+
 // The fixture as a map of `family`; false with the reason in `*error`.
 bool write_bsp(const Fixture& fixture, Family family, std::vector<uint8_t>* out,
                std::string* error);
