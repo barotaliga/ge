@@ -55,12 +55,13 @@
 // ge:keywords classic-enhance enhance job switches help-pages window shooters-edge press_key
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
-// ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo
+// ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo recipe
 // ge:keywords select-game menu_games take_game games-page menu-sound menu-cue take_cue click
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
 
+#include <deque>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -88,7 +89,7 @@
 
 namespace shooters_edge::menu {
 
-class GameMenu {
+class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
  public:
   GameMenu();
   GameMenu(const GameMenu&) = delete;
@@ -97,7 +98,14 @@ class GameMenu {
 
   // Registers `menu_look`, the menu's commands and the `ce_` switches on `con`, which must outlive
   // the menu.
-  void add_cvars(ge::console::Console& con);
+  // `recipes` (the window's -recipes): a recipe's commands too, `menu_press`, `menu_select`,
+  // `menu_list` and the console's `sleep` (docs/console.md § Recipes); a player's window has none.
+  void add_cvars(ge::console::Console& con, bool recipes = false);
+  // A page that draws and reads its own rows is up (the server browser, the gallery, the demos,
+  // the games, classic enhance): a recipe's `menu_select` and `menu_list` refuse it.
+  bool on_own_page() const {
+    return in_gallery_ || in_servers_ || in_demos_ || in_games_ || in_enhance_;
+  }
   // `menu_attract`: the recordings a classic game plays behind its main menu ("auto" the game's
   // own, "" none).
   const std::string& attract() const { return attract_; }
@@ -222,6 +230,8 @@ class GameMenu {
   PlayerView figure_;
   ge::ui::Rect figure_box_, swatches_;  // the setup page's figure and colour picker, last drawn
   std::vector<std::string> problems_;
+  // A recipe's presses (`menu_press`, `menu_select`), one a frame, ahead of the real keys.
+  std::deque<ge::ui::MenuInput> pressed_;
   bool open_ = false;
   ge::ui::MenuCue cue_ = ge::ui::MenuCue::none;  // the sound not yet taken
   void cue(ge::ui::MenuCue c) { cue_ = ge::ui::louder(cue_, c); }

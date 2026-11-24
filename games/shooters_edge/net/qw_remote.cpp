@@ -4,6 +4,7 @@
 // ge:keywords remote_connect remote_step remote_disconnect remote_status
 // ge:skill net shooter
 #include "shooters_edge/net/qw_remote.hpp"
+#include "classic/teleporters.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -61,10 +62,27 @@ std::string map_shown(const QwClientEnd& c) {
   return m;
 }
 
+// The server's turn of the player (a spawn, a teleport: `setangle`) taken by the view once, as
+// soon as it is read (a command made after it carries it). A teleport's under the high-lag
+// teleport keeps the turning he did since the command that touched it (qw_client.hpp's
+// `set_turn`); else the view is the server's.
+void take_turn(Remote& r) {
+  if (r.end.setangles == r.setangles) return;
+  r.setangles = r.end.setangles;
+  // The turn of a teleport the prediction foresaw: the view already has it (and his turning since).
+  const sh::Vec3f told{r.end.set_angles[0], r.end.set_angles[1], r.end.set_angles[2]};
+  if (r.predict_teleports && sh::tele_guess_setangle(r.tele_guess, r.tele, told, r.view)) return;
+  if (r.end.set_kind == 1 && r.end.cfg.lag_turn)
+    r.view = {r.end.set_angles[0], r.view.y + r.end.set_turn, 0};
+  else
+    r.view = {r.end.set_angles[0], r.end.set_angles[1], 0};
+}
+
 void start(Remote& r, const ClientConfig& cfg) {
   r.kept = false;
   ClientConfig c = cfg;
   c.brain = [&r](int) {
+    take_turn(r);
     sh::MoveCmd m = r.hands;
     m.angles = r.view;
     r.hands.impulse = 0;  // an impulse goes once
@@ -289,6 +307,8 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
     if (static_cast<int>(i) != c.playernum && st.players[i].present && !st.players[i].dead)
       others.push_back(st.players[i].origin);
   sh::MoveState ahead;
+  const sh::Teleporters* tele = r.predict_teleports && !r.tele.empty() ? &r.tele : nullptr;
+  sh::TeleHit hit;
   if (original_move(c)) {
     // The server steps the original move: the same step on the stand-in, built once a level.
     if (r.original_for != r.world || r.original_level != r.levels) {
@@ -304,12 +324,14 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
       at.push_back({static_cast<int>(m.model - r.world->data()), m.origin});
     ge::classic::original_prediction_place(r.original, at.data(), static_cast<int>(at.size()),
                                            others.data(), static_cast<int>(others.size()));
-    ahead = ge::classic::predict_player_original(r.original, n, cmds, count, each);
+    ahead = ge::classic::predict_player_original(r.original, n, cmds, count, each, tele,
+                                                 r.tele_guess.skip, &hit);
   } else {
     sh::MoveWorld world;
     sh::client_world((*r.world)[0], movers.data(), static_cast<int>(movers.size()), others.data(),
                      static_cast<int>(others.size()), world);
-    ahead = sh::predict_player(n, cmds, count, settings_of(c), world, each);
+    ahead = sh::predict_player_teleports(n, cmds, count, settings_of(c), world, each, tele,
+                                         r.tele_guess.skip, &hit);
   }
   out = ahead.origin;
   if (full != nullptr) {
@@ -317,9 +339,32 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
     std::copy(seqs, seqs + count, r.ahead_seq);
     r.ahead_count = count;
     r.ahead_from_held = n.jump_held;
+    r.tele_hit_cmd = hit.cmd;
+    r.tele_hit_index = hit.index;
   }
   replayed = count;
   return true;
+}
+
+// The teleport the main prediction went through, if any: the server's answer to an earlier one
+// taken (a wrong one's turn undone, shooter/teleport_ahead.hpp), a new one turning the view to the
+// far end's facing at once, keeping the turning made since the command that walked in. The drawn
+// view follows.
+void foresee_teleport(Remote& r, client::DemoState& st) {
+  if (!r.predict_teleports || r.tele.empty()) return;
+  const QwClientEnd& c = r.end;
+  const sh::Vec3f before = r.view;
+  sh::tele_guess_acked(r.tele_guess, r.tele, c.ch.incoming_acknowledged,
+                       c.players[c.playernum].origin, sh::kPlayerMins, sh::kPlayerMaxs, r.view);
+  if (r.tele_hit_cmd >= 0 && r.tele_hit_cmd < r.ahead_count) {
+    const uint32_t seq = r.ahead_seq[r.tele_hit_cmd];
+    sh::tele_guess_hit(r.tele_guess, r.tele, seq, r.tele_hit_index, c.sent[seq & 63].angles,
+                       r.view);
+  }
+  if (r.view.x != before.x || r.view.y != before.y) {
+    st.angles = r.view;
+    st.angles.y = st.angles.y + r.jump_aid.shown;
+  }
 }
 
 // The other players run forward to the drawn time `now_s` from their newest records, each with
@@ -826,8 +871,17 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
     start(r, cfg);
 }
 
+void remote_teleporters(Remote& r, const ge::brush::Map* level) {
+  r.tele = level != nullptr ? ge::classic::level_teleporters(*level) : sh::Teleporters{};
+  r.tele_guess = {};
+  r.q2_ahead.tele =
+      level != nullptr && level->family == ge::brush::Family::v38 ? r.tele : sh::Teleporters{};
+  r.q2_ahead.guess = {};
+}
+
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
-                  const ge::brush::Map* brushes) {
+                  const ge::brush::Map* brushes, const ge::brush::Map* level) {
+  if (level != nullptr) remote_teleporters(r, level);
   r.world = models;
   r.smooth = sh::Smoothing{};
   q2_predict_map(r.q2_ahead, brushes);
@@ -1180,10 +1234,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     remote_disconnect(r);  // let go: the window is no longer on the server
     return RemoteStep::dropped;
   }
-  if (r.end.setangles != r.setangles) {  // the server turned the player
-    r.setangles = r.end.setangles;
-    r.view = {r.end.set_angles[0], r.end.set_angles[1], 0};
-  }
+  take_turn(r);
   // The recording read up to its newest packet, and what was read dropped.
   client::Demo& d = r.demo;
   d.bytes.insert(d.bytes.end(), r.recording.bytes.begin(), r.recording.bytes.end());
@@ -1273,6 +1324,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
       sh::smoothing_frame(r.smooth, before, now, r.end.latency);
     sh::smoothing_decay(r.smooth, wall_s);
     r.prediction = now;
+    foresee_teleport(r, d.state);
     sh::Vec3f drawn = sh::smoothed(r.smooth, now);
     // The eased place never inside a wall: the player's box swept from the prediction to it.
     if (r.world != nullptr && !r.world->empty() && sh::length(r.smooth.correction) > 0) {
@@ -1421,6 +1473,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
     // cl_pext_weaponprediction 0: the weapon's state not asked for (qw_weapon.hpp).
     if (cvar("cl_pext_weaponprediction", "1") == "0") cfg.ask[ExtFamily::mvd] &= ~kMvdWeaponPred;
+    // cl_pext_lagteleport 0: the teleport's kind not asked for, the moves in flight left as made.
+    cfg.lag_turn = cvar("cl_pext_lagteleport", "1") != "0";
+    if (!cfg.lag_turn) cfg.ask[ExtFamily::mvd] &= ~kMvdTeleport;
+    // cl_predict_teleport 1: the teleport foreseen, its moves made the new way from the first, so
+    // the server must not turn them again: the high-lag teleport is not asked for.
+    if (cvar("cl_predict_teleport", "1") != "0") cfg.ask[ExtFamily::mvd] &= ~kMvdTeleport;
     // The lens Quake II's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
@@ -1656,6 +1714,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "server's sound arrives",
                     .kind = ge::console::CvarKind::boolean},
                    &r.predict_jump);
+  con.cvars().bind({.name = "cl_predict_teleport",
+                    .fallback = "1",
+                    .help = "1: on a server joined, a teleporter takes you to its far end and "
+                            "turns you the moment you walk in; 0: when the server's word arrives",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.predict_teleports);
   con.cvars().bind({.name = "cl_predict_smoothview",
                     .fallback = "1",
                     .help = "How a correction of your predicted place is eased out on a server "

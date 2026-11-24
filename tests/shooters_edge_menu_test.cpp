@@ -359,6 +359,40 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(!w.ran.empty() && w.ran.back() == "quit");
 }
 
+TEST(a_recipe_drives_the_menu_only_in_a_window_started_for_recipes) {
+  World plain;  // a player's window: none of a recipe's commands
+  sm::GameMenu p;
+  p.add_cvars(plain.con);
+  for (const char* word : {"menu_press", "menu_select", "menu_list", "sleep"})
+    CHECK_MSG(plain.con.commands().count(word) == 0, word);
+  World w;  // -recipes
+  sm::GameMenu g;
+  g.add_cvars(w.con, true);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  w.con.execute("menu_press down");  // a closed menu with nothing opening it: refused
+  CHECK(!w.con.problems().empty());
+  w.con.clear_problems();
+  g.update({}, false, host, 0.016);
+  CHECK(!g.open());
+  w.con.execute("menu_list");
+  CHECK(w.con.output().back() == "menu closed");
+  w.con.execute("menu_press escape");  // a closed menu opened, as the key does
+  g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.main().top().id == "main");
+  w.con.execute("menu_select options");
+  g.update({}, false, host, 0.016);
+  CHECK(g.main().top().id == "options");
+  w.con.execute("menu_press down down");  // one key a frame
+  g.update({}, false, host, 0.016);
+  g.update({}, false, host, 0.016);
+  CHECK(g.main().focused() != nullptr);
+  const std::string focused = g.main().focused()->id;
+  w.con.execute("menu_list");
+  CHECK(w.con.output().back().find("\n> " + focused + " ") != std::string::npos);
+  w.con.execute("menu_select nowhere");
+  CHECK(!w.con.problems().empty());
+}
+
 TEST(quakes_menu_words_open_each_page) {
   World w;
   sm::GameMenu g;

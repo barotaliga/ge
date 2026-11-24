@@ -91,6 +91,10 @@ struct Profile {
   std::string_view full_game;  // present only in the full game's packs
   MaterialWords words;         // what a texture's name says it is made of
   std::span<const MissionPack> packs = {};  // the game's mission packs
+  // The first palette index the game draws at full brightness (a texture's, a skin's): Quake's
+  // last 32 colours; 256 for a game whose texels are all lit by the light (Quake II, whose lamps
+  // are its surface lights, `brush::Texture::lamp`).
+  int fullbright_first = 256;
 };
 
 // Quake's material words.
@@ -147,6 +151,7 @@ inline constexpr Profile kProfiles[] = {
         .full_game = "gfx/pop.lmp",
         .words = {kQ1Metal, kQ1Wood, kQ1Stone},
         .packs = kQ1Packs,
+        .fullbright_first = 224,
     },
     {
         // Quake II: its maps keep their textures in wall texture files (`textures/*.wal`,

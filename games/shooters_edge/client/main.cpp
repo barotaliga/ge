@@ -105,6 +105,7 @@
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
+#include "shooters_edge/client/entity_debug.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
@@ -304,7 +305,7 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   console.cvars().set_layer(cl::kLayerShell);  // the menus and the attract loop (menu_attract)
-  game_menu.add_cvars(console);
+  game_menu.add_cvars(console, args.recipes);  // -recipes: a recipe's commands too
   // The console in the loaded classic game's own letters and background (menu/classic_console.hpp).
   shooters_edge::menu::ClassicConsole con_look;
   console.cvars().set_layer(cl::kLayerEngine);  // the engine's again (screenshots, the console)
@@ -407,6 +408,13 @@ int run_main(int argc, char** argv) {
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
+  const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
                                                    args.plus, {series, outside});
       ran.passed_over > 0)
@@ -518,13 +526,6 @@ int run_main(int argc, char** argv) {
     return 1;
   }
   ge::ui::DrawList overlay;
-  const uint64_t first_ns = ge::platform::now_ns();
-  ge::console::add_clock_macros(
-      console, {.local = [] { return cl::local_time(); },
-                .uptime_s =
-                    [first_ns] {
-                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -570,6 +571,7 @@ int run_main(int argc, char** argv) {
   playback.places = &places;       // the demo's players' table names their places
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
   cl::add_place_queries(console, places, listen, place_seen, adapter, files);
+  if (args.recipes) cl::add_entity_debug_commands(console, place_seen);  // entlist, enthide
   ge::render::add_gpu_debug(console, gpu_debug, device.get(), [&] {
     return cl::gpu_debug_notes({&view_from, &listen, &place_seen, &picture.look, &w, &h});
   });
@@ -679,8 +681,7 @@ int run_main(int argc, char** argv) {
   cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                  next_map);
 
-  // The held weapons: a classic game's own, else ours (the folder given, else the tree's;
-  // held.hpp).
+  // The held weapons (held.hpp): a classic game's own, else ours (the folder given, or the tree's).
   std::vector<ge::viewmodel::HeldModel> weapons;
   std::vector<std::string> model_dirs;
   if (!args.models.empty()) model_dirs.push_back(args.models);
@@ -1546,10 +1547,8 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
-      cl::demo_music(music, ds);  // the track its server names
-      place_seen.on = !ds.map.empty();
-      place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
-      place_seen.angles = ds.angles;
+      cl::demo_music(music, ds);     // the track its server names
+      cl::see_from(place_seen, ds);  // where it stands, looks, and what it draws
       place_seen.map = bench_map ? &bench_map->bsp : nullptr;
       // The place names the recording kept (or the server stuffed) are the ones it played with:
       // they stand in for any file while its level lasts.
@@ -1587,7 +1586,8 @@ int run_main(int argc, char** argv) {
         bench_fx_state = cl::fx_state_for(&places);  // a new level: nothing burning
         bench_demo_fx = {};
         if (drawn_remote)
-          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get());
+          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get(),
+                           &bench_map->bsp.map);
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
@@ -1616,6 +1616,7 @@ int run_main(int argc, char** argv) {
         std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
         cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
         if (drawn_remote) joined_heard = {ds.started, ds.stopped, ds.voice, ds.prints, ds.centre};
+        cl::hear_fx(bench_fx, (drawn_remote ? joined_heard : bench.heard).started);  // ce_shells
         if (hearing.frame(ds, drawn_remote ? joined_heard : bench.heard, static_cast<float>(wall),
                           lines, hud.centre, &chat_lines))
           hud.centre_until = t + picture.centre_time;  // scr_centertime
@@ -1723,6 +1724,7 @@ int run_main(int argc, char** argv) {
       in_hand.recording = !drawn_remote;  // r_viewmodellastfired plays back alone
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
+      cl::held_cases(bench_fx_state.cases, held_fire, hand, bench_fx_state.on.shells, t);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 || own_behind > 0
                       ? nullptr
@@ -1893,11 +1895,9 @@ int run_main(int argc, char** argv) {
     shooters_edge::view::HandFrame hand = cl::step_held(
         listen, shown, in_hand, view_settings, weapons, t - hand_paused, paused ? 0 : wall);
     if (listen.server != nullptr) cl::quick_hand(controls.quick, hand);
-    if (hand.flashing && picture.muzzle_flash == 1)  // cl_muzzleflash 2 and 0: unlit
-      fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
-    // ce_muzzles in the modern look: each shot's flame, smoke and sparks from the barrel (off, or
-    // the classic look: the weapon's own flash and its light alone).
-    cl::fire_held(held_fire, hand, fx_state.on.muzzles, view.time_s, fx);
+    // The hand's flash lit (cl_muzzleflash 1), its fire (ce_muzzles) and cases (ce_shells).
+    cl::hand_fx(fx_state, held_fire, hand, picture.muzzle_flash == 1, view.time_s, t, fx,
+                listen.sounds, cl::kMostListenSounds);
     overlay.begin(w, h);
     const shooters_edge::server::Q2Server* q2 =
         listen.rules ? shooters_edge::server::q2_of(*listen.rules) : nullptr;

@@ -52,7 +52,8 @@ SheetSource qw_sheet_source(const std::string& serverinfo, bool ours);
 // info leaves out read 0), and, for the match mod, its rules with their words, the ones only a
 // listing says left with an empty value until `qw_match_listing_read` fills them.
 void qw_sheet_from_info(ge::server::SettingsSheet& sheet, const std::string& serverinfo);
-// The match mod's listing words a client sends to fill the rest ("cmd status1", "cmd status2").
+// The match mod's listing words a client sends to fill the rest, each a command line sent to the
+// server as it stands ("status1", "status2"; a console's `cmd` adds no word of its own).
 std::vector<std::string> qw_match_listing_asks();
 // One printed line of a listing taken into the sheet (bit 7 of every byte cleared first); true
 // when the line was one of a listing's (a window hides it then).

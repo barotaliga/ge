@@ -10,16 +10,18 @@
 //   mistake at its next frame.
 // - A SHOT PLAYED ONCE (`weapon_shot_fresh`): a shot is played when the shown command first
 //   reaches its command (`played_to`), and one a correction moves is not played twice: one of the
-//   same kind within `gap` of game time of the last is the same shot.
+//   same kind within `gap` of game time of the last is the same shot. One a correction moves back
+//   onto a command already shown plays then, unless one of its kind was played beside it
+//   (`weapon_played_near`).
 // - WHICH SOUNDS THE PREDICTION PLAYS (`weapon_sound_plays`, `cl_predict_weaponsound`): 0 none (the
 //   server's are heard), 1 every one; above 1 its bits name the weapons left to the server, bit
 //   2^n the weapon on key n (QuakeWorld: 2 the axe .. 256 the lightning gun; Quake II: 2 the
 //   blaster .. 512 the railgun, 1024 the BFG10K).
 // - THE SERVER'S COPIES (`WeaponPlayed`): each sound the prediction played is kept with its kind
-// and
-//   the server's frame (or time) it is sent with; a server copy of the same kind in or beside one
-//   not yet matched is that one, dropped; any other plays as it comes, late, so a shot the
-//   prediction missed is never lost.
+//   and the server's frame it is sent with (Quake II: the rules frame; QuakeWorld: the command,
+//   which the server runs as it arrives); a server copy of the same kind in or beside one not yet
+//   matched is that one, dropped; any other plays as it comes, late, so a shot the prediction
+//   missed is never lost.
 // - THE HAND FIRED (`weapon_shot_fired`): each predicted shot counts in `DemoState::own_shots`,
 //   which the window's hand fires on (client/held.cpp).
 // - THE FRAME DRAWN only once the server has sent a weapon frame other than 0 (`frames_live`):
@@ -91,6 +93,39 @@ inline bool weapon_played_match(WeaponPlayed& p, int32_t frame, int kind) {
         return true;
       }
     }
+  return false;
+}
+
+// `a` - `b` on frames that wrap (a command count).
+inline int32_t weapon_frames_apart(int32_t a, int32_t b) {
+  return static_cast<int32_t>(static_cast<uint32_t>(a) - static_cast<uint32_t>(b));
+}
+
+// Whether the prediction played a sound of `kind` within `within` frames of `frame`, matched or
+// not: a shot a correction moved is the one played beside it.
+inline bool weapon_played_near(const WeaponPlayed& p, int32_t frame, int kind, int32_t within) {
+  const uint32_t kept = p.n < 16 ? p.n : 16;
+  for (uint32_t k = 0; k < kept; k++) {
+    const uint32_t at = (p.n - 1 - k) & 15;
+    const int32_t apart = weapon_frames_apart(p.frame[at], frame);
+    if (p.kind[at] == kind && apart >= -within && apart <= within) return true;
+  }
+  return false;
+}
+
+// Whether a server copy of `kind` from a frame in [`lo`, `hi`] is one the prediction played (the
+// oldest not yet matched), which is then matched. QuakeWorld's copies come with the newest command
+// the server has run, so a copy is from one of the commands acknowledged since the last pass.
+inline bool weapon_played_match_within(WeaponPlayed& p, int32_t lo, int32_t hi, int kind) {
+  const uint32_t kept = p.n < 16 ? p.n : 16;
+  for (uint32_t k = kept; k-- > 0;) {
+    const uint32_t at = (p.n - 1 - k) & 15;
+    if (!p.matched[at] && p.kind[at] == kind && weapon_frames_apart(p.frame[at], lo) >= 0 &&
+        weapon_frames_apart(hi, p.frame[at]) >= 0) {
+      p.matched[at] = true;
+      return true;
+    }
+  }
   return false;
 }
 

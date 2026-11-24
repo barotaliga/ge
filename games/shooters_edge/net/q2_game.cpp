@@ -46,6 +46,7 @@
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_game_tv.hpp"
 #include "shooters_edge/net/q2_login.hpp"
+#include "shooters_edge/net/q2_match.hpp"
 #include "shooters_edge/net/q2_mvd_relay.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_download.hpp"
@@ -313,6 +314,19 @@ bool endpoint_number(const gs::ServerConfig& c, const char* name, int most, int&
 }
 
 // Quake II's own names for the download settings, as its configs and admins write them.
+// `sv_modern` (engine/server's GameMeta): what a modern Quake II server is. Every shot and every
+// rocket, grenade and bolt meet the others where the shooter saw them, one frame further back as
+// the client drew them. The game's feel is never part of it: only how the network judges it. A
+// setting any layer names wins over it.
+constexpr gs::GameMeta kMetas[] = {
+    {"sv_modern", "0", "",
+     "Whether the server plays as a modern one: every shot judged where its shooter saw the "
+     "others.",
+     "0: as each setting says (the default); 1: sv_antilag 2, sv_antilag_projectiles 1 and "
+     "sv_antilag_interp 1"},
+    {"sv_modern", "1", "sv_antilag 2; sv_antilag_projectiles 1; sv_antilag_interp 1"},
+};
+
 constexpr gs::SettingName kSettingNames[] = {
     {"allow_download", "sv_download"},
     {"allow_download_players", "sv_download_players"},
@@ -436,6 +450,10 @@ struct Game {
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
   Q2Votes votes;  // the players' votes and the settings sheet (q2_votes.hpp)
+  // The match: the lobby, timeouts, overtime (q2_match.hpp), opened with the network from the
+  // settings the server started with.
+  Q2Match match;
+  gs::ServerConfig match_cfg;
 };
 
 // `m` mended as it loads (server/q2_mapfix.hpp): the visibility patch, then an entity file.
@@ -553,6 +571,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   }
   if (!g->rules.start(g->map->spec, error)) return nullptr;
   q2_votes_rules(g->votes, g->rules, gs::vote_settings(c));
+  g->match_cfg = c;
   Game* game = g.get();
   g->votes.map = [game] { return game->map ? game->map->name : std::string(); };
   g->votes.has_map = [game](const std::string& wanted) {
@@ -956,6 +975,7 @@ void change_level(Game& g) {
   }
   if (s.pending_change != sv::MapChange::restart)
     q2_votes_map_over(g.votes);  // a vote's restart keeps them
+  q2_match_map_change(g.match, s.pending_change == sv::MapChange::restart, g.now_s);
   g.rules.carry();
   if (sv::NativeQ2* ns = sv::native_q2_of(g.rules); ns != nullptr && next)
     ns->map_checksum = sv::q2_map_checksum(next->file);
@@ -1184,6 +1204,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     game.login->logins.signer = game.signer;
   }
   q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
+  q2_match_open(game.match, *game.net, game.rules, game.match_cfg);  // its words before the votes'
   return true;
 }
 
@@ -1213,6 +1234,7 @@ void net_frame(void* g, int64_t now_us) {
     masters_send(game, out);
   }
   q2_votes_frame(game.votes);
+  q2_match_frame(game.match, game.map ? game.map->name : std::string(), now_s);
   change_level(game);
   if (game.login) q2_login_frame(*game.login);
 }
@@ -1482,6 +1504,8 @@ const gs::ServerGame& make() {
     s.rule_count = static_cast<int>(all_rules().size());
     s.names = kSettingNames;
     s.name_count = static_cast<int>(std::size(kSettingNames));
+    s.metas = kMetas;
+    s.meta_count = static_cast<int>(std::size(kMetas));
     s.create = create;
     s.destroy = destroy;
     s.frame_seconds = frame_seconds;

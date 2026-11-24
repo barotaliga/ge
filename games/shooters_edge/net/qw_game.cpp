@@ -264,6 +264,20 @@ const std::vector<gs::GameRule>& all_rules() {
 // `+set`, rcon or vote line by either name sets the one setting. Both games share the names they
 // have in common, so one table serves both: Quake's alone (floodprot, floodprotmsg), the
 // Quake II's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
+// `sv_modern` (engine/server's GameMeta): what a modern QuakeWorld server is. Every shot's line and
+// every rocket, grenade and nail meet the others where the shooter saw them; on a LAN (2) the
+// rate is not held to sv_maxrate either. The game's feel is never part of it: only how the
+// network judges it. A setting any layer names wins over it.
+constexpr gs::GameMeta kMetas[] = {
+    {"sv_modern", "0", "",
+     "Whether the server plays as a modern one: every shot judged where its shooter saw the "
+     "others.",
+     "0: as each setting says (the default); 1: sv_antilag 2 and sv_antilag_projectiles 1; 2: "
+     "the same and sv_lanrate 1, for a LAN"},
+    {"sv_modern", "1", "sv_antilag 2; sv_antilag_projectiles 1"},
+    {"sv_modern", "2", "sv_modern 1; sv_lanrate 1"},
+};
+
 constexpr gs::SettingName kSettingNames[] = {
     {"hostname", "sv_hostname"},
     {"maxclients", "sv_maxclients"},
@@ -1002,11 +1016,7 @@ void timeout_turn(Game& g) {
     }
   b.said.clear();
   b.to.clear();
-  const bool want = gs::timeout_paused(b);
-  if (want != g.timeout_held) {
-    g.rules.pause(sv::kPauseByServer, want);
-    g.timeout_held = want;
-  }
+  sv::timeout_hold(b, g.rules, g.timeout_held);
 }
 
 // `timeout` and `timein` from a client; `pause` while one is on.
@@ -1366,11 +1376,7 @@ void lobby_words(Game& g) {
   sv::announce_phase(g.rules->localinfo, g.room->lobby.phase);
   if (g.qw != nullptr) {  // the match's `status` as other servers say it (a recording starts on it)
     const gs::LobbyPhase p = g.room->lobby.phase;
-    qw_set_serverinfo(*g.qw, "status",
-                      p == gs::LobbyPhase::warmup      ? "Standby"
-                      : p == gs::LobbyPhase::countdown ? "Countdown"
-                      : p == gs::LobbyPhase::match     ? "In progress"
-                                                       : "End");
+    qw_set_serverinfo(*g.qw, "status", sv::phase_status(p));
   }
   sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
@@ -1408,10 +1414,13 @@ bool mate_words(Game& g, int slot, const std::string& line) {
     return true;
   }
   sb::AimSkill skill = sb::AimSkill::average;
+  bool helper = false;
+  std::string bad;
   const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
-  if (!named.empty() && !cl::skill_named(named, skill)) {
+  if (!cl::companion_words(named, skill, helper, bad)) {
     client_print(cs, slot, 2,
-                 "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
+                 "addbot: unknown word \"" + bad +
+                     "\" (use novice, average or expert, and escort or helper)\n");
     return true;
   }
   const bool turned = coop == nullptr || !coop->on();
@@ -1420,7 +1429,7 @@ bool mate_words(Game& g, int slot, const std::string& line) {
   for (int i = 0; i < sh::kMaxClients; i++)
     if (cs.clients[i].state != ConnState::free) held |= 1u << i;
   std::string error;
-  const int at = cl::q2_party_add(p, g.rules, g.map->spec, skill, held, error);
+  const int at = cl::q2_party_add(p, g.rules, g.map->spec, skill, held, error, helper);
   if (at < 0 || !qw_add_local(cs, at, p.mates[static_cast<size_t>(at)]->name, error)) {
     if (at > 0) {
       g.rules.drop(at);
@@ -1435,7 +1444,9 @@ bool mate_words(Game& g, int slot, const std::string& line) {
     client_print(cs, slot, 2, "The game is cooperative while you have company.\n");
   }
   const cl::Q2Mate& m = *p.mates[static_cast<size_t>(at)];
-  client_print(cs, slot, 2, m.name + " (" + sb::aim_skill_name(skill) + ") joins the game\n");
+  client_print(cs, slot, 2,
+               m.name + " (" + sb::aim_skill_name(skill) + (helper ? ", helper" : "") +
+                   ") joins the game\n");
   return true;
 }
 
@@ -1940,6 +1951,8 @@ gs::ServerGame make() {
   g.rule_count = static_cast<int>(all_rules().size());
   g.names = kSettingNames;
   g.name_count = static_cast<int>(std::size(kSettingNames));
+  g.metas = kMetas;
+  g.meta_count = static_cast<int>(std::size(kMetas));
   g.create = create;
   g.destroy = destroy;
   g.frame_seconds = frame_seconds;

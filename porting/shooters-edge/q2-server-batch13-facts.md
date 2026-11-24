@@ -242,6 +242,68 @@ edict's alignment, else "Game library returned bad size of edict_t"; max edicts 
 and at most 8192 (1024 without the bit), else "Game library returned bad number of max_edicts". Both are
 fatal drop errors.
 
+### 10. Server behaviours with the extensions (batch 14)
+
+"Extended" = the game set feature bit 15 (0x8000); it holds for the whole map and every client, since an
+extended server admits only protocol 36 clients of minor 1024 or later (§ 5). [read]
+
+**Leaf contents.** [read] Each leaf has two contents values: the leaf lump's, and a second computed at map
+load (no lump, no BSPX lump) as the lump value OR-ed with the contents of every brush in the leaf's
+leaf-brush list, all 32 bits, every leaf but leaf 0. Extended world traces, point contents and entity clips
+read the second, otherwise the first; the renderer always reads the first. A trace skips a leaf whose value
+shares no bit with the mask, then still tests each brush on its own contents. Point contents returns the
+leaf value (so, extended, the OR of all brushes in the leaf), OR-ed with every touching solid entity's (box
+entities give monster 0x2000000; touch list capped at 1024). [read/derived]
+
+**All-solid starts.** [read] A swept trace (start differs from end, point traces included, inline models
+and box entities included) through a brush it starts and ends inside sets startsolid and allsolid in both
+modes. Extended only: fraction becomes 0, contents becomes the brush's, endpos is the start, plane and
+surface are left as they were, and the walk stops. Without: that brush changes nothing else, so fraction
+stays 1 (endpos = end) unless another brush clips the sweep. A position test (start equals end) always
+gives fraction 0, both flags and the brush's contents, in both modes. A world trace with fraction 0 skips
+entities; an all-solid result also ends the entity pass. Extended entity clips also shift the hit plane's
+distance by the entity's origin (normal dot origin) into world space; without, it stays in model space.
+[read]
+
+**Player and projectile.** [read] Contents player 0x40000000, projectile 0x80000000. An entity is one by
+svflags: player 0x8, projectile 0x80 (the sample game sets neither). Extended move clips ignore a
+projectile-flagged entity unless the mask has 0x80000000, a player-flagged one unless it has 0x40000000,
+deadmonster-flagged (0x2) ones are ignored unless the mask has 0x4000000 in both modes. Hits on a box
+entity still report 0x2000000. Without the extensions the two flags are ignored. The client's prediction,
+extended, skips entities numbered up to max clients unless the mask has 0x40000000.
+
+**No-cull.** [read] svflags 0x400, extended only: skips the area-portal check, PVS/PHS, the 400-unit
+no-model limit and the loop-sound cut. Not bypassed: svflags no-client 0x1, the nothing-to-show rule, the
+client's no-gibs/no-flares settings, the game's per-client visibility hook, the per-frame cap. The viewer's
+own entity and the setting sv_novis skip the same checks in both modes.
+
+**Loop sounds.** [read] Extended, an entity with a non-zero sound field is tested against the PHS instead
+of the fat PVS, then cut when (distance from view origin to entity origin − 80) × m > 1, with m = 0 for
+loop attenuation −1, attenuation × 0.0006 for attenuation above 0 other than 3, else 0.003 (unset 0, 3,
+other negatives). Cut-offs [derived]: about 413.3 units by default, 1746.7 at 1, 913.3 at 2,
+80 + 1666.67 / attenuation in general. Loop volume plays no part. Past the cut a model-less entity is not
+sent; one with a model is sent only if also in the PVS (a beam needs no second test). Sent entities are
+never stripped of their sound. Inside the cut a sound entity with no model has no 400-unit limit.
+
+**Frame overflow.** [read] Cap: sv_max_packet_entities if above 0 (default 0, unclamped), else 512
+extended, 128 not. With sv_prioritize_entities 0 (default), gathering in entity-number order stops at the
+cap. Non-zero: all are gathered, ranked, the first cap kept, re-sorted by number. Rank: high first (client
+slots, monsters: svflags 0x4 without 0x2 or renderfx 0x40, brush models), then low last (gibs, or no model
+and no effects), then nearer first; ties unordered. Gib = renderfx low-priority 0x1000000 when extended,
+effects 0x2 or 0x200000 otherwise. The bit only demotes within a class.
+
+**No flares, no gibs, no footsteps.** [read] cl_flares (default 1) is sent as client setting index 13
+(opcode 5, two signed shorts, value 1 = no flares) after "begin" and on change, only to an extended 36
+server. Extended, a client with it set never gets entities with renderfx 0x200000, before any visibility
+test. No-gibs (index 10): effects 0x2 dropped, except, extended, when the rocket effect 0x10 is also set,
+0x200000 dropped in both modes. No-footsteps (index 11) clears event 2 in both modes and events 8 (other
+footstep) and 9 (ladder step) only extended; the entity is still sent. The game emits these events; the
+server never rewrites them by protocol. "status s" shows the settings (L = no flares).
+
+**Other.** [read] Serverinfo "protocol" is "36" extended, "34" otherwise. The edict extension block (more
+effects, alpha, scale, loop volume, loop attenuation) is read only extended. No distance or visibility
+change for multicasts or positioned sounds was found.
+
 ## C. The newer game interface (version 3302)
 
 ### 7. Telling them apart, layouts, behaviour

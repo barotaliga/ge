@@ -335,6 +335,14 @@ in `tests/golden/console_script.txt` (`meta-*`) hold the precedence, the restore
 the refused loop; the `server-cfg` lab draws a mod setting `sv_modern 1` over a base that set
 `sv_fps`.
 
+A game's dedicated server declares its own levels as data (`ServerGame::metas`, a `GameMeta` row a
+level), so `sv_modern` means "a modern server" in every game and each says what that is for it.
+Only how the network judges play is in it, never a game's feel. Shooter's Edge's QuakeWorld: 1 is
+`sv_antilag 2; sv_antilag_projectiles 1` (every shot's line and every rocket, grenade and nail
+rewound to what the shooter saw), 2 adds `sv_lanrate 1`. Its Quake II: 1 is `sv_antilag 2;
+sv_antilag_projectiles 1; sv_antilag_interp 1`. Held by `tests/shooters_edge_qw_game_test.cpp`;
+the `se-dedicated-lobby` lab plays its matches with `--modern=1`.
+
 ## The lobby and the match's phases
 
 Sessions (`engine/net/session`) already hold the seats, the leader, teams, ready and `lobby` /
@@ -480,6 +488,36 @@ next. Spectators, bots and a warmup are refused with the reason. The clock is th
 which runs on through the pause; the game stops and starts its world as the book says (Shooter's
 Edge pauses its rules as the server's own pause, which no player's word undoes). The status line
 says `timeout=out` or `timeout=resuming` while one is on.
+
+**Quake II's match** (`games/shooters_edge/net/q2_match.hpp`) plays the lobby, the timeouts,
+overtime, prewar and the lock as QuakeWorld's server does, on the rules both share
+(`games/shooters_edge/server/match_rules.hpp`). Its players' own words are taken too: `unready`
+and `noready` for `notready`; `time`, `calltime`, `ctime` and `hold` call a timeout and, from the
+caller, end it. Its rules add a tournament's gameplay switches: `g_fast_weap_switch`,
+`g_teleporter_nofreeze`, `g_spawn_mode`, `g_removed_weapons`, `g_removed_powerups` and
+`g_warmup_loadout` (each one's help says what it does). While the rules are paused the server
+keeps sending what is said, so a player's next word is heard.
+
+## Teams and captains
+
+`engine/server/captains.hpp`. A team match's two teams over the lobby's red and blue, named by
+the game, each with a captain: the first to join it, then the lowest seat left when he goes. A
+captain (and the referee, on either team) locks and unlocks the team, renames it in the warmup,
+invites a spectator (`invite`, taken with `accept`, even into a match under way or a locked
+team), picks one straight on when the server allows it, and removes a teammate to watch.
+`team` and `join` take `1`, `a`, `2`, `b` or a team's name, refused while the team is locked or
+full. The book asks the game to seat or unseat a player and says every line; the shuffle deals
+the seats again from a seed. Quake II's server plays it with `dmflags` 64 or 128, every player
+in his team's look.
+
+## The referee
+
+`engine/server/referee.hpp`. A player who gives the server's administrator password in the game
+(`referee <password>`, or `admin`) runs the match without a vote: `endmatch` (or `break` in a
+match), `tl <minutes>`, `changemap <map>`, `kick`, `kickban` and `ban <player> [minutes]` (60 by
+default, 720 at most), `mute <player> [minutes]` (5 by default, 60 at most) and `unmute`,
+`shuffle`, `readyall` and `unreadyall`; `acommands` lists them. A wrong password is refused and
+logged; a referee is never kicked, banned or muted. The book hands the game each act to do.
 
 ## Player aids: help for one chosen player
 

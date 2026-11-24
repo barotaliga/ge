@@ -442,3 +442,224 @@ agrees unless said (R):
 - Only the server operator sees versions and settings of all: `status v` (versions), `status s`
   (protocol, the setting letters G, B, R, I, F, P, L, update rate and frame rate), `status l`
   (lag), `status p`, `status t`, `status d` (R).
+
+## Part D: Prediction and smoothing
+
+Read on 2026-11-23 at the same heads as Parts A to C, plus the shared QuakeWorld protocol
+definitions that ezQuake and MVDSV both take in as a submodule (QW-Group/qwprot, commit f13e9ce
+of 2026-11-22), ezQuake's bundled settings help, and Q2PRO's manuals. Same marks. Questions 18
+to 27 are the prediction brief's 1 to 10 in order. "Weapon prediction" is the client-side
+prediction carried by the MVD protocol extension of that name.
+
+### Where it stands
+
+ezQuake has a full set of weapon-prediction settings, built in by a build option named for the
+"antilag 1 prototype" that is on by default (R). The shared protocol definitions keep the weapon
+prediction and simple projectile extension bits commented out (bit 7, value 128, and bit 8, value
+256), and ezQuake supplies them from its own build instead (R). Neither MVDSV nor KTX at the heads
+read implements or advertises weapon prediction or simple projectiles, and ezQuake's built-in
+local server does not either (R: no such extension in their sources). So against every server in
+the read set the weapon prediction settings do nothing: the extension is never agreed, and every
+setting that starts "with weapon prediction active" is inert (D). No ruleset names any prediction
+or smoothing setting (R).
+
+### 18. Weapon prediction: settings, rulesets, server
+
+- `cl_pext_weaponprediction` (default 1, on or off): asks for the weapon prediction extension
+  when connecting (R). It is one of the extension settings the server may not set: a server's
+  attempt prints `Server tried setting cl_pext_weaponprediction cvar` and changes nothing (R).
+  It takes effect only at the next connection, because the extensions are agreed while
+  connecting (D: the client's request is built from these settings during the connection
+  handshake and not re-sent later).
+- `cl_pext` (default 1): the master switch for all protocol extensions; 0 asks for none, so it
+  also turns weapon prediction off (R).
+- `cl_nopred_weapon` (default 0, on or off): turns weapon prediction off on the client even when
+  the extension was agreed (R). Read on every prediction pass, so it acts at once (D).
+- Weapon prediction is also off when the player is a spectator (R), and when `cl_nopred` is 1
+  (D: with `cl_nopred` the whole prediction pass is skipped, so nothing of the weapon is run).
+- The protocol lets a supporting server send, with each player state, a prediction flags byte:
+  one bit says the coilgun (instagib) weapon is in use, one says the midair mode is on, and the
+  value 255 means "forced off", which the client treats like `cl_nopred_weapon 1` (R). It is a
+  per-frame value, not a setting; no server in the read set sends it (R).
+- What the server sends for the prediction, per frame while the extension is on: the impulse, the
+  current weapon, the client's game time, when the next attack is allowed, the weapon think time
+  and step, the ping, the flags byte above and the four ammunition counts (R; the order and sizes
+  are the extension's wire format).
+- Rulesets: none of the six locks, limits or refuses `cl_pext_weaponprediction`,
+  `cl_nopred_weapon` or `cl_pext` (R: the rulesets' lists name none of them, and none has a
+  change handler).
+- Server: MVDSV has no setting that allows or disallows it, and never offers it (R). KTX has no
+  such setting and its example league configs do not mention it (R). The only nearby server
+  setting is lag compensation, `sv_antilag` (KTX's user modes set it to 2, "on"; KTX's example
+  server config says 1 is unsupported by KTX) (R); it is separate from weapon prediction (R:
+  neither refers to the other).
+
+### 19. Weapon sounds and the buffer
+
+- `cl_predict_weaponsound` (default 1, integer) (R), by value:
+- 0: no own weapon sound is predicted; the server's sounds play as usual.
+- 1: every own weapon sound is predicted, played when the predicted shot happens; the server's
+  sounds for the player's own weapon channel are then dropped, except the axe's hit sound,
+  which still comes from the server.
+- Above 1: a mask of weapons to leave to the server, each set bit excluding one weapon from
+  prediction (its sound is then the server's): 2 axe, 4 shotgun (and the coilgun, which shares
+  the bit), 8 super shotgun, 16 nailgun, 32 super nailgun, 64 grenade launcher, 128 rocket
+  launcher, 256 lightning gun (start sound and hit sound together).
+- With the lightning gun predicted, its start sound (which the server sends on the general
+  channel, not the weapon channel) is dropped from the server, and its hit sound is played
+  locally at most once every 0.6 s while the beam fires (R).
+- Edge: with a mask above 1, a server sound on the player's own weapon channel that is not one
+  of the predicted weapon sounds (the axe's hit sound included) is dropped and nothing plays in
+  its place (D: the filter keeps the server's sound only for the excluded weapons' own sounds).
+- The bundled help gives the same meaning for 0, 1 and the mask (R).
+- `cl_predict_buffer` (default 1, integer, no clamp) (R): how many commands the predicted
+  sounds, projectiles and beams wait before they are shown, so that a misprediction can be
+  corrected first. An event from a command is shown once `cl_predict_buffer` more commands have
+  been sent after it, but it is never held once its command is no more than two commands after
+  the last command the server has acknowledged (R). 0 shows events at once (R).
+  Negative values act as 0 (D: the upper bound wins). The help: "Higher values are safer but
+  reduce the antilag benefit" (R). One command is one physics frame, about 13 ms at 77 frames a
+  second (D).
+- When a correction shows the weapon or its frame differed from what was predicted, every sound
+  since the last acknowledged command is played again (R).
+- Rulesets and server: none of the six touches either setting (R), and no server setting exists
+  (R), as in Q18.
+
+### 20. Own projectiles and the jump sound
+
+- `cl_predict_projectiles` (default 1, on or off): with weapon prediction active, the player's
+  own nails, super nails, grenades and rockets are spawned at once as local projectiles, which
+  the client merges with the server's when they arrive (R).
+- `cl_predict_beam` (default 1, on or off): with weapon prediction active, the player's own
+  lightning beam is drawn at once from the predicted state, 600 units long from the shot's
+  origin along the aim, stopped at the first wall, and the server's beam is not drawn (R).
+- `cl_predict_jump` (default 1, on or off): with weapon prediction active, the jump sound is
+  played at the predicted jump and the server's jump sound (on the body channel) is dropped; the
+  drop does not happen while `cl_nopred` is 1 (R).
+- Related, also part of the same prototype: `cl_pext_simpleprojectiles` (default 1) asks for the
+  simple projectile extension, where the server sends nails, grenades and rockets as stateless
+  launches that the client flies itself (R); `cl_sproj_xerp` (default 0) moves other players'
+  simple projectiles ahead by the player's latency (R). Its help says the latency is capped at
+  150 ms; the cap is compared in seconds, so it never binds below 150 s (D: the latency the
+  client keeps is in seconds, held between 0 and 1).
+- No ruleset limits any of these (R). No server in the read set implements either extension (R),
+  so all are inert there (D).
+
+### 21. Turning prediction off
+
+- `cl_nopred` (default 0, on or off): the player is drawn where the last server update put them,
+  without running their own unacknowledged commands (R). It is ignored while watching a
+  multi-view demo (R). The help calls it "for debugging" and says other players are still
+  predicted (R).
+- Prediction is also skipped whenever there is no unacknowledged command to run (R).
+- Other players: `cl_predict_players` (default 1) turns other players' prediction on or off; the
+  help says it should be left at 1 "unless you are having problems" (R). `cl_predict_half`
+  (default 0) predicts half of other players' move instead of all of it (R).
+- No ruleset locks or limits any of the three (R).
+- Server side (MVDSV), related: `sv_antilag_no_pred` (default empty, shown in the server info)
+  changes where lag compensation rewinds other players to. Unset, the rewind adds the time the
+  client is assumed to be predicting ahead (one server physics frame when the ping is under
+  20 ms, otherwise 20 ms, never past the server's present); set, the rewind uses only the frame
+  the client last saw (R). The physics rate used is `sv_maxfps`, or 77 when it is outside 20 to
+  1000 (R). It does not change or check any client setting (R).
+
+### 22. Smoothing prediction errors
+
+- `cl_predict_smoothview` (default 1, a number) (R). Active only when the weapon prediction
+  extension was agreed, the player is not a spectator, and the value is at least 0.1; below 0.1
+  it is off (R).
+- What it does (R): when a new prediction puts the player more than 4 and less than 64 units
+  from where the previous one had them at the same command, the difference is kept as a nudge
+  so the view starts where it was and eases to the corrected place. The nudge is scaled down by
+  one minus (13 ms divided by the latency, at most 1), so at 13 ms or less there is no easing.
+  The nudge is held to 64 units and shrinks every frame at a rate set by its size, times the
+  multiplier below: 200 units a second below 8 units, 500 from 8 to 16, 800 from 16 to 32, 1400
+  above. A nudge smaller than what 220 units a second (times the multiplier) would remove in
+  that frame drops to zero at once. The nudged view is traced against the world so it never
+  goes into a wall.
+- The rate multiplier is 2 minus the setting, held between 0.1 and 2 (R). So 0.1 gives 1.9 times
+  the base rates (the fastest easing), 1 gives the base rates, and 1.9 or more gives 0.1 times
+  (the slowest) (D).
+- Discrepancy: the bundled help says values toward 2 decay faster and toward 0.1 slower, the
+  reverse of what the code does (D from the two read facts).
+- No ruleset limits it (R). Without the weapon prediction extension there is no error smoothing
+  of one's own position in ezQuake at all (R); against MVDSV or KTX it is therefore inert (D).
+- Other smoothing in the client that is not of prediction errors: `cl_nolerp` (default 0)
+  turns off the interpolation of other objects between updates (R). No ruleset touches it (R).
+
+### 23. The high-lag teleport extension
+
+- What it does (R): when the server turns the player's view (a teleport or a respawn), it tags
+  the turn as teleport or respawn. After a teleport, the server turns the movement commands the
+  client made before it learned of the teleport by the same change of yaw, until the client
+  acknowledges the packet that carried the turn; the client turns its own pending commands the
+  same way so its prediction agrees. After a respawn, the client replaces the yaw of its pending
+  commands with the new view angle.
+- `cl_pext_lagteleport` (R): code default 1. The client asks for the extension only when the
+  value is odd (bit 1 set), so 2 does not ask. The server may not set it (the "Server tried
+  setting" refusal of Q18). When asked for but not granted, connecting prints `Warning: high-lag
+  teleport fix not available` (with "Warning" in red).
+- Discrepancy: the bundled help gives the default as 0 and the code as 1 (R, both). The help
+  also says a reconnect is needed for a change to take effect (R).
+- Server (MVDSV): offers the extension on each map only when the loaded game module defines a
+  player field named `teleported` (R). There is no server setting to turn it on or off (R).
+- KTX defines that field and sets it when a player passes through a teleporter (R), so on a KTX
+  server the extension is always offered (D). KTX has no setting for it (R).
+- No ruleset touches it (R).
+
+### 24. Announced to others, or answered by a query?
+
+- No. None of the settings in Q18 to Q23 has a change handler that says anything in chat, and no
+  `f_` reply mentions prediction, smoothing or the extensions (R). The announced settings stay
+  those of Parts A and B (`cl_fakeshaft`, the side-step aid, the packet delay settings) (R).
+- Q2PRO: `cl_predict 0` is reported to the server (Q26) and shows to the server operator as the
+  letter `P` in `status s`; nothing is said to other players (R).
+
+### 25. Refused while connected, or during a match?
+
+- ezQuake: none of these settings is refused while connected or during a match (R: no change
+  handler). The extension requests (`cl_pext`, `cl_pext_weaponprediction`,
+  `cl_pext_lagteleport`, `cl_pext_simpleprojectiles`) can be changed at any time but take effect
+  at the next connection (D, as in Q18; R for the help's reconnect remark on lag teleport). Only
+  the server is refused, by the "Server tried setting <name> cvar" line (R).
+- Q2PRO: `cl_predict` is accepted at any time; while connected on the Q2PRO protocol the change
+  is sent to the server at once (R).
+
+### 26. Quake II (Q2PRO)
+
+- `cl_predict` (default 1, on or off): 0 draws the view where the server last put it,
+  interpolated between the last two server frames, instead of predicting (R). Not
+  cheat-protected (R: not on the list of Q14). Prediction is also off while
+  playing a demo and while the server's player state carries the no-prediction flag; the
+  protocol describes that flag as temporarily disabling prediction (used for a grappling hook)
+  (R). The bundled game sets it while a spectator chases another player and clears it when the
+  chase ends (R); the server's multi-view demo viewers get it too (R).
+- Error smoothing, built in, with no setting (R): each server frame the client compares where
+  the server put the player with where it had predicted for the same command. When the
+  difference (the sum of its three components' sizes) is above 1/8 unit and at most 80 units,
+  the difference is blended out over the time to the next server frame (at the default 10 frames
+  a second, 100 ms) (R; D for the 100 ms). Above 80 units it is taken as a teleport and snapped
+  (R). While the game is paused the error is cleared (R).
+- Step smoothing, built in, with no setting (R): a predicted rise of about 7.9 to 20 units while
+  on the ground is eased over 100 ms, a new step adding to what is left of the last one, held
+  to 32 units.
+- `cl_showmiss` (default 0) prints each prediction miss, only in debug builds (R).
+- No weapon, sound or projectile prediction exists in Q2PRO (R: no such settings or code).
+- Server: no setting forces or forbids `cl_predict` (R). A client on the Q2PRO protocol tells
+  the server its `cl_predict` value; with prediction off, the server leaves the prediction
+  fields out of that client's player state (R), and `status s` shows `P` (R). No cvar ban is
+  preset for it, though an operator could add one with the general cvar checks (D from Q15).
+- Tournament setup: Q2PRO's manuals have no tournament or duel section (R, as in Q16), so nothing restricts these.
+
+### 27. Norms stated in the projects' own documentation
+
+- ezQuake's bundled help: `cl_nopred` is "for debugging"; `cl_predict_players` should be left
+  at 1 unless there are problems; the weapon prediction settings are described as part of the
+  "antilag 1 prototype"; `cl_predict_buffer` higher is "safer but reduce[s] the antilag
+  benefit" (R). No tournament or league rule is stated (R).
+- MVDSV and KTX: no documentation of client prediction settings (R). KTX's example server config
+  states only that `sv_antilag` 2 is on and 1 is unsupported by KTX, and its user modes all set
+  2 (R).
+- Q2PRO: the server manual notes that the underwater-jump fix exists because the old movement
+  computed the surfacing speed differently on client and server, causing prediction errors and
+  jerky movement (R). Nothing else on prediction, and no tournament norm (R).

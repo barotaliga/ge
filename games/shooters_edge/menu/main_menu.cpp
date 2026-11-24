@@ -706,6 +706,14 @@ constexpr Entry kEntries[] = {
      .hint = "Each shot's flash and smoke from the barrel.",
      .needs = "ce_muzzles",
      .target = Target::client},
+    {.page = "weapon",
+     .id = "ce_shells",
+     .text = "SPENT SHELLS",
+     .kind = ItemKind::toggle,
+     .hint = "The shotguns and machine guns throw out their spent shells, which clatter to the "
+             "floor and lie there a while.",
+     .needs = "ce_shells",
+     .target = Target::client},
     {.page = "weapon", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     // CLASSIC ENHANCED: what the game adds to the classic picture, page by subject. Only what a
@@ -940,10 +948,10 @@ constexpr Entry kEntries[] = {
      .target = Target::client},
     {.page = "ce_liquids",
      .id = "r_arrival",
-     .text = "ARRIVAL FLASH",
+     .text = "ARRIVAL EDGES",
      .kind = ItemKind::slider,
-     .hint = "How strongly your own arrival (a spawn, a teleporter) sweeps the whole view in a "
-             "flash and a warp; 0 none.",
+     .hint = "How strongly your own arrival (a spawn, a teleporter) tints the edges of the view "
+             "for a moment; the middle is never touched; 0 none.",
      .needs = "r_arrival",
      .target = Target::client,
      .min = 0,
