@@ -521,6 +521,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   std::vector<int> gates;  // the shut doors barred by the links through their shut boxes
   // The links that pass through secret wall `e` (shut while it is barred).
   // One lying flat (e2m1's slab over the pool's shaft) is crossed through its floor.
+  constexpr float kOnSlab = 64;  // a ride's foot this far over a flat wall stands on it, units
   const auto add_crossings = [&](int e) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
     const sh::Vec3f size = d.absmax - d.absmin;
@@ -531,7 +532,14 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         const int32_t li = n.first_link + k;
         const sb::NavLink& l = g.links[static_cast<size_t>(li)];
         const sh::Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
-        if (flat ? way_through_floor(n.origin, to, d.absmin, d.absmax)
+        // A ride boarded on it: the plat's trigger lies under the slab (e3m1's plat *64 at the
+        // foot of its shaft, under slab t58), so it never rises while the slab is there.
+        // (Its box is a unit wider all round.)
+        const bool on = l.kind == sb::NavKind::ride && n.origin.z >= d.absmax.z - 4 &&
+                        n.origin.z - d.absmax.z <= kOnSlab && n.origin.x >= d.absmin.x &&
+                        n.origin.x <= d.absmax.x && n.origin.y >= d.absmin.y &&
+                        n.origin.y <= d.absmax.y;
+        if (flat ? on || way_through_floor(n.origin, to, d.absmin, d.absmax)
                  : crosses(n.origin, to, d.absmin, d.absmax))
           w.crossings.push_back({li, static_cast<int32_t>(a), e});
       }
