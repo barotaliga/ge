@@ -92,7 +92,8 @@ void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int
 }
 
 MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
-                                  const MoveCmd* cmds, int count, MoveState* each) {
+                                  const MoveCmd* cmds, int count, MoveState* each,
+                                  const Teleporters* tele, int skip, TeleHit* hit) {
   Server& sv = p.sv;
   const MoveState from = unquantize_player(acked, sv.set.move);
   unlink_edict(sv, kPlayer);
@@ -109,8 +110,19 @@ MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
     out.jump_held = (ed.flags & kFlagJumpReleased) == 0;
     return out;
   };
+  if (hit != nullptr) *hit = {};
   for (int i = 0; i < count; i++) {
     run_split(sv, cmds[i]);
+    if (tele != nullptr && ed.movetype == kMovetypeWalk) {
+      const int k = teleporter_at(*tele, ed.origin, kPlayerMins, kPlayerMaxs, kTeleLinkGrow, skip);
+      if (k >= 0) {  // as the server's teleporter: there, at its speed, off the ground
+        const Teleporter& t = (*tele)[static_cast<size_t>(k)];
+        set_origin(sv, kPlayer, t.dest);
+        ed.velocity = t.velocity;
+        ed.flags &= ~kFlagOnGround;
+        if (hit != nullptr && hit->cmd < 0) *hit = {i, k};
+      }
+    }
     if (each != nullptr) each[i] = state();
   }
   return state();

@@ -65,15 +65,26 @@ view::HandFrame step_q2_held(const server::Q2Server& sq, const PlayerState& p, c
   in.weapon = static_cast<view::Weapon>(w);
   in.q2 = true;
   in.dead = p.dead;
-  // A shot each time the hand steps onto a frame that fires (the held-fire guns loop in their
-  // range, a shot a frame).
-  if (w >= 0 && w < server::kSqWeaponCount) {
+  // A shot each time the hand passes a frame that fires since the last step. The server fires a
+  // frame and steps past it at once, so a gun that fires on its first frame (the shotguns, the
+  // blaster) is never seen on it: the step that starts firing counts from the first fire frame,
+  // and a held-fire gun's loop back to the start of its range is a shot too.
+  const bool firing = hand.state == server::SqHandState::firing;
+  if (w >= 0 && w < server::kSqWeaponCount && firing && !p.dead) {
     const server::SqWeaponRow& row = server::kSqWeapons[static_cast<size_t>(w)];
-    in.fired = !p.dead && hand.state == server::SqHandState::firing &&
-               hand.frame >= row.fire_from && hand.frame <= row.fire_to &&
-               (hand.frame != s.q2_frame || w != s.recorded_weapon);
+    const bool began = !s.q2_firing || w != s.q2_weapon;
+    int from = hand.frame;  // the frames passed since the last step: from..hand.frame
+    if (began)
+      from = row.last_activate + 1;
+    else if (hand.frame > s.q2_frame)
+      from = s.q2_frame + 1;
+    else if (hand.frame == s.q2_frame)
+      from = hand.frame + 1;  // none
+    in.fired = std::max(from, row.fire_from) <= std::min(hand.frame, row.fire_to);
   }
   s.q2_frame = hand.frame;
+  s.q2_firing = firing;
+  s.q2_weapon = w;
   if (in.fired) ++s.shots;
   q2_gun_sway(sq.players[0].seen.gun_angles, sq.players[0].seen.gun_offset, p.v_angle, in);
   in.place.look_yaw = v.pose.yaw;
