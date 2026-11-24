@@ -417,6 +417,13 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   // A big one (boss5's hull) is filmed over the player's shoulder: from beside its gun it fills
   // the frame.
   const ge::camera::Pose cam = side_camera(g, k.big);
+  // The framing in the digest (the pictures are not: each GPU draws its own bits): where the
+  // camera stands, to a tenth of a metre, and where it looks, to the degree.
+  lab.metric(std::string(k.name) + ".camera.x", std::round(double(cam.eye.x) * 10) / 10, "m");
+  lab.metric(std::string(k.name) + ".camera.y", std::round(double(cam.eye.y) * 10) / 10, "m");
+  lab.metric(std::string(k.name) + ".camera.z", std::round(double(cam.eye.z) * 10) / 10, "m");
+  lab.metric(std::string(k.name) + ".camera.yaw", std::round(cam.yaw * 180 / 3.14159265358979),
+             "deg");
   const int start = std::max(0, shot_at - int(s.before / kTic));
   const int end = shot_at + int(s.seconds / kTic);
   double t = 0, next_draw = -1;
