@@ -255,8 +255,7 @@ TEST(dissolution_offers_its_team_games_on_the_teamplay_row) {
   sm::Host base{.console = &w.con, .server = &server, .maps = {"start", "dm1"}};
   sm::refresh(m, base);
   CHECK(item(m, "host", "teamplay")->choices.size() == 3);
-  // Dissolution of Eternity's: its tag and three flag games too, a step left of off wrapping to
-  // the last of them.
+  // Dissolution of Eternity's: its tag and flag games too, left of off wrapping to the last.
   sm::Host rogue{.console = &w.con, .server = &server, .maps = {"start", "r1m1", "ctf1"}};
   sm::refresh(m, rogue);
   const std::vector<std::string> want = {"OFF",           "NO FRIENDLY FIRE", "FRIENDLY FIRE",
@@ -277,8 +276,7 @@ TEST(dissolution_offers_its_team_games_on_the_teamplay_row) {
   sm::refresh(m, rogue);
   CHECK(item(m, "host", "teamplay")->choice == 4);
   sm::refresh(m, base);
-  CHECK(item(m, "host", "teamplay")->choice == 0);
-  CHECK(sm::teamplay_choices(rogue.maps) == 7 && sm::teamplay_choices(base.maps) == 3);
+  CHECK(item(m, "host", "teamplay")->choice == 0 && sm::teamplay_choices(rogue.maps) == 7);
 }
 
 TEST(ranked_game_looks_for_a_duel_once_the_console_can) {
