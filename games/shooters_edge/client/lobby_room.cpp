@@ -115,6 +115,24 @@ bool skill_named(const std::string& word, sb::AimSkill& out) {
   return false;
 }
 
+bool companion_words(const std::string& words, sb::AimSkill& skill, bool& helper,
+                     std::string& bad) {
+  size_t at = 0;
+  while (at < words.size()) {
+    const size_t sp = words.find(' ', at);
+    const std::string w = words.substr(at, sp == std::string::npos ? std::string::npos : sp - at);
+    at = sp == std::string::npos ? words.size() : sp + 1;
+    if (w.empty() || skill_named(w, skill)) continue;
+    if (w == "escort" || w == "helper") {
+      helper = w == "helper";
+      continue;
+    }
+    bad = w;
+    return false;
+  }
+  return true;
+}
+
 int room_add_bot(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map, sb::AimSkill skill,
                  std::string& error) {
   const sv::RulesCommon& s = *rules;

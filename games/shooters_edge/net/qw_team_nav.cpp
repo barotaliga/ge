@@ -48,11 +48,12 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sb::BotView& seen, in
   f.bot.view_book = tn.view_book;
   f.bridges.clear();
   for (const bt::NavBridge& br : nav.bridges)
-    if (!br.turns)  // a turning bridge is the way through's (way_through.hpp), not a match's
+    if (!br.turns) {  // a turning bridge is the way through's (way_through.hpp), not a match's
       f.bridges.push_back(
           {br.ent, br.spawn,
            f.features[ge::shooterbots::Feature::bridgeseen] && !br.floor ? br.own : br.nodes,
-           !br.floor, br.floor, br.wait, -1});
+           !br.floor, br.floor, br.wait, -1, -2, true, br.out_at});
+    }
   bt::floor_traps_init(f, graph, seen);  // after the buttons and the bridges
   f.name = name;
   if (tn.locs.points.empty()) {

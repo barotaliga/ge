@@ -84,5 +84,9 @@ void room_packets(Room& r, const sv::RulesCommon& s, int msec, std::vector<sh::P
 hud::LobbyView lobby_view(const Room& r, double now, int me);
 // A skill named `novice`, `average` or `expert`; false for anything else.
 bool skill_named(const std::string& word, sb::AimSkill& out);
+// A co-op companion's words after `addbot`, in any order: a skill (`skill_named`) and a role,
+// `escort` (keeps at the player's shoulder) or `helper` (works the level near the people). The
+// first word neither is, in `bad`; false then.
+bool companion_words(const std::string& words, sb::AimSkill& skill, bool& helper, std::string& bad);
 
 }  // namespace shooters_edge::client
