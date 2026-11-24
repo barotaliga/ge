@@ -267,6 +267,7 @@ void run(gl::Lab& lab) {
   shooters_edge::view::HandFrame hand;
   double t = 0;
   double births[2] = {0, 0}, blasts[2] = {0, 0}, beams[2] = {0, 0};
+  size_t cases_most[2] = {0, 0};  // the most spent shells out at once (they fade by the end)
 
   float at[5] = {0, 0, 0, 0, 0}, side[5] = {0, 0, 0, 0, 0};
   // The halls' spot, looking down the hall at the floor 9 m ahead, by default.
@@ -346,6 +347,7 @@ void run(gl::Lab& lab) {
         fx[k].lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
       cl::fire_held(held_fire[k], hand, fx_state[k].on.muzzles, t, fx[k]);
       cl::held_cases(fx_state[k].cases, held_fire[k], hand, fx_state[k].on.shells, t);
+      cases_most[k] = std::max(cases_most[k], ge::detail::debris_count(fx_state[k].cases.pool));
       births[k] += static_cast<double>(fx[k].births.size());
       if (device && draw) {
         const ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
@@ -696,10 +698,9 @@ void run(gl::Lab& lab) {
                "vertices");
     lab.metric(std::string(kLooks[k]) + ".wounds", static_cast<double>(fx_state[k].wounds.size()),
                "count");
-    // The spent shells lying or flying at the end (ce_shells): measured, the GPU drew none of it
-    // but the pictures show them.
-    lab.metric(std::string(kLooks[k]) + ".cases",
-               static_cast<double>(ge::detail::debris_count(fx_state[k].cases.pool)), "count",
+    // The most spent shells lying or flying at once (ce_shells): a case rests, then fades, so
+    // the count at the end can be nought though the pictures show them. Measured.
+    lab.metric(std::string(kLooks[k]) + ".cases", static_cast<double>(cases_most[k]), "count",
                gl::Det::measured);
   }
   lab.metric("explosions", static_cast<double>(l.explosions.size()), "count");
