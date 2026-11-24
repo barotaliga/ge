@@ -146,6 +146,10 @@ struct QcServer : RulesCommon {
 
   std::string command_buffer;             // localcmd's text, run at the next frame
   std::vector<std::string> map_messages;  // the entity text's messages ("x is not a field")
+  // Each entity's class name as the map's entity text spawned it, by entity number ("" one the
+  // program made, or a slot the text left free): a program that renames its things (a pack's
+  // exploder) still answers by the map's name.
+  std::vector<std::string> spawned_as;
   // particleeffectnum's names, number n the name at n - 1, kept for the server's life.
   std::vector<std::string> effect_names;
 

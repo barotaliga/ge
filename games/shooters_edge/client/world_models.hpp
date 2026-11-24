@@ -32,6 +32,7 @@
 // ge:keywords placed-model effect-models s_explod bolt effect_model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
+// ge:keywords rotating-brush-models func_rotating rotate_object
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
 // ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting filtered_models
 // ge:keywords player-figures choose_look worn_slot drawn_kind carried-weapons skin-files
@@ -380,8 +381,9 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
 void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, WorldModels& m,
                    const wgpu::BindGroupLayout& frame, ModelsRead read);
 // Where the map's own brush models stand this frame (doors, plats, buttons): each one an entity
-// of `placed` holds offset by that entity's origin; one no entity holds (removed by the game) is
-// hidden. Empty when the models were loaded with no server's list.
+// of `placed` holds offset by that entity's origin and turned by its angles (a rotating door, a
+// fan); one no entity holds (removed by the game) is hidden. Empty when the models were loaded with
+// no server's list.
 void place_brushes(const WorldModels& m, std::span<const Placed> placed, double t,
                    std::vector<ge::brush::app::Mover>& out);
 // This frame's draws of `placed` at `view` (its time the animations' clock), lit `brightness`
