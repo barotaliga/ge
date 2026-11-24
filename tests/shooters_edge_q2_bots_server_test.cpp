@@ -114,6 +114,7 @@ TEST(a_q2_server_seats_its_bots_and_they_fight_a_match) {
     }
   }
   CHECK_MSG(bots == 2 && people == 1, std::to_string(bots) + " " + std::to_string(people));
+  CHECK(s.game->seated(s.state) == 3);    // the bots count as seated players
   for (int f = 0; f < 1600; f++) step();  // past the time limit: the intermission
   const auto heard = [&](const std::string& text) {
     return std::any_of(ana.prints.begin(), ana.prints.end(),

@@ -1147,7 +1147,10 @@ void frame(void* g) {
 
 int seated(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
-  return game.net ? q2_net_clients(*game.net) : 0;
+  int bots = 0;  // the bots seated, players as QuakeWorld's server counts its own
+  for (int i = 1; i < sh::kMaxClients; i++)
+    bots += game.bots.bots[static_cast<size_t>(i)] && game.rules->clients[i].active ? 1 : 0;
+  return (game.net ? q2_net_clients(*game.net) : 0) + bots;
 }
 
 uint64_t hash(const void* g) {
