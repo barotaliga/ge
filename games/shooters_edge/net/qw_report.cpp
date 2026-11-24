@@ -77,9 +77,7 @@ gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end, bool stat
     p.ping_avg = (s.ping_sum + s.ping_n / 2) / s.ping_n;
   }
   if (stats) {
-    SeatStats closed = s.stats;
-    stats_close(closed);
-    p.columns.assign(closed.n.begin(), closed.n.end());
+    p.columns = sv::stats_row(qw_stats_game(), s.stats);
   }
   const double rms = ge::shooter::aim_spread_rms(s.aim);
   p.columns.push_back(rms < 0 ? -1 : static_cast<int64_t>(ge::core::num::round(rms * 1000)));

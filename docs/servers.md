@@ -335,6 +335,14 @@ in `tests/golden/console_script.txt` (`meta-*`) hold the precedence, the restore
 the refused loop; the `server-cfg` lab draws a mod setting `sv_modern 1` over a base that set
 `sv_fps`.
 
+A game's dedicated server declares its own levels as data (`ServerGame::metas`, a `GameMeta` row a
+level), so `sv_modern` means "a modern server" in every game and each says what that is for it.
+Only how the network judges play is in it, never a game's feel. Shooter's Edge's QuakeWorld: 1 is
+`sv_antilag 2; sv_antilag_projectiles 1` (every shot's line and every rocket, grenade and nail
+rewound to what the shooter saw), 2 adds `sv_lanrate 1`. Its Quake II: 1 is `sv_antilag 2;
+sv_antilag_projectiles 1; sv_antilag_interp 1`. Held by `tests/shooters_edge_qw_game_test.cpp`;
+the `se-dedicated-lobby` lab plays its matches with `--modern=1`.
+
 ## The lobby and the match's phases
 
 Sessions (`engine/net/session`) already hold the seats, the leader, teams, ready and `lobby` /
@@ -369,7 +377,8 @@ itself: a recording begins at the frame after the phase turns to the match (the 
 see of it: a map restarted for the match shows from there) and ends when the phase leaves it, to
 `demos/<map>-<YYYYMMDD>-<HHMMSS>.ged` in the game's folder, written as it goes, so the warmup and
 the scores after are in no file and a server stopped mid-match keeps every whole second. A game with
-no phases is in its match from the start. Beside `--record` and the server's own TV, every
+no phases is in its match from the start. QuakeWorld's and Quake II's servers both tell their match's phase
+(`sv_lobby`), so each of their matches is a file of its own. Beside `--record` and the server's own TV, every
 recording takes the same frame bytes, which the game is asked for once a frame
 (`Server::tv_frame_bytes`): a game whose frame hands out what its viewers have not had yet, as
 Shooter's Edge's classic game does, would otherwise give each recording only part of a frame. In

@@ -23,6 +23,8 @@ Effect effect_of(const DemoEffect& d) {
   e.at = d.at;
   e.end = d.end;
   e.q2_specks = d.q2_specks;
+  e.flash = d.flash;
+  e.flash_monster = d.flash_monster;
   if (d.q2_specks > 0) e.way = d.way;  // the face's normal the puff leaves
   switch (d.kind) {
     case DemoEffectKind::spike:
