@@ -474,7 +474,10 @@ bool start_map(Listen& l, std::string& error) {
   h->lines.insert(h->lines.end(), l.opt.console.begin(), l.opt.console.end());
   if (h->module != nullptr || !h->native_library.empty())  // `cr_over_mods`: over the mod's own
     h->lines.insert(h->lines.end(), l.opt.over_mod.begin(), l.opt.over_mod.end());
-  h->lobby = l.opt.lobby;
+  // A lobby is a match's: a single-player or coop game (`deathmatch 0`) starts with the map, its
+  // monsters in it, whatever `sv_lobby` says.
+  const bool lobby = l.opt.lobby && !wants_campaign(l.opt);
+  h->lobby = lobby;
   h->lobby_settings = l.opt.lobby_settings;
   h->player = l.opt.player;
   h->speedjump = kListenSpeedJump;
@@ -487,7 +490,7 @@ bool start_map(Listen& l, std::string& error) {
   c.map = l.map->name;
   c.seed = l.opt.seed;
   c.maxclients = l.opt.maxclients;
-  c.lobby = l.opt.lobby ? 1 : 0;
+  c.lobby = lobby ? 1 : 0;
   c.port = l.opt.port;
   if (l.opt.voice) c.rules.emplace("sv_voip", "1");
   c.host = h.get();
