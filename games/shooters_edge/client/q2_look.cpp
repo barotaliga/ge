@@ -150,6 +150,18 @@ PowerLook power_look(const PowerIn& in, bool power_shells, bool item_pulse) {
   return out;
 }
 
+std::string q2_picture_path(std::string_view name) {
+  if (!name.empty() && (name[0] == '/' || name[0] == '\\')) return std::string(name.substr(1));
+  return "pics/" + std::string(name) + ".pcx";
+}
+
+std::string q2_custom_skin(uint32_t render_fx, int skin, std::span<const std::string> images) {
+  if ((render_fx & kRfCustomSkin) == 0 || skin <= 0 || size_t(skin) >= images.size() ||
+      images[size_t(skin)].empty())
+    return {};
+  return q2_picture_path(images[size_t(skin)]);
+}
+
 std::string q2_disguised(std::string_view look) {
   const size_t cut = look.find('/');
   std::string folder(cut == std::string_view::npos || cut == 0 ? std::string_view("male")

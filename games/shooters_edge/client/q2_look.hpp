@@ -29,8 +29,10 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace shooters_edge::client {
 
@@ -50,7 +52,8 @@ inline constexpr uint32_t kRfMinLight = 1u, kRfFullBright = 8u, kRfTranslucent =
                           kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
                           kRfShellGreen = 2048u, kRfShellBlue = 4096u, kRfShellDouble = 65536u,
                           kRfShellHalf = 131072u, kRfShellLiteGreen = 1u << 19,
-                          kRfIrVisible = 32768u, kRfNoShadow = 8192u, kRfUseDisguise = 1u << 18;
+                          kRfIrVisible = 32768u, kRfNoShadow = 8192u, kRfUseDisguise = 1u << 18,
+                          kRfCustomSkin = 256u;
 // The view's bit for infra-red goggles: an `kRfIrVisible` model drawn red, lit by nothing.
 inline constexpr int kQ2RdIrGoggles = 4;
 
@@ -141,6 +144,14 @@ int q2_texture_frame(uint32_t effects, int frame, double t);
 // The disguise's look for a player's look ("male/grunt"): its folder's `disguise` skin
 // ("male/disguise"); a look with no folder, "male/disguise".
 std::string q2_disguised(std::string_view look);
+
+// A picture the server names by its list's name: a name after a slash is a path in the game's
+// files ("/models/x/skin.pcx"), any other is under `pics/` as a .pcx ("i_health").
+std::string q2_picture_path(std::string_view name);
+// The custom skin bit (`kRfCustomSkin`, read only from an extended server or recording): the skin
+// number names a picture of the server's list (`images`) the model wears in place of its own, by
+// its path (`q2_picture_path`); "" when the bit is clear or the number names none.
+std::string q2_custom_skin(uint32_t render_fx, int skin, std::span<const std::string> images);
 
 // The glow's pulse on a light (each channel, 0..1 a lightmap's white) at the picture's clock `t`.
 void q2_pulse(float rgb[3], double t);
