@@ -645,7 +645,8 @@ void match_end(Q2Match& m) {
   m.end_said = true;
   say_result(m);
   if (!keep_stats(m)) return;
-  const ge::net::MatchReport r = stats_report(m, m.last_stats, m.last_names);
+  std::vector<int> slots;  // every player on the map, one who never fired or was hit too
+  const ge::net::MatchReport r = stats_report(m, m.last_stats, m.last_names, &slots);
   if (!r.players.empty())  // every player's stats, as each classic game shows them
     for (const std::string& line : sv::stats_lines(sv::q2_stats_game(), r)) say(m, -1, line);
   make_report(m, m.map);

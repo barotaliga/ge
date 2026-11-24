@@ -361,8 +361,11 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   int players = 0, watching = 0, slot = -1;
   for (int i = 0; i < q2_net_slots(s); i++) {
     const Q2NetClient& o = s.clients[i];
-    if (o.stage == Q2Slot::free) {
-      if (slot < 0) slot = i;
+    const sv::ClientInfo& seat = (**s.rules).clients[i];
+    if (o.stage == Q2Slot::free && seat.active && seat.bot) {
+      players++;  // a bot the server seated (sv_bots): a player, with no connection
+    } else if (o.stage == Q2Slot::free) {
+      if (slot < 0 && !seat.active) slot = i;
     } else if (o.stage != Q2Slot::dummy) {
       (o.spectator ? watching : players)++;
     }
@@ -428,7 +431,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   }
   answer += " map=" + (*s.rules)->map_name;
   send_oob(s, from, answer);
-  note(s, c.name + " connected");
+  note(s, c.name + " joins from " + gn::to_string(from));  // the rules say "connected" at its begin
 }
 
 void read_oob(Q2NetServer& s, const gn::Address& from, const uint8_t* data, size_t size) {
@@ -1719,6 +1722,8 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
   if (s.game != nullptr)  // what the rules check a switch to or from watching against
     s.game->gate = {s.cfg.password, s.cfg.spectator_password,
                     s.cfg.max_spectators > 0 ? s.cfg.max_spectators : sh::kMaxClients};
+  packets.insert(packets.end(), s.local_moves.begin(), s.local_moves.end());  // the bots'
+  s.local_moves.clear();
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   if (s.game != nullptr)  // a seat watches as the rules say: a switch mid-match lands here
     for (int i = 0; i < sh::kMaxClients; i++)

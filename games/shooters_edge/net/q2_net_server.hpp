@@ -387,6 +387,9 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
+  // The moves of players with no connection (the bots the game seats, bots/bot_seats.hpp), run in
+  // the next frame after the clients' and emptied.
+  std::vector<sh::Packet> local_moves;
   // A client's `nextserver <count>` (a cinematic or picture level watched to its end, while
   // `cfg.wire.show` names one): the game decides (q2_game.cpp); null: ignored.
   std::function<void(int32_t count)> nextserver;
