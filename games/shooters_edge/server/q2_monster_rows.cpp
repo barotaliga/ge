@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "shooters_edge/server/q2_items.hpp"
@@ -19,6 +20,7 @@
 #include "shooters_edge/server/q2_monster_pain.hpp"
 #include "shooters_edge/server/q2_monster_steps.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -199,6 +201,17 @@ void monster_rows(Q2Server& s) {
     }
     if (!m.dead && s.level_time < m.screen_flash)
       r.effects |= kSqPowerScreenEffect;  // a blow taken
+    if (!m.dead &&
+        s.opt.pack == Q2Pack::ground_zero) {  // its power-ups' shells, blinking at the end
+      const std::pair<const char*, double> held[] = {
+          {"item_quad", m.boss.quad_until},
+          {"item_double", m.boss.double_until},
+          {"item_invulnerability", m.boss.invulnerable_until}};
+      for (const SqPower& pw : sq_powers())
+        for (const auto& [item, until] : held)
+          if (std::string_view(pw.item) == item && sq_power_shown(until - s.level_time))
+            r.effects |= pw.effects;
+    }
     if (loop != nullptr && !e.gone) {
       const auto at = std::find(s.sounds.begin(), s.sounds.end(), loop);
       if (at != s.sounds.end()) r.loop = static_cast<int>(at - s.sounds.begin());

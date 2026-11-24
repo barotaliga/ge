@@ -182,6 +182,10 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
       return;
     }
     case Fire::rail:
+      // Ground Zero's: never from a muzzle inside a wall (no shot through it).
+      if (s.opt.pack == Q2Pack::ground_zero &&
+          (map_contents(s, from) & (sh::kSqSolid | sh::kSqWindow)) != 0)
+        return;
       if (!m.aimed) m.aim_at = mark(s, m, 0);
       fight_monster_rail(s, m.entity, from, m.aim_at, a.damage, a.kick, cause_of(m));
       return;

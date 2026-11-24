@@ -207,12 +207,17 @@ TEST(the_widow_answers_a_quad_with_her_own_multiplier) {
   run(*h, 2);
   const int w = find(*h, "monster_widow");
   h->m(w).enemy = 0;
-  h->s().players[0].quad_until = 1e9;
+  h->s().players[0].quad_until = h->s().level_time + 30;
   watch(*h, 3, [] { return 0; });
   CHECK_MSG(h->m(w).boss.multiplier == 4, std::to_string(h->m(w).boss.multiplier));
+  const auto row = [&] {
+    return h->s().world.entities[size_t(sv::map_row(h->m(w).entity))].effects;
+  };
+  CHECK((row() & sv::kSqQuadEffect) != 0);  // she wears its blue shell
   h->s().players[0].quad_until = 0;
   watch(*h, 3, [] { return 0; });
   CHECK(h->m(w).boss.multiplier == 1);
+  CHECK((row() & sv::kSqQuadEffect) == 0);
 }
 
 TEST(the_widow_beams_out_leaves_her_legs_and_they_burn_down) {

@@ -174,6 +174,7 @@ struct Q2Boss {  // NOLINT(clang-analyzer-optin.performance.Padding): one a boss
   int brood[2] = {-1, -1};  // the spares growing for it (monster rows), -1 none
   int multiplier = 1;
   double invulnerable_until = 0;
+  double quad_until = 0, double_until = 0;  // the shells its answer wears (the player's times)
   int dying = -1;
   int legs = -1;
   double legs_at = 0;

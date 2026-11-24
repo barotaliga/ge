@@ -344,6 +344,8 @@ void answer(Q2Server& s, Q2Monster& m) {
   const int sk = std::clamp(skill(s), 0, 3);
   const bool quad = now < p.quad_until, twice = now < p.double_until;
   int& mult = m.boss.multiplier;
+  m.boss.quad_until = quad && sk >= 1 ? p.quad_until : 0;  // the shell of what it took up
+  m.boss.double_until = !quad && twice && sk >= 2 ? p.double_until : 0;
   if (quad) {
     if (sk == 1) mult = 2;
     if (sk >= 2) mult = 4;
