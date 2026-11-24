@@ -1599,7 +1599,10 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
       m.screen_flash = fight_power_hit(s, ent.origin + dir * -16.0f, dir * -1.0f, false);
     if (damage <= 0) return true;
   }
-  if (m.shield > 0 && (damage = shield_take(s, m, damage, dir)) <= 0) return true;
+  if (m.shield > 0) {
+    damage = shield_take(s, m, damage, dir);
+    if (damage <= 0) return true;
+  }
   fight_dealt(s, attacker, e, damage);
   ent.health -= damage;
   // The knockback: 500 × damage / mass along the blow (a flier's too; not a swimmer's).

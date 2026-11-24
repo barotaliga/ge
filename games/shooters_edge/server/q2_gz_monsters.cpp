@@ -38,6 +38,7 @@
 // ge:test tests/shooters_edge_q2_gz_monsters_test.cpp
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <string>
@@ -221,7 +222,7 @@ constexpr int kBlasterFlag = 8, kGunFlag = 16, kRocketFlag = 32, kBeamFlag = 64,
 constexpr double kDegrees = 57.29577951308232;
 constexpr const char* kDebris = "models/objects/debris1/tris.md2";
 
-enum Stage : int {
+enum Stage : std::int8_t {
   kStand = 0,     // no enemy: frames 0 and 1
   kOpen = 2,      // opening: frames 2 to 8, one a stage
   kReady = 9,     // aiming: frames 8 and 9
@@ -397,7 +398,7 @@ bool turret_think(Q2Server& s, Q2Monster& m) {
 constexpr std::string_view kStalker = "monster_stalker";
 constexpr int kOnRoof = 8;
 
-enum Stalk : int {
+enum Stalk : std::uint8_t {
   kStalking = 0,
   kAir = 1,        // in a jump: 1.3 gravity, till it lands or `stage_until`
   kFeignFall = 2,  // falling into a false death: frames 70 to 78
