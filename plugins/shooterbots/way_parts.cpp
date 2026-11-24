@@ -1,7 +1,7 @@
 // The way through's parts (way_parts.hpp): the small reads way_init and way_plan share.
 //
 // ge:summary The way through's shared parts: boxes, edicts, open links, the searches past bars
-// ge:keywords way_parts node_in touches crosses link_open reach_past reach_back
+// ge:keywords way_parts touches crosses link_open reach_past reach_back
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooterbots/way_parts.hpp"
@@ -106,69 +106,6 @@ bool touches(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
          p.z + 32 >= lo.z && p.z - 24 <= hi.z;
 }
 
-// A trigger hung in a shaft is reached by a fall through it onto a node this far under it, units.
-constexpr float kUnderShaft = 512;
-
-// The node a player standing on touches the box from, nearest its middle; else the nearest a step
-// beyond it; else one under it that a fall through it lands on; else none.
-int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
-  const sh::Vec3f mid = (lo + hi) * 0.5f;
-  constexpr float kOnMover = 1e6f;
-  int32_t best = -1;
-  float best_d = 0;
-  for (size_t n = 0; n < g.nodes.size(); n++) {
-    const sh::Vec3f o = g.nodes[n].origin;
-    if (!touches(o, lo, hi)) continue;
-    // A node off any mover first: one on a door the trigger opens is shut until it is touched
-    // (e1m2's exit trigger right before its doors took a node on them and was never reached).
-    const float d = dist(o, mid) + (g.nodes[n].mover >= 0 ? kOnMover : 0.0f);
-    if (best < 0 || d < best_d) {
-      best = static_cast<int32_t>(n);
-      best_d = d;
-    }
-  }
-  if (best >= 0 && best_d < kOnMover) return best;
-  // None inside (a thin trigger up in a doorway, one over a pit) or only on a mover (e2m6's trigger
-  // round the pillar it lowers): the nearest in the box grown by a player's size, a step away
-  // (`way_touch` walks him in); none there, no node at all (a step no route leads to).
-  const sh::Vec3f grow{32, 32, 56};
-  for (size_t n = 0; n < g.nodes.size(); n++) {
-    const sh::Vec3f o = g.nodes[n].origin;
-    if (!touches(o, lo - grow, hi + grow)) continue;
-    // A node off any mover first: one on a door the trigger opens is shut until it is touched
-    // (e1m2's exit trigger right before its doors took a node on them and was never reached).
-    const float d = dist(o, mid) + (g.nodes[n].mover >= 0 ? kOnMover : 0.0f);
-    if (best < 0 || d < best_d) {
-      best = static_cast<int32_t>(n);
-      best_d = d;
-    }
-  }
-  if (best >= 0) return best;
-  const int32_t n = sb::nav_nearest(g, mid);
-  if (n >= 0 && dist(g.nodes[static_cast<size_t>(n)].origin, mid) < 256) return n;
-  // Hung in a shaft (base2's first exit, a trigger halfway down a pit under a hatch): fallen
-  // through, at the highest node standing under it.
-  for (size_t k = 0; k < g.nodes.size(); k++) {
-    const sh::Vec3f o = g.nodes[k].origin;
-    if (o.x < lo.x || o.x > hi.x || o.y < lo.y || o.y > hi.y || o.z > lo.z ||
-        o.z < lo.z - kUnderShaft)
-      continue;
-    if (best < 0 || o.z > g.nodes[static_cast<size_t>(best)].origin.z)
-      best = static_cast<int32_t>(k);
-  }
-  if (best >= 0) return best;
-  // The nearest node at all within reach (a trigger in a lift's shaft, passed riding it: e1m1's
-  // under its hidden plat opens the secret wall at the top; the nav's nearest looks for a floor).
-  for (size_t k = 0; k < g.nodes.size(); k++) {
-    const float d = dist(g.nodes[k].origin, mid);
-    if (d < 256 && (best < 0 || d < best_d)) {
-      best = static_cast<int32_t>(k);
-      best_d = d;
-    }
-  }
-  return best;
-}
-
 // Where a brush entity's model stood when the map spawned it (its `origin`, else the map's own):
 // a level entered again keeps its doors and buttons where they were left.
 sh::Vec3f spawned_at(const sb::EntityBlock& b) {
@@ -217,6 +154,7 @@ void shut_crossings(WayThrough& w, const std::vector<int32_t>& barred, size_t li
     for (const int32_t b : barred)
       if (b == c.door) w.link_shut[static_cast<size_t>(c.link)] = 1;
   for (const int32_t li : w.hatch_shut) w.link_shut[static_cast<size_t>(li)] = 1;
+  for (const int32_t li : w.closed_shut) w.link_shut[static_cast<size_t>(li)] = 1;
 }
 
 bool is_wall(const WayThrough& w, int32_t e) {

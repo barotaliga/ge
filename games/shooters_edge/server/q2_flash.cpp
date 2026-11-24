@@ -52,7 +52,7 @@ std::array<Q2Flash, 40> player_table() {
   // The mission packs' guns (a mod's game library sends them).
   const float ripper[3] = {1, 0.5f, 0.5f}, blue[3] = {0, 0, 1}, etf[3] = {0.9f, 0.7f, 0};
   t[16] = make(ripper, "blaster", {"weapons/rippfire.wav"});
-  t[17] = make(blue, "blaster", {"weapons/hyprbf1a.wav"});
+  t[17] = make(blue, "blaster");  // a light and the flash, silent: no pack sends it from a player
   t[18] = make(ripper, "rocket", {"weapons/plasshot.wav"});
   t[19] = make(kGreen, nullptr);
   t[20] = make(ripper, nullptr);

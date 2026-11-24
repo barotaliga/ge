@@ -11,8 +11,8 @@ cache. It depends on the core, `assets` (the inflater, SHA-256), `audio` (the sp
 resampler), `lab` (the PNG writer), `vfs`
 (the pack and zip archives), `camera` and `viewmodel` (the view, and the held weapon's form, place and light), `brush` (the
 maps) and `morph` (the models and sprites):
-`ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel PLUGINS brush morph APP gpu render)`
-(the APP list is for the GPU lab alone).
+`plugins/classicenhance/CMakeLists.txt`'s `ge_add_plugin` line is the list (`detail` for the
+spent shells' bounce and the surfaces their landings are heard on).
 
 ## The line that keeps it legal
 
@@ -70,6 +70,7 @@ maps) and `morph` (the models and sprites):
 | `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → models → pictures, each skipped when its recorded key is current; `pack_textures` |
 | `classicenhance/weapons.hpp/.cpp` | The held weapons (M48b): `held_from_morph` (the eye frame into the held frame, wound back out, the fullbright skin texels as glow), `classic_weapon_row`, `probe_under` (the lightmap under the player, 128 = 1), `muzzle_flash_light`, `flame_lights`, `pack_weapons`, `classic_fire_of` and `classic_fire_frame` (each weapon's muzzle-fire look and rate, the firing frames); the labs `classic-weapons` and `classic-weapons-fire` (GPU) |
 | `classicenhance/cached.hpp/.cpp` | The cache read back by a game: `find_cache`, `cached_texture` (the albedo, glow in alpha), `cached_surface` (normal x, y, height and roughness in one texel, for the BSP scene's surface atlas: `ce_relief`, `ce_parallax`), `cached_skins`, `cached_picture`, `cached_rebake`, `cached_sound` (a sound's WAV, played in place of the pack's under `ce_sounds`) |
+| `classicenhance/shells.hpp/.cpp` | The spent cases (`ce_shells`): the hull, brass and heavy brass; each one's bounce (`engine/detail/debris.hpp`'s shapes), its model coloured from the game's palette (`casing_model`), its landing sound by the surface's class (`casing_sound`, named `ce/shell/<case>/<class>/<variant>`); which gun throws which is each game's |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),

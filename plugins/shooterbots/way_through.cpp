@@ -106,6 +106,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.barred_was.clear();
   w.crossings.clear();
   w.walls.clear();
+  w.closers.clear();
+  w.closed_shut.clear();
+  w.closed_from.clear();
+  w.closed_was.clear();
   // The nodes standing on a mover's top (its box under his feet, his middle over it).
   w.on_top.assign(g.nodes.size(), 0);
   for (size_t n = 0; n < g.nodes.size(); n++) {
@@ -268,14 +272,19 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.key_doors.clear();
   std::vector<int> gates;  // the shut doors barred by the links through their shut boxes
   // The links that pass through secret wall `e` (shut while it is barred).
+  // One lying flat (e2m1's slab over the pool's shaft) is crossed through its floor.
   const auto add_crossings = [&](int e) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    const sh::Vec3f size = d.absmax - d.absmin;
+    const bool flat = size.z < size.x && size.z < size.y;
     for (size_t a = 0; a < g.nodes.size(); a++) {
       const sb::NavNode& n = g.nodes[a];
       for (int32_t k = 0; k < n.links; k++) {
         const int32_t li = n.first_link + k;
         const sb::NavLink& l = g.links[static_cast<size_t>(li)];
-        if (crosses(n.origin, g.nodes[static_cast<size_t>(l.to)].origin, d.absmin, d.absmax))
+        const sh::Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
+        if (flat ? way_through_floor(n.origin, to, d.absmin, d.absmax)
+                 : crosses(n.origin, to, d.absmin, d.absmax))
           w.crossings.push_back({li, static_cast<int32_t>(a), e});
       }
     }
@@ -292,6 +301,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
                                : spec.brushes       ? spec.brushes->models.size()
                                                     : 0;
     const bool brush = m > 0 && static_cast<size_t>(m) < model_count;
+    if (std::strcmp(cn, "func_door") == 0 && brush)
+      way_note_closer(w, s, edict_of(s, model), sb::block_value(b, "spawnflags"));
     WayStep st;
     const bool trigger =
         std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0;
@@ -333,7 +344,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const sh::Vec3f o = origin_of(org);
       st.lo = {o.x - 16, o.y - 16, o.z};
       st.hi = {o.x + 16, o.y + 16, o.z + 32};
-      st.node = node_in(g, st.lo, st.hi);
+      st.node = way_node_in(g, st.lo, st.hi);
       st.name = cn;
       w.steps.push_back(st);
       continue;
@@ -350,7 +361,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const sh::Vec3f o = origin_of(org);
       st.lo = {o.x - 8, o.y - 8, o.z - 8};
       st.hi = {o.x + 8, o.y + 8, o.z + 24};
-      st.node = node_in(g, {o.x - 16, o.y - 16, o.z}, {o.x + 16, o.y + 16, o.z + 32});
+      st.node = way_node_in(g, {o.x - 16, o.y - 16, o.z}, {o.x + 16, o.y + 16, o.z + 32});
       st.name = cn;
       w.steps.push_back(st);
       continue;
@@ -374,7 +385,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const sh::Vec3f at = st.ent >= 0 ? s.sv.edicts[static_cast<size_t>(st.ent)].origin : o;
       st.lo = {at.x - 16, at.y - 16, at.z - 16};
       st.hi = {at.x + 16, at.y + 16, at.z + 32};
-      st.node = node_in(g, st.lo, st.hi);
+      st.node = way_node_in(g, st.lo, st.hi);
       st.name = cn;
       w.steps.push_back(st);
       continue;
@@ -555,7 +566,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.lo = {bm.mins[0], bm.mins[1], bm.mins[2]};
       st.hi = {bm.maxs[0], bm.maxs[1], bm.maxs[2]};
     }
-    st.node = node_in(g, st.lo, st.hi);
+    st.node = way_node_in(g, st.lo, st.hi);
     // A trigger flush with the door it opens (base3's key lock, a strip before its door): its node
     // stands where his box meets the shut door, so every way there is through it. The nearest
     // node by the trigger clear of its doors instead.
@@ -725,6 +736,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     w.walls.push_back(e);
   }
+  way_blast_steps(w, f, nav, s);
   // (`complete`) A trigger or a secret whose node the start does not reach (a strip at the foot of
   // a ledge over water, its node on the ledge): a node he reaches that stands by its box instead.
   if (w.complete) {
@@ -938,6 +950,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   for (const MapNav::Hatch& h : nav.hatches)
     if (dist(s.sv.edicts[static_cast<size_t>(h.door)].origin, h.rest) < 1)
       w.hatch_shut.push_back(h.link);
+  const bool closed_now = way_closed_floors(w, nav, s);
   // The doors shut now that only something else opens.
   w.barred.clear();
   for (size_t k = 0; k < w.locked.size(); k++) {
@@ -954,7 +967,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   for (const int32_t b : w.barred)
     if (!is_wall(w, b) && !is_lift(w, f, b)) f.bot.pilot.pilot.shut.push_back(b);
   f.bot.pilot.pilot.hollow = w.cars;  // and a car at rest is walked through
-  if (w.barred != w.barred_was || w.hatch_shut != w.hatch_shut_was) {  // nor onto a bridge still in
+  if (w.barred != w.barred_was || w.hatch_shut != w.hatch_shut_was ||
+      closed_now) {  // nor onto a bridge still in
     w.barred_was = w.barred;
     w.hatch_shut_was = w.hatch_shut;
     std::vector<sb::NavExtraLink>& sl = f.bot.pilot.pilot.shut_links;
@@ -975,6 +989,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
           const sb::NavLink& l = g.links[static_cast<size_t>(c.link)];
           sl.push_back({c.from, l.to, l.kind, l.time_s});
         }
+    for (size_t k = 0; k < w.closed_shut.size(); k++) {  // nor through one closed now
+      const sb::NavLink& l = g.links[static_cast<size_t>(w.closed_shut[k])];
+      sl.push_back({w.closed_from[k], l.to, l.kind, l.time_s});
+    }
     for (const MapNav::Hatch& h : nav.hatches)  // nor through a floor door still resting
       for (const int32_t li : w.hatch_shut)
         if (li == h.link) {
@@ -1354,7 +1372,17 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // monster: bunk1's sinking floor, waited for in its pit while the tour sent him after one
   // across the map, called again only seven seconds later.
   const bool calling = pick >= 0 && pick == w.calling;
-  if (w.complete && w.toured && left_to_do && !me_trapped && w.out < 0 && !calling) {
+  // A step taken first (a blast weapon, while monsters only a blast puts down wait): the nearest.
+  int first = -1;
+  for (size_t k = 0; w.complete && pick < 0 && k < w.steps.size(); k++) {
+    const WayStep& st = w.steps[k];
+    if (!st.first || st.done || st.node < 0 || !reach(st.node) || t < st.left_until) continue;
+    if (first < 0 ||
+        w.search.cost(st.node) < w.search.cost(w.steps[static_cast<size_t>(first)].node))
+      first = static_cast<int>(k);
+  }
+  if (first >= 0) pick = first;
+  if (w.complete && w.toured && left_to_do && !me_trapped && w.out < 0 && !calling && first < 0) {
     const auto open_now = [&](int32_t stop) {
       // A monster in a trap (map_nav.hpp: a pool dropped into with no way back) is no stop of the
       // tour while he is out of it.

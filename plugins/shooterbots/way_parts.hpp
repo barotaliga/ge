@@ -3,7 +3,7 @@
 // walls and lifts by their edict, which links are open and the search past the barred ones.
 //
 // ge:summary The way through's shared parts: boxes, edicts, open links, the searches past bars
-// ge:keywords way_parts node_in touches crosses shut_crossings link_open reach_past reach_back
+// ge:keywords way_parts touches crosses shut_crossings link_open reach_past reach_back
 // ge:keywords locked_moved is_wall is_lift say_way name_linked_doors
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
@@ -40,10 +40,6 @@ void name_linked_doors(const ge::shooterbots::BotView& s, const ge::shooter::Map
 
 // A player's box (origin at its middle, 16 across, 24 down and 32 up) touches the box.
 bool touches(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi);
-
-// The node a player standing on touches the box from, nearest its middle; else the nearest a step
-// beyond it; else one under it that a fall through it lands on; else none.
-int32_t node_in(const NavGraph& g, sh::Vec3f lo, sh::Vec3f hi);
 
 // Where a brush entity's model stood when the map spawned it (its `origin`, else the map's own):
 // a level entered again keeps its doors and buttons where they were left.

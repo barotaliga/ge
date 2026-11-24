@@ -257,3 +257,24 @@ TEST(a_q2_server_says_goodbye_with_the_operators_reason) {
     sv::server_close(s);
   }
 }
+
+TEST(a_q2_lobby_tells_the_core_its_phase_so_each_match_is_recorded) {
+  for (const int lobby : {0, 1}) {
+    sv::ServerConfig c;
+    c.root = hall_folder();
+    c.map = "hall";
+    c.maxclients = kSlots;
+    c.lobby = lobby;
+    gn::SimNetwork net = gn::make_sim_network(3, gn::LinkConditions{});
+    gn::Transport port;  // the match opens with the network
+    gn::open_sim_transport(port, net, gn::sim_address(0, cn::kPortQ2));
+    sv::Server s;
+    std::string error;
+    CHECK_MSG(sv::server_open(s, cn::q2_game(), c, &port, nullptr, error), error);
+    if (!s.state) return;
+    for (int f = 0; f < 20; f++) sv::server_frame(s);
+    // With the lobby the server warms up first (sv_autorecord waits for the match); without it
+    // the match is on from the start.
+    CHECK(s.phase == (lobby != 0 ? ge::server::LobbyPhase::warmup : ge::server::LobbyPhase::match));
+  }
+}
