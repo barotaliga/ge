@@ -199,9 +199,15 @@ std::string music_file(const std::string& game_dir, std::string_view name) {
 
 int q2_remap_track(std::string_view game_folder, int track) {
   if (track < 2 || track > 11) return track;
-  if (game_folder == "rogue") return track + 10;
+  // The folder's last name in any case, as `-game` gives it ("XATRIX", "C:\Quake2\xatrix\").
+  while (!game_folder.empty() && (game_folder.back() == '/' || game_folder.back() == '\\'))
+    game_folder.remove_suffix(1);
+  const size_t slash = game_folder.find_last_of("/\\");
+  const std::string folder =
+      lower(slash == std::string_view::npos ? game_folder : game_folder.substr(slash + 1));
+  if (folder == "rogue") return track + 10;
   static constexpr int kXatrix[10] = {9, 13, 14, 7, 16, 2, 15, 3, 4, 18};
-  if (game_folder == "xatrix") return kXatrix[track - 2];
+  if (folder == "xatrix") return kXatrix[track - 2];
   return track;
 }
 

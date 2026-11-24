@@ -218,6 +218,37 @@ bool floor_door(const sb::EntityBlock& b, const ModelBox& bm, const std::vector<
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
+// A SLIDE-OUT BRIDGE: a named plate drawn resting in its slot (not started open), sliding level
+// (an angle of 0, 90, 180 or 270) to where it spans a gap, with room to stand on it there and a
+// floor under where it rests (bunk1's over the hole between its two floors, run out by the button
+// on the walkway above). Its travel in `move` (a door's: across its own size less its lip).
+bool slides_out(const sb::EntityBlock& b, const ModelBox& bm, const sh::MoveWorld& world,
+                sh::Vec3f& move) {
+  const char* cn = sb::block_value(b, "classname");
+  const char* an = sb::block_value(b, "angle");
+  if (!cn || std::strcmp(cn, "func_door") != 0 || start_open(b) || !an ||
+      !sb::block_value(b, "targetname") || !plate(bm))
+    return false;
+  const int angle = std::atoi(an);
+  const sh::Vec3f dir = angle == 0     ? sh::Vec3f{1, 0, 0}
+                        : angle == 90  ? sh::Vec3f{0, 1, 0}
+                        : angle == 180 ? sh::Vec3f{-1, 0, 0}
+                        : angle == 270 ? sh::Vec3f{0, -1, 0}
+                                       : sh::Vec3f{};
+  if (dir.x == 0 && dir.y == 0) return false;
+  const char* lp = sb::block_value(b, "lip");
+  const float lip = lp ? static_cast<float>(std::atof(lp)) : 8;
+  const sh::Vec3f size = bm.maxs - bm.mins;
+  const float travel = std::fabs(dir.x) * size.x + std::fabs(dir.y) * size.y - lip;
+  if (travel <= 0) return false;
+  move = dir * travel;
+  const sh::Vec3f rest{(bm.mins.x + bm.maxs.x) * 0.5f, (bm.mins.y + bm.maxs.y) * 0.5f, 0};
+  const sh::Vec3f out = rest + move;
+  return !sh::box_free(world, {rest.x, rest.y, bm.mins.z - 25}) &&
+         sh::box_free(world, {out.x, out.y, bm.maxs.z + 25}) &&
+         sh::box_free(world, {out.x, out.y, bm.mins.z - 25});
+}
+
 void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                          ge::brush::BrushTracer* tracer, const std::vector<sb::EntityBlock>& blocks,
                          sh::MoveWorld& world, std::vector<NavBridge>& bridges) {
@@ -230,6 +261,19 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
       continue;
     const int e = edict_of(s, model);
     const ModelBox bm = model_box(spec, m);
+    sh::Vec3f move;
+    if (e >= 0 && slides_out(b, bm, world, move)) {
+      const sh::Vec3f rest = s.sv.edicts[static_cast<size_t>(e)].origin;
+      world.solids[world.count++] = model_solid(spec, tracer, m, rest + move);  // out
+      NavBridge br;
+      br.ent = e;
+      br.spawn = rest;
+      br.out_at = rest + move;
+      const char* wait = sb::block_value(b, "wait");
+      br.wait = wait ? static_cast<float>(std::atof(wait)) : 3;  // a door's default
+      bridges.push_back(br);
+      continue;
+    }
     if (!floor_door(b, bm, named, e)) continue;
     sh::Solid& so = world.solids[world.count++];
     so = model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);  // at rest
@@ -1193,7 +1237,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     // Out, and a player's half-width beyond its edge (a node there stands on it too).
     // A floor door's nodes stand on it where it rests (a turning one's too); a bridge's where the
     // map drew it.
-    const sh::Vec3f shift = br.floor || br.turns ? sh::Vec3f{} : br.spawn;
+    const sh::Vec3f shift = br.floor || br.turns ? sh::Vec3f{} : br.spawn - br.out_at;
     const sh::Vec3f lo = ab.min - shift - sh::Vec3f{16, 16, 0},
                     hi = ab.max - shift + sh::Vec3f{16, 16, 0};
     for (size_t n = 0; n < out.graph.nodes.size(); n++) {

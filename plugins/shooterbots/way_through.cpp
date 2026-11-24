@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooterbots/way_through.hpp"
 #include "shooterbots/way_bosses.hpp"
+#include "shooterbots/way_gates.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -626,9 +627,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       for (const std::string& was : w.been) st.revisit = st.revisit || goes == was;
       if (avoided(goes)) continue;
     } else if ((std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0) &&
-               brush && target && !fired(name)) {
-      st.kind = WayKind::trigger;  // one fired by something else is not walked into
-      st.target = target;
+               brush && target && (!fired(name) || trigger_waits(b))) {
+      st.kind = WayKind::trigger;  // one fired by something else is not walked into, but one
+      st.target = target;          // made live by it is, once it is
+      st.repeats = std::strcmp(cn, "trigger_multiple") == 0;
+      if (fired(name)) way_gate_names(st, name, blocks);
       st.opens = opens(target, st.doors);
       st.keyed = keyed(target);
     } else if (std::strcmp(cn, "item_key1") == 0 || std::strcmp(cn, "item_key2") == 0) {
@@ -789,6 +792,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       w.locked_at.push_back(spawned_at(b));
       w.locked_turns.push_back(0);
       gates.push_back(e);
+      // A bridge it slides out into (map_nav.hpp `slides_out`): its nodes are shut till it moves.
+      for (const NavBridge& br : nav.bridges)
+        if (br.ent == e && !br.floor && !br.turns)
+          for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
       continue;
     } else if (std::strcmp(cn, "func_door_rotating") == 0 && name && brush) {
       // A turning bridge still turned up is shut to him (its nodes are where it turns down to).
@@ -867,6 +874,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         st.lo = st.hi = spawned_at(b);  // a level kept from before may have it pressed already
         target = sb::block_value(b, "target");
         st.opens = opens(target, st.doors);
+        if (target) st.target = target;
       }
     }
     // One whose target, or a relay's it fires, changes the level is an exit pressed (base2's
@@ -1181,6 +1189,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       w.crawl_out_at = t;
     }
   }
+  way_wake_gates(w);
   // A waiting plat once moved runs for good: never locked again (where it stood is put out of
   // reach).
   for (size_t k = 0; k < w.locked.size(); k++) {
@@ -1200,6 +1209,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     bool held = false;  // a key door with its key held opens to his touch
     for (const WayThrough::KeyDoor& kd : w.key_doors)
       held = held || (kd.door == w.locked[k] && (items & kd.bit) != 0);
+    held = held || way_touch_opened(w, s.sv.edicts[static_cast<size_t>(w.locked[k])], w.locked[k]);
     if (!held && t >= w.hopeful_until) w.barred.push_back(w.locked[k]);
   }
   // His own routes never through them either (a secret wall by its crossings, below: its sweep's
@@ -1338,6 +1348,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     return false;
   };
   reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
+  way_trigger_sides(w, g);
   // A place is gone to while he can come back from it, or go on from it to an exit: a one-way drop
   // into a pit to touch a trigger or look about held him there for the rest of the map (e1m6's
   // pit, from 13 s; e1m1's flooded secret). Only with nothing else to do is a one-way place gone
@@ -1529,8 +1540,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   }
   for (size_t k = 0; k < w.steps.size(); k++) {
     const WayStep& st = w.steps[k];
+    // (A party beside people: party.hpp) the exit held for no one is the people's to take.
     if (left_to_do || car_first || !way_exit(st) || st.revisit || st.node < 0 || !reach(st.node) ||
-        t < st.left_until)
+        t < st.left_until || (w.complete && held_step(st)))
       continue;
     const double c = w.search.cost(st.node);
     if (pick < 0 || c < best) {
@@ -1600,7 +1612,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // straggler at the far end of the map for last). Steps taken last (in a trap, a pool's drain) and
   // the way back are left to the passes above.
   int toured = 0;  // 1 a step, 2 a monster, from the tour
-  if (w.complete && w.toured && left_to_do && !me_trapped && w.out < 0) {
+  // A lift he waits for being called by its button (above) is not toured past nor left for a
+  // monster: bunk1's sinking floor, waited for in its pit while the tour sent him after one
+  // across the map, called again only seven seconds later.
+  const bool calling = pick >= 0 && pick == w.calling;
+  if (w.complete && w.toured && left_to_do && !me_trapped && w.out < 0 && !calling) {
     const auto open_now = [&](int32_t stop) {
       // A monster in a trap (map_nav.hpp: a pool dropped into with no way back) is no stop of the
       // tour while he is out of it.
@@ -1696,9 +1712,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   }
   // (`complete`) The nearest monster alive when it is nearer than the step (or the tour's next).
   const bool chase =
-      toured ? toured == 2
-             : w.complete && prey >= 0 &&
-                   (pick < 0 || way_exit(w.steps[static_cast<size_t>(pick)]) || prey_c < best);
+      calling  ? false
+      : toured ? toured == 2
+               : w.complete && prey >= 0 &&
+                     (pick < 0 || way_exit(w.steps[static_cast<size_t>(pick)]) || prey_c < best);
   if (chase) pick = -1;
   // Its time in all, over every spell he chased it: one he keeps turning to between others (e2m6's
   // monster past the pool's bridges, the plat out of the water between) restarts the clock below
