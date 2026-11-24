@@ -84,6 +84,10 @@ struct NavBridge {
   // shut while its angles are still `spawn_angles`.
   bool turns = false;
   ge::shooter::Vec3f spawn_angles;
+  // Where its origin stands all the way out: where the map drew it ({0}), or (a SLIDE-OUT
+  // bridge, `slides_out`: a slab drawn in its slot that a button runs out over a gap) its rest
+  // plus its travel.
+  ge::shooter::Vec3f out_at;
 };
 
 // A crawl (`add_crawlways`): a region under a roof too low to stand under, searched as a tree of
