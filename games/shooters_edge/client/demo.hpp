@@ -402,6 +402,14 @@ struct DemoState {
   int64_t frames = 0;  // frames read
 };
 
+// Whether a model index names one of the level's own brush models ("*1", "*2", ...): a door, a
+// lift, a train, never a player, a missile or an item.
+inline bool brush_model(const DemoState& st, int model) {
+  return model > 0 && static_cast<size_t>(model) < st.models.size() &&
+         st.models[static_cast<size_t>(model)].size() > 1 &&
+         st.models[static_cast<size_t>(model)][0] == '*';
+}
+
 // An item coming back told (svc 119): kept in place of what was told of the same entity; those a
 // second past their time let go.
 void take_item_back(DemoState& s, const DemoItemBack& b);
