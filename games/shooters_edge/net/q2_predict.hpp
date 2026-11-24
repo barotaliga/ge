@@ -51,6 +51,7 @@
 #include "brush/trace.hpp"
 #include "classic/q2_move.hpp"
 #include "shooter/predict.hpp"
+#include "shooter/teleport_ahead.hpp"
 #include "shooters_edge/client/demo.hpp"
 
 namespace shooters_edge::net {
@@ -82,10 +83,18 @@ struct Q2Predict {
   // A miss: a new frame put the newest move somewhere else than the last base did (the
   // correction's size). `cl_showmiss` (`show_misses`) prints each one as the frame it came in on.
   bool show_misses = false;
-  int64_t misses = 0;       // since the client began predicting
-  int64_t misses_told = 0;  // the ones printed (or passed over while `show_misses` was off)
-  float miss_units = 0;     // the last one's size, units
-  int miss_frame = 0;       // the frame it came in on
+  // cl_predict_teleport: the level's teleporters (classic/teleporters.hpp) taken in the
+  // prediction, so a teleport is drawn and the view turned the move it happens; the guess the
+  // server has not yet answered.
+  bool teleports = true;
+  ge::shooter::Teleporters tele;
+  ge::shooter::TeleGuess guess;
+  bool teleported = false;       // the last step's moves went through one
+  int16_t delta_angles[3] = {};  // the last step's predicted view turn (the server's own)
+  int64_t misses = 0;            // since the client began predicting
+  int64_t misses_told = 0;       // the ones printed (or passed over while `show_misses` was off)
+  float miss_units = 0;          // the last one's size, units
+  int miss_frame = 0;            // the frame it came in on
 };
 
 // The feel the move is predicted on: the one our server told (svc 122), else the stock move with
