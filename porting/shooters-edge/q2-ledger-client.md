@@ -15,13 +15,13 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Client console commands | 139 | 0 | 17 | 156 |
 | Client settings (cvars) | 239 | 0 | 111 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
-| Menu pages and rows | 147 | 3 | 12 | 162 |
+| Menu pages and rows | 150 | 0 | 12 | 162 |
 | Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
 | Temporary entities (svc_temp_entity) | 39 | 0 | 26 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
 | Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 23 | 2 | 7 | 32 |
+| Entity render bits (RF_) and view bits (RDF_) | 24 | 1 | 7 | 32 |
 | Configstrings | 10 | 0 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
 | HUD and screen elements | 19 | 0 | 10 | 29 |
@@ -31,7 +31,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
 | Connection, network, downloads and the rest | 16 | 0 | 2 | 18 |
-| **all** | 976 | 5 | 231 | 1212 |
+| **all** | 980 | 1 | 231 | 1212 |
 
 ## Client console commands
 
@@ -607,7 +607,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.look.background | menu background | black behind every page; the in-game page tinted blue at about 1/8 | not-taken | Our design: ours draws the classic menu's backdrop with Quake II's plates (C5) |
 | menu.look.font | menu font and cursor | the pack's `conchars` letters, `ch1` as the cursor | not-taken | Tail (decided 2026-11-23), cosmetic: quake II's plates and our carved letters; the `ch1` cursor not matched. |
 | menu.look.colours | row colours | normal and selected rows light blue, disabled grey | not-taken | Our design: ours the classic menu's colours (C5) |
-| menu.look.weapon | player-setup weapon | the figure on the player page holds the railgun's world model | missing | no figure drawn (C5) |
+| menu.look.weapon | player-setup weapon | the figure on the player page holds the railgun's world model | done | `games/shooters_edge/menu/player_view.cpp`: the figure holds the folder's carried weapon (`w_<name>.md2`, else its `weapon.md2`), the page's WEAPON row picks it; held by `tests/shooters_edge_player_view_test.cpp` |
 | menu.esc.disconnected | ESCAPE while not in a game | opens the main page | done | `games/shooters_edge/menu/main_menu.cpp` |
 | menu.esc.ingame | ESCAPE in a game | opens the compact in-game page (below) over the world | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.esc.layout | ESCAPE with a layout up | sends `putaway` (closes the help computer or inventory); held, opens the in-game page | done | `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, `Host::escape_held`): ESCAPE sends `putaway`; held on half a second (a key's first repeat), the in-game page opens |
@@ -649,7 +649,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.dmf.infiniteammo | flags: infinite ammo | dmflag 8192 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
 | menu.dmf.fixedfov | flags: fixed FOV | dmflag 32768 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
 | menu.dmf.quaddrop | flags: quad drop | dmflag 16384 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
-| menu.opt.player | options: player setup | opens the player page | missing | Missing, rank 1 (gameplay, daily use): `games/shooters_edge/menu/q2_pages.cpp`: name, model, skin and handedness; the figure drawn missing |
+| menu.opt.player | options: player setup | opens the player page | done | `games/shooters_edge/menu/q2_pages.cpp` (name, model, skin, handedness) with the figure beside the rows (`menu/player_view.cpp`) |
 | menu.opt.input | options: input setup | opens the input page | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.opt.keys | options: key bindings | opens the key page | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.opt.weapons | options: weapon bindings | opens the weapon-key page | done | `games/shooters_edge/menu/q2_pages.cpp` |
@@ -663,7 +663,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.pl.model | player: model | every figure in `players/` | done | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: male, female, then by name; written to `skin` |
 | menu.pl.skin | player: skin | the chosen figure's skins | done | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: a skin with its icon; a new model at its first skin |
 | menu.pl.hand | player: handedness | right, left, center (`hand`) | done | `games/shooters_edge/menu/q2_pages.cpp` |
-| menu.pl.figure | player: the figure drawn | the chosen figure and skin turning, holding the weapon | missing | C5 |
+| menu.pl.figure | player: the figure drawn | the chosen figure and skin turning, holding the weapon | done | `games/shooters_edge/menu/player_view.cpp`: the model live in its skin, turning, dragged round, firing on a click; `tests/shooters_edge_player_view_test.cpp` |
 | menu.pl.none | player: no figures | "No player models found." when none | done | `games/shooters_edge/menu/main_menu.cpp` (`apply_event`): "No player models found." and the page does not open |
 | menu.in.sens | input: mouse sens | a number field for `sensitivity` | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.in.autosens | input: auto sens | `m_autosens` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -1026,7 +1026,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.no_lod | `RF_NO_LOD` (1<<25) | no level-of-detail model | done | ours has no lower-detail models: every model is drawn whole, as the bit asks |
 | rf.stair_step | `RF_STAIR_STEP` (1<<26) | the stair step is smoothed for this entity | done | the game's client reads it nowhere; ours the same |
 | rdf.underwater | `RDF_UNDERWATER` (1) | the view is under water: the warp (`gl_waterwarp`) and the sound muffle (`s_underwater`) | not-taken | Tail (decided 2026-11-23), cosmetic: ours tints the view under water; warp and muffle missing (C21, C28) |
-| rdf.noworldmodel | `RDF_NOWORLDMODEL` (2) | a view with no world (the player-setup figure) | missing | no player figure page (C5) |
+| rdf.noworldmodel | `RDF_NOWORLDMODEL` (2) | a view with no world (the player-setup figure) | done | the player page's figure is drawn alone on the CPU with no world (`menu/player_view.cpp`, the engine's `overview/mesh_picture.hpp`) |
 | rdf.irgoggles | `RDF_IRGOGGLES` (4) | infra-red goggles on | done | client/demo_q2.cpp keeps the view's bits in `DemoState::rdflags`; `client/demo_video.cpp` marks the warm models |
 | rdf.uvgoggles | `RDF_UVGOGGLES` (8) | the other goggles bit | done | the game's client reads it nowhere; ours the same |
 | rdf.teleport | `RDF_TELEPORT_BIT` (16) | the extended protocol's teleport mark: no view interpolation this frame | done | `client/demo_q2.cpp` keeps the toggle (`DemoState::teleport_bit`: the view bit 16 in the extended protocol, else movement flag 128) and a flip since the frame before draws the view at the new frame, its eye, angles and field of view not eased, the bodies still between (`client/demo_lerp.cpp`); `tests/shooters_edge_demo_lerp_test.cpp` |
