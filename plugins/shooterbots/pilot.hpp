@@ -568,7 +568,14 @@ struct Pilot {
     float z = 0;
     double moved_at = -1e9;
   };
-  MoverSeen movers_seen[8];
+  // (Room for every ridden mover of a big map: with 8, bunk1's ninth and later were never seen
+  // moving, so its sinking floor was walked under on its way down.)
+  MoverSeen movers_seen[48];
+  // (`under_plat`) A ridden mover on its way within reach of him at the last command
+  // (pilot_movers.hpp `over_him`): his own keys step clear, and no one else's run him under it.
+  bool crushing = false;
+  int crush_try = 0;        // which of its sides he runs out of (the nearest first)
+  double crush_slow_s = 0;  // how long he has been held running out of that one, s
   bool gap_flight = false;
   // (`gapturn`) the gap turned to (its start node) and since when (`clock_s`)
   int32_t gap_turn_node = -1;

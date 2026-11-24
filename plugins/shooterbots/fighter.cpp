@@ -773,9 +773,13 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
       // him until its top: never lost there (walked to the nearest node, he stepped off e1m4's
       // lift halfway up, again and again).
       const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(me)];
-      const bool riding = f.bot.pilot.pilot.mode == sb::PilotMode::ride && self.waterlevel == 0 &&
-                          ed.groundentity > 0 && ed.groundentity < s.sv.num_edicts &&
-                          s.sv.edicts[static_cast<size_t>(ed.groundentity)].velocity.z > 0;
+      // (A ground the move does not name, as Quake II's rows keep it, is the pilot's word: on the
+      // ground in his ride, bunk1's sinking floor, walked off it as it started up.)
+      const bool carried = ed.groundentity > 0 && ed.groundentity < s.sv.num_edicts &&
+                           s.sv.edicts[static_cast<size_t>(ed.groundentity)].velocity.z > 0;
+      const bool riding =
+          f.bot.pilot.pilot.mode == sb::PilotMode::ride && self.waterlevel == 0 &&
+          (carried || (f.bot.pilot.pilot.set.under_plat && (ed.flags & sh::kFlagOnGround) != 0));
       if (!escaping && !was_diving && !riding &&
           ((pool && (f.dry_pockets || swim)) || sb::nav_nearest(g, self.origin) < 0)) {
         f.lost++;
@@ -1693,7 +1697,9 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
   if (!dead && f.features[sb::Feature::packs])
     packs_bore(f, s, me, st, t, cmd);  // its launcher to the quad
   keys_mark(f, cmd, keys_was, "packs");
-  if (!dead) button_poke_cmd(f, s, me, t, cmd);
+  // Not while a lift coming down is near: the poke at bunk1's button by its sinking floor ran him
+  // back under the floor as it came down, and it stalled on him for good.
+  if (!dead && !f.bot.pilot.pilot.crushing) button_poke_cmd(f, s, me, t, cmd);
   keys_mark(f, cmd, keys_was, "poke");
   if (!dead) floor_trap_cmd(f, s, me, cmd);
   keys_mark(f, cmd, keys_was, "trap");

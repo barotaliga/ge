@@ -119,3 +119,29 @@ TEST(homedir_on_the_command_line_is_the_data_folder_and_is_read_only_after) {
         ge::console::SetResult::read_only);
   fs::remove_all(top);
 }
+
+// A Quake II mission pack's level asks its disc track; with `ogg_remap_tracks` on, the window's
+// music finds the digital release's file for that pack, and with it off the disc's number.
+TEST(a_mission_packs_level_plays_the_digital_releases_track) {
+  const fs::path top = fs::temp_directory_path() / "ge_take_in_remap_test";
+  fs::remove_all(top);
+  fs::create_directories(top / "music");
+  for (const char* name : {"track02.flac", "track09.flac", "track12.flac"})
+    std::ofstream(top / "music" / name, std::ios::binary) << "fLaC";
+  ge::console::Console con;
+  ge::audio::MusicConsole music;
+  std::string ask, basedir = top.string(), game = "xatrix";
+  bool remap = true;
+  cl::add_take_in_commands(con, &ask, &basedir, &music, &game, &remap);
+  CHECK(music.track_of(2) == (top / "music/track09.flac").string());
+  game = "rogue";
+  CHECK(music.track_of(2) == (top / "music/track12.flac").string());
+  game = "XATRIX";  // as a player may type it
+  CHECK(music.track_of(2) == (top / "music/track09.flac").string());
+  remap = false;
+  CHECK(music.track_of(2) == (top / "music/track02.flac").string());
+  game = "baseq2";
+  remap = true;
+  CHECK(music.track_of(2) == (top / "music/track02.flac").string());
+  fs::remove_all(top);
+}

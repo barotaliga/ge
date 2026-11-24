@@ -565,6 +565,14 @@ void add_first(con::Console& c, const GameBindings& b) {
                          "as you fire.",
                  .kind = con::CvarKind::boolean,
                  .values = "1: ask (the default); 0: don't, from the next connect"});
+  c.cvars().add({.name = "cl_pext_lagteleport",
+                 .fallback = "1",
+                 .flags = con::kArchive,
+                 .help = "Whether the moves you made before a server's turn reached you go where "
+                         "you now face, so a teleporter never walks you the old way.",
+                 .kind = con::CvarKind::boolean,
+                 .values = "1: they do, on servers that offer it (the default); 0: they go the old "
+                           "way for a moment, from the next connect"});
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",
