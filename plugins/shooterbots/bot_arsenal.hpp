@@ -122,6 +122,9 @@ struct BotArsenal {
   // Whether a monster of a model is put down for good only by a blast (Quake's zombie: anything
   // less knocks it down to get up again); none: every monster falls to any weapon.
   bool (*blast_only)(std::string_view model) = nullptr;
+  // Whether a thing lying on the map of a model is a weapon that blasts (Quake's grenade and
+  // rocket launchers): a campaign with blast-only monsters fetches one first; none: never fetched.
+  bool (*blast_pickup)(std::string_view model) = nullptr;
   // The game's maps as its bots' book: people's tricks, routes and item rules by map
   // (shooterbots/map_book.hpp; none: no map has any).
   const ge::shooterbots::MapBook* maps = nullptr;
