@@ -107,6 +107,9 @@ struct ClientConfig {
   bool spectator = false;
   bool gender_auto = false;  // Quake II's: `gender` picked from the skin's figure
   bool speedjump = false;    // cl_speedjump: the easy jump asked for (sent only when set)
+  // cl_pext_lagteleport: the moves in flight through a teleport turned with the server's
+  // (classic/protocol/lag_turn.hpp); off, the extension is not asked for either.
+  bool lag_turn = true;
   Q2Downloads q2_downloads;  // Quake II's `allow_download` switches (q2_downloads.hpp)
   bool q2_nodelta = false;   // Quake II's `cl_nodelta`: every frame asked for whole
   std::string password;
@@ -324,6 +327,11 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<std::string> local_commands;
   std::vector<ClientSound> heard;  // the sounds read this tick (cleared as the tick starts)
   float set_angles[3] = {};        // the server's last turn of the player (setangle), degrees
+  // The last turn's kind under the high-lag teleport (classic/protocol/lag_turn.hpp; -1 without
+  // it) and, for a teleport, how far it turned the view (degrees): the commands in flight are
+  // turned as it is read, and the view keeps the player's own turning since (`set_turn`).
+  int set_kind = -1;
+  float set_turn = 0;
   float movevars[10] = {800, 100, 320, 500, 10, 10, 10, 4, 4, 1};  // serverdata's, in its order
   sh::MoveCmd sent[64];        // each move's newest command, by its packet's sequence mod 64
   uint32_t sent_seq[64] = {};  // the sequence each `sent` slot holds (0: none)

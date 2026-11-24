@@ -24,6 +24,8 @@ or look only when a recipe cannot answer (sound, feel, a GPU fault the picture d
 | `screenshot <name>` | The next frame as a picture in the game's `screenshots/` |
 | `condump <name>` | The console's lines to a file: the recipe's whole record |
 | `connect`, `disconnect`, `quit` | As a player types them |
+| `togglewarmup`, `toggleready`, `team switch`, `addbot`, `removebot`, `start` | The lobby's keys as words (F4, F1, F2, F5, F6, ENTER): a listen game that opens on its lobby (Quake II's `base1`) needs `togglewarmup` before the map shows |
+| `sv <cvar> <value>` | A setting on the window's own server (`sv sv_cheats 1` before `cmd setpos X Y Z`) |
 
 Arguments are cvars set before the recipe (`+set recipe_server host:port`), read as `$name`.
 `sleep` and the `menu_` recipe commands exist only when the window starts with `-recipes`

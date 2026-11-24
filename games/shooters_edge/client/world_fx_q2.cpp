@@ -13,7 +13,7 @@
 // ge:keywords te_heatbeam te_monster_heatbeam te_lightning tesla nuke-blast tracker-explosion
 // ge:keywords negative-light q2_pack_hit heat-beam-rings
 // ge:skill render shooter
-// ge:test tests/shooters_edge_effects_test.cpp
+// ge:test tests/shooters_edge_q2_world_fx_test.cpp
 #include <algorithm>
 #include <cmath>
 #include <string_view>

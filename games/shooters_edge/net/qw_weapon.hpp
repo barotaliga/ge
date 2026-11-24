@@ -57,7 +57,7 @@ struct RemoteWeapon {
   bool on = false;                 // it predicted
   ge::classic::WeaponState shown;  // the state at the shown command
   uint32_t played_to = 0;          // the newest command whose shots have played
-  float last_shot[10] = {};        // the weapon clock of each sound's last play
+  float last_shot[16] = {};        // the weapon clock of each sound's last play, by kind
   bool frames_live = false;        // the server has sent a weapon frame other than 0
   WeaponPlayed played;             // the sounds played, by command, for the server's copies
   uint32_t copies_from = 0;        // the acknowledged command at the last pass
