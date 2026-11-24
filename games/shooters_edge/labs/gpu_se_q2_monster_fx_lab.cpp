@@ -302,8 +302,8 @@ bool roomy(const cl::Listen& l, sh::Vec3f c, float r) {
 }
 
 // The camera: off to one side of the attack's line (from the monster to where it ends), a little
-// back and up, with room round it, looking at the line's middle; failing that, or for a `big` one,
-// over the player's shoulder at its gun.
+// back and up, with room round it, looking at the line's middle; failing that, over the player's
+// shoulder; a `big` one from beside the player, looking at its gun.
 ge::camera::Pose side_camera(const Staged& g, bool big) {
   const sh::Vec3f eye = {g.stand.x, g.stand.y, g.stand.z + 22};
   const sh::Vec3f a = g.shot_from, b = g.shot_to;
@@ -318,7 +318,21 @@ ge::camera::Pose side_camera(const Staged& g, bool big) {
   const float fx_ = dx / len, fy = dy / len, sx = -fy, sy = fx_;
   sh::Vec3f cam = {eye.x - fx_ * 24, eye.y - fy * 24, eye.z + 8};
   if (!clear_line(g.l, cam, mid)) cam = eye;
-  bool found = big;  // a big one: over the player's shoulder, where it stands whole in view
+  // A big one: from beside the player, off the line its shots fly down (they burst on him, and
+  // from his shoulder the blast filled the frame), where it stands whole in view.
+  bool found = false;
+  for (const float side : {192.f, 128.f, 96.f})
+    for (const float back : {64.f, 0.f})
+      for (const float sign : {1.f, -1.f}) {
+        if (!big || found) break;
+        const sh::Vec3f c = {eye.x - fx_ * back + sx * side * sign,
+                             eye.y - fy * back + sy * side * sign, eye.z + 32};
+        if (roomy(g.l, c, 16) && clear_line(g.l, c, a) && clear_line(g.l, c, eye)) {
+          cam = c;
+          found = true;
+        }
+      }
+  if (big) found = true;  // none: from his shoulder
   const float reach = std::max(len, 64.f);
   for (const float side : {reach, reach * 0.6f, 192.f, 128.f, 96.f, 64.f})
     for (const float back : {0.3f, 0.0f, 0.6f})
