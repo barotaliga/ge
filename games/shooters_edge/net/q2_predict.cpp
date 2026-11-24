@@ -276,7 +276,7 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
     p.track_frames = c.frames;
     sh::mover_track_frame(p.movers_track, st.time);
     for (size_t n = 0; n < st.entities.size(); n++)
-      if (st.entities[n].present && st.entities[n].model > 0)
+      if (st.entities[n].present && client::brush_model(st, st.entities[n].model))
         sh::mover_track_seen(p.movers_track, n, st.entities[n].model, st.entities[n].origin);
   }
   MoverWorld mw;

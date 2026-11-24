@@ -120,7 +120,7 @@ MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
   if (hit != nullptr) *hit = {};
   // The movers start each replay where the frame put them, so a replay's push is undone after it.
   Vec3f placed_at[kPlaceMax];
-  for (int m = 0; m < p.movers; m++) placed_at[m] = sv.edicts[static_cast<size_t>(2 + m)].origin;
+  for (int m = 0; m < p.movers; m++) placed_at[m] = sv.edicts[2 + static_cast<size_t>(m)].origin;
   float gone[kPlaceMax] = {};
   float movers_now = 0;  // seconds the movers have run on
   for (int i = 0; i < count; i++) {
@@ -152,7 +152,7 @@ MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
   }
   const MoveState out = state();
   for (int m = 0; m < p.movers; m++)
-    if (!(sv.edicts[static_cast<size_t>(2 + m)].origin == placed_at[m]))
+    if (!(sv.edicts[2 + static_cast<size_t>(m)].origin == placed_at[m]))
       set_origin(sv, 2 + m, placed_at[m]);
   return out;
 }

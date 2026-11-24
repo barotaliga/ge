@@ -1247,7 +1247,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     }
     sh::mover_track_frame(r.movers_track, st.time);
     for (size_t i = 0; i < st.entities.size(); i++)
-      if (st.entities[i].present && st.entities[i].model > 0)
+      if (st.entities[i].present && client::brush_model(st, st.entities[i].model))
         sh::mover_track_seen(r.movers_track, i, st.entities[i].model, st.entities[i].origin);
     started.insert(started.end(), st.started.begin(), st.started.end());
     stopped.insert(stopped.end(), st.stopped.begin(), st.stopped.end());
