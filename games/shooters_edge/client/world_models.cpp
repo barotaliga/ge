@@ -1000,6 +1000,10 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed, double 
     ba::Mover& mv = out[n - 1];
     mv.hidden = false;
     to_world(p.origin, mv.offset);
+    // Turned by its angles about the map's origin, where a rotating model is built round its
+    // centre (pitch not reversed: that is the vertex-animated models' own quirk).
+    const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+    if (ang[0] != 0 || ang[1] != 0 || ang[2] != 0) models::rotation_of(ang, false, mv.rotation);
     mv.frame = p.q2_anim < 0 ? -1 : q2_texture_frame(uint32_t(p.q2_anim), p.frame, t);
   }
 }
