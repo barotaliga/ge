@@ -38,8 +38,8 @@
 // ge:test tests/shooters_edge_q2_gz_monsters_test.cpp
 #include <algorithm>
 #include <array>
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 #include <string_view>
