@@ -161,6 +161,21 @@ struct RulesCommon {
   // The rocket jump helper's waiting requests, a seat each (rjump_rules.hpp).
   sh::RjumpSeat rjumps[sh::kMaxClients];
 
+  // THE VIEWS THE RULES TURNED this frame (a program's `fixangle`: a teleport, a spawn), for the
+  // protocol's server to send each its `setangle` (net/qw_server.cpp), which clears them. A turn
+  // of a player alive at the last frame's end and still alive is a TELEPORT (the high-lag
+  // teleport's kind 1, classic/protocol/lag_turn.hpp), any other a RESPAWN (2).
+  struct Turn {
+    bool on = false;
+    bool teleport = false;
+    sh::Vec3f angles;
+  };
+  Turn turns[sh::kMaxClients];
+  bool alive[sh::kMaxClients] = {};  // each player alive at the last frame's end
+  // The turns of `edicts` (its players at 1..kMaxClients) whose `fixangle` is set, kept; the flag
+  // cleared and the view set to the angles, as the frame ends.
+  void take_turns();
+
   bool map_stopped = false;  // error / objerror: the map is over (`stop_reason` says why)
   bool paused = false;
 

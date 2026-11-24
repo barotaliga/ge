@@ -80,6 +80,30 @@ TEST(a_ruleset_holds_its_settings_and_gives_them_back) {
   CHECK(printed(c, "sent"));
 }
 
+// A game's own spelling of a held setting, whole or with its own values, is held too: the lock is
+// on the setting, and a spelling only writes it.
+TEST(a_lock_holds_through_a_games_spelling_of_the_setting) {
+  Console c(false);
+  Cvar& hud = c.cvars().add({.name = "cl_hud", .fallback = "1", .flags = kArchive});
+  CHECK(c.cvars().add_synonym("cl_showhud", "cl_hud"));
+  CHECK(c.cvars().add_mapped_synonym("hud_on", "cl_hud", {{"yes", "1"}, {"no", "0"}}));
+  Rulesets r(c, [] { return false; });
+  r.set_book(kBook);
+  c.execute("ruleset strict");
+  r.update();
+  CHECK(hud.value == "0");
+  c.clear_output();
+  c.execute("cl_showhud 1");
+  CHECK(hud.value == "0");
+  c.execute("hud_on yes");
+  CHECK(hud.value == "0");
+  CHECK(printed(c, "cl_hud is locked by the strict ruleset."));
+  c.execute("ruleset default");
+  r.update();
+  c.execute("hud_on yes");
+  CHECK(hud.value == "1");
+}
+
 TEST(a_ruleset_changes_only_while_not_connected) {
   Console c(false);
   Rulesets r(c);

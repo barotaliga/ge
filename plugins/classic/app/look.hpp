@@ -248,8 +248,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   std::string team_skin, enemy_skin;
   int team_top = -1, team_bottom = -1, enemy_top = -1, enemy_bottom = -1;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
-  // r_arrival: how strongly your own arrival (a spawn, a teleport's far end) warps the whole view
-  // in the modern look with ce_warps on (render/post.hpp's arrival), 0 none.
+  // r_arrival: how strongly your own arrival (a spawn, a teleport's far end) touches the view's
+  // edges in the modern look with ce_warps on (render/post.hpp's arrival), 0 none.
   double arrival = 1;
   // ce_bubbles_share: the share of the bubbles the game blows under water that is drawn, either
   // look (a map's air vents blow one a second each, a column of ten in the water at once).
