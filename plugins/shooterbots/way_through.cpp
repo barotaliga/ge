@@ -1540,8 +1540,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   }
   for (size_t k = 0; k < w.steps.size(); k++) {
     const WayStep& st = w.steps[k];
+    // (A party beside people: party.hpp) the exit held for no one is the people's to take.
     if (left_to_do || car_first || !way_exit(st) || st.revisit || st.node < 0 || !reach(st.node) ||
-        t < st.left_until)
+        t < st.left_until || (w.complete && held_step(st)))
       continue;
     const double c = w.search.cost(st.node);
     if (pick < 0 || c < best) {
@@ -1876,7 +1877,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         far_c = c;
       }
     }
-    if (far != w.explore) {
+    // A plan that finds nothing to reach keeps the place he chose and its clock: a door shutting
+    // and opening (jail1's) took the place in and out of reach each plan, and choosing it again
+    // after every gap started the clock again, so it was never given up.
+    if (far != w.explore && far >= 0) {
       w.explore = far;
       w.explore_since = t;
     }
