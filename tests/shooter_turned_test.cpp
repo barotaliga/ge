@@ -1,13 +1,14 @@
 // A BRUSH MODEL TURNED BY ITS ENTITY'S ANGLES: the frame a trace takes its line into and turns the
 // normal back out of, the reach that holds the model at any angle, and the rows it is drawn by,
-// which put a vertex where the trace finds it.
+// which the window's picture of a turned brush model matches.
 //
-// ge:summary Tests: a turned brush model's frame, its exact inverse, its reach and its drawn rows
-// ge:keywords test turned-brush to_model to_world turned_reach turned_rows
+// ge:summary Tests: a turned brush model's frame, its exact inverse, its reach, the picture's match
+// ge:keywords test turned-brush to_model to_world turned_reach rotation_of
 // ge:skill shooter testing
 #include "brush/map.hpp"
 #include "check.hpp"
 #include "shooter/turned.hpp"
+#include "shooters_edge/app/classic_models.hpp"
 
 namespace sh = ge::shooter;
 
@@ -22,9 +23,6 @@ TEST(nothing_turns_at_zero) {
   CHECK(!sh::turned({0, 0, 0}));
   CHECK(sh::turned({0, 0.5f, 0}));
   CHECK(sh::turned({-0.0001f, 0, 0}));
-  double rows[9];
-  sh::turned_rows({0, 0, 0}, rows);
-  for (int i = 0; i < 9; i++) CHECK(rows[i] == (i % 4 == 0 ? 1.0 : 0.0));
 }
 
 TEST(the_frame_is_forward_left_and_up) {
@@ -58,9 +56,10 @@ TEST(the_reach_holds_every_corner) {
   CHECK(near(sh::turned_reach({-3, -40, 0}, {4, 10, 0}), sh::root_of(16 + 1600)));
 }
 
-TEST(the_drawn_rows_put_a_vertex_where_the_trace_finds_it) {
+TEST(the_picture_turns_a_brush_model_where_the_trace_finds_it) {
   // A model vertex in the map's frame, turned by the trace's frame then taken to the engine's
-  // axes, lands where the rows put the same vertex taken to the engine's axes first.
+  // axes, lands where the window's turn (a quaternion, the pitch not reversed) puts the same vertex
+  // taken to the engine's axes first.
   const float l[3] = {48, -20, 9};
   for (int k = 0; k < 16; k++) {
     const auto a = static_cast<float>(k);
@@ -70,12 +69,15 @@ TEST(the_drawn_rows_put_a_vertex_where_the_trace_finds_it) {
     double want[3], v[3];
     ge::brush::to_engine(wf, want);
     ge::brush::to_engine(l, v);
-    double rows[9];
-    sh::turned_rows(angles, rows);
-    for (int i = 0; i < 3; i++) {
-      const double* r = &rows[size_t(i) * 3];
-      const double got = r[0] * v[0] + r[1] * v[1] + r[2] * v[2];
-      CHECK(near(got, want[i]));
-    }
+    const float ang[3] = {angles.x, angles.y, angles.z};
+    float q[4];
+    shooters_edge::models::rotation_of(ang, false, q);
+    // v + 2w (u x v) + 2 u x (u x v), u the quaternion's vector part
+    const double t[3] = {2 * (q[1] * v[2] - q[2] * v[1]), 2 * (q[2] * v[0] - q[0] * v[2]),
+                         2 * (q[0] * v[1] - q[1] * v[0])};
+    const double got[3] = {v[0] + q[3] * t[0] + (q[1] * t[2] - q[2] * t[1]),
+                           v[1] + q[3] * t[1] + (q[2] * t[0] - q[0] * t[2]),
+                           v[2] + q[3] * t[2] + (q[0] * t[1] - q[1] * t[0])};
+    for (int i = 0; i < 3; i++) CHECK(near(got[i], want[i]));
   }
 }
