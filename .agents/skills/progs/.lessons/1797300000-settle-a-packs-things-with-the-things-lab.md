@@ -2,7 +2,7 @@
 title: Settle a pack's entity rows with se-campaign --things, by the map's class name
 date: 2026-11-23
 scope: games/shooters_edge/labs/campaign_things.hpp, games/shooters_edge/server/qc_server.hpp
-concepts: [things-lab, spawned_as, mission-pack, verify-rows, level-change, use-targets]
+concepts: [things-lab, spawned-as, mission-pack, verify-rows, level-change, use-targets]
 ---
 
 A bot census tables the classes the program names at run time, and a pack renames what it spawns

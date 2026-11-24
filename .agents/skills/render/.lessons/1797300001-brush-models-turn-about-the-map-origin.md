@@ -2,7 +2,7 @@
 title: A brush model turns about the map's origin, before its offset
 date: 2026-11-23
 scope: plugins/brush/app/bsp_draw.hpp, plugins/brush/app/bsp.wgsl, plugins/brush/app/bsp_cull.cpp, games/shooters_edge/client/world_models.cpp
-concepts: [movers, rotating-brush-models, set_movers, quaternion, cull-box]
+concepts: [movers, rotating-brush-models, set-movers, quaternion, cull-box]
 ---
 
 `ba::Mover::rotation` (a quaternion in the engine's frame, from `rotation_of` with the pitch not
