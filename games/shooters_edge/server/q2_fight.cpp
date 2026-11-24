@@ -1020,6 +1020,7 @@ void fight_precache(Q2Server& s) {
 
 void fight_spawn(Q2Server& s, int slot) {
   Q2Player& p = s.players[slot];
+  stats_spawn(s, slot);
   p.hand = SqHand{};
   p.stepped = false;
   p.killer = -1;
@@ -1389,7 +1390,10 @@ void fight_choose(Q2Server& s, int slot, int w) {
   if (fightable(s, slot)) sq_choose(p.hand, p.body, w);
 }
 
+float fight_floor_gap(const Q2Server& s, int slot) { return midair_height(s, slot); }
+
 void fight_took(Q2Server& s, int slot, int item, int grenades_before) {
+  stats_item(s, slot, item);
   const int w = sq_weapon_of_item(item);
   Q2Player& p = s.players[slot];
   const SqItem& it = kSqItems[item];

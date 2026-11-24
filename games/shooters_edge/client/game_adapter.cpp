@@ -62,6 +62,16 @@ void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                     if (demos.empty()) c.print("demos: none in the game's files");
                     for (const std::string& d : demos) c.print(d);
                   });
+  // A demo's name completes after the words that play one: relative to the game's own folder of
+  // recordings where it has one (Quake II's `demos/`), as `find_demo` takes it.
+  const Con::ArgValues demo_names = [&adapter, &files] {
+    std::vector<std::string> out = adapter.list_demos(adapter, files);
+    const std::string_view folder = adapter.game->demo_folder;
+    for (std::string& d : out)
+      if (!folder.empty() && d.starts_with(folder)) d.erase(0, folder.size());
+    return out;
+  };
+  for (const char* word : {"playdemo", "timedemo"}) con.set_arg_values(word, demo_names);
 }
 
 void read_configs_from(ge::console::Console& con, const GameAdapter& adapter,
