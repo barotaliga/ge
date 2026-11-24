@@ -34,8 +34,6 @@ constexpr float kNear = 32;
 constexpr float kRolling = 50;
 // The least blow that counts as a hit or damage while the player lives (a mega health's rot is 1).
 constexpr float kLeast = 3;
-// A kill this soon after the victim came in is a spawn frag, s.
-constexpr double kSpawnFrag = 2;
 // How far down a mid-air's height is looked for, units.
 constexpr float kDrop = 2048;
 
@@ -113,118 +111,41 @@ int missile_weapon(Kind k) {
   }
 }
 
-int64_t& at(SeatStats& st, int weapon, int k) {
-  return st.n[static_cast<size_t>(4) * static_cast<size_t>(weapon) + static_cast<size_t>(k)];
-}
-
-void close_runs(SeatStats& st) {
-  st.n[kMsStreakMax] = std::max(st.n[kMsStreakMax], st.run);
-  st.n[kMsQuadRunMax] = std::max(st.n[kMsQuadRunMax], st.quad_run);
-  st.run = st.quad_run = 0;
-}
-
-// A hit proves its shot: one the ammunition did not show (a missile fired on the frame its
-// shooter died, or took ammunition up; the axe swung on the frame it was taken up, when the
-// weapon held the frame before was another) is counted with it.
-void proven(SeatStats& st, int weapon) {
-  int64_t& attacks = at(st, weapon, kMsAttacks);
-  attacks = std::max(attacks, at(st, weapon, kMsHits));
-}
-
 }  // namespace
+
+const server::StatsGame& qw_stats_game() {
+  static const server::StatsGame g = [] {
+    server::StatsGame out;
+    out.weapons = kMsWeapons;
+    for (int w = 0; w < kMsWeapons; w++) out.label[static_cast<size_t>(w)] = kWeaponLabels[w];
+    out.rl = static_cast<int>(StatWeapon::rl);
+    out.gl = static_cast<int>(StatWeapon::gl);
+    int k = 0;
+    for (StatWeapon w : {StatWeapon::lg, StatWeapon::rl, StatWeapon::gl, StatWeapon::sng,
+                         StatWeapon::ng, StatWeapon::ssg, StatWeapon::sg})
+      out.shown[static_cast<size_t>(k++)] = static_cast<uint8_t>(w);
+    out.shown_count = k;
+    out.item = {"ga", "ya", "ra", "mh", "quad", "pent", "ring"};
+    out.words = {"green", "yellow", "red", "mega", "quad", "pent", "ring"};
+    return out;
+  }();
+  return g;
+}
 
 const char* stat_name(int stat) {
-  const char* const* kWeapons = kWeaponLabels;
-  static const char* kParts[4] = {"attacks", "hits", "kills", "deaths"};
-  static char names[4 * kMsWeapons][16] = {};
-  if (stat < 4 * kMsWeapons) {
-    char* n = names[stat];
-    if (n[0] == 0) {
-      const char* w = kWeapons[stat / 4];
-      const char* p = kParts[stat % 4];
-      const size_t wl = std::strlen(w), pl = std::strlen(p);
-      std::memcpy(n, w, wl);
-      n[wl] = '_';
-      std::memcpy(n + wl + 1, p, pl + 1);
-    }
-    return n;
-  }
-  static const char* kRest[kMatchStats - 4 * kMsWeapons] = {
-      "rl_splash", "gl_splash",   "rl_damage",  "midair",      "midair_height", "midair_height_max",
-      "dmg_given", "dmg_taken",   "dmg_team",   "dmg_self",    "dmg_ewep",      "ga",
-      "ya",        "ra",          "mh",         "quad",        "pent",          "ring",
-      "quad_s",    "spawn_frags", "streak_max", "quad_run_max"};
-  return stat >= 0 && stat < kMatchStats ? kRest[stat - 4 * kMsWeapons] : "";
+  static const std::array<std::string, kMatchStats> names = [] {
+    std::array<std::string, kMatchStats> out;
+    for (int k = 0; k < kMatchStats; k++)
+      out[static_cast<size_t>(k)] = server::stats_column_name(qw_stats_game(), k);
+    return out;
+  }();
+  return stat >= 0 && stat < kMatchStats ? names[static_cast<size_t>(stat)].c_str() : "";
 }
 
-void stats_close(SeatStats& seat) { close_runs(seat); }
-
-namespace {
-
-// A share as a percentage with one decimal ("45.5%").
-std::string percent(int64_t part, int64_t whole_n) {
-  const int64_t tenths = whole_n > 0 ? (part * 1000 + whole_n / 2) / whole_n : 0;
-  return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + "%";
-}
-
-std::string counted(int64_t n, const char* what) {
-  return std::to_string(n) + " " + what + (n == 1 || n == -1 ? "" : "s");
-}
-
-}  // namespace
+void stats_close(SeatStats& seat) { server::stats_close(qw_stats_game(), seat); }
 
 std::vector<std::string> stats_lines(const ge::net::MatchReport& r) {
-  std::vector<std::string> out;
-  if (r.columns.size() != static_cast<size_t>(kMatchStats)) return out;
-  for (int k = 0; k < kMatchStats; k++)
-    if (r.columns[static_cast<size_t>(k)] != stat_name(k)) return out;
-  out.emplace_back("Player statistics:");
-  for (const ge::net::ReportPlayer& p : r.players) {
-    if (p.columns.size() != static_cast<size_t>(kMatchStats)) continue;
-    const auto v = [&](int k) { return p.columns[static_cast<size_t>(k)]; };
-    const auto w = [&](StatWeapon sw, int k) { return v(stat_of(sw, k)); };
-    const int64_t effi_base = p.score + p.deaths;
-    out.push_back(" " + p.name + (p.team.empty() ? "" : " [" + p.team + "]") + ": " +
-                  counted(p.score, "frag") + ", " + counted(p.deaths, "death") + ", " +
-                  percent(p.score > 0 ? p.score : 0, effi_base > 0 ? effi_base : 1) +
-                  " efficiency");
-    std::string wp;
-    const auto add = [&](const std::string& part) { wp += (wp.empty() ? "" : ", ") + part; };
-    const int64_t rockets = w(StatWeapon::rl, kMsAttacks), grenades = w(StatWeapon::gl, kMsAttacks);
-    if (w(StatWeapon::lg, kMsAttacks) > 0)
-      add("lg " + percent(w(StatWeapon::lg, kMsHits), w(StatWeapon::lg, kMsAttacks)));
-    if (rockets > 0)
-      add("rl " + percent(v(kMsRlSplash), rockets) + " (" + std::to_string(v(kMsRlSplash)) + "/" +
-          std::to_string(rockets) + ")");
-    if (grenades > 0) add("gl " + percent(v(kMsGlSplash), grenades));
-    for (StatWeapon sw : {StatWeapon::sng, StatWeapon::ng, StatWeapon::ssg, StatWeapon::sg})
-      if (w(sw, kMsAttacks) > 0)
-        add(std::string(kWeaponLabels[static_cast<int>(sw)]) + " " +
-            percent(w(sw, kMsHits), w(sw, kMsAttacks)));
-    if (!wp.empty()) out.push_back("  Weapons: " + wp);
-    if (rockets > 0) {
-      const int64_t splash = v(kMsRlSplash);
-      const int64_t tenths = splash > 0 ? (v(kMsRlDamage) * 10 + splash / 2) / splash : 0;
-      std::string line = "  Rockets: " + std::to_string(w(StatWeapon::rl, kMsHits)) + " direct, " +
-                         std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) +
-                         " average damage";
-      if (v(kMsMidair) > 0)
-        line += ", " + std::to_string(v(kMsMidair)) + " mid-air (highest " +
-                std::to_string(v(kMsMidairHeightMax)) + ")";
-      out.push_back(line);
-    }
-    out.push_back("  Armour: green " + std::to_string(v(kMsGa)) + ", yellow " +
-                  std::to_string(v(kMsYa)) + ", red " + std::to_string(v(kMsRa)) + ", mega " +
-                  std::to_string(v(kMsMh)) + "; quad " + std::to_string(v(kMsQuad)) + ", pent " +
-                  std::to_string(v(kMsPent)) + ", ring " + std::to_string(v(kMsRing)));
-    out.push_back("  Damage: taken " + std::to_string(v(kMsDmgTaken)) + ", given " +
-                  std::to_string(v(kMsDmgGiven)) + ", team " + std::to_string(v(kMsDmgTeam)) +
-                  ", self " + std::to_string(v(kMsDmgSelf)));
-    out.push_back("  Streak " + std::to_string(v(kMsStreakMax)) + ", quad run " +
-                  std::to_string(v(kMsQuadRunMax)) + ", quad held " + std::to_string(v(kMsQuadS)) +
-                  "s, spawn frags " + std::to_string(v(kMsSpawnFrags)));
-  }
-  return out;
+  return server::stats_lines(qw_stats_game(), r);
 }
 
 void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>& seats,
@@ -250,6 +171,7 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
     eyes.owner.assign(n, -1);
   }
   const double dt = fresh ? 0 : now - eyes.time;
+  const server::StatsGame& g = qw_stats_game();
   const auto seat = [&](int e) -> SeatStats* {
     return e >= 1 && e <= clients ? seats[static_cast<size_t>(e - 1)] : nullptr;
   };
@@ -269,7 +191,7 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
     const float life = (health > 0 ? health : 0) + armour;
     const int32_t items = items_of(e);
     const bool was_alive = eyes.health[i] > 0, alive = health > 0;
-    if (me != nullptr && alive && (!was_alive || me->spawned < 0)) me->spawned = now;
+    if (me != nullptr && alive && (!was_alive || me->spawned < 0)) server::stats_spawned(me, now);
     // Attacks: ammunition spent on the weapon held the frame before, alive in both frames.
     if (me != nullptr && alive && was_alive) {
       const int32_t w = eyes.weapon[i];
@@ -282,7 +204,7 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
         return d > 0 ? whole(d) : 0;
       };
       const auto add = [&](StatWeapon sw, int64_t v) {
-        at(*me, static_cast<int>(sw), kMsAttacks) += v;
+        server::stats_attack(me, static_cast<int>(sw), v);
       };
       if (w == kAxe && field(s, e, s.world_fields.attack_finished) > eyes.attack_finished[i])
         add(StatWeapon::axe, 1);
@@ -304,41 +226,35 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
     if (me != nullptr && alive && was_alive) {
       if (armour > eyes.armour[i] + 0.5f) {
         const float kind = field(s, e, f.armortype);
-        me->n[kind >= 0.7f ? kMsRa : kind >= 0.5f ? kMsYa : kMsGa]++;
+        server::stats_took(g, me,
+                           kind >= 0.7f   ? server::StatItem::armour_heavy
+                           : kind >= 0.5f ? server::StatItem::armour_middle
+                                          : server::StatItem::armour_light);
       }
-      if (health - eyes.health[i] >= 50) me->n[kMsMh]++;
+      if (health - eyes.health[i] >= 50) server::stats_took(g, me, server::StatItem::mega);
       const int32_t rose = items & ~eyes.items[i];
-      if ((rose & kQuad) != 0) {
-        me->n[kMsQuad]++;
-        me->n[kMsQuadRunMax] = std::max(me->n[kMsQuadRunMax], me->quad_run);
-        me->quad_run = 0;
-      }
-      if ((rose & kPent) != 0) me->n[kMsPent]++;
-      if ((rose & kRing) != 0) me->n[kMsRing]++;
+      if ((rose & kQuad) != 0) server::stats_took(g, me, server::StatItem::quad);
+      if ((rose & kPent) != 0) server::stats_took(g, me, server::StatItem::power_b);
+      if ((rose & kRing) != 0) server::stats_took(g, me, server::StatItem::power_c);
     }
-    if (me != nullptr && alive && (items & kQuad) != 0) {
-      me->quad_carry += dt;
-      const int64_t whole_s = static_cast<int64_t>(me->quad_carry);
-      me->n[kMsQuadS] += whole_s;
-      me->quad_carry -= static_cast<double>(whole_s);
-    }
+    if (me != nullptr && alive && (items & kQuad) != 0) server::stats_quad_held(g, me, dt);
     // A blow: who dealt it and with what.
     const float blow = eyes.life[i] - life;
     const bool died = was_alive && !alive;
     if (!(blow >= kLeast || (died && blow > 0))) {
-      if (died && me != nullptr) close_runs(*me);
+      if (died && me != nullptr) server::stats_close(g, *me);
       continue;
     }
     const int from = entity_of(s, e, f.dmg_inflictor);
     if (from <= 0 || static_cast<size_t>(from) >= n) {
-      if (died && me != nullptr) close_runs(*me);
+      if (died && me != nullptr) server::stats_close(g, *me);
       continue;
     }
     const bool missile = from > clients;
     const Kind k = missile ? static_cast<Kind>(eyes.kind[static_cast<size_t>(from)]) : kNone;
     const int by = missile ? eyes.owner[static_cast<size_t>(from)] : from;
     if (by < 1 || by > clients || (missile && k == kNone)) {
-      if (died && me != nullptr) close_runs(*me);
+      if (died && me != nullptr) server::stats_close(g, *me);
       continue;
     }
     SeatStats* them = seat(by);
@@ -348,15 +264,7 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
         missile ? missile_weapon(k) : held_weapon(static_cast<int32_t>(field(s, by, f.weapon)));
     const bool self = by == e, enemy = !self && enemies(by, e);
     const int64_t dmg = whole(blow);
-    if (self) {
-      if (me != nullptr) me->n[kMsDmgSelf] += dmg;
-    } else if (!enemy) {
-      if (them != nullptr) them->n[kMsDmgTeam] += dmg;
-    } else {
-      if (them != nullptr) them->n[kMsDmgGiven] += dmg;
-      if (me != nullptr) me->n[kMsDmgTaken] += dmg;
-      if (them != nullptr && (items & (kRl | kLg)) != 0) them->n[kMsDmgEwep] += dmg;
-    }
+    server::stats_blow(g, them, me, self, enemy, dmg, (items & (kRl | kLg)) != 0);
     // Hits (team mates count, oneself never).
     if (!self && them != nullptr && weapon >= 0) {
       const auto many = [&](float each) {
@@ -371,8 +279,7 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
                                  ? many(kPellet)
                              : weapon == static_cast<int>(StatWeapon::lg) ? many(kPulse)
                                                                           : 1;
-        at(*them, weapon, kMsHits) += hits;
-        proven(*them, weapon);
+        server::stats_hit(them, weapon, hits);
       } else if (struck[mi] == 0) {
         bool touched = k == kNail || k == kHeavyNail;
         if (k == kRocket)
@@ -380,35 +287,20 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
         if (k == kGrenade)
           touched = eyes.speed[mi] >= kRolling && gap_to_box(body, eyes.at[mi]) <= kNear;
         if (touched) {
-          at(*them, weapon, kMsHits)++;
-          proven(*them, weapon);
+          server::stats_hit(them, weapon, 1);
           struck[mi] = 1;
         }
       }
-      if (enemy && (k == kRocket || k == kGrenade)) {
-        them->n[k == kRocket ? kMsRlSplash : kMsGlSplash]++;
-        proven(*them, weapon);
-        if (k == kRocket) them->n[kMsRlDamage] += dmg;
-      }
+      if (enemy && (k == kRocket || k == kGrenade)) server::stats_splash(g, them, weapon, dmg);
       if (enemy && k == kRocket && eyes.aloft[i] != 0) {
         const sh::Vec3f was = eyes.at[i];
         const sh::Vec3f down{was.x, was.y, was.z - kDrop};
         const sh::HullTrace t = sh::trace_move(s.sv, was, {}, {}, down, sh::kTraceNoMonsters, e);
         const int64_t height = whole(was.z + body.mins.z - t.endpos.z);
-        them->n[kMsMidair]++;
-        them->n[kMsMidairHeight] += height > 0 ? height : 0;
-        them->n[kMsMidairHeightMax] = std::max(them->n[kMsMidairHeightMax], height);
+        server::stats_midair(g, them, height);
       }
     }
-    if (!died) continue;
-    if (enemy && them != nullptr) {
-      if (weapon >= 0) at(*them, weapon, kMsKills)++;
-      if (me != nullptr && now - me->spawned <= kSpawnFrag) them->n[kMsSpawnFrags]++;
-      them->run++;
-      if (quad) them->quad_run++;
-    }
-    if (enemy && weapon >= 0 && me != nullptr) at(*me, weapon, kMsDeaths)++;
-    if (me != nullptr) close_runs(*me);
+    if (died) server::stats_died(g, me, them, enemy, weapon, quad, now);
   }
   // What this frame read, for the next.
   for (int e = 1; e <= clients; e++) {

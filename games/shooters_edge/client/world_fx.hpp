@@ -97,6 +97,7 @@
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/q2_model_fx.hpp"
+#include "shooters_edge/client/shells.hpp"
 #include "shooters_edge/client/warps.hpp"
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/view/hand.hpp"
@@ -126,6 +127,8 @@ struct FxSwitches {
   // ce_respawns: an item about to come back drawn as a blue hologram filling in to solid
   // (classicenhance/hologram.hpp); off, it appears at once.
   bool respawns = false;
+  // ce_shells: the guns throw out their spent cases (shells.hpp); off, none.
+  bool shells = false;
   bool gibs_hidden = false;  // cl_gibfilter (either look): the pieces hidden lay no blood trail
   // cl_muzzleflash (either look): 1 every gun's flash lights the room, 2 the others' alone (the own
   // is the hand's: main.cpp), 0 none, a monster's neither.
@@ -277,6 +280,8 @@ struct FxState {
   const ge::brush::Map* marked = nullptr;
   std::shared_ptr<const MarkFaces> receivers;
   ge::detail::DecalPool marks;
+  ge::detail::ReceiverScratch receiver_scratch;  // the receivers' queries' (the cases' flight)
+  Cases cases;                                   // the guns' spent cases (ce_shells, shells.hpp)
   std::vector<std::array<float, 3>> mark_light;  // each slot's light, whites, as it was pressed
   ge::render::MarkFire
       mark_fire;  // the hot marks' flames and smoke as they cool (render/mark_fire.hpp)
@@ -460,6 +465,8 @@ struct FxFrame {
   std::vector<ge::render::MuzzleFire> flames;
   // The arc guns' beams to draw this frame (ce_beams), their look app/weapon_fx.hpp's bolt.
   std::vector<HeldBeam> beams;
+  // The effects' own sounds this frame (the cases landing: shells.hpp), for the window's sounds.
+  std::vector<DemoSound> sounds;
   // The marks on the walls this frame (ce_decals), three vertices a triangle, for the beams' pass.
   std::vector<ge::render::BurnVertex> burns;
   // The small flames burning on the hot marks this frame (ce_decals, render/mark_fire.hpp), for
@@ -651,6 +658,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
 struct HeldFire {
   std::vector<ge::render::MuzzleLook> looks;
   effects::MuzzleShots shots;
+  std::vector<const Ejection*> ejects;  // each weapon's spent cases (shells.hpp; null: none)
 };
 
 // Each built weapon's fire from its row (view/weapons.hpp) at kBuiltScale; or, when `at_eye`
@@ -663,5 +671,18 @@ bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string
 // `now_s`; `on` false (ce_muzzles 0): a shot throws nothing, its light alone. The player's own
 // beam (entity 1's) is rooted on the hand's muzzle.
 void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, FxFrame& out);
+
+// The guns' spent cases this frame (shells.hpp), from step_fx: the shooters' new shots, the pool
+// stepped, the cases placed in `out.models` and their landings in `out.sounds`.
+void step_cases(const FxScene& l, FxState& s, double t, double dt, FxFrame& out);
+// The hand's shot's cases (`on`: ce_shells), owed and thrown from its gun as it is at their moment.
+void held_cases(Cases& c, const HeldFire& f, const view::HandFrame& hand, bool on, double t);
+// The frame's effects' own sounds (the cases landing) moved into `into`, at most `most` there.
+void hear_fx(FxFrame& fx, std::vector<DemoSound>& into, std::size_t most = SIZE_MAX);
+// The window's own game's hand this frame: its lit flash (`lit`: cl_muzzleflash 1), its muzzle fire
+// (`fire_held`, ce_muzzles), its spent cases (`held_cases`, ce_shells) and their landings heard
+// (`hear_fx` into `heard`, at most `most` there).
+void hand_fx(FxState& s, HeldFire& f, const view::HandFrame& hand, bool lit, double now_s, double t,
+             FxFrame& fx, std::vector<DemoSound>& heard, std::size_t most);
 
 }  // namespace shooters_edge::client

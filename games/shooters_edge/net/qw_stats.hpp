@@ -3,6 +3,9 @@
 // their streaks and spawn frags, read off the QC server every frame (it changes nothing there) and
 // sent with the match's report as its columns (`kMatchStats`, named by `stat_name`).
 //
+// The counting rules and the lines are every classic game's (server/match_stats.hpp); this file
+// finds QuakeWorld's events.
+//
 // - AN ATTACK is ammunition spent on the weapon held the frame before, alive in both frames: a
 //   scattergun's shell is 6 pellets, a double's two shells 14, a nail one (the heavy spiker's two
 //   nails one), a grenade or rocket one, a cell one pulse of the arc. The axe's is a swing: its
@@ -49,6 +52,7 @@
 #include "net/report.hpp"
 
 #include "shooter/server.hpp"
+#include "shooters_edge/server/match_stats.hpp"
 
 namespace shooters_edge::server {
 struct QcServer;
@@ -60,10 +64,15 @@ namespace shooters_edge::net {
 enum class StatWeapon : uint8_t { axe, sg, ssg, ng, sng, gl, rl, lg };
 constexpr int kMsWeapons = 8;
 
+// QuakeWorld's weapons and items as the shared stats count them (server/match_stats.hpp).
+const server::StatsGame& qw_stats_game();
+
 // A weapon's four columns: attacks, hits, kills, deaths by it (kMsAttacks + 4 * weapon + k).
-constexpr int kMsAttacks = 0, kMsHits = 1, kMsKills = 2, kMsDeaths = 3;
+constexpr int kMsAttacks = server::kStatAttacks, kMsHits = server::kStatHits,
+              kMsKills = server::kStatKills, kMsDeaths = server::kStatDeaths;
+// The rest, as the shared columns lay them after QuakeWorld's eight weapons.
 enum Stat : uint8_t {
-  kMsRlSplash = 4 * kMsWeapons,
+  kMsRlSplash = 4 * kMsWeapons + server::kStatRlSplash,
   kMsGlSplash,
   kMsRlDamage,
   kMsMidair,
@@ -88,16 +97,12 @@ enum Stat : uint8_t {
   kMsCount
 };
 constexpr int kMatchStats = kMsCount;
+static_assert(kMatchStats == 4 * kMsWeapons + server::kStatRestCount);
 constexpr int stat_of(StatWeapon w, int k) { return 4 * static_cast<int>(w) + k; }
 // The column's name in a report ("rl_hits", "dmg_given", "streak_max").
 const char* stat_name(int stat);
 
-struct SeatStats {
-  std::array<int64_t, kMatchStats> n{};
-  int64_t run = 0, quad_run = 0;  // the kills since the last death, and of the quad held
-  double spawned = -1;            // the server's time the player last came in, s
-  double quad_carry = 0;          // the part of a second of quad not yet counted, s
-};
+using SeatStats = server::PlayerStats;
 
 // What the last frame read, by entity.
 struct StatsEyes {

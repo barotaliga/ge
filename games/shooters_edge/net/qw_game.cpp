@@ -46,6 +46,7 @@
 #include "shooters_edge/net/qw_coop.hpp"
 #include "shooters_edge/net/qw_coop_game.hpp"
 #include "shooters_edge/net/qw_endpoint_cfg.hpp"
+#include "shooters_edge/net/qw_game_names.hpp"
 #include "shooters_edge/net/qw_game_tv.hpp"
 #include "shooters_edge/net/qw_login.hpp"
 #include "shooters_edge/net/qw_match_rules.hpp"
@@ -261,96 +262,6 @@ const std::vector<gs::GameRule>& all_rules() {
   return rules;
 }
 
-// Each QuakeWorld game's own names for the server's settings (gs::SettingName): a server.cfg,
-// `+set`, rcon or vote line by either name sets the one setting. Both games share the names they
-// have in common, so one table serves both: Quake's alone (floodprot, floodprotmsg), the
-// Quake II's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
-constexpr gs::SettingName kSettingNames[] = {
-    {"hostname", "sv_hostname"},
-    {"maxclients", "sv_maxclients"},
-    {"maxspectators", "sv_maxspectators"},
-    {"password", "sv_password"},
-    {"spectator_password", "sv_spectatorpassword"},
-    {"timeout", "sv_timeout"},
-    {"floodprot", "sv_floodprot"},
-    {"floodprotmsg", "sv_floodprotmsg"},
-    {"sv_maplist", "sv_maprotation"},
-    {"flood_msgs", "sv_floodprot", 0},
-    {"flood_persecond", "sv_floodprot", 1},
-    {"flood_waitdelay", "sv_floodprot", 2},
-    {"allow_download", "sv_download"},
-    {"allow_download_skins", "sv_download_skins"},
-    {"allow_download_models", "sv_download_models"},
-    {"allow_download_sounds", "sv_download_sounds"},
-    {"allow_download_maps", "sv_download_maps"},
-    {"allow_download_other", "sv_download_other"},
-    {"sv_downloadchunksperframe", "sv_downloadchunks"},
-    {"sv_default_name", "sv_defaultname"},
-    {"sv_forcenick", "sv_loginname"},
-    {"sv_registrationinfo", "sv_loginwelcome"},
-    {"sv_forcespec_onfull", "sv_fullspectate"},
-    {"sv_reconnectlimit", "sv_reconnectwait"},
-    {"sv_enable_cmd_minping", "sv_minpingcmd"},
-    {"countrycode", "sv_country"},
-    {"city", "sv_city"},
-    {"coords", "sv_coords"},
-    {"hostport", "sv_publicaddr"},
-    {"sv_admininfo", "sv_admin"},
-    {"watervis", "sv_watervis"},
-    {"sv_kicktop", "sv_colorkick"},
-    {"sv_kickuserinfospamcount", "sv_infoflood", 0},
-    {"sv_kickuserinfospamtime", "sv_infoflood", 1},
-    {"sv_antilag_no_pred", "sv_antilagexact"},
-    {"sv_voip_echo", "sv_voipecho"},
-    {"sv_crypt_rcon", "sv_rconcrypt"},
-    {"sv_timestamplen", "sv_rcontime"},
-    {"sv_rconlim", "sv_rconrate"},
-    {"filterban", "sv_banmode"},
-    {"vip_password", "sv_vippassword"},
-    {"vip_values", "sv_vipvalues"},
-    {"maxvip_spectators", "sv_maxvipspectators"},
-};
-
-// `*mods`: each package's name and version, ", " between, cut with "+N more" past what one
-// serverinfo value should take of the whole string's 512 bytes.
-std::string mods_info(const std::vector<std::unique_ptr<ge::mod::LoadedMod>>& packages) {
-  constexpr size_t kMax = 120;
-  std::string out;
-  for (size_t k = 0; k < packages.size(); k++) {
-    const ge::mod::Manifest& m = packages[k]->manifest;
-    std::string one = m.name + " " + m.version;
-    const std::string more = " +" + std::to_string(packages.size() - k) + " more";
-    if (out.size() + 2 + one.size() > kMax - (k + 1 < packages.size() ? more.size() : 0)) {
-      out += more;
-      break;
-    }
-    if (!out.empty()) out += ", ";
-    out += one;
-  }
-  return out;
-}
-
-// The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
-// own table before they start: each mod sees the server it runs on, not a default of its own.
-void game_names(sv::RulesCommon& rules, const gs::ServerConfig& c) {
-  const struct {
-    const char* name;
-    std::string value;
-    const char* help;
-  } values[] = {
-      {"hostname", c.hostname, "The server's name, which is sv_hostname."},
-      {"maxclients", std::to_string(c.maxclients), "The most players, which is sv_maxclients."},
-      {"maxspectators", std::to_string(c.max_spectators),
-       "The most spectators, which is sv_maxspectators."},
-  };
-  for (const auto& v : values) {
-    if (rules.cvars.find(v.name) == nullptr)
-      rules.cvars.add({v.name, v.value, ge::console::kServer, v.help, ge::console::CvarKind::text});
-    else
-      rules.cvars.set(v.name, v.value, ge::console::Source::code);
-  }
-}
-
 // A file of the game's search path, for a compiled module's reads.
 bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& bytes) {
   const auto& files = *static_cast<const cl::SearchPath*>(ctx);
@@ -359,14 +270,6 @@ bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& by
   if (found.empty()) return false;
   bytes.assign(found.begin(), found.end());
   return true;
-}
-
-// The loop's client slots: the players' and, when spectators have their own, theirs.
-int slots(const gs::ServerConfig& c) {
-  int vip = 0;
-  if (const auto v = c.rules.find("sv_maxvipspectators"); v != c.rules.end())
-    vip = std::max(0, std::atoi(v->second.c_str()));
-  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
 // A save of Quake II's game the window asked to load (ListenHost::load): asked of `rules`, the
@@ -411,7 +314,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     // hulls (q2_native.hpp).
     sv::NativeQ2Options no;
     no.library = g.native_library;
-    no.max_clients = slots(c);
+    no.max_clients = qw_slots(c);
     no.game = std::filesystem::path(g.native_library).parent_path().filename().string();
     no.settings.emplace_back("deathmatch", "1");
     no.settings.emplace_back("hostname", c.hostname);
@@ -428,12 +331,12 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     so.speedjump = speedjump;
     so.pack = sv::q2_pack_of_folder(g.files.folder);  // a mission pack's folder plays its rules
     std::unique_ptr<sv::Q2Server> sq = sv::make_q2_server(so);
-    sq->sv.set.maxclients = slots(c);
+    sq->sv.set.maxclients = qw_slots(c);
     rules = sv::q2_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = slots(c);
+    so.loop.maxclients = qw_slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     so.read_file = &read_game_file;
@@ -447,7 +350,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   } else {
     sv::QcServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = slots(c);
+    so.loop.maxclients = qw_slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*g.program, so, error);
@@ -467,9 +370,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     for (const std::string& line : g.info_lines) rules.console(line);
   }
   // The C++ mods it runs, for a browser and a hub to show (docs/mods.md § Distribution).
-  if (const std::string mods = mods_info(g.packages); !mods.empty())
+  if (const std::string mods = qw_mods_info(g.packages); !mods.empty())
     rules.console("serverinfo *mods \"" + mods + "\"");
-  game_names(*rules, c);
+  qw_game_names(*rules, c);
   // The settings a config made with `set` (a match mod's switches), before the map starts.
   if (!brushes && g.native_library.empty())
     for (const auto& [setting, value] : c.created)
@@ -1807,7 +1710,7 @@ void fill_status(const void* g, ge::net::Status& st) {
   for (const char* name : {"fraglimit", "timelimit"}) {
     st.keys.emplace_back(name, std::to_string(number(name)));
   }
-  if (const std::string mods = mods_info(game.packages); !mods.empty())
+  if (const std::string mods = qw_mods_info(game.packages); !mods.empty())
     st.keys.emplace_back("*mods", mods);
   // The classic game the match is of (its content id): the hub draws its map and its board from
   // that game's files (hub/cards.hpp).
@@ -1954,8 +1857,10 @@ gs::ServerGame make() {
   g.base_dir = kGameFolder;
   g.rules = all_rules().data();
   g.rule_count = static_cast<int>(all_rules().size());
-  g.names = kSettingNames;
-  g.name_count = static_cast<int>(std::size(kSettingNames));
+  g.names = qw_setting_names().data();
+  g.name_count = static_cast<int>(qw_setting_names().size());
+  g.metas = qw_game_metas().data();
+  g.meta_count = static_cast<int>(qw_game_metas().size());
   g.create = create;
   g.destroy = destroy;
   g.frame_seconds = frame_seconds;
