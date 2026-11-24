@@ -99,9 +99,14 @@ Button& Console::add_button(std::string_view name, std::string_view help) {
     ++b->held;
     b->pressed = true;
   });
-  add_command("-" + n, help, [b](Console&, const Args&) {
-    if (b->held > 0) --b->held;
-  });
+  // A server may let go of a button for the player (a classic program does at a respawn or an
+  // intermission), never press one.
+  add_command(
+      "-" + n, help,
+      [b](Console&, const Args&) {
+        if (b->held > 0) --b->held;
+      },
+      kStuffable);
   return *b;
 }
 
