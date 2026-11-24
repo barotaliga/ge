@@ -151,6 +151,11 @@ struct Q2Sight {
   const ge::brush::Map* map = nullptr;  // null: no cut, every entity sent
   std::vector<Q2SightLinks> links;      // by entity number (kQ2Entities)
   std::vector<int32_t> groups;          // each area's group over the open portals (empty: no areas)
+  // An extended game (protocol extensions): an entity with a looping sound is kept by the hearing
+  // set and its loop's reach (80 units, then 1 over 0.0006 times its attenuation, 0.003 for the
+  // default or static, never past for none), not the sight's; past it one with a model is kept
+  // only when seen, one without is gone. A no-cull entity is linked `everywhere`.
+  bool extended = false;
 };
 // Starts a frame's links over `map` (null: no cut) for `entities` (an extended game's 8192);
 // every entity unlinked.
@@ -198,12 +203,13 @@ struct Q2Wire {
   uint8_t suppress = 0;
   // A later protocol's viewer (q2_wire_ext.cpp): what its client asked to be left out (its client
   // settings: no gun 1 the whole gun, 2 all but its model; no blend; recording turns every leaving
-  // out off; no gibs; no footsteps; no prediction) and the frame's flags for 36 (1 frames held
+  // out off; no gibs; no footsteps; no prediction; no flares, on an extended server) and the
+  // frame's flags for 36 (1 frames held
   // back, 2 the client's packets lost, 4 the client's moves ran short), cleared as it is written.
   struct Asked {
     int no_gun = 0;
     bool no_blend = false, recording = false, no_gibs = false, no_footsteps = false,
-         no_predict = false;
+         no_predict = false, no_flares = false;
   } asked;
   uint8_t frame_flags = 0;
   // The room the packet carrying the next frame has after the reliable data it carries (0: the

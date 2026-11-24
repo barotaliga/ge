@@ -3,8 +3,7 @@
 // as the window draws it, a thirtieth of a second a frame, a picture at each moment asked; or the
 // original (ce_warps off: the teleport's classic specks, the figure there or gone at once). Seen
 // from aside (another player arriving or leaving) or from his own eyes (`first_person`: his own
-// arrival, the ash streaming at the eyes, the weapon in hand assembling and the whole view opening
-// out of the arrival's flash and warp, at r_arrival).
+// arrival: the view's edges touched for a moment at r_arrival, the weapon whole, no ash).
 //
 // ge:summary Labs' helper: a player's warp in or out filmed through the window's world draw
 // ge:keywords lab warp film dust ash spawn teleport first-person held-warp film_warp warp_dust
@@ -85,8 +84,8 @@ inline void film_warp(ge::gpu::Device& d, client::WorldDraw& world, const ge::gp
       m.warp.shown = float(shown);
       s.models.push_back(m);
     } else {
-      s.held_shown = float(shown);
-      // His whole view's warp (the post pass's arrival, at r_arrival).
+      // His weapon stays whole and no ash is thrown at his eyes (world_fx.hpp): the view's edges
+      // alone are touched (the post pass's arrival, at r_arrival).
       s.arrival_s = age;
       if (take.palette.size() >= 768) {
         const double hi =
@@ -94,7 +93,7 @@ inline void film_warp(ge::gpu::Device& d, client::WorldDraw& world, const ge::gp
         for (int k = 0; k < 3; ++k) s.arrival_tint[k] = take.palette[42 + size_t(k)] / hi;
       }
     }
-    if (births)
+    if (births && !take.first_person)
       client::warp_dust(warp, dust, was, age, take.seed + uint32_t(age * 1000), &s.births);
     return s;
   };

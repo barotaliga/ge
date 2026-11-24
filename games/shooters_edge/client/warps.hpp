@@ -42,7 +42,9 @@ struct Warp {
   bool arriving = true;
 };
 
-inline constexpr double kArriveS = 0.7, kLeaveS = 0.8;
+// Short: a player who teleported in is whole at once, and one who left is not seen at the near end
+// longer than a glance (an enemy must never seem to stand where he no longer is).
+inline constexpr double kArriveS = 0.35, kLeaveS = 0.3;
 inline constexpr float kJumpUnits = 96, kJumpUnitsPerS = 1500;
 
 struct WarpWatch {

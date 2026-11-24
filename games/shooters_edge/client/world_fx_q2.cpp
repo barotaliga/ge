@@ -11,7 +11,7 @@
 // ge:keywords ef_spinninglights
 // ge:keywords ef_flag1 ef_flag2 ef_ionripper ef_tagtrail ef_plasma q2_mark
 // ge:skill render shooter
-// ge:test tests/shooters_edge_effects_test.cpp
+// ge:test tests/shooters_edge_q2_world_fx_test.cpp
 #include <algorithm>
 #include <cmath>
 #include <string_view>

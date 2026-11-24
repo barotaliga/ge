@@ -13,6 +13,7 @@
 #include "brush/areas.hpp"
 #include "classic/protocol/directions.hpp"
 #include "classic/protocol/info.hpp"
+#include "classic/protocol/q2_limits.hpp"
 #include "shooters_edge/server/md4.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 
@@ -587,12 +588,34 @@ bool q2_sight_hears(const Q2Wire& w, const float ear[3], sh::Vec3f at) {
   return a != 0 && b != 0 && ge::brush::areas_connected(w.sight->groups, a, b);
 }
 
+namespace {
+
+// Whether an extended game's looping sound at squared distance `d2` from the eye has faded out:
+// the distance less 80 units, times 0.0006 per unit of its attenuation (0.003 for the default or
+// static), past 1; one of no attenuation never fades.
+bool loop_out_of_reach(const Q2EntityState& s, float d2) {
+  float m = 0.003f;
+  if (s.loop_attenuation == 192) return false;  // none (q2_limits.hpp's coding)
+  const float a = ge::classic::protocol::q2_loop_attenuation_from_wire(s.loop_attenuation);
+  if (a > 0 && a != 3) m = a * 0.0006f;
+  const float reach = 80.0f + 1.0f / m;  // (distance − 80) × m > 1, squared
+  return d2 > reach * reach;
+}
+
+}  // namespace
+
 bool q2_sight_keeps(const Q2Wire& w, int n, const Q2EntityState& s, const float eye[3]) {
   if (n == w.slot + 1) return true;
   if (size_t(n) >= w.sight->links.size()) return true;
   const Q2SightLinks& l = w.sight->links[size_t(n)];
   if (l.everywhere) return true;
-  if ((s.renderfx & kBeam) != 0) {
+  // An extended game's looping sound goes by the hearing set (q2_wire.hpp, Q2Sight::extended).
+  const bool loop_heard = w.sight->extended && (s.sound & 0x3FFF) != 0;
+  if (loop_heard) {
+    bool heard = false;
+    for (int i = 0; i < l.count && !heard; i++) heard = bit(w.heard, l.clusters[i]);
+    if (!heard) return false;
+  } else if ((s.renderfx & kBeam) != 0) {
     if (l.count == 0 || !bit(w.heard, l.clusters[0])) return false;
   } else {
     bool seen = false;
@@ -605,14 +628,20 @@ bool q2_sight_keeps(const Q2Wire& w, int n, const Q2EntityState& s, const float 
     };
     if (!joined(l.area1) && (l.area2 == 0 || !joined(l.area2))) return false;
   }
-  if (s.model[0] == 0) {
-    float d2 = 0;
-    for (int k = 0; k < 3; k++) {
-      const float d = static_cast<float>(s.origin[k]) / 8.0f - eye[k];
-      d2 += d * d;
-    }
-    if (d2 > 400.0f * 400.0f) return false;
+  float d2 = 0;
+  for (int k = 0; k < 3; k++) {
+    const float d = static_cast<float>(s.origin[k]) / 8.0f - eye[k];
+    d2 += d * d;
   }
+  if (loop_heard) {  // within the loop's reach anything goes; past it only what is seen
+    if (!loop_out_of_reach(s, d2)) return true;
+    if (s.model[0] == 0) return false;
+    if ((s.renderfx & kBeam) != 0) return true;
+    for (int i = 0; i < l.count; i++)
+      if (bit(w.seen, l.clusters[i])) return true;
+    return false;
+  }
+  if (s.model[0] == 0 && d2 > 400.0f * 400.0f) return false;
   return true;
 }
 

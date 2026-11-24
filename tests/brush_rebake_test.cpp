@@ -120,6 +120,40 @@ TEST(rebake_direct_only_has_no_bounce) {
   }
 }
 
+// A 38 map's lamp (the fixture's `lamp` ceiling) lights the hall with no light entity, in its
+// texture's hue; the same map with a plain ceiling stays dark.
+TEST(rebake_a_lamp_s_panel_lights_the_room) {
+  const auto bake_with = [](const std::string& ceiling, float red[2]) {
+    Fixture fx = sample_fixture();
+    fx.rooms[0].ceiling = ceiling;
+    std::vector<uint8_t> bytes;
+    std::string err;
+    CHECK(write_bsp(fx, Family::v38, &bytes, &err));
+    Map m;
+    CHECK(read_bsp(bytes, &m, &err));
+    RebakeInput in;  // no lights; every texture an orange
+    in.albedo.assign(m.textures.size(), {0.8f, 0.4f, 0.1f});
+    RebakeOptions o;
+    o.atlas_width = 1024;
+    o.bake.samples = 8;
+    Rebaked out;
+    CHECK(rebake_map(m, in, o, &out, &err));
+    red[0] = red[1] = 0;
+    for (const uint32_t p : out.rgb9e5) {
+      float c[3];
+      unpack_rgb9e5(p, c);
+      red[0] = std::max(red[0], c[0]);
+      red[1] = std::max(red[1], c[2]);
+    }
+  };
+  float lamp[2], plain[2];
+  bake_with("lamp1", lamp);
+  bake_with("ceiling", plain);
+  CHECK(plain[0] == 0 && plain[1] == 0);
+  CHECK(lamp[0] > 0.1f);
+  CHECK(lamp[1] < lamp[0] * 0.1f);  // the hue squared: an orange lamp lights far more red than blue
+}
+
 // RGB9E5 keeps each channel within half a step of the largest channel's precision.
 TEST(rebake_rgb9e5) {
   const float cases[][3] = {
