@@ -1441,10 +1441,9 @@ bool mate_words(Game& g, int slot, const std::string& line) {
 QwRefereeGame referee_game(Game& g) {
   if (!g.qw || !g.progs_crc.empty() || !g.module.empty() || !g.native_library.empty()) return {};
   cl::Room* room = g.room && g.settings.lobby != 0 ? g.room.get() : nullptr;
-  QwRefereeGame f{g.qw.get(), &g.rules, room ? &room->lobby : nullptr};
-  f.announcer = room ? &room->announcer : nullptr;
-  f.overtime = &g.overtime;
-  f.settings = &g.settings;
+  QwRefereeGame f{
+      g.qw.get(),  &g.rules,   room ? &room->lobby : nullptr, room ? &room->announcer : nullptr,
+      &g.overtime, &g.settings};
   f.in_match = !room || room->lobby.phase == gs::LobbyPhase::match;
   f.now = g.now_s;
   f.map_known = [](const void* c, std::string_view m) {
@@ -1455,8 +1454,7 @@ QwRefereeGame referee_game(Game& g) {
   return f;
 }
 
-// A client's words before the mod: the admin's (qw_referee.hpp), the vote's (`vote`, `yes`, `no`);
-// with a room the leader's `addbot [skill]` and `removebot`, and with sv_lobby the lobby's own.
+// A client's words before the mod: the admin's, the vote's, a room's `addbot`, sv_lobby's own.
 bool room_words(void* ctx, int slot, const std::string& line) {
   Game& g = *static_cast<Game*>(ctx);
   if (g.qw && line.starts_with("ge_sheet") && slot >= 0 && slot < 32) {  // qw_sheet.hpp
