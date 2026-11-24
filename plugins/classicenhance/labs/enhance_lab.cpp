@@ -10,6 +10,10 @@
 // on every sheet, its PSNR in the table and its time; the weights are the classicenhance tool's
 // fetched copy, or any file of that network.
 //
+// The map views (enhance_map.hpp): the fixture map from its starts, its own textures beside the
+// enhanced; with `--source`, the `--maps` read out of the pack with the cache's textures
+// (`--cache`: the root the pipeline wrote to), as the game draws them under ce_textures.
+//
 // By default it runs on the lab's own painted fixtures (fixtures.hpp), so its pictures and digest
 // are the same everywhere and may be published. `--source=<path>` runs it on the classic pack
 // found there (source.hpp: any pack that reads); those pictures are derived from the
@@ -27,6 +31,7 @@
 #include <vector>
 
 #include "classicenhance/cache.hpp"
+#include "classicenhance/labs/enhance_map.hpp"
 #include "classicenhance/labs/fixtures.hpp"
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/planes.hpp"
@@ -318,6 +323,11 @@ void run(ge::lab::Lab& lab) {
               {{"scale", std::to_string(scale)}}},
              over);
   }
+
+  // The map views: a map drawn from its starts with its own textures and the enhanced ones.
+  if (path.empty() || !lab.arg("maps").empty()) {
+    ce::labs::map_views(lab, path, lab.arg("maps"), lab.arg("cache"), opts);
+  }
 }
 
 const ge::lab::LabSpec kSpec{
@@ -334,6 +344,11 @@ const ge::lab::LabSpec kSpec{
         {"limit", "8", "with --source, how many textures (in the pack's order)"},
         {"names", "", "with --source, texture names, comma-separated, in place of --limit"},
         {"weights", "", "the trained upscaler's weights file: adds its column; empty: kernel only"},
+        {"maps", "start",
+         "with --source, the maps drawn from their starts with the cache's textures (comma "
+         "separated, without maps/ and .bsp; none: no map views)"},
+        {"cache", "",
+         "with --source, the cache root the pipeline wrote to (empty: the default root)"},
     },
     "--scale=2",
     run,
