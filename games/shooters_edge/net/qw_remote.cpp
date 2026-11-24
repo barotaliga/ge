@@ -396,10 +396,11 @@ void predict_others(Remote& r, double now_s) {
 
 // THE PLAYER'S OWN JUMP AND MISSILES, at the weapon prediction's shown command: a jump the
 // predicted move took on a command shown for the first time plays its sound at once (the server's
-// copy on the player dropped, `cl_predict_jump`); each nail, rocket or grenade the weapon pass
-// fired is thrown ahead of the server (client/own_missiles.hpp, `cl_predict_projectiles`) from
-// the player's predicted place and view on its command; then every stand-in flies to `now_s`, is
-// handed to the server's copy near it and is drawn into the demo's state.
+// copy on the player dropped, `cl_predict_jump`); each nail, rocket, grenade or pack missile the
+// weapon pass fired is thrown ahead of the server (client/own_missiles.hpp,
+// `cl_predict_projectiles`) from the player's predicted place and view on its command; then every
+// stand-in flies to `now_s`, is handed to the server's copy near it and is drawn into the demo's
+// state.
 void own_ahead(Remote& r, client::DemoState& d, double now_s) {
   const QwClientEnd& c = r.end;
   const int me = c.playernum;
@@ -440,24 +441,13 @@ void own_ahead(Remote& r, client::DemoState& d, double now_s) {
     if (static_cast<int32_t>(shown - r.jump_played_to) > 0) r.jump_played_to = shown;
   }
   const int ping = me >= 0 && me < 32 ? c.players[me].weapon.ping_ms : 0;
+  const bool deathmatch = info_get(c.serverinfo, "deathmatch") != "0";
   for (const RemoteWeapon::Fired& f : r.weapon.fired) {
     client::OwnShot shot;
-    switch (f.shot.sound) {
-      case ge::classic::WeaponSound::nailgun:
-        shot.kind = client::OwnMissileKind::nail;
-        break;
-      case ge::classic::WeaponSound::super_nailgun:
-        shot.kind = client::OwnMissileKind::super_nail;
-        break;
-      case ge::classic::WeaponSound::rocket:
-        shot.kind = client::OwnMissileKind::rocket;
-        break;
-      case ge::classic::WeaponSound::grenade:
-        shot.kind = client::OwnMissileKind::grenade;
-        break;
-      default:
-        continue;
-    }
+    const int throws =
+        client::own_shot_kind(f.shot.sound, f.shot.copies, f.weapon, f.rules, shot.kind);
+    if (throws == 0) continue;
+    shot.deathmatch = deathmatch;
     shot.origin = r.prediction;
     for (int i = 0; i < r.ahead_count; i++)
       if (r.ahead_seq[i] == f.command) shot.origin = r.ahead_each[i].origin;
@@ -466,7 +456,11 @@ void own_ahead(Remote& r, client::DemoState& d, double now_s) {
     shot.midair = f.midair;
     for (uint32_t q = f.command + 1; static_cast<int32_t>(q - next) < 0; q++)
       if (c.sent_seq[q & 63] == q) shot.age_s += c.sent[q & 63].msec * 0.001;
-    client::own_missile_fire(r.missiles, shot, now_s, c.latency, ping, r.prediction);
+    for (int k = 0; k < throws; k++) {
+      shot.spread = k;
+      if (shot.kind == client::OwnMissileKind::laser) shot.side = throws > 1 ? 1 - 2 * k : 0;
+      client::own_missile_fire(r.missiles, shot, now_s, c.latency, ping, r.prediction);
+    }
   }
   const sh::Hull* world =
       r.world != nullptr && !r.world->empty() ? &(*r.world)[0].hulls[0] : nullptr;

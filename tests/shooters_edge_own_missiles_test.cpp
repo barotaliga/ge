@@ -242,3 +242,52 @@ TEST(at_most_96_fly_and_a_new_one_replaces_the_farthest) {
   for (const cl::OwnMissile& o : m.flying) farthest = std::max(farthest, o.origin.x - kAt.x);
   CHECK(farthest < cl::kOwnMissilesMost - 1 + 8 - 0.5f);  // the one at +95 went
 }
+
+TEST(the_packs_shots_leave_as_their_rules_launch_them) {
+  cl::OwnMissiles m;
+  cl::OwnShot shot;
+  shot.origin = kAt;
+  shot.angles = {0, 0, 0};  // due east (+x)
+  // Scourge of Armagon's twin laser bolts: 12 ahead, 1.8 up, 4.2 to each side, at 1000.
+  shot.kind = cl::OwnMissileKind::laser;
+  shot.side = 1;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  const cl::OwnMissile& laser = m.flying.back();
+  CHECK(near(laser.origin.x, kAt.x + 12) && near(laser.origin.y, kAt.y - 4.2f) &&
+        near(laser.origin.z, kAt.z + 1.8f));
+  CHECK(near(laser.velocity.x, 1000));
+  // Dissolution of Eternity's multi rockets: in a deathmatch turned 3.3 and 6.6 degrees each way.
+  shot.kind = cl::OwnMissileKind::multi_rocket;
+  shot.spread = 0;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  const cl::OwnMissile& rocket = m.flying.back();
+  CHECK(near(rocket.origin.x, kAt.x + 8) && near(rocket.origin.z, kAt.z + 16));
+  CHECK(rocket.velocity.y < -100 && rocket.velocity.y > -130);  // 1000 sin 6.6 to the right
+  // In single play with 80 units/s to the right instead.
+  shot.deathmatch = false;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  CHECK(near(m.flying.back().velocity.x, 1000) && near(m.flying.back().velocity.y, -80));
+  // The plasma ball waits 0.1 s 24 ahead and 16 up, then flies at 1250.
+  shot.kind = cl::OwnMissileKind::plasma;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  cl::own_missiles_step(m, nullptr, 800, 10.05);
+  CHECK(near(m.flying.back().origin.x, kAt.x + 24));
+  cl::own_missiles_step(m, nullptr, 800, 10.1 + 0.02);
+  CHECK(near(m.flying.back().origin.x, kAt.x + 24 + 25, 0.1f));
+}
+
+TEST(a_proximity_grenade_sticks_where_it_lands) {
+  std::unique_ptr<cl::LoadedMap> map = halls();
+  const sh::Hull* world = &map->bsp.world.models[0].hulls[0];
+  cl::OwnMissiles m;
+  cl::OwnShot shot;
+  shot.kind = cl::OwnMissileKind::prox;
+  shot.origin = kAt;
+  shot.angles = {0, 0, 0};
+  CHECK(cl::own_missile_fire(m, shot, 10, 3, 100, kAt));
+  cl::own_missiles_step(m, world, 800, 11);
+  CHECK(m.flying.size() == 1 && m.flying[0].stuck);
+  const sh::Vec3f at = m.flying[0].origin;
+  cl::own_missiles_step(m, world, 800, 11.3);
+  CHECK(m.flying.size() == 1 && sh::length(m.flying[0].origin - at) < 0.01f);
+}
