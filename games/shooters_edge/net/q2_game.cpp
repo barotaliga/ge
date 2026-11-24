@@ -41,6 +41,7 @@
 #include "server/skew.hpp"
 #include "server/status.hpp"
 #include "server/web_files.hpp"
+#include "shooters_edge/bots/bot_seats.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
@@ -454,7 +455,48 @@ struct Game {
   // settings the server started with.
   Q2Match match;
   gs::ServerConfig match_cfg;
+  // The bots `sv_bots` seats (bots/bot_seats.hpp): players with no connection, their moves run
+  // each frame after the clients'.
+  bots::BotSeats bots;
 };
+
+// The bots' moves for the next frame, one rules step long.
+void bot_moves(Game& g, std::vector<sh::Packet>& out) {
+  if (bots::bot_seats_count(g.bots) == 0) return;
+  const int msec = static_cast<int>(ge::core::num::round(g.rules->sv.set.mintic * 1000));
+  bots::bot_seats_packets(g.bots, g.rules, msec, out);
+}
+
+// `sv_bots` fighters seated on the first map: deathmatch only, on our own rules.
+bool seat_bots(Game& g, int count, std::string& error) {
+  if (count <= 0) return true;
+  const ge::console::Cvar* dm = g.rules->cvars.find("deathmatch");
+  if (sv::q2_of(g.rules) == nullptr || dm == nullptr || !dm->on()) {
+    g.said.emplace_back("sv_bots " + std::to_string(count) +
+                        ": the bots play deathmatch on the server's own rules, so this game has "
+                        "none");
+    return true;
+  }
+  for (int i = 0; i < count; i++)
+    if (bots::bot_seats_add(g.bots, g.rules, g.map->spec, ge::shooterbots::AimSkill::average, 0,
+                            error) < 0) {
+      std::string why = "sv_bots " + std::to_string(count) + ": ";
+      why.append(error).append(" (keep sv_bots under sv_maxclients)");
+      error = std::move(why);
+      return false;
+    }
+  return true;
+}
+
+// The bots on a level just started: connected again and made anew on its nav; a map they cannot
+// walk sends them away.
+void bots_enter(Game& g) {
+  std::vector<int> gone;
+  std::string error;
+  bots::bot_seats_enter(g.bots, g.rules, g.map->spec, true, gone, error);
+  for (const int slot : gone) g.rules.drop(slot);
+  if (!gone.empty() && g.net) g.net->log.push_back("the bots leave: " + error);
+}
 
 // `m` mended as it loads (server/q2_mapfix.hpp): the visibility patch, then an entity file.
 void mend(Game& g, cl::LoadedMap& m) {
@@ -570,6 +612,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->rules.console(line);
   }
   if (!g->rules.start(g->map->spec, error)) return nullptr;
+  g->bots.seed = c.seed;
+  if (!seat_bots(*g, c.bots, error)) return nullptr;
   q2_votes_rules(g->votes, g->rules, gs::vote_settings(c));
   g->match_cfg = c;
   Game* game = g.get();
@@ -991,6 +1035,7 @@ void change_level(Game& g) {
   } else {
     g.map = std::move(next);
   }
+  bots_enter(g);
   g.cfg.wire.map_checksum = sv::q2_map_checksum(g.map->file);
   sv::q2_sky(*g.map->spec.brushes, g.cfg.wire);
   if (g.net) q2_net_level(*g.net, g.cfg.wire);
@@ -1094,7 +1139,9 @@ void crash(void* g, const std::string& text) {
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
   if (game.relay.spawned) return;  // no game while it relays
-  game.rules.frame(nullptr, 0);
+  std::vector<sh::Packet> moves;
+  bot_moves(game, moves);
+  game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   change_level(game);
 }
 
@@ -1127,6 +1174,15 @@ void fill_status(const void* g, ge::net::Status& st) {
     p.score = static_cast<int32_t>(game.rules->world.clients[i].numbers.frags);
     p.ping_ms = static_cast<uint16_t>(std::clamp(c.ping_ms, 0, 9999));
     p.flags = c.spectator ? ge::net::kPlayerSpectator : 0;
+    st.players.push_back(std::move(p));
+  }
+  for (int i = 1; i < sh::kMaxClients; i++) {  // the bots, seated with no connection
+    const bots::SeatBot* b = game.bots.bots[static_cast<size_t>(i)].get();
+    if (b == nullptr || !game.rules->clients[i].active) continue;
+    ge::net::StatusPlayer p;
+    p.name = b->name;
+    p.score = static_cast<int32_t>(game.rules->world.clients[i].numbers.frags);
+    p.flags = ge::net::kPlayerBot;
     st.players.push_back(std::move(p));
   }
 }
@@ -1220,6 +1276,8 @@ void net_frame(void* g, int64_t now_us) {
     q2_relay_frame(game.relay, now_us);
     return;
   }
+  game.net->local_moves.clear();
+  bot_moves(game, game.net->local_moves);
   q2_net_frame(*game.net, now_us);
   gs::web_files_frame(game.web, game.now_s);
   if (!game.relay.conns.empty()) q2_relay_frame(game.relay, now_us);

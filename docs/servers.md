@@ -37,6 +37,10 @@ are local seats of its classic endpoint: shown to every client as players, sent 
 lines, a countdown run out restarts the map into the match, and the match's end brings the next
 map up in warmup. With `LobbySettings::humans` set (a dedicated server's 1) bots alone never
 count down, and a bot never leads while a player is seated (the `se-dedicated-lobby` lab).
+Quake II's server seats `sv_bots` too, in deathmatch on its own rules: the same bot seats
+(`games/shooters_edge/bots/bot_seats.hpp`, which QuakeWorld's lobby keeps its bots in), their nav
+built off the map's brushes, Quake II's arsenal, their moves run after the clients' each frame, a
+client never given a bot's slot, and the status listing them as bots.
 The lobby and the warmup are apart: with `LobbySettings::warm_on_join` off (a game that has a
 lobby screen of its own, as Shooter's Edge's window does) a player waits on that screen, off the
 map, until `warmup` puts him in the warmup (`sitout` takes him back, `lobby_on_map` says where a
