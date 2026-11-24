@@ -452,9 +452,9 @@ not-taken (why named). Our own program runs these; a mod's program keeps its own
 | A17 | `lockmap`, `prewar`, `exclusive`, `infolock` toggles | missing | `sv_prewar` and `sv_lockjoin` are settings already | 3 |
 | A18 | admins' votes as a veto | missing | | 3 |
 | A19 | captain mode: `captain` elections, numbered picks in turn A B B A, the lines | done | net/qw_captains.hpp on the engine's election and draft; numbers as frags, picks by `impulse N`, no fire and no team change while picking; our fire line reads "Nobody fires while the captains pick" | |
-| A22 | team picking un-readies every waiting player | missing | with sv_lobby picking runs in the warmup; a ready player stays ready | 2 |
+| A22 | team picking un-readies every waiting player | done | `qw_captains.cpp` un-readies each numbered player through the lobby; `shooters_edge_qw_captains_test` | 2 |
 | A23 | `status1`'s "Team picking in progress" and "N captain present" | missing | | 3 |
-| A24 | the team name's refusals out of captain mode: no change during a match or its countdown, no empty team for a ready player | missing | | 2 |
+| A24 | the team name's refusals out of captain mode: no change during a match or its countdown, no empty team for a ready player | done | `qw_captains_info` refuses and puts the player's own back; `shooters_edge_qw_captains_test` | 2 |
 | A20 | coaches | missing | | 3 |
 | A21 | the engine's other referee words (`tl`, `ban`, `mute`, `shuffle`, `readyall`) | not-taken | not QuakeWorld's: left to a mod | |
 
