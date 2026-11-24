@@ -252,6 +252,22 @@ bool lock(QwReferee& r, const QwRefereeGame& g, int slot) {
   return true;
 }
 
+// Captain mode's view of the game: the referee's, with the server's one election.
+QwCaptainsGame captains_game(QwReferee& r, const QwRefereeGame& g) {
+  QwCaptainsGame c;
+  c.qw = g.qw;
+  c.election = &r.election;
+  c.lobby = g.lobby;
+  c.settings = g.settings;
+  const ge::console::Cvar* teamplay =
+      g.rules && g.rules->common ? g.rules->common->cvars.find("teamplay") : nullptr;
+  c.team_mode = teamplay != nullptr && teamplay->on();
+  c.in_match = g.lobby != nullptr && g.lobby->phase != gs::LobbyPhase::warmup;
+  c.now = g.now;
+  c.seed = g.settings != nullptr ? g.settings->seed : 0;
+  return c;
+}
+
 }  // namespace
 
 const gs::RefereeWords& qw_referee_words() {
@@ -264,6 +280,7 @@ bool qw_referee_line(QwReferee& r, const QwRefereeGame& g, int slot, const std::
       slot >= ge::shooter::kMaxClients)
     return false;
   forget_gone(r, *g.qw);
+  if (qw_captains_line(r.captains, captains_game(r, g), slot, line)) return true;
   if (line == "forcestart") return force_start(r, g, slot);
   if (line == "lock") return lock(r, g, slot);
   std::array<int, gs::kLobbySeats> ids{};
@@ -302,6 +319,8 @@ bool qw_referee_line(QwReferee& r, const QwRefereeGame& g, int slot, const std::
 void qw_referee_frame(QwReferee& r, const QwRefereeGame& g) {
   if (g.qw == nullptr || g.rules == nullptr) return;
   forget_gone(r, *g.qw);
+  r.last = g;
+  qw_captains_frame(r.captains, captains_game(r, g));
   force_frame(r, g);
   if (r.locked_until > 0 && g.now >= r.locked_until) {
     r.locked_until = 0;
@@ -313,6 +332,22 @@ std::string qw_referee_lock(const QwReferee& r, double now) {
   if (r.locked_until <= now) return {};
   const auto n = static_cast<int>(std::max(1.0, whole_up(r.locked_until - now)));
   return "server is temporary locked: " + std::to_string(n) + (n == 1 ? " second" : " seconds");
+}
+
+uint8_t qw_referee_buttons(QwReferee& r, const QwRefereeGame& g, int slot, uint8_t buttons) {
+  return qw_captains_buttons(r.captains, captains_game(r, g), slot, buttons);
+}
+
+void qw_referee_hooks(QwServer& s, QwReferee& r) {
+  s.move_ctx = &r;
+  s.impulse = [](void* ctx, int slot, uint8_t impulse, bool fresh) {
+    QwReferee& me = *static_cast<QwReferee*>(ctx);
+    return qw_captains_impulse(me.captains, captains_game(me, me.last), slot, impulse, fresh);
+  };
+  s.info_rule = [](void* ctx, int slot, const std::string& key, const std::string& value) {
+    QwReferee& me = *static_cast<QwReferee*>(ctx);
+    return qw_captains_info(me.captains, captains_game(me, me.last), slot, key, value);
+  };
 }
 
 }  // namespace shooters_edge::net

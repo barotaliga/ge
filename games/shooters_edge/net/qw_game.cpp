@@ -1581,8 +1581,7 @@ void load_bans(QwServer& s) {
   }
 }
 
-// A client's words: a login's first (qw_login.hpp), then the lobby's and the votes'.
-// The lobby's lock and prewar on a client (qw_match_rules.hpp).
+// The lobby's lock and prewar on a client (qw_match_rules.hpp); the referee's lock and picking.
 bool may_play(void* ctx, const std::string& name, std::string& why) {
   const Game& g = *static_cast<const Game*>(ctx);
   why = qw_referee_lock(g.referee, g.now_s);
@@ -1591,6 +1590,7 @@ bool may_play(void* ctx, const std::string& name, std::string& why) {
 }
 uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
   Game& g = *static_cast<Game*>(ctx);
+  buttons = qw_referee_buttons(g.referee, referee_game(g), slot, buttons);
   if (!g.room || g.settings.lobby == 0 || slot < 0 || slot >= gs::kLobbySeats) return buttons;
   std::string tell;
   buttons = prewar_buttons(g.room->lobby, slot, buttons, g.rules->sv.time,
@@ -1598,7 +1598,7 @@ uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
   if (!tell.empty() && g.qw) client_print(*g.qw, slot, 2, tell);
   return buttons;
 }
-
+// A client's words: a login's first (qw_login.hpp), then the lobby's and the votes'.
 bool game_words(void* ctx, int slot, const std::string& line) {
   Game& game = *static_cast<Game*>(ctx);
   if (game.login && qw_login_line(*game.login, slot, line)) return true;
@@ -1689,8 +1689,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   game.qw->game_ctx = &game;
   game.qw->may_play = may_play;
   game.qw->buttons = move_buttons;
-  // Logins, on a dedicated server and on the window's own match alike (its player is a local seat,
-  // never asked).
+  qw_referee_hooks(*game.qw, game.referee);
+  // Logins, on a dedicated server and on the window's own match (its local seat never asked).
   if (qw_login_wanted(game.settings)) {
     game.login = std::make_unique<QwLogin>();
     if (!qw_login_open(*game.login, *game.qw, game.settings, error)) return false;

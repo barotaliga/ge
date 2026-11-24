@@ -502,6 +502,24 @@ full. The book asks the game to seat or unseat a player and says every line; the
 the seats again from a seed. Quake II's server plays it with `dmflags` 64 or 128, every player
 in his team's look.
 
+## Elections and picks
+
+`engine/server/election.hpp`. A role a player asks the others for (a captain, a coach, an admin)
+is an election: ONE is open on a server at a time whatever it is for (the role is data: its name
+and a team), the people playing are the voters and answer `yes` (`no` takes it back), the
+candidate's own vote counts when he is one (a coach who watches is not), and it passes on the
+round-up of a percent (51 to 100) of the voters, at least two. It times out after 60 seconds, the
+candidate may call it off, and he waits 30 seconds before he asks again. The game gives the role
+when one passes and says the lines in its own words.
+
+`engine/server/draft.hpp`. Two captains picking the other players in turn: each waiting player
+has a number (1, 2, 3... in slot order), the captain who picks first is drawn from the seed, then
+A, B, B, A, B, A...; the last one goes by himself, a late joiner takes the lowest free number,
+and a captain who leaves ends it. Our QuakeWorld server's captain mode is both in QuakeWorld's
+words (`games/shooters_edge/net/qw_captains.hpp`): `captain` before a match in team play, the
+numbers shown as frags, a pick by the number keys, each pick taking the captain's team name and
+colours, nobody firing and nobody changing team while they pick.
+
 ## The referee
 
 `engine/server/referee.hpp`. A player who gives the server's administrator password in the game

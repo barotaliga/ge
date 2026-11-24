@@ -30,7 +30,7 @@
 // module, a game library) keeps its own admin, and these words go to it untouched.
 //
 // ge:summary QuakeWorld's admin in the game on the engine's referee: k_admincode, forcebreak,
-// ge:summary forcemap, kick with a reason, forcestart and the server lock
+// ge:summary forcemap, kick with a reason, forcestart and the server lock; captain mode beside it
 // ge:keywords qw-referee qw-admin k_admins k_admincode admin-code forcestart forcebreak forcemap
 // ge:keywords kick-reason server-lock lock qw_referee_line qw_referee_frame qw_referee_lock
 // ge:skill net shooter
@@ -41,8 +41,10 @@
 #include <string>
 #include <string_view>
 
+#include "server/election.hpp"
 #include "server/referee.hpp"
 #include "server/server.hpp"
+#include "shooters_edge/net/qw_captains.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/match_rules.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -50,15 +52,6 @@
 namespace shooters_edge::net {
 
 struct QwServer;
-
-struct QwReferee {
-  ge::server::Referee book;
-  std::array<int, ge::server::kLobbySeats> ids{};  // each referee's user id when he became one
-  double force_ends = 0;                           // forcestart's count runs out (0: none)
-  int force_by = -1;                               // the admin who gave it
-  int force_shown = -1;                            // the whole seconds last shown
-  double locked_until = 0;                         // `lock`: joins refused until then (0: open)
-};
 
 // What one call needs of the game. `lobby` and `announcer` null: no lobby (sv_lobby 0).
 struct QwRefereeGame {
@@ -74,6 +67,18 @@ struct QwRefereeGame {
   const void* map_ctx = nullptr;
 };
 
+struct QwReferee {
+  ge::server::Referee book;
+  std::array<int, ge::server::kLobbySeats> ids{};  // each referee's user id when he became one
+  double force_ends = 0;                           // forcestart's count runs out (0: none)
+  int force_by = -1;                               // the admin who gave it
+  int force_shown = -1;                            // the whole seconds last shown
+  double locked_until = 0;                         // `lock`: joins refused until then (0: open)
+  ge::server::Election election;  // the server's one election, whatever role (election.hpp)
+  QwCaptains captains;            // captain mode (qw_captains.hpp)
+  QwRefereeGame last;             // the game as the last frame saw it (the hooks' view)
+};
+
 // QuakeWorld's words for the engine's book.
 const ge::server::RefereeWords& qw_referee_words();
 // A client's line: true when it was the admin's (said and done).
@@ -82,5 +87,9 @@ bool qw_referee_line(QwReferee& r, const QwRefereeGame& g, int slot, const std::
 void qw_referee_frame(QwReferee& r, const QwRefereeGame& g);
 // The line a joining player reads while `lock` holds ("": open).
 std::string qw_referee_lock(const QwReferee& r, double now);
+// Captain mode's say over a move's buttons (qw_captains.hpp): no fire while picking.
+uint8_t qw_referee_buttons(QwReferee& r, const QwRefereeGame& g, int slot, uint8_t buttons);
+// The server's `impulse` and `info_rule` hooks given to the referee, on the game it last saw.
+void qw_referee_hooks(QwServer& s, QwReferee& r);
 
 }  // namespace shooters_edge::net

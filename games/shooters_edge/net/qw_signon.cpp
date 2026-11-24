@@ -656,7 +656,8 @@ void string_command(QwServer& s, int slot, const std::string& line) {
           }
           *t = std::move(plain);
         }
-      cmd_setinfo(s, slot, key, value);
+      if (s.info_rule == nullptr || s.info_rule(s.move_ctx, slot, key, value))
+        cmd_setinfo(s, slot, key, value);
     }
   } else if (cmd == "serverinfo") {
     std::vector<std::pair<std::string, std::string>> pairs;
