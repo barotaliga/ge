@@ -10,6 +10,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <system_error>
 
 #include "brush/cells.hpp"
 #include "brush/read.hpp"
@@ -18,6 +20,7 @@
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/load_order.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_monsters.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
@@ -44,6 +47,22 @@ void count(RemixReport& r, std::string_view from, std::string_view to) {
       return;
     }
   r.swaps.push_back({std::string(from), std::string(to), 1});
+}
+
+std::string lower_ascii(std::string_view s) {
+  std::string out(s);
+  for (char& c : out)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return out;
+}
+
+// The folder of the install at `basedir` named `name` in any case, as it is spelled on disk, or "".
+std::string pack_folder(const std::string& basedir, std::string_view name) {
+  std::error_code ec;
+  for (const std::filesystem::directory_entry& e : std::filesystem::directory_iterator(basedir, ec))
+    if (e.is_directory(ec) && lower_ascii(e.path().filename().string()) == name)
+      return e.path().filename().string();
+  return {};
 }
 
 void write_block(const ge::progs::EntityBlock& b, std::string& out) {
@@ -141,6 +160,16 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::text,
               .values = kWhoseValues},
              &out->charset);
+  cvars.bind({.name = "cr_expansions",
+              .fallback = "1",
+              .flags = ge::console::kArchive,
+              .help = "Whether classic remix takes the mission packs in too: the other game's "
+                      "packs' maps, their weapons and items swapped by what they do, and the "
+                      "played pack's own weapons laid down where it has them.",
+              .kind = ge::console::CvarKind::boolean,
+              .values = "0: the base games alone, a pack's own items left out; 1: the packs "
+                        "installed beside each game too (the default)"},
+             &out->expansions);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -242,6 +271,7 @@ RemixState remix_check(const RemixSettings& s, std::string_view played,
   st.on = true;
   st.other = other->id;
   st.other_basedir = other->basedir;
+  st.expansions = s.expansions;
   return st;
 }
 
@@ -390,6 +420,8 @@ struct Item {
   std::string becomes;  // "" dropped
   int32_t bits = 0;
   const pf::PoolItem* pool = nullptr;
+  const pf::PackSpawn* pack = nullptr;  // the played pack's own weapon for its role, if any
+  std::string by_role;                  // what the role table gave, before the balance
 };
 
 std::string where(const Item& it) {
@@ -592,7 +624,7 @@ void lay_pools(std::vector<Item>& items, std::string_view to, const pf::RemixBal
 
 bool remix_entities(std::string_view text, std::string_view from, std::string_view to,
                     std::string& out, RemixReport* report, std::string& error,
-                    const pf::RemixBalance& balance) {
+                    const pf::RemixBalance& balance, const pf::RemixPacks& packs) {
   RemixReport mine;
   RemixReport& r = report != nullptr ? *report : mine;
   r = {};
@@ -616,15 +648,23 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
                 &it.at[1], &it.at[2]);
     it.pool = pf::pool_item(from, to, cls);
     if (it.pool == nullptr) {
-      const pf::ItemSwap swap = pf::remix_item(from, to, cls, it.flags);
+      const pf::ItemSwap swap = pf::remix_item(from, to, cls, it.flags, packs);
       it.becomes = std::string(swap.becomes);
       it.bits = swap.bits;
+      it.by_role = it.becomes;
+      if (swap.known) it.pack = pf::pack_spawn(from, to, cls, it.flags, packs);
     }
     items.push_back(std::move(it));
   }
   r.items = static_cast<int>(items.size());
   lay_pools(items, to, balance, r);
   balance_weapons(items, to, balance, r);
+  // The played pack's own weapon where the balance left the role's base weapon standing.
+  for (Item& it : items)
+    if (it.pack != nullptr && !it.becomes.empty() && it.becomes == it.by_role) {
+      it.becomes = std::string(it.pack->class_name);
+      it.bits = it.pack->bits;
+    }
   std::vector<const Item*> by_block(blocks.size(), nullptr);
   for (const Item& it : items) {
     by_block[it.block] = &it;
@@ -700,14 +740,30 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
     return false;
   }
   std::string why;
-  SearchPath own;
-  if (!open_game_dir(state.other_basedir, "", r.files, why, *other) ||
+  SearchPath base, own;
+  if (!open_game_dir(state.other_basedir, "", base, why, *other) ||
       !open_game_dir(basedir, game, own, why, *mine)) {
     error = "Classic remix could not open the games' files: " + why;
     r.files = {};
     return false;
   }
-  for (ge::vfs::Source& src : own.vfs.sources) {  // the played game's over the other's
+  // The other game's mission packs first (`cr_expansions`), under its base game, so only what the
+  // packs alone hold (their maps) comes from them; then the played game's over both.
+  if (state.expansions)
+    for (const ce::MissionPack& p : other->packs) {
+      const std::string dir = pack_folder(state.other_basedir, p.folder);
+      if (!dir.empty() && !ge::vfs::add_game(&r.files.vfs, state.other_basedir, dir, &why,
+                                             load_order_of(*other).layout)) {
+        error = "Classic remix could not open the games' files: " + why;
+        r.files = {};
+        return false;
+      }
+    }
+  std::vector<ge::vfs::Source> sources = std::move(base.vfs.sources);
+  for (ge::vfs::Source& src : own.vfs.sources) sources.push_back(std::move(src));
+  for (const ce::MissionPack& p : mine->packs)
+    if (state.expansions && lower_ascii(game) == p.folder) r.pack = std::string(p.folder);
+  for (ge::vfs::Source& src : sources) {  // the other's base, then the played game's over it
     const bool ok =
         src.kind == ge::vfs::SourceKind::directory
             ? ge::vfs::add_directory(&r.files.vfs, src.path, src.game, &why)
@@ -798,7 +854,7 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   RemixReport rep;
   std::string text;
   if (!remix_entities(m->spec.entities, remix->state.other, remix->played, text, &rep, why,
-                      remix->balance)) {
+                      remix->balance, {remix->state.expansions, remix->pack})) {
     error = "Classic remix could not read " + name + "'s items: " + why;
     return nullptr;
   }

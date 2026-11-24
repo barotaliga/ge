@@ -1939,3 +1939,28 @@ TEST(the_ruleset_row_offers_the_games_book) {
   check(shooters_edge::menu::classic_menu(), ge::classic::qw_rulesets());
   check(shooters_edge::menu::q2_menu(), ge::classic::q2_rulesets());
 }
+
+TEST(classic_remix_is_one_page_of_the_cr_settings) {
+  World w;
+  using K = ge::console::CvarKind;
+  w.con.cvars().add({"cr_enabled", "0", 0, "", K::boolean});
+  w.con.cvars().add({"cr_expansions", "1", 0, "", K::boolean});
+  w.con.cvars().add({"cr_items", "", 0, "", K::text});
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con};
+  sm::refresh(m, host);
+  CHECK(!item(m, "options", "remix")->disabled);
+  CHECK(item(m, "remix", "cr_expansions")->choice == 1);  // ON
+  CHECK(!item(m, "remix", "cr_items")->disabled);
+  m.open("remix");
+  CHECK(m.focus("cr_items"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value == "q1");
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value == "q2");
+  // Past QUAKE II it wraps back to the game's own: the cvar set to nothing, not shown.
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value.empty());
+}

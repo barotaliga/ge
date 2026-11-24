@@ -74,6 +74,7 @@ struct RemixSettings {
   std::string menu;        // cr_menu: the same for the menu's pictures
   std::string charset;     // cr_charset: the same for the glyph sheet every letter is
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
+  bool expansions = true;          // cr_expansions: the mission packs' maps and items taken too
 };
 
 // The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
@@ -85,7 +86,7 @@ inline RemixParts remix_parts(const RemixSettings& s) {
 }
 
 // `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods`, `cr_monsters`,
-// `cr_menu`, `cr_charset` and the balance's, writing `out`.
+// `cr_menu`, `cr_charset`, `cr_expansions` and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -99,6 +100,7 @@ struct RemixState {
   bool on = false;
   std::string other;          // the other full game's profile id ("" when off)
   std::string other_basedir;  // its install
+  bool expansions = true;     // cr_expansions: the other game's mission packs mounted too
   std::string why;            // when off but enabled: what is missing, in the game's words
 };
 
@@ -138,9 +140,12 @@ struct RemixReport {
 // remix table and the map then balanced (profiles/remix.hpp: the weapons' tiers, the pools), into
 // `out`. The same text when the games are the same. False with `error` when the text does not
 // parse.
+// `packs` (`cr_expansions`): whether a mission pack's items are read, and the played pack whose own
+// weapons are laid down where it has them (profiles/remix.hpp's `kPackSpawns`).
 bool remix_entities(std::string_view text, std::string_view from, std::string_view to,
                     std::string& out, RemixReport* report, std::string& error,
-                    const profiles::RemixBalance& balance = {});
+                    const profiles::RemixBalance& balance = {},
+                    const profiles::RemixPacks& packs = {});
 
 // The line the console prints for a rewrite, in the game's words.
 std::string remix_line(const RemixReport& r, std::string_view to);
@@ -154,6 +159,7 @@ struct RemixFiles {
   std::string played;              // the played game's profile id
   SearchPath files;                // the other game's, the played game's over it (empty while off)
   profiles::RemixBalance balance;  // the settings' (the window copies them before a load)
+  std::string pack;  // the played game's mission pack folder, lower case ("" the base game)
   // The other game's weapons and armour the played game's rules wear (`cr_items`,
   // profiles/remix_arsenal.hpp), or null: its models and sounds are read from `files`.
   const profiles::RemixArsenal* worn = nullptr;
