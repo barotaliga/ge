@@ -215,6 +215,7 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | rog1.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (its logo at the right) drawn by the se-attract lab with `--game=rogue` (2026-11-23) |
 | rog1.endtext | `end1.bin`, `end2.bin`, the text screens on quitting | not taken |  | as hip.endtext |
 | rog1.dm | `ctf1` and the team modes played by bots | verify | 2 |  |
+| rog1.teams | the team modes on the server: capture the flag with two flags, one flag and three teams, tag; the program's colours stuffed and its team change refused | done | 2 | the pack's program on the QC server; the server sets a single-player-form program's `team` from the pants colour as it changes (server/commands.cpp `pants_team`; tests/shooters_edge_qc_server_test.cpp). The se-dissolution-dm lab (`--packs`): joiners put on red and blue, the enemy flag taken, captured for 15 and sent home, dropped by a killed carrier and returned, a change of pants refused, three teams at `teamplay 6`, the neutral flag captured at 5, the tag token at 3 (2026-11-24) |
 | rog1.coop | co-op on the pack's program | verify | 2 |  |
 | rog1.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | rog1.remix | the pack's weapons and items as roles for remix | missing | 3 | plugins/classic/item_roles.hpp |

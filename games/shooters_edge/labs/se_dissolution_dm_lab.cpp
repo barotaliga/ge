@@ -1,20 +1,24 @@
-// LAB `se-dissolution-dm`: DO DISSOLUTION OF ETERNITY'S RUNES AND GRAPPLING HOOK WORK ON OUR
-// SERVER? The pack's own program (its progs.dat, from `--packs`) runs on the QC server over the
-// test arena with two players, driven frame by frame. Runes (deathmatch on, `gamecfg 1`): four come
-// out of the first four deathmatch spots, a player who walks onto one is told its name, a second is
-// refused, the held one falls where he dies, an untaken one moves after two minutes, and none come
-// with `gamecfg 0`. The hook (deathmatch on, `teamplay 4`): impulse 22 selects it, attack held
-// throws it at a wall, the chain is sent as the beam temporary entity, the player is pulled to the
-// wall, letting go takes the hook away; with `teamplay 0` impulse 22 gives nothing. A table of
-// every check and what was seen. With no `--packs` it says so and runs nothing: the packs are the
-// player's own and never in the tree.
+// LAB `se-dissolution-dm`: DO DISSOLUTION OF ETERNITY'S RUNES, GRAPPLING HOOK AND TEAM MODES WORK
+// ON OUR SERVER? The pack's own program (its progs.dat, from `--packs`) runs on the QC server over
+// the test arena with up to three players, driven frame by frame; the lab plays their clients'
+// part by running the `color` lines the program stuffs. Runes (deathmatch on, `gamecfg 1`): four
+// come out of the first four deathmatch spots, one is taken and named, a second refused, the held
+// one falls where its holder dies, untaken ones move after two minutes, none at `gamecfg 0`. The
+// hook (`teamplay 4`): impulse 22 and attack throw it, the chain goes as beams, it pulls the player
+// to the wall and goes when attack is let go; none at `teamplay 0`. Capture the flag (`teamplay
+// 4`): joiners put on red and blue, the enemy flag taken, captured for 15, sent home, dropped by
+// a killed carrier and returned, a change of pants refused; three teams at 6; the neutral flag
+// taken and captured at the enemy base at 5; the tag token at 3. A table of every check and what
+// was seen. With no `--packs` it says so and runs nothing: the packs are the player's own.
 //
-// ge:summary Lab: Dissolution of Eternity's runes and grappling hook on the QC server
+// ge:summary Lab: Dissolution of Eternity's runes, grappling hook and team modes on the QC server
 // ge:keywords lab se-dissolution-dm runes gamecfg grappling-hook grapple teamplay impulse-22
-// ge:keywords te-beam mission-pack dissolution-of-eternity rog1
+// ge:keywords te-beam mission-pack dissolution-of-eternity rog1 capture-the-flag ctf tag-token
+// ge:keywords pants-colour team-change
 // ge:skill progs labs
 // ge:test tests/shooters_edge_qc_server_test.cpp
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -70,7 +74,7 @@ const char* const kEntities = R"({
 }
 )";
 
-constexpr int kPlayers = 2;  // slots the lab can fill
+constexpr int kPlayers = 3;  // slots the lab can fill
 constexpr double kFrameS = 0.013;
 constexpr double kPi = 3.14159265358979;
 
@@ -85,7 +89,7 @@ struct Run {
 };
 
 bool open(Run& r, const std::vector<uint8_t>& program, const std::vector<std::string>& console,
-          std::string& error) {
+          std::string& error, const char* entities = kEntities) {
   if (!pg::load_progs(program.data(), program.size(), r.progs, error, pg::every_form()))
     return false;
   sv::QcServerOptions o;
@@ -96,13 +100,13 @@ bool open(Run& r, const std::vector<uint8_t>& program, const std::vector<std::st
   sv::MapSpec map;
   map.name = "arena";
   map.models = sv::arena_models();
-  map.entities = kEntities;
+  map.entities = entities;
   if (!sv::load_map(*r.s, map, error)) return false;
   return true;
 }
 
 void join(Run& r, int k) {
-  sv::connect(*r.s, k, k == 0 ? "Ana" : "Bo", false, false);
+  sv::connect(*r.s, k, k == 0 ? "Ana" : k == 1 ? "Bo" : "Cy", false, false);
   r.joined = k + 1;
 }
 
@@ -127,6 +131,23 @@ void frame(Run& r) {
   }
   sv::qc_frame(*r.s, p, r.joined);
   r.events = r.s->out.events;
+  // A client runs what the server stuffs: `color <shirt> [pants]` sets its colours.
+  for (const sv::NetEvent& e : r.events) {
+    if (e.kind != sv::EventKind::stuffcmd) continue;
+    for (int k = 0; k < r.joined; k++) {
+      if ((e.to & (1u << k)) == 0) continue;
+      size_t at = 0;
+      while ((at = e.text.find("color ", at)) != std::string::npos) {
+        at += 6;
+        int top = 0, bottom = -1;
+        const int n = std::sscanf(e.text.c_str() + at, "%d %d", &top, &bottom);
+        if (n < 1) continue;
+        if (n < 2) bottom = top;
+        sv::set_user_info(*r.s, k, "topcolor", std::to_string(top));
+        sv::set_user_info(*r.s, k, "bottomcolor", std::to_string(bottom));
+      }
+    }
+  }
   r.beams = count_beams(r.s->out.unreliable) + count_beams(r.s->out.multicast);
   for (const sv::NetEvent& e : r.events)
     if (e.kind == sv::EventKind::multicast) r.beams += count_beams(e.bytes);
@@ -185,7 +206,7 @@ void idle(Run& r, double s) {
 }
 
 struct Checks {
-  gl::LabTable t{"Dissolution of Eternity's runes and grappling hook on our server",
+  gl::LabTable t{"Dissolution of Eternity's runes, grappling hook and team modes on our server",
                  {"check", "seen", "as it should be"},
                  {}};
   int failed = 0;
@@ -194,6 +215,15 @@ struct Checks {
     if (!ok) failed++;
   }
 };
+
+// The line of `s` holding `key`, or the last line when none does.
+std::string line_of(const std::string& s, const std::string& key) {
+  size_t at = s.find(key);
+  if (at == std::string::npos) at = s.size() > 1 ? s.rfind('\n', s.size() - 2) + 1 : 0;
+  const size_t from = s.rfind('\n', at) == std::string::npos ? 0 : s.rfind('\n', at) + 1;
+  const size_t to = s.find('\n', at);
+  return s.substr(from, to == std::string::npos ? std::string::npos : to - from);
+}
 
 std::string one_line(std::string s) {
   for (char& c : s)
@@ -369,6 +399,286 @@ void hook(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
         with_model(r, "progs/hook").empty());
 }
 
+// The arena for the team modes: the red flag in the west room, the blue in the east, a neutral
+// flag and a tag token in the doorway, each team's spots by its flag and the four deathmatch spots.
+const char* const kTeamEntities = R"({
+"classname" "worldspawn"
+"message" "dissolution team modes"
+}
+{
+"classname" "info_player_start"
+"origin" "-416 0 24"
+}
+{
+"classname" "info_player_deathmatch"
+"origin" "-416 384 24"
+}
+{
+"classname" "info_player_deathmatch"
+"origin" "-416 -384 24"
+}
+{
+"classname" "info_player_deathmatch"
+"origin" "416 256 24"
+}
+{
+"classname" "info_player_deathmatch"
+"origin" "416 -96 24"
+}
+{
+"classname" "info_player_team1"
+"origin" "-416 384 24"
+}
+{
+"classname" "info_player_team1"
+"origin" "-416 -384 24"
+}
+{
+"classname" "info_player_team2"
+"origin" "416 256 24"
+}
+{
+"classname" "info_player_team2"
+"origin" "416 -96 24"
+}
+{
+"classname" "item_flag_team1"
+"origin" "-416 0 24"
+}
+{
+"classname" "item_flag_team2"
+"origin" "416 80 24"
+}
+{
+"classname" "item_flag"
+"origin" "-200 0 24"
+}
+{
+"classname" "dmatch_tag_token"
+"origin" "-200 0 24"
+}
+)";
+
+// Everything printed or centre printed to slot `k` in the last frame, the coloured letters plain.
+std::string heard(Run& r, int k) {
+  std::string out;
+  for (const sv::NetEvent& e : r.events)
+    if ((e.kind == sv::EventKind::print || e.kind == sv::EventKind::centerprint) &&
+        (e.to & (1u << k)) != 0)
+      for (const char ch : e.text) out += static_cast<char>(ch & 127);
+  return out;
+}
+
+float field(Run& r, int e, const char* name) {
+  const pg::Def* d = pg::find_field(r.progs, name);
+  return d == nullptr ? -1 : pg::as_float(*pg::entity_field(r.s->q.vm, e, d->offset));
+}
+
+float frags(Run& r, int e) { return field(r, e, "frags"); }
+
+std::string classname(Run& r, int e) {
+  const pg::Def* d = pg::find_field(r.progs, "classname");
+  if (d == nullptr) return "";
+  const char* n =
+      pg::vm_string(r.s->q.vm, static_cast<int32_t>(*pg::entity_field(r.s->q.vm, e, d->offset)));
+  return n == nullptr ? "" : n;
+}
+
+int find_class(Run& r, const std::string& cls) {
+  for (int e = sh::kMaxClients + 1; e < r.s->sv.num_edicts; e++)
+    if (!ed(r, e).free && classname(r, e) == cls) return e;
+  return -1;
+}
+
+// Player `k` walks to `to`, through the doorway (x 128..144, y -64..64) when the dividing wall is
+// between; the slot's prints gathered into `said`. True when `done` held within `limit` seconds.
+template <class Done>
+bool go(Run& r, int k, sh::Vec3f to, double limit, std::string& said, Done done) {
+  const sh::Vec3f door{136, 0, 24};
+  const double t0 = r.s->sv.time;
+  while (r.s->sv.time - t0 < limit) {
+    const sh::Vec3f at = ed(r, k + 1).origin;
+    const bool across = (at.x < 128) != (to.x < 128);
+    const sh::Vec3f aim =
+        across && std::hypot(at.x - door.x, at.y - door.y) > 24
+            ? (std::abs(at.y) > 40 ? sh::Vec3f{at.x < 128 ? 60.0f : 220.0f, 0, 24} : door)
+            : to;
+    const double dx = aim.x - at.x, dy = aim.y - at.y;
+    r.cmd[k].angles = {0, static_cast<float>(std::atan2(dy, dx) * 180.0 / kPi), 0};
+    r.cmd[k].forward = std::hypot(dx, dy) > 4 ? 320 : 0;
+    frame(r);
+    said += heard(r, k);
+    if (done()) {
+      r.cmd[k].forward = 0;
+      return true;
+    }
+  }
+  r.cmd[k].forward = 0;
+  return false;
+}
+
+void teams(const std::vector<uint8_t>& program, Checks& c, gl::Lab& lab) {
+  // Two-flag capture the flag.
+  {
+    Run r;
+    std::string error;
+    if (!open(r, program, {"deathmatch 1", "teamplay 4"}, error, kTeamEntities))
+      return c.row("the map loads (teamplay 4)", error, false);
+    std::string said[kPlayers];
+    join(r, 0);
+    frame(r);
+    said[0] += heard(r, 0);
+    join(r, 1);
+    for (int i = 0; i < 40; i++) {
+      frame(r);
+      for (int k = 0; k < kPlayers; k++) said[k] += heard(r, k);
+    }
+    const float ta = field(r, 1, "team"), tb = field(r, 2, "team");
+    c.row("teamplay 4: each joiner is put on a team",
+          line_of(said[0], "assigned") + "; teams " + to_fixed(ta, 0) + " and " + to_fixed(tb, 0),
+          said[0].find("You have been assigned to") != std::string::npos &&
+              said[1].find("You have been assigned to") != std::string::npos && ta != tb &&
+              (ta == 5 || ta == 14) && (tb == 5 || tb == 14));
+    const int red = ta == 5 ? 0 : 1, blue = 1 - red;
+    const int red_flag = find_class(r, "item_flag_team1");
+    const int blue_flag = find_class(r, "item_flag_team2");
+    c.row("both team flags stand", std::to_string(red_flag) + ", " + std::to_string(blue_flag),
+          red_flag > 0 && blue_flag > 0);
+    if (red_flag <= 0 || blue_flag <= 0) return;
+    const sh::Vec3f blue_home = ed(r, blue_flag).origin, red_home = ed(r, red_flag).origin;
+    // The red player takes the blue flag.
+    std::string s;
+    go(r, red, blue_home, 10, s,
+       [&] { return s.find("YOU GOT THE ENEMY FLAG") != std::string::npos; });
+    c.row("the red player takes the blue flag", line_of(s, "got the"),
+          s.find("got") != std::string::npos &&
+              s.find("YOU GOT THE ENEMY FLAG") != std::string::npos);
+    // And brings it home: a capture.
+    const float before = frags(r, red + 1);
+    s.clear();
+    go(r, red, red_home, 15, s, [&] { return s.find("captured") != std::string::npos; });
+    idle(r, 0.2);
+    const float gained = frags(r, red + 1) - before;
+    c.row("brought to his own flag, it is captured", line_of(s, "captured"),
+          s.find("captured the BLUE flag") != std::string::npos &&
+              s.find("Your team captured the flag!") != std::string::npos);
+    c.row("the capture scores 15", to_fixed(gained, 0) + " frags", gained == 15);
+    lab.metric("ctf.capture-frags", gained, "frags");
+    const sh::Vec3f bf = ed(r, blue_flag).origin;
+    c.row("the blue flag goes home", "at " + to_fixed(bf.x, 0) + " " + to_fixed(bf.y, 0),
+          std::hypot(bf.x - blue_home.x, bf.y - blue_home.y) < 2);
+    // He takes it again and the blue player kills him: the flag falls; the blue player returns it.
+    s.clear();
+    go(r, red, blue_home, 15, s,
+       [&] { return s.find("YOU GOT THE ENEMY FLAG") != std::string::npos; });
+    std::string bs;
+    bool dead = false;
+    for (int i = 0; i < static_cast<int>(30 / kFrameS) && !dead; i++) {
+      const sh::Vec3f a = ed(r, red + 1).origin, b = ed(r, blue + 1).origin;
+      const double d = std::hypot(a.x - b.x, a.y - b.y);
+      r.cmd[blue].angles = {0, static_cast<float>(std::atan2(a.y - b.y, a.x - b.x) * 180.0 / kPi),
+                            0};
+      r.cmd[blue].forward = static_cast<int16_t>(d > 160 ? 320 : d < 120 ? -320 : 0);
+      r.cmd[blue].buttons = d < 200 ? sh::kButtonAttack : 0;
+      frame(r);
+      bs += heard(r, blue);
+      dead = field(r, red + 1, "health") <= 0;
+    }
+    r.cmd[blue] = {};
+    frame(r);
+    bs += heard(r, blue);
+    c.row("the carrier killed drops the flag", line_of(bs, "lost"),
+          dead && bs.find("lost the BLUE flag") != std::string::npos);
+    const sh::Vec3f dropped = ed(r, blue_flag).origin;
+    bs.clear();
+    go(r, blue, dropped, 10, bs, [&] { return bs.find("returned") != std::string::npos; });
+    c.row("the blue player returns his own flag", line_of(bs, "returned"),
+          bs.find("returned the BLUE flag") != std::string::npos);
+    // The red player changes his pants to blue: refused, killed, put back.
+    {
+      std::string ch;
+      sv::set_user_info(*r.s, red, "bottomcolor", "13");
+      for (int i = 0; i < 80; i++) {
+        frame(r);
+        ch += heard(r, red);
+      }
+      const float team = field(r, red + 1, "team");
+      c.row("changing teams is refused",
+            line_of(ch, "change teams") + "; team " + to_fixed(team, 0),
+            ch.find("You cannot change teams.") != std::string::npos && team == 5);
+    }
+  }
+  // Three teams: the third joiner is grey.
+  {
+    Run r;
+    std::string error;
+    if (!open(r, program, {"deathmatch 1", "teamplay 6"}, error, kTeamEntities))
+      return c.row("the map loads (teamplay 6)", error, false);
+    std::string said;
+    join(r, 0);
+    idle(r, 0.2);
+    join(r, 1);
+    idle(r, 0.2);
+    join(r, 2);
+    for (int i = 0; i < 40; i++) {
+      frame(r);
+      said += heard(r, 2);
+    }
+    std::string teams_seen;
+    for (int k = 0; k < 3; k++)
+      teams_seen += (k ? ", " : "") + to_fixed(field(r, k + 1, "team"), 0);
+    const float t[3] = {field(r, 1, "team"), field(r, 2, "team"), field(r, 3, "team")};
+    c.row("teamplay 6: three joiners on three teams", "teams " + teams_seen,
+          t[0] != t[1] && t[1] != t[2] && t[0] != t[2] && (t[0] == 1 || t[1] == 1 || t[2] == 1));
+  }
+  // One flag.
+  {
+    Run r;
+    std::string error;
+    if (!open(r, program, {"deathmatch 1", "teamplay 5"}, error, kTeamEntities))
+      return c.row("the map loads (teamplay 5)", error, false);
+    join(r, 0);
+    join(r, 1);
+    idle(r, 0.5);
+    const int flag = find_class(r, "item_flag");
+    const int b1 = find_class(r, "item_flagbase_team1"), b2 = find_class(r, "item_flagbase_team2");
+    c.row("teamplay 5: the neutral flag and both bases",
+          std::to_string(flag) + ", " + std::to_string(b1) + ", " + std::to_string(b2) +
+              (find_class(r, "item_flag_team1") > 0 ? "; a team flag stands" : ""),
+          flag > 0 && b1 > 0 && b2 > 0 && find_class(r, "item_flag_team1") < 0);
+    if (flag > 0 && b1 > 0 && b2 > 0) {
+      const int red = field(r, 1, "team") == 5 ? 0 : 1;
+      std::string s;
+      go(r, red, ed(r, flag).origin, 10, s,
+         [&] { return s.find("TAKE IT TO") != std::string::npos; });
+      c.row("a player takes the neutral flag", line_of(s, "got the"),
+            s.find("got the flag") != std::string::npos);
+      s.clear();
+      go(r, red, ed(r, b2).origin, 15, s, [&] { return s.find("captured") != std::string::npos; });
+      c.row("carried to the enemy base, it is captured", line_of(s, "captured"),
+            s.find("captured the flag") != std::string::npos);
+    }
+  }
+  // Tag.
+  {
+    Run r;
+    std::string error;
+    if (!open(r, program, {"deathmatch 1", "teamplay 3"}, error, kTeamEntities))
+      return c.row("the map loads (teamplay 3)", error, false);
+    join(r, 0);
+    idle(r, 0.5);
+    const int token = find_class(r, "dmatch_tag_token");
+    c.row("teamplay 3: the tag token stands", std::to_string(token), token > 0);
+    if (token > 0) {
+      std::string s;
+      go(r, 0, ed(r, token).origin, 10, s,
+         [&] { return s.find("tag token") != std::string::npos; });
+      c.row("a player takes the tag token", line_of(s, "tag token"),
+            s.find("got the tag token!") != std::string::npos);
+    }
+  }
+}
+
 void run(gl::Lab& lab) {
   const std::string root = lab.arg("packs");
   if (root.empty()) {
@@ -394,6 +704,7 @@ void run(gl::Lab& lab) {
   Checks c;
   runes(program, c, lab);
   hook(program, c, lab);
+  teams(program, c, lab);
   lab.table(c.t);
   lab.metric("checks.failed", c.failed, "count");
   if (c.failed > 0)
@@ -406,9 +717,9 @@ const gl::LabSpec kSpec{
     gl::LabKind::scenario,
     "game:shooters_edge",
     "games/shooters_edge/server: Dissolution of Eternity's program on the QC server (runes, the "
-    "grappling hook)",
+    "grappling hook, the team modes)",
     "progs",
-    "Do Dissolution of Eternity's runes and grappling hook work on our server?",
+    "Do Dissolution of Eternity's runes, grappling hook and team modes work on our server?",
     {
         {"packs", "", "a folder holding rogue/pak0.pak (the player's own Dissolution of Eternity)"},
     },
