@@ -8,6 +8,8 @@
 // ge:summary Tests: Quake's held weapon predicted (frames, refire, thinks, impulses, empty switch)
 // ge:keywords test weapon-prediction weapon-clock think-step nailgun shotgun axe best-weapon
 // ge:skill classic testing
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "check.hpp"
@@ -224,4 +226,124 @@ TEST(the_nailgun_s_nails_leave_its_barrels_in_turn_the_super_nailgun_s_the_middl
   cl::WeaponState sn = holding(cl::kItSuperNailgun);
   const Run rs = run(sn, 25, 10, 25, w);
   for (const cl::WeaponEvent& e : rs.events) CHECK(e.side == 0);
+}
+
+// THE MISSION PACKS' GUNS.
+namespace {
+constexpr int kScourge = kAll | cl::kItLaserCannon | cl::kItMjolnir | cl::kItProximityGun;
+}  // namespace
+
+TEST(scourge_s_laser_cannon_fires_twin_and_single_bolts_a_cell_a_think) {
+  cl::WeaponState s = holding(cl::kItLaserCannon);
+  const cl::WeaponWorld w{kScourge, "", cl::WeaponRules::scourge};
+  // Held 0.5 s in 10 ms moves: a think at the press, then every 0.1 s.
+  const Run r = run(s, 80, 10, 50, w);
+  CHECK(r.events.size() == 5);
+  for (size_t i = 0; i < r.events.size(); i++) {
+    CHECK(r.events[i].sound == cl::WeaponSound::laser);
+    CHECK(r.events[i].copies == (i % 2 == 0 ? 2 : 1));  // twin bolts, a single bolt, in turn
+  }
+  CHECK(r.events[1].clock - r.events[0].clock > 0.099f &&
+        r.events[1].clock - r.events[0].clock < 0.101f);
+  CHECK(s.ammo[3] == 35);
+  CHECK(changes(r.frames) == (std::vector<int>{1, 4, 1, 4, 1, 0}));
+  CHECK(std::string_view(cl::weapon_sound_sample(cl::WeaponSound::laser)) == "hipweap/laserg.wav");
+  CHECK(cl::weapon_sound_bit_of_sample("hipweap/laserg.wav") == 256);
+}
+
+TEST(scourge_s_mjolnir_swings_with_no_cells_and_is_never_switched_away) {
+  cl::WeaponState s = holding(cl::kItMjolnir);
+  s.ammo[3] = 0;
+  const cl::WeaponWorld w{kScourge, "", cl::WeaponRules::scourge};
+  const Run r = run(s, 70, 10, 1, w);  // one press
+  CHECK(r.events.empty());             // its blow is heard by what it hits: the server's
+  CHECK(changes(r.frames) == (std::vector<int>{1, 2, 3, 4, 0}));
+  CHECK(s.weapon == cl::kItMjolnir);
+  // The blow at 0.3 s sets the refire 0.4 s on: 0.7 s from the press (at 10.01).
+  CHECK(s.attack_finished > 10.70f && s.attack_finished < 10.72f);
+}
+
+TEST(scourge_s_key_6_toggles_the_launchers_and_its_impulses_and_cycle_take_its_guns) {
+  const cl::WeaponWorld w{kScourge, "", cl::WeaponRules::scourge};
+  cl::WeaponState s = holding(cl::kItGrenadeLauncher);
+  cl::WeaponEvent ev[8];
+  const auto press = [&](int impulse) {
+    cl::WeaponCmd c;
+    c.msec = 10;
+    c.impulse = impulse;
+    cl::weapon_command(s, c, w, ev, 8);
+    return s.weapon;
+  };
+  CHECK(press(6) == cl::kItProximityGun);
+  CHECK(press(6) == cl::kItGrenadeLauncher);
+  CHECK(press(225) == cl::kItLaserCannon);
+  CHECK(press(10) == cl::kItMjolnir);  // the cycle's last
+  CHECK(press(10) == cl::kItAxe);
+  CHECK(press(12) == cl::kItMjolnir);
+  CHECK(press(226) == cl::kItMjolnir);
+  // The proximity gun fires as the launcher does, with its own sample.
+  s = holding(cl::kItProximityGun);
+  const Run r = run(s, 10, 10, 1, w);
+  CHECK(r.events.size() == 1 && r.events[0].sound == cl::WeaponSound::proximity);
+  CHECK(s.ammo[2] == 19);
+  // Out of cells and shells and nails, the best weapon is Mjolnir, not the axe.
+  cl::WeaponState e = holding(cl::kItLaserCannon);
+  e.ammo[0] = e.ammo[1] = e.ammo[3] = 0;
+  CHECK(cl::weapon_best(e, w, 0) == cl::kItMjolnir);
+}
+
+TEST(dissolution_s_guns_fire_from_the_counts_shown_and_a_change_is_left_to_the_server) {
+  const int all = cl::kItAxeEternity | cl::kItNailgun | cl::kItLavaNailgun |
+                  cl::kItLavaSuperNailgun | cl::kItMultiRocket | cl::kItPlasmaGun;
+  const cl::WeaponWorld w{all, "", cl::WeaponRules::dissolution};
+  // The lava super nailgun: two of the nails shown a think, the super nailgun's sound.
+  cl::WeaponState s = holding(cl::kItLavaSuperNailgun);
+  Run r = run(s, 30, 10, 25, w);
+  CHECK(r.events.size() == 3 && r.events[0].sound == cl::WeaponSound::super_nailgun);
+  CHECK(s.ammo[1] == 94);
+  // The multi rocket launcher: the rocket launcher's sound and refire, one of the rockets shown.
+  s = holding(cl::kItMultiRocket);
+  r = run(s, 100, 10, 100, w);
+  CHECK(r.events.size() == 2 && r.events[0].sound == cl::WeaponSound::rocket);
+  CHECK(r.events[1].clock - r.events[0].clock > 0.79f);
+  // The plasma gun: one bolt a second, at half volume, its firing frame never shown.
+  s = holding(cl::kItPlasmaGun);
+  r = run(s, 150, 10, 150, w);
+  CHECK(r.events.size() == 2 && r.events[0].sound == cl::WeaponSound::plasma);
+  CHECK(cl::weapon_sound_volume(cl::WeaponSound::plasma) == 0.5f);
+  CHECK(changes(r.frames) == (std::vector<int>{0}));
+  CHECK(s.ammo[3] == 38);
+  // Its axe swings at 2048.
+  s = holding(cl::kItAxeEternity);
+  r = run(s, 5, 10, 1, w);
+  CHECK(r.events.size() == 1 && r.events[0].sound == cl::WeaponSound::axe);
+  // A key is the server's to follow: the weapon is unknown, nothing fires, until it says.
+  s = holding(cl::kItLavaNailgun);
+  cl::WeaponEvent ev[8];
+  cl::WeaponCmd c;
+  c.msec = 10;
+  c.impulse = 4;
+  c.attack = true;
+  CHECK(cl::weapon_command(s, c, w, ev, 8) == 0);
+  CHECK(s.weapon == cl::kWeaponUnknown);
+  // Run dry: left to the server too.
+  s = holding(cl::kItLavaNailgun);
+  s.ammo[1] = 0;
+  r = run(s, 5, 10, 5, w);
+  CHECK(r.events.empty() && s.weapon == cl::kWeaponUnknown);
+}
+
+TEST(a_pack_s_weapon_past_the_short_travels_as_its_bit_and_the_level_names_the_rules) {
+  CHECK(cl::weapon_off_wire(cl::weapon_on_wire(cl::kItLaserCannon)) == cl::kItLaserCannon);
+  CHECK(cl::weapon_off_wire(cl::weapon_on_wire(cl::kItProximityGun)) == cl::kItProximityGun);
+  CHECK(cl::weapon_on_wire(cl::kItProximityGun) < 0);
+  CHECK(cl::weapon_off_wire(cl::weapon_on_wire(cl::kItAxe)) == cl::kItAxe);
+  CHECK(cl::weapon_rules_of({"", "progs/v_axe.mdl", "progs/v_laserg.mdl"}) ==
+        cl::WeaponRules::scourge);
+  CHECK(cl::weapon_rules_of({"", "progs/v_lava.mdl"}) == cl::WeaponRules::dissolution);
+  CHECK(cl::weapon_rules_of({"", "progs/v_axe.mdl"}) == cl::WeaponRules::quake);
+  // A server rebuilds the laser cannon's and Mjolnir's thinks from the frame.
+  CHECK(cl::weapon_step_of(cl::kItLaserCannon, 4, cl::WeaponRules::scourge) != 0);
+  CHECK(cl::weapon_step_of(cl::kItMjolnir, 2, cl::WeaponRules::scourge) == 3);
+  CHECK(cl::weapon_step_of(cl::kItLavaNailgun, 3, cl::WeaponRules::dissolution) == 2);
 }

@@ -10,21 +10,7 @@ q2-sp-gaps.md).
 
 ## Totals
 
-| kind | done | partial | missing | not-taken | rows |
-| --- | --- | --- | --- | --- | --- |
-| Client commands (what a player types; the game library answers them) | 35 | 0 | 0 | 2 | 37 |
-| Server commands (`sv <word>` typed at the server console) | 6 | 0 | 0 | 0 | 6 |
-| Cvars the game library registers or reads | 43 | 0 | 0 | 3 | 46 |
-| User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
-| dmflags bits | 16 | 0 | 0 | 0 | 16 |
-| Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
-| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 83 | 0 | 0 | 0 | 83 |
-| Monsters | 26 | 0 | 0 | 0 | 26 |
-| Player messages (printed, broadcast and centre-printed) | 79 | 0 | 0 | 2 | 81 |
-| Server console lines (what an admin reads; `dprintf`) | 36 | 0 | 0 | 2 | 38 |
-| Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
-| Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 436 | 0 | 0 | 9 | 445 |
+Counts: `make ledger` counts this ledger's rows by section and the missing rows by rank (`porting/ledger-count.mjs`; `make ledger ARGS=--missing` for the missing count alone). No total is kept here by hand.
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -32,8 +18,6 @@ The game answers these words; any other word is said as chat. During the intermi
 `players`, `say`, `say_team`, `score` and `help` are answered; every other word (the cheats, the
 inventory, the unknown word's chat) is silently dropped. A command from a client not yet in the
 game is ignored.
-
-count: done 17, partial 13, missing 7, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -77,8 +61,6 @@ count: done 17, partial 13, missing 7, not-taken 0
 
 ## Server commands (`sv <word>` typed at the server console)
 
-count: done 0, partial 4, missing 2, not-taken 0
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | svcmd.test | `sv test` | developer test, prints `Svcmd_Test_f()` | done | q2_server.cpp sq_console |
@@ -92,8 +74,6 @@ count: done 0, partial 4, missing 2, not-taken 0
 
 Flags: SI = in the server info (server browsers and `status` see it), L = latched (takes effect
 at the next map), A = archived, N = no-set (command line only), U = user info.
-
-count: done 29, partial 10, missing 7, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -146,8 +126,6 @@ count: done 29, partial 10, missing 7, not-taken 0
 
 ## User info keys the game reads
 
-count: done 4, partial 5, missing 0, not-taken 0
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | ui.name | `name` | the player's name in prints, the scoreboard and the skin configstring | done | q2_commands.cpp, q2_fight.cpp |
@@ -164,8 +142,6 @@ count: done 4, partial 5, missing 0, not-taken 0
 
 Bits read in every mode: 4, 64, 128, 256, 8192 (except removing ammo and the BFG from the map);
 the rest are deathmatch only (R23).
-
-count: done 10, partial 6, missing 0, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -194,8 +170,6 @@ auto-switch, respawn times, instant items). Ours: games/shooters_edge/server/q2_
 table), q2_server.cpp (pickups), q2_use.cpp (use), q2_fight.cpp (drop, weapons),
 q2_combat.hpp (weapons' numbers). Rows are partial only for an item-specific gap. Item teams
 (the `team` key on items) are a rule row (rule.item-teams).
-
-count: done 16, partial 26, missing 0, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -249,8 +223,6 @@ removed. Entities left out by skill, deathmatch or co-op spawnflags are removed 
 inhibited.` on the console). The world and monster audits (q2-sp-world.md 1-51,
 q2-sp-monsters.md 1-68) are all landed per q2-sp-gaps.md; rows below are done unless a later gap
 row names a difference.
-
-count: done 73, partial 7, missing 1, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -347,8 +319,6 @@ q2_gibs.cpp; the C++ rules' campaign in games/shooters_edge/rules/campaign_*. Mo
 nothing; a death a monster causes reads `<name> died.` (R2 landed). Kills give a co-op player 1
 point each: rule.coop-score (R19).
 
-count: done 26, partial 0, missing 0, not-taken 0
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | mon.monster_berserk | Berserker | melee brute: spike and club, jump | done | q2_monster_kinds.hpp |
@@ -382,8 +352,6 @@ count: done 26, partial 0, missing 0, not-taken 0
 
 Levels: medium = obituaries; high = most game lines; chat = chat and flood lock. A trailing
 full stop is part of the text only where shown.
-
-count: done 50, partial 16, missing 15, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -471,8 +439,6 @@ count: done 50, partial 16, missing 15, not-taken 0
 
 ## Server console lines (what an admin reads; `dprintf`)
 
-count: done 1, partial 1, missing 34, not-taken 0
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | con.startup | `Game is starting up.` / `Game is <name> built on <date>.` / `==== ShutdownGame ====` | library start and end | done | q2_server.cpp `==== InitGame ====` when the rules are made; net/q2_game.cpp `==== ShutdownGame ====` on quit and restart, printed by engine/server/main.cpp's last drain |
@@ -516,8 +482,6 @@ count: done 1, partial 1, missing 34, not-taken 0
 
 ## Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats
 
-count: done 8, partial 8, missing 1, not-taken 0
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | layout.statusbar-sp | single-player status bar program | health number and icon at the bottom left, ammo, armour, selected item, the pickup icon and name, the timer, the help icon | done | games/shooters_edge/server/q2_bar.cpp |
@@ -539,8 +503,6 @@ count: done 8, partial 8, missing 1, not-taken 0
 | layout.dead-view | the dead player's view | looks at his killer, lies on the floor, the scoreboard in deathmatch | done | q2_bar.cpp |
 
 ## Rules a player sees (behaviour not in a row above)
-
-count: done 18, partial 15, missing 11, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |

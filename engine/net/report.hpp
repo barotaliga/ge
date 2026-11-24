@@ -36,7 +36,7 @@
 namespace ge::net {
 
 constexpr size_t kReportName = 64;  // a string's bytes kept (a SHA-256 in hex fits)
-constexpr size_t kReportPlayers = 64, kReportTeams = 16, kReportColumns = 64;
+constexpr size_t kReportPlayers = 64, kReportTeams = 16, kReportColumns = 96;
 
 enum class MatchEnd : uint8_t {
   limit,    // a frag or time limit, as the rules end a match

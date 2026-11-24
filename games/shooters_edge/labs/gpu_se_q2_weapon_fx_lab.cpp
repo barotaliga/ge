@@ -18,7 +18,7 @@
 //
 // ge:summary Lab: Quake II's weapons fired, classic beside modern: bolts, smoke, rail, BFG
 // ge:keywords lab se-q2-weapon-fx q2 weapon-effects blaster hyperblaster railgun bfg
-// ge:keywords rocket grenade sparks glow-trail rail-beam modern-look screenshot
+// ge:keywords rocket grenade sparks glow-trail rail-beam modern-look screenshot spent-shells
 // ge:keywords ground-zero etf-rifle plasma-beam disruptor prox-mine tesla
 // ge:skill render labs
 // ge:test tests/shooters_edge_listen_test.cpp
@@ -83,6 +83,9 @@ struct Shot {
   int hold = 4;  // `wall` or `release`: the frames the trigger is held
   // Let go after `hold` frames though not at a wall: a thrown mine, a single shot watched land.
   bool release = false;
+  // With `wall`: the picture from half a metre above the spent shells the gun threw, wherever
+  // they came to lie (ce_shells).
+  bool shells = false;
 };
 constexpr Shot kShots[] = {
     {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
@@ -125,6 +128,13 @@ constexpr Shot kShots[] = {
      sv::SqWeapon::bfg, true, false, false, 2},
     {"bfg-marks-cool", "the flames out, thin smoke off the large mark as it cools", 420,
      sv::SqWeapon::bfg, true, false, false, 2},
+    // The spent shells (ce_shells): the brass a burst throws, the hulls a break drops.
+    {"machinegun-shells", "the burst's brass thrown out to the right, bounced and lying", 160,
+     sv::SqWeapon::machinegun, true, false, false, 50, false, true},
+    {"chaingun-shells", "the chain gun's brass, a heap of it beside the player", 160,
+     sv::SqWeapon::chaingun, true, false, false, 60, false, true},
+    {"super-shotgun-shells", "the two red hulls dropped as the gun broke open", 140,
+     sv::SqWeapon::super_shotgun, true, false, false, 4, false, true},
 };
 // Ground Zero's weapons (`--mod=rogue`): the shots its own rules fire (server/q2_gz.hpp).
 constexpr Shot kGroundZeroShots[] = {
@@ -432,6 +442,7 @@ void run(gl::Lab& lab) {
         cl::step_fx(l, shown, fx_state, t, kTic, fx);
         hand = cl::step_held(l, shown, held, {}, weapons, t, kTic);
         cl::fire_held(held_fire, hand, fx_state.on.muzzles, t, fx);
+        cl::held_cases(fx_state.cases, held_fire, hand, fx_state.on.shells, t);  // ce_shells
         cl::draw_world(*device, *frame, v, fx, &hand, kTic, {}, out.view);
       };
       sh::MoveCmd aim;
@@ -467,26 +478,56 @@ void run(gl::Lab& lab) {
         v.eye[1] += 0.25;
         v.heading -= 0.55;
       }
+      if (shot.shells) {
+        // The cases lying or flying (measured: the pictures show them).
+        lab.metric(std::string(shot.id) + "-" + look_name + ".cases",
+                   static_cast<double>(ge::detail::debris_count(fx_state.cases.pool)), "count",
+                   gl::Det::measured);
+        // Down at where the cases lie, from half a metre above them on the player's side, so a
+        // heap beside him and a pair dropped at his feet are both seen close.
+        double mid[3] = {0, 0, 0};
+        int n = 0;
+        for (const ge::detail::Debris& d : fx_state.cases.pool.pieces) {
+          if (d.serial == 0) continue;
+          mid[0] += d.at.x, mid[1] += d.at.y, mid[2] += d.at.z;
+          ++n;
+        }
+        if (n > 0) {
+          for (double& m : mid) m /= n;
+          double ax = v.eye[0] - mid[0], az = v.eye[2] - mid[2];
+          double len = std::sqrt(ax * ax + az * az);
+          if (len < 0.2) ax = -fx_, az = -fz, len = 1;
+          v.eye[0] = mid[0] + ax / len * 0.55;
+          v.eye[2] = mid[2] + az / len * 0.55;
+          v.eye[1] = mid[1] + 0.5;
+          const double dx = mid[0] - v.eye[0], dy = mid[1] - v.eye[1], dz = mid[2] - v.eye[2];
+          v.heading = ge::core::libm::atan2(dx, dz);
+          v.pitch = ge::core::libm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+        }
+      }
       cl::FxFrame still = fx;  // the same moment again: nothing born twice, nothing moved
       still.births.clear();
       // The weapon in hand only where the picture is the eye's own.
       cl::draw_world(*device, *frame, v, still,
-                     shot.wall || shot.held || shot.eye ? &hand : nullptr, 0, {}, out.view);
+                     (shot.wall && !shot.shells) || shot.held || shot.eye ? &hand : nullptr, 0, {},
+                     out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string id = std::string(shot.id) + "-" + look_name;
       lab.shot(
           {id,
            std::string(sv::kSqWeapons[static_cast<int>(shot.weapon)].name) + ", " + look_name,
-           shot.held ? std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
-                           " at rest in the player's hand on " + map_name +
-                           ", the game's own view model drawn at the eye."
-                     : std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
-                           " fired on " + map_name + " in the " + look_name +
-                           (shot.wall  ? " look at the floor a few steps ahead, seen from the eye "
-                            : shot.eye ? " look, seen from the eye "
-                                       : " look, seen from a step ahead and beside the player ") +
-                           (shot.eye ? std::string("a frame after the shot left the muzzle.")
-                                     : std::to_string(shot.ticks) + " frames after the trigger."),
+           shot.held
+               ? std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
+                     " at rest in the player's hand on " + map_name +
+                     ", the game's own view model drawn at the eye."
+               : std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
+                     " fired on " + map_name + " in the " + look_name +
+                     (shot.shells ? " look, the spent shells seen from close above where they lie "
+                      : shot.wall ? " look at the floor a few steps ahead, seen from the eye "
+                      : shot.eye  ? " look, seen from the eye "
+                                  : " look, seen from a step ahead and beside the player ") +
+                     (shot.eye ? std::string("a frame after the shot left the muzzle.")
+                               : std::to_string(shot.ticks) + " frames after the trigger."),
            shot.look_for,
            {{"map", map_name}, {"weapon", shot.id}, {"look", look_name}}},
           gl::Picture{int(img.width), int(img.height), img.rgba}, gl::Det::measured);
