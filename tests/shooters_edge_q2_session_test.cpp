@@ -233,3 +233,11 @@ TEST(the_download_switches_are_quake_iis_settings) {
   r.c.execute("allow_download -2");  // out of range: held to -1
   CHECK(all->value == "-1");
 }
+
+TEST(developer_is_a_setting_every_game_s_window_knows) {
+  Rig r;
+  const ge::console::Cvar* d = r.c.cvars().find("developer");
+  CHECK(d != nullptr && !d->on());
+  r.c.execute("developer 1");  // a stock Quake II config's line
+  CHECK(r.c.cvars().find("developer")->on());
+}
