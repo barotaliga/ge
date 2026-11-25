@@ -543,10 +543,8 @@ int run_main(int argc, char** argv) {
     cl::draw_title_backdrop(overlay, con_look, w, h, no_night);  // a classic game's own
     if (lobby) {
       const se::LobbyView lv = cl::listen_lobby_view(listen);
-      if (game_menu.art().loaded())
-        shooters_edge::menu::draw_lobby_page_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby_page(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         true);
     }
     game_menu.draw(overlay, w, h, t);
     con_view.frame(dt);
@@ -1170,6 +1168,7 @@ int run_main(int argc, char** argv) {
     const std::string demo_before = bench_ask;  // a title demo asked for and not started yet
     const bool joined_before = remote.active;
     con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
+    con_keys.taken = cl::lobby_taken_keys(listen);  // the lobby's keys press no pack bind
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.typing() != text_on) {
       text_on = con_view.typing();
@@ -1177,7 +1176,7 @@ int run_main(int argc, char** argv) {
     }
     // The console's text selected with the mouse (Command-C copies it, ui/console_keys.hpp).
     ge::ui::select_with_pointer(
-        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, h,
+        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, w, h,
         input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
         (input.pointer_buttons & 1u) != 0 && con_view.open() && !game_menu.open(), selecting_text);
     // The main menu: Escape opens it and goes back out of it; while it is up it has the keys and
@@ -1813,8 +1812,8 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
-                               [&](const std::string& line) { tell(line, t); });
+      printed = cl::game_lines_joined(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                                      [&](const std::string& line) { tell(line, t); });
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1881,8 +1880,8 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
-                             [&](const std::string& line) { tell(line, t); });
+    printed = cl::game_lines_joined(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                                    [&](const std::string& line) { tell(line, t); });
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];
@@ -1955,10 +1954,8 @@ int run_main(int argc, char** argv) {
       se::LobbyView lv = cl::listen_lobby_view(listen);
       // A classic game counts down in its own centre print (server/announce.hpp).
       lv.count = shooters_edge::server::words_of(listen.server->localinfo, "count_head").empty();
-      if (game_menu.art().loaded())
-        shooters_edge::menu::draw_lobby_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         false);
     }
     const bool scores_on =  // the score keys (TAB: +showscores), unless scr_draw2d hides them
         !con_keys.held && !was_open && cl::shows_scores(q2_screen);

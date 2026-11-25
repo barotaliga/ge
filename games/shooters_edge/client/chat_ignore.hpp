@@ -74,5 +74,11 @@ bool game_line(QwIgnore& g, std::string_view text, int level, double now_s);
 size_t game_lines(QwIgnore& g, const std::vector<std::string>& lines,
                   const std::vector<int>& levels, size_t from, double now_s,
                   const std::function<void(const std::string&)>& show);
+// `game_lines` with the pieces of one line joined: a line may come in several prints (a backpack's
+// "You get ", "25 shells", ", ", "5 rockets", the newline), so each whole line is `show`n once its
+// newline comes, and what is left without one at the end is shown as it stands.
+size_t game_lines_joined(QwIgnore& g, const std::vector<std::string>& lines,
+                         const std::vector<int>& levels, size_t from, double now_s,
+                         const std::function<void(const std::string&)>& show);
 
 }  // namespace shooters_edge::client

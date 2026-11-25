@@ -151,7 +151,7 @@ void draw_scoreboard(ui::DrawList& dl, const ClassicArt& art, int width, int hei
     draw_modern_board(dl, width, height, b, false);
     return;
   }
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
   ranking(pen, type);
@@ -168,7 +168,7 @@ void draw_team_scoreboard(ui::DrawList& dl, const ClassicArt& art, int width, in
     draw_scoreboard(dl, art, width, height, b, view);
     return;
   }
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
   ranking(pen, type);
@@ -194,7 +194,7 @@ void draw_team_scoreboard(ui::DrawList& dl, const ClassicArt& art, int width, in
 void draw_scorebar(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                    const Scoreboard& b) {
   if (art.glyphs.empty()) return;  // the modern board's header carries the clock
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
   if (const ui::Image* bar = art.find("scorebar"))

@@ -138,6 +138,8 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   // The player opens on the lobby's screen, off the map, until he joins the warmup.
   CHECK(cl::on_lobby_screen(l));
   CHECK(!l.server->clients[0].active);
+  // The lobby's keys press no pack bind: F1, F2, F4, and on its screen F5, F6 and ENTER too.
+  CHECK(cl::lobby_taken_keys(l).size() == 6);
   CHECK(sv::lobby_start(l.room->lobby, 0, l.server->sv.time) == sv::LobbyWhy::too_few);  // alone
   // Warmup holds the limits off.
   CHECK(l.server->cvars.find("fraglimit")->number == 0);
@@ -189,9 +191,10 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK(l.restarted);
   CHECK(l.server->sv.time < warm_time);  // a new server: its clock started over
   CHECK(l.room->lobby.phase == sv::LobbyPhase::match);
-  CHECK(ran >= 150 && ran <= 160);  // 2 s of 13 ms frames
-  CHECK(frags_of(l, 1) == 0);       // starting the match reset the warmup's frags
-  CHECK(!cl::on_lobby_screen(l));   // and put the player on the map
+  CHECK(ran >= 150 && ran <= 160);         // 2 s of 13 ms frames
+  CHECK(frags_of(l, 1) == 0);              // starting the match reset the warmup's frags
+  CHECK(!cl::on_lobby_screen(l));          // and put the player on the map
+  CHECK(cl::lobby_taken_keys(l).empty());  // the match's keys are the player's binds again
   for (int s = 1; s <= 4; s++) CHECK(l.server->sv.edicts[static_cast<size_t>(s)].health == 100);
   for (int s = 0; s < 4; s++) CHECK(l.server->clients[s].active);
   CHECK(sv::info_value(l.server->clients[0].userinfo, "team") == "blue");

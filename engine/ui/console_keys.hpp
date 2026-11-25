@@ -31,6 +31,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "console/view.hpp"
 #include "input/state.hpp"
@@ -49,6 +50,9 @@ struct ConsoleKeys {
   std::function<void(const std::string&)> copy = {};
   bool held = false;  // the view was down at some point this frame: the game reads no keys
   bool menu = false;  // a menu has the keys: only F1..F12 (and the tilde's key) run their binds
+  // Keys (HID usages) the game reads itself this frame: they press no bind (a lobby's F1 ready
+  // and F4 warmup over a pack's `bind F4 menu_keys`).
+  std::vector<uint16_t> taken = {};
 };
 
 // The input line's key for a keyboard key by its HID usage; none for a key it does not edit.
