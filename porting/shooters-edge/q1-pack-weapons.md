@@ -469,3 +469,22 @@ Dissolution [read; frame counts measured]:
   grenades "progs/mervup.mdl"; multi rocket "progs/rockup.mdl" in single player and
   "progs/rockup_d.mdl" in deathmatch and co-op; plasma bolt "progs/plasma.mdl".
 - The pak also holds "progs/v_star.mdl", which the program never names [measured].
+
+## The missiles at launch, measured (2026-11-24)
+
+Measured black box with `se-weapon-predict --packs=<folder>` (its launch table): each pack's own
+program run on our server, single play, level, facing +x, the missiles new in the first frame
+after one press. Places are after one 0.013 s frame of flight; the launch place below takes that
+flight back off [measured, the launch derived].
+
+- Laser cannon (twin bolts): progs/lasrspik.mdl, 12 ahead, 1.8 up, 4.2 to each side, 1000 units/s
+  along the aim.
+- Proximity gun: progs/proxbomb.mdl, from the origin, 600 along the aim and 200 up (as the
+  grenade launcher).
+- Lava nailgun: progs/lspike.mdl, as the base nailgun's nail (0 ahead, 16 up, 4 to the barrel's
+  side, 1000); the lava super nailgun the same model from the middle.
+- Multi grenade launcher: progs/mervup.mdl, as the grenade launcher.
+- Multi rocket launcher (single play): four progs/rockup.mdl, 8 ahead and 16 up, 1000 along the
+  aim with 80 and 40 units/s to each side.
+- Plasma gun: progs/plasma.mdl, 24 ahead and 16 up, still in its first frame.
+- For comparison the base game's nail leaves 0 ahead (not 8) and 16 up; the rocket 8 ahead.

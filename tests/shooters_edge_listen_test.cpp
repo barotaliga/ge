@@ -995,6 +995,27 @@ TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
 // In Quake II's single-player game `addbot` seats a companion beside the player: the game turns
 // cooperative for it, the companion keeps near him as he walks off, stays seated through a level
 // change (the same rules), and the last one sent away makes the game single player again.
+// `sv_lobby 1` (the window's default) is a match's lobby: a single-player game, `deathmatch 0`
+// before the map, starts with the map, in Quake II's rules too; deathmatch warms up in the lobby.
+TEST(a_single_player_game_starts_with_its_map_whatever_sv_lobby_says) {
+  std::string error;
+  cl::SearchPath files;
+  const std::vector<uint8_t> hall = brush_hall();
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/hall.bsp", hall}}), error));
+  for (const bool dm : {false, true}) {
+    cl::ListenOptions opt = shooters_edge::net::listen_options();
+    opt.lobby = true;
+    opt.console = {dm ? "deathmatch 1" : "deathmatch 0"};
+    cl::Listen l;
+    std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "hall", error);
+    CHECK_MSG(map != nullptr, error);
+    if (!map) return;
+    CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
+    CHECK_MSG((l.room != nullptr) == dm, dm ? "deathmatch had no lobby" : "single player had one");
+    if (l.server != nullptr) CHECK(l.server->cvars.find("deathmatch")->on() == dm);
+  }
+}
+
 TEST(a_companion_joins_q2_s_single_player_game_and_follows_through_a_level_change) {
   std::string error;
   cl::SearchPath files;

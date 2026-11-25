@@ -1,7 +1,9 @@
 // engine/render/ao.hpp: the target is half the render size, rounded up; on a device, a wall
 // square to the view reads open, a valley running up the picture reads closed along its floor
 // and more than its walls, a ridge pointing at the eye reads open, and where nothing was drawn
-// reads open with no depth; each texel carries the depth it was worked at.
+// reads open with no depth; each texel carries the depth it was worked at. Applied after the fact
+// ("ao.apply"), a drawn colour is darkened on the valley's floor more than on its walls, and a
+// pixel with no depth keeps its colour.
 //
 // ge:summary Tests for ambient occlusion: its size, a flat wall, a valley, a ridge and the sky
 // ge:keywords test render ambient-occlusion ao gtao valley ridge half-size
@@ -51,6 +53,8 @@ struct Scene {
   r::FrameUniforms staged{};
   r::Ao ao;
   r::FrameTargets targets;
+  wgpu::Texture colour;  // the drawn colour the occlusion is applied over (read back)
+  wgpu::TextureView colour_view;
   r::FrameRecorder rec;
   uint32_t flat = 0, valley = 0, ridge = 0, sky = 0;
 };
@@ -87,6 +91,7 @@ void make_scene(ge::gpu::Device& d, Scene& s) {
   s.uniforms =
       r::make_buffer(d, "test.uniforms", sizeof(r::FrameUniforms), wgpu::BufferUsage::Uniform);
   r::create_ao_pipelines(d, s.pipelines, s.ao);
+  r::create_ao_apply(d, s.pipelines, s.ao);
   const wgpu::ShaderModule m = ge::gpu::create_shader(d, kShapes, "test.shapes");
   s.flat = shape(d, s, m, 0, 1, 1);
   s.valley = shape(d, s, m, 0.03, 1, 1);
@@ -96,6 +101,9 @@ void make_scene(ge::gpu::Device& d, Scene& s) {
   ge::gpu::end_load(d);
   s.targets = r::create_targets(d, "test", kW, kH);
   r::create_ao_targets(d, s.ao, kW, kH, s.uniforms, s.targets.depth_view);
+  s.colour = r::make_texture(d, "test.colour", kW, kH, 1, r::kHdrFormat,
+                             wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc);
+  s.colour_view = s.colour.CreateView();
   r::set_ao(d, s.ao, {.strength = 1, .radius_m = 1.5});
   s.rec.init(d, "test.timer", 2);
 }
@@ -103,7 +111,7 @@ void make_scene(ge::gpu::Device& d, Scene& s) {
 // The shape drawn into the depth, the pass run; the target's red (the occlusion) and green (the
 // depth it was worked at) back.
 void run(ge::gpu::Device& d, Scene& s, uint32_t pipeline, std::vector<float>& shut,
-         std::vector<float>& depth) {
+         std::vector<float>& depth, std::vector<float>* colour = nullptr) {
   r::FrameView v;
   v.altitude_m = 1000;
   r::fill_uniforms(s.staged, v, kW, kH, nullptr);
@@ -124,12 +132,25 @@ void run(ge::gpu::Device& d, Scene& s, uint32_t pipeline, std::vector<float>& sh
     pass.End();
   }
   r::encode_ao(s.ao, s.pipelines, s.rec, e);
+  if (colour != nullptr) {  // a white frame, then the occlusion applied over it
+    wgpu::RenderPassColorAttachment white{};
+    white.view = s.colour_view;
+    white.loadOp = wgpu::LoadOp::Clear;
+    white.storeOp = wgpu::StoreOp::Store;
+    white.clearValue = {1, 1, 1, 1};
+    wgpu::RenderPassDescriptor desc{};
+    desc.colorAttachmentCount = 1;
+    desc.colorAttachments = &white;
+    s.rec.render(e, desc, "white").End();
+    r::encode_ao_apply(s.ao, s.pipelines, s.rec, e, s.colour_view);
+  }
   s.rec.end_frame(e);
   wgpu::CommandBuffer c = e.Finish();
   d.queue.Submit(1, &c);
   s.rec.after_submit(d);
   shut = r::read_red(d, s.ao.target, 0, s.ao.width, s.ao.height, r::kHdrFormat);
   depth = r::read_red(d, s.ao.target, 0, s.ao.width, s.ao.height, r::kHdrFormat, 1);
+  if (colour != nullptr) *colour = r::read_red(d, s.colour, 0, kW, kH, r::kHdrFormat);
 }
 
 // The texel at half-size column `x` on the middle row.
@@ -166,5 +187,26 @@ TEST(a_wall_and_a_ridge_read_open_and_a_valley_reads_closed_along_its_floor) {
   CHECK(at(shut, s, 24) == 0.0f);
   run(d, s, s.sky, shut, depth);
   for (size_t i = 0; i < shut.size(); ++i) CHECK(shut[i] == 0.0f && depth[i] == 0.0f);
+  CHECK(d.errors.load() == 0);
+}
+
+TEST(applied_after_the_fact_the_valley_floor_darkens_and_the_sky_keeps_its_colour) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  std::vector<float> shut, depth, colour;
+  // Twice: the search turns its slices each frame, the second frame is a steady one.
+  run(d, s, s.valley, shut, depth, &colour);
+  run(d, s, s.valley, shut, depth, &colour);
+  const auto px = [&](uint32_t x) { return colour[static_cast<size_t>(kH / 2) * kW + x]; };
+  CHECK_MSG(px(48) < 0.9f, std::to_string(px(48)));  // the floor
+  CHECK(px(48) < px(16));                            // darker than the wall
+  CHECK(px(48) > 0.0f);
+  run(d, s, s.sky, shut, depth, &colour);
+  for (const float c : colour) CHECK(c == 1.0f);
+  run(d, s, s.flat, shut, depth, &colour);
+  CHECK(px(48) == 1.0f);  // a wall square to the view sees all its sky
   CHECK(d.errors.load() == 0);
 }

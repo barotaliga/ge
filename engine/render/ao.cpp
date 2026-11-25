@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "render/ao.wgsl.hpp"
+#include "render/ao_apply.wgsl.hpp"
 #include "render/ao_blur.wgsl.hpp"
 
 namespace ge::render {
@@ -57,6 +58,36 @@ void create_ao_targets(gpu::Device& device, Ao& ao, uint32_t width, uint32_t hei
   ao.view = ao.target.CreateView();
   ao.group = make_group(device, "ao", ao.layout, {frame_uniforms, ao.params, depth, ao.raw_view});
   ao.blur_group = make_group(device, "ao.blur", ao.blur_layout, {ao.raw_view, ao.view});
+  if (ao.p_apply != 0)
+    ao.apply_group = make_group(device, "ao.apply", ao.apply_layout, {ao.view, depth});
+}
+
+void create_ao_apply(gpu::Device& device, gpu::PipelineSet& pipelines, Ao& ao) {
+  ao.apply_layout = make_layout(device, "ao.apply", {Slot::texture_raw, Slot::depth},
+                                wgpu::ShaderStage::Fragment);
+  const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::ao_apply, "ao_apply");
+  // The colour drawn times the fragment's: dst * src, the alpha kept.
+  wgpu::BlendState blend{};
+  blend.color.srcFactor = wgpu::BlendFactor::Zero;
+  blend.color.dstFactor = wgpu::BlendFactor::Src;
+  blend.alpha.srcFactor = wgpu::BlendFactor::Zero;
+  blend.alpha.dstFactor = wgpu::BlendFactor::One;
+  wgpu::ColorTargetState target{};
+  target.format = kHdrFormat;
+  target.blend = &blend;
+  wgpu::FragmentState fragment{};
+  fragment.module = module;
+  fragment.entryPoint = "fs_main";
+  fragment.targetCount = 1;
+  fragment.targets = &target;
+  wgpu::RenderPipelineDescriptor desc{};
+  desc.label = "ao.apply";
+  desc.layout = make_pipeline_layout(device, "ao.apply", {ao.apply_layout});
+  desc.vertex.module = module;
+  desc.vertex.entryPoint = "vs_main";
+  desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+  desc.fragment = &fragment;
+  ao.p_apply = pipelines.add_render(device, desc);
 }
 
 void set_ao(gpu::Device& device, const Ao& ao, const AoSettings& settings) {
@@ -75,6 +106,23 @@ void encode_ao(const Ao& ao, const gpu::PipelineSet& pipelines, FrameRecorder& r
   pass.SetBindGroup(0, ao.blur_group);
   pass.DispatchWorkgroups((ao.width + 7) / 8, (ao.height + 7) / 8);
   rec.current().dispatches += 2;
+  pass.End();
+}
+
+void encode_ao_apply(const Ao& ao, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                     wgpu::CommandEncoder& encoder, const wgpu::TextureView& hdr) {
+  wgpu::RenderPassColorAttachment colour{};
+  colour.view = hdr;
+  colour.loadOp = wgpu::LoadOp::Load;
+  colour.storeOp = wgpu::StoreOp::Store;
+  wgpu::RenderPassDescriptor desc{};
+  desc.colorAttachmentCount = 1;
+  desc.colorAttachments = &colour;
+  wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "ao.apply");
+  pass.SetPipeline(pipelines.render(ao.p_apply));
+  pass.SetBindGroup(0, ao.apply_group);
+  pass.Draw(3);
+  ++rec.current().draws;
   pass.End();
 }
 

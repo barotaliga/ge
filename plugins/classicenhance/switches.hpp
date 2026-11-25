@@ -40,7 +40,7 @@ struct Switches {
   bool textures = true, upscaler = true, relief = true, parallax = true, glow = true,
        pictures = true;
   // Light
-  bool rebake = true, flicker = true, shadows = true;
+  bool rebake = true, flicker = true, shadows = true, ao = true;
   // World
   bool decals = true;
   // Liquids and sky
