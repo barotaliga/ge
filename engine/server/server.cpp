@@ -177,6 +177,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
   const std::string masters = c.masters;
+  const std::string open_port = std::to_string(c.open_port), gateway = c.gateway;
   const std::string rcon = c.rcon_password;
   // Each setting's words (console/words.hpp): one sentence, then what each value does.
   auto bind = [&](std::string_view id, std::string_view fallback, uint32_t flags,
@@ -359,6 +360,17 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        "\"\": none, listed by no master (the default); TEXT: host:port addresses with spaces "
        "between (port 27900 when left out)",
        &c.masters);
+  bind("sv_open_port", open_port, latched,
+       "Whether the server asks the home router to forward its game port from the internet, so "
+       "players anywhere can join a server run at home.",
+       CvarKind::integer, 0, 1,
+       "0: no (the default); 1: ask the router by PCP, NAT-PMP or UPnP and say the public address",
+       &c.open_port);
+  bind("sv_gateway", gateway, latched, "The home router sv_open_port asks.", CvarKind::text, -kAny,
+       kAny,
+       "\"\": the machine's default route where the system tells it, else UPnP's search (the "
+       "default); TEXT: the router's address",
+       &c.gateway);
   bind("sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
        "The mods' game directories laid over the base game, set by --mod.", CvarKind::text, -kAny,
        kAny, "\"\": the base game alone; TEXT: directories, lowest first, commas between", &c.mod);

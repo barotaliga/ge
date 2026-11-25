@@ -118,6 +118,11 @@ forwarders to go through, nearest first, with the chain the game's route setting
   with `--cfg=<file>`, its output in `<logs>/dedicated-<port>.log` (line-buffered, so the log
   reads as it runs). The CLI then asks it for its status for up to ten seconds and answers
   whether it serves, or with the end of its log when it died.
+- `host --dedicated --open-port` also asks the home router to forward the port (the server's
+  `sv_open_port 1`, docs/servers.md § The port opened on the home router; `--gateway=<address>`
+  names the router when the default route's is not it). The answer is the server's own line: the
+  public address friends join, or why no router answered (`router` and `forwarded` in the JSON).
+  A listen server is refused the flag: the window does not ask the router yet.
 - `host send <port> <line>` sends a console line to a dedicated server the CLI started, through
   the console file beside its record: `host send 27500 mod arena` switches its mods (the
   settings' layers read again, the match restarted under them).
@@ -196,7 +201,7 @@ is each command's exit code; the terminals carry pings and ports, so they are me
 ## Not yet
 
 - The listen server's name and password from `host` (the window has no setting for them yet).
-- `host` reaching the internet: the answer says to forward the port; opening it on the router
-  (`engine/net/portmap.hpp`) and listing with a rendezvous are later rows.
+- A listen server's port opened on the router (the dedicated server's is, `--open-port`), and
+  listing with a rendezvous.
 - Talking to a running window (a setting changed live, the console's output read): the CLI
   works on files and the network today.
