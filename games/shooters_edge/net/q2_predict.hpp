@@ -33,6 +33,15 @@
 // frame's, so ducking and standing up move the view the frame the key goes down, not a round trip
 // later. 1 (the default) on our server, whose move the client is told; 2 on a stock server too.
 //
+// MOVERS RUN ON (`cl_predict_movers`): each door, plat and train runs on through the replay at the
+// speed the last two frames show it going (by their server times), stopping where it was seen
+// standing (plugins/shooter/predict.hpp, `MoverTrack`), and carries the player who stands on it or
+// shoves him where it moves into him; so a lift ridden or a door run through is where the server
+// will have it when it runs the move; the window draws them there too (`q2_draw_movers_ahead`),
+// so the lift is under his feet. The server moves them once a frame (100 ms), so they run on in
+// whole frames as the moves pass the frame's time. A new frame's correction predicts the newest
+// move from the old base over the movers as they were then.
+//
 // Not yet: the other players' boxes in the player's own prediction, a mover's turn.
 //
 // ge:summary The player's own moves predicted ahead of a server of Quake II, over its brushes
@@ -59,6 +68,15 @@ namespace shooters_edge::net {
 struct Q2ClientEnd;
 
 inline constexpr int kSqSentRing = 64;  // the moves kept by outgoing sequence
+
+// A brush model the prediction runs over: where the newest frame put it, how fast it goes and how
+// far it runs on before it stops (plugins/shooter/predict.hpp, `mover_motion`), and its turn.
+struct Q2Mover {
+  uint32_t model = 0;
+  ge::shooter::Vec3f at, velocity;
+  float reach = 1e30f;
+  ge::shooter::Vec3f angles;  // its turn (shooter/turned.hpp): traced in its own frame
+};
 
 struct Q2Predict {
   const ge::brush::Map* map = nullptr;  // the level's brushes (the window's loaded map)
@@ -87,7 +105,13 @@ struct Q2Predict {
   // prediction, so a teleport is drawn and the view turned the move it happens; the guess the
   // server has not yet answered.
   bool teleports = true;
-  ge::shooter::Teleporters tele;
+  bool pushes = true;                    // cl_predict_push: the push triggers taken the same way
+  bool movers = true;                    // cl_predict_movers: the movers run on through the replay
+  ge::shooter::MoverTrack movers_track;  // their motion over the frames
+  int64_t track_frames = -1;             // the client's frame count it was taken at
+  std::vector<Q2Mover> movers_last;      // the movers the last prediction ran over
+  float movers_ahead_s = 0;              // how far on the newest move ran them (drawn there)
+  ge::shooter::TeleTables tele;          // the teleporters, and the push triggers after them
   ge::shooter::TeleGuess guess;
   bool teleported = false;       // the last step's moves went through one
   int16_t delta_angles[3] = {};  // the last step's predicted view turn (the server's own)
@@ -100,6 +124,8 @@ struct Q2Predict {
 // The feel the move is predicted on: the one our server told (svc 122), else the stock move with
 // the server's stated air acceleration.
 ge::classic::Q2Feel q2_feel_of(const client::Demo& d);
+// The movers in `st` drawn where the last prediction ran them (`cl_predict_movers`).
+void q2_draw_movers_ahead(const Q2Predict& p, client::DemoState& st);
 // The level the prediction moves through (nullptr: none, nothing predicted).
 void q2_predict_map(Q2Predict& p, const ge::brush::Map* map);
 // One window frame: the player's place run ahead of the newest frame read (`d`, the client's

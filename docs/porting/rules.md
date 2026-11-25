@@ -103,6 +103,17 @@ health, and a body that slows on the ground (`tests/shooters_edge_arena_quake_te
 The arena's own rules, its digests and its pins are unchanged without the switch; `se-quake-dm`
 plays both from one seed.
 
+Quake II's mission packs play their rules in C++ beside the base game's, behind the pack switch
+(`server/q2_pack.hpp`: the game folder picks it). A pack's items, weapons, shots, monsters and
+map things are rows that carry their pack, and only that pack registers their models and sounds,
+so the base game's lists, goldens and digests do not move. What two games share is one table:
+the timed powers (`server/q2_powers.hpp`: the quad, The Reckoning's dual fire, invulnerability,
+the suit and the rebreather, each with its tint, warning, shell and drop rule) feed the timer, the
+view's tint, the shell, the drops and `use` alike. The Reckoning's rules are in
+`server/q2_reckoning.hpp` (its map things, its thinking shots, the trap) and `server/q2_choose.cpp`
+(its weapon cycle and the hyperblaster and railgun toggles); the item and ammunition tables are
+saved length first, so a pack's rows never break an older save.
+
 ## Labs and tests
 
 `se-baseline`, `se-quake-dm`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-coop-sweep`, `se-dive`, `se-q2-fight`, `se-q2-coop`,

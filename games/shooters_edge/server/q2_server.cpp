@@ -32,10 +32,12 @@
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
@@ -400,7 +402,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   p.respawn_time = respawn ? s.level_time : 0;  // a first placing counts from the map's start
   p.pressed = 0;
   p.view_angles = {0, yaw, 0};
-  p.body = sq_new_body();
+  p.body = sq_new_body(s.opt.pack);
   p.body.health = static_cast<int>(p.health);
   p.mega = -1;
   p.taken.clear();
@@ -413,6 +415,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   fight_spawn(s, slot);
   pose_spawn(s, slot);
   campaign_body(s, slot, respawn);
+  gz_entered(s, slot);  // the pack's last level hands out the A-M bomb
   if (respawn && coop(s))
     for (int i = 0; i < kSqItemCount; i++)
       if (kSqItems[i].kind == SqKind::key) p.body.counts[i] = died.counts[i];
@@ -483,6 +486,7 @@ bool match_removed(const Q2Server& s, const SqItem& it) {
 }
 
 bool dm_left_out(const Q2Server& s, int item) {
+  if (s.opt.pack == Q2Pack::ground_zero && gz_left_out(s, item)) return true;  // in every mode
   if (item < 0 || !deathmatch(s)) return false;
   if (fight_midair(s)) return true;  // nothing lies on the map in midair
   const SqItem& it = kSqItems[item];
@@ -497,6 +501,7 @@ bool dm_left_out(const Q2Server& s, int item) {
 // Whether the map's entity is left out in this mode by its spawn flags.
 bool left_out(const Q2Server& s, int flags) {
   if (deathmatch(s)) return (flags & 0x800) != 0;
+  if (const int gz = gz_coop_left_out(s, flags); gz >= 0) return gz != 0;  // Ground Zero's co-op
   const int k = skill(s);
   return (k == 0 && (flags & 0x100) != 0) || (k == 1 && (flags & 0x200) != 0) ||
          (k >= 2 && (flags & 0x400) != 0);
@@ -533,20 +538,34 @@ void show_item(Q2Server& s, size_t i) {
 // Each item dropped up to 128 units onto the floor, the map's or a solid mover's (a key resting on
 // a train or a wall's ledge), 0.2 s into the level, once the trains stand at their first corners;
 // one that starts in a solid is removed.
-void drop_items(Q2Server& s) {
+// Item `i` dropped up to `reach` units down onto the floor; removed, and said, if it starts in a
+// solid. Whether it found a floor.
+bool drop_item(Q2Server& s, size_t i, float reach) {
   const sh::Vec3f mins{-kItemHalf, -kItemHalf, -kItemHalf}, maxs{kItemHalf, kItemHalf, kItemHalf};
+  Q2Entity& e = s.entities[i];
+  const ge::classic::Q2Trace t =
+      map_trace(s, e.origin, mins, maxs, e.origin - sh::Vec3f{0, 0, reach},
+                sh::kSqSolid | sh::kSqWindow, static_cast<int>(i));
+  if (t.start_solid) {
+    s.console.push_back("droptofloor: " + e.classname + " startsolid at " + q2_pos(e.origin));
+    e.gone = true;
+    return false;
+  }
+  e.origin = t.end;
+  return t.fraction < 1;
+}
+
+// Ground Zero's item spawned by a trigger (TRIGGER_SPAWN, 1; never the power cube's): left where
+// it was placed, unseen, until used.
+bool gz_trigger_spawned(const Q2Server& s, const Q2Entity& e) {
+  return s.opt.pack == Q2Pack::ground_zero && e.item >= 0 && (e.spawnflags & 1) != 0 &&
+         e.classname != "key_power_cube";
+}
+
+void drop_items(Q2Server& s) {
   for (size_t i = 0; i < s.entities.size(); i++) {
-    Q2Entity& e = s.entities[i];
-    if (e.item < 0 || e.gone) continue;
-    const ge::classic::Q2Trace t =
-        map_trace(s, e.origin, mins, maxs, e.origin - sh::Vec3f{0, 0, 128},
-                  sh::kSqSolid | sh::kSqWindow, static_cast<int>(i));
-    if (t.start_solid) {
-      s.console.push_back("droptofloor: " + e.classname + " startsolid at " + q2_pos(e.origin));
-      e.gone = true;
-      continue;
-    }
-    e.origin = t.end;
+    const Q2Entity& e = s.entities[i];
+    if (e.item >= 0 && !e.gone && !gz_trigger_spawned(s, e)) drop_item(s, i, 128);
   }
   // Item teams (items sharing a `team`): every member hidden as they land, and 0.1 s later the
   // team's first entity (when it is an item) shows one of them at random.
@@ -558,6 +577,21 @@ void drop_items(Q2Server& s) {
     if (team_master(s, e.team) == i && !e.gone) e.respawn_at = s.level_time + 0.1;
   }
 }
+
+}  // namespace
+
+void q2_item_used(Q2Server& s, size_t i) {
+  Q2Entity& e = s.entities[i];
+  if (!e.hidden || (e.spawnflags & 1) == 0) return;
+  const bool dropped = gz_trigger_spawned(s, e);
+  e.hidden = false;
+  e.spawnflags &= ~1;
+  // Ground Zero's drops now, once used: 128 units down, and on to the floor below if none is
+  // that near (it falls; here it lands at once).
+  if (dropped && !drop_item(s, i, 128) && !e.gone) drop_item(s, i, 8192);
+}
+
+namespace {
 
 // The items a living player's box touches, taken by their rule.
 void touch_items(Q2Server& s, int slot) {
@@ -600,7 +634,8 @@ void touch_items(Q2Server& s, int slot) {
     int count = 0;  // ammo the map gives a `count` of
     if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
       count = std::atoi(s.map->entities[size_t(item.block)].get_any_case("count").c_str());
-    const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
+    const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
+    if (s.opt.pack == Q2Pack::ground_zero && gz_sphere_refused(s, slot, item.item)) continue;
     if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time, count)) continue;
     p.health = static_cast<float>(p.body.health);
     if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
@@ -657,7 +692,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   if (s.clients[slot].spectator && s.intermission_at <= 0 && spectate_command(s, slot, c)) return;
   ge::classic::Q2Move pm;
   pm.s = p.move;
-  if (s.intermission_at > 0)
+  if (s.intermission_at > 0 || (!p.alive && p.hunter_cam != -1))  // or riding a hunter sphere
     pm.s.type = ge::classic::Q2Type::freeze;
   else if (p.noclip && p.alive)  // `noclip` (q2_commands.hpp): the spectator's flight, no walls
     pm.s.type = ge::classic::Q2Type::spectator;
@@ -665,7 +700,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
     pm.s.type = p.alive    ? ge::classic::Q2Type::normal
                 : p.gibbed ? ge::classic::Q2Type::gib  // his head: the gib's box, no input
                            : ge::classic::Q2Type::dead;
-  pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
+  pm.s.gravity = static_cast<int16_t>(float(s.cvars.find("sv_gravity")->integer()) * p.gravity);
   pm.cmd = ge::classic::q2_command(c);  // the jump button the up move (q2_move.hpp)
   if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
       pm.cmd.angles[1] == p.forced_angles[1] && pm.cmd.angles[2] == p.forced_angles[2]) {
@@ -698,6 +733,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
     p.old_fall = 0;
   }
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
+  gz_gravity_touch(s, slot);  // Ground Zero's gravity triggers, for his next move
   if (p.noclip) {
     if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
     if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
@@ -1015,6 +1051,13 @@ void fill_rows(Q2Server& s) {
       wc.numbers.gun_angles[k] = still ? 0 : guns[k + 3];
     }
     wc.numbers.fov = fight_fov(s, i);
+    if (gz_sphere_view(s, i)) {  // riding a hunter sphere: its wide eye, 8 up
+      wc.numbers.fov = 140;
+      wc.numbers.view_z = 8;
+      wc.numbers.view_offset[0] = wc.numbers.view_offset[1] = 0;
+      wc.numbers.view_offset[2] = 8;
+    }
+    wc.numbers.rdflags = sq_power_shown(p.ir_until - s.level_time) ? 4 : 0;  // IR goggles
     for (int k = 0; k < 4; k++) {
       const bool none = s.intermission_at > 0;
       wc.numbers.blend[k] = none ? 0 : p.blend[k];
@@ -1045,9 +1088,14 @@ void fill_rows(Q2Server& s) {
     } else if (p.gibbed) {
       e.modelindex = 0;
     }
+    if (!p.alive && p.hunter_cam != -1) e.modelindex = 0;          // his view rides a hunter sphere
+    if (s.opt.pack == Q2Pack::ground_zero) e.render_fx |= 0x8000;  // seen through IR goggles
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
-      if (sq_power_shown(p.quad_until - s.level_time)) e.effects |= kSqQuadEffect;
-      if (sq_power_shown(p.invulnerable_until - s.level_time)) e.effects |= kSqInvulnerableEffect;
+      for (const SqPower& pw : sq_powers())
+        if ((pw.effects | pw.render) != 0 && sq_power_shown(p.*pw.until - s.level_time)) {
+          e.effects |= pw.effects;
+          e.render_fx |= pw.render;
+        }
       if (p.god) {  // god mode: a white shell
         e.effects |= kSqColourShellEffect;
         e.render_fx |= kSqGodShellRender;
@@ -1073,6 +1121,12 @@ void fill_rows(Q2Server& s) {
     if (m.item < 0) continue;
     sh::WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
     e.free = m.gone || m.hidden;
+    // Where it lies: dropped to the floor 0.2 s in, as a loaded level has it (a worn look's own
+    // offset kept, sq_dress).
+    e.origin = m.origin;
+    if (e.modelindex > 0 && size_t(e.modelindex) < s.model_looks.size())
+      if (const profiles::Look* l = s.model_looks[size_t(e.modelindex)]; l != nullptr)
+        e.origin = e.origin + sh::Vec3f{l->offset[0], l->offset[1], l->offset[2]};
     // Its glow, once: on the tenth it showed (a frame between tenths shows none).
     e.event = !e.free && s.tenth && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;
     // Taken in deathmatch: how long until it shows again, and the model it will show.
@@ -1270,13 +1324,17 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     if (q2_same_name(s.map_name, "fact2") && e.classname == "target_spawner" &&
         e.origin.x == -1504 && e.origin.y == 512 && e.origin.z == 72)
       e.origin.z = 64;
+    if (s.opt.pack == Q2Pack::ground_zero) e.classname = std::string(gz_classname(e.classname));
     e.item = sq_item(e.classname, s.opt.pack);
     if (e.item >= 0) e.team = b.get_any_case("team");
     inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
     e.gone = inhibited.back() != 0 || dm_left_out(s, e.item);
     // An item keeps its own flags only as a power cube: TRIGGER_SPAWN (1) hides it until used,
     // NO_TOUCH (2) leaves it lying there, never taken. Any other item's are cleared, and said.
-    if (e.item >= 0 && (e.spawnflags & 0xff) != 0 && e.classname != "key_power_cube") {
+    // Ground Zero's items keep TRIGGER_SPAWN alone (gz_trigger_spawned).
+    const bool gz_spawned = s.opt.pack == Q2Pack::ground_zero && (e.spawnflags & 0xff) == 1;
+    if (e.item >= 0 && (e.spawnflags & 0xff) != 0 && e.classname != "key_power_cube" &&
+        !gz_spawned) {
       if (!e.gone)
         s.console.push_back(e.classname + " at " + q2_pos(e.origin) +
                             " has invalid spawnflags set");
@@ -1298,6 +1356,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   }
   s.item_models.assign(size_t(kSqItemCount), 0);  // every item's, for those a player drops
   for (int i = 0; i < kSqItemCount; i++) {
+    if (!q2_pack_has(s.opt.pack, kSqItems[i].pack)) continue;  // a pack's under it alone
     const std::string model = kSqItems[i].model;
     const auto found = std::find(s.models.begin(), s.models.end(), model);
     s.item_models[size_t(i)] = static_cast<int>(found - s.models.begin());
@@ -1306,6 +1365,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.sounds.assign(1, "");
   fight_precache(s);
   monster_precache(s);
+  gz_decoys_reserve(s);  // Ground Zero's deathmatch: a Doppleganger's row for each slot
   campaign_start(s);
   fight_clear(s);
   s.models.emplace_back(kSqPowerScreenModel);  // the plate a power screen shows when struck
@@ -1508,6 +1568,7 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
     Q2Player& p = s.players[slot];
     if (p.alive && s.level_time >= p.respawn_time + kKillAfter) {
       p.god = false;
+      if (s.opt.pack == Q2Pack::ground_zero) gz_sphere_remove(s, slot);  // his sphere goes too
       fight_kill(s, slot, slot, -1);
     }
     fill_rows(s);
@@ -1667,6 +1728,7 @@ std::unique_ptr<Q2Server> make_q2_server(const Q2ServerOptions& opt) {
   s->opt = opt;
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
+  if (opt.pack == Q2Pack::ground_zero) gz_cvars(*s);
   add_aim_help(*s);
   s->console.push_back("==== InitGame ====");
   return s;
@@ -1779,7 +1841,7 @@ bool sq_give(Q2Server& s, int slot, int item) {
   if (!p.alive) return false;
   const SqItem& it = kSqItems[item];
   p.body.health = static_cast<int>(p.health);
-  const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
+  const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
   if (!sq_pick_up(item, p.body, deathmatch(s), skill(s), s.level_time)) return false;
   p.health = static_cast<float>(p.body.health);
   if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock

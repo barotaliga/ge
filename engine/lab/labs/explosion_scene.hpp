@@ -96,6 +96,7 @@ struct Scene {
   std::vector<gr::BurnVertex> burns;  // this frame's marks
   uint32_t flashes = 0, marked = 0;   // the last frame's lights and marks
   bool flash = true;                  // the blasts' flashes handed to the lights (a lab's own)
+  bool adapt = true;  // the eye adapts to the flash (off: a game that draws with no adaptation)
   ge::gpu::Target out;
   uint32_t w = 0, h = 0;
 };
@@ -183,13 +184,13 @@ inline void mark_blasts(Scene& s, const std::vector<gr::Blast>& blasts, double n
 // One frame: the particles flown `dt` s first (births waiting go in), then the picture.
 // The eye adapts to the flash at once (`FrameView::lamp_lux`, the flash's light on a face at the
 // eye turned to it), as a camera's exposure would: the yard round a blast at night reads lit by
-// it instead of blown out against the dark.
+// it instead of blown out against the dark. `Scene::adapt` off: the exposure stays the scene's.
 inline Timed draw(ge::gpu::Device& d, Scene& s, gr::FrameView v,
                   const std::vector<gr::Blast>& blasts, double dt,
                   std::span<const gr::MuzzleFire> fires = {}) {
   s.lamps.clear();
   if (s.flash) s.flashes = static_cast<uint32_t>(gr::flash_lights(blasts, v.time_s, s.lamps));
-  v.lamp_lux = gr::lamp_lux_at(s.lamps, v.eye, v.time_s);
+  if (s.adapt) v.lamp_lux = gr::lamp_lux_at(s.lamps, v.eye, v.time_s);
   s.rec.begin_frame(d);
   gr::fill_uniforms(s.staged, v, s.w, s.h);
   d.queue.WriteBuffer(s.uniforms, 0, &s.staged, sizeof s.staged);

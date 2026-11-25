@@ -3,10 +3,12 @@
 // with its speed, the hit naming the command; a guess turns the view once, keeping the turning
 // made since; the server's state settles it (kept when he is there, undone two commands past it
 // when he is not, that teleporter then left out while he stands in it), and the server's own turn
-// to the same view is the guess's.
+// to the same view is the guess's. A push sets the speed in the replay without a teleport, and the
+// tables keep the teleporters first.
 //
 // ge:summary Tests: the client's foreseen teleports: the box, the replay, the guess and its answers
 // ge:keywords test teleport-prediction teleporter_at tele_guess predict_player_teleports
+// ge:keywords pusher_at tele-tables
 // ge:skill shooter testing
 #include <cmath>
 
@@ -114,4 +116,38 @@ TEST(the_servers_turn_is_the_guesss_only_when_it_faces_the_same_way) {
   // Nothing foreseen: never the guess's.
   sh::TeleGuess none;
   CHECK(!sh::tele_guess_setangle(none, t, {0, 90, 0}, v));
+}
+
+TEST(a_push_sets_the_speed_in_the_replay_and_the_tables_keep_teleporters_first) {
+  sh::Teleporter push;
+  push.lo = {100, -50, -10};
+  push.hi = {140, 50, 80};
+  push.velocity = {0, 0, 500};
+  push.push = true;
+  sh::TeleTables tables;
+  tables.fill(one_pad(), {push});
+  CHECK(tables.with_push.size() == 2 && !tables.with_push[0].push && tables.with_push[1].push);
+  CHECK(tables.table(true, true) == &tables.with_push && tables.table(true, false) == &tables.tele);
+  CHECK(tables.table(false, true) == &tables.push_only && tables.table(false, false) == nullptr);
+  // A push is no teleporter: the box test for one passes over it.
+  CHECK(sh::teleporter_at(tables.push_only, {120, 0, 24}, sh::kPlayerMins, sh::kPlayerMaxs, 1) ==
+        -1);
+  CHECK(sh::pusher_at(tables.push_only, {120, 0, 24}, sh::kPlayerMins, sh::kPlayerMaxs, 1) == 0);
+  sh::MoveWorld world;
+  sh::MoveState start;
+  start.origin = {60, 0, 24};
+  start.velocity = {320, 0, 0};
+  sh::MoveCmd cmds[10];
+  for (sh::MoveCmd& c : cmds) {
+    c.msec = 13;
+    c.forward = 400;
+  }
+  sh::MoveState each[10];
+  sh::TeleHit hit;
+  sh::predict_player_teleports(sh::quantize_player(start), cmds, 10, sh::MoveSettings{}, world,
+                               each, &tables.push_only, -1, &hit);
+  int thrown = -1;
+  for (int i = 0; i < 10 && thrown < 0; i++)
+    if (each[i].velocity.z > 400) thrown = i;
+  CHECK(thrown >= 0 && hit.cmd == -1);  // thrown up, and no teleport named
 }

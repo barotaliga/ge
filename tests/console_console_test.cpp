@@ -151,7 +151,9 @@ TEST(a_server_stuffs_only_what_is_allowed) {
   CHECK(c.output()[0] == "hello");
   CHECK(c.cvars().find("sensitivity")->value == "3");
   CHECK(c.cvars().find("sv_fps")->value == "60");
-  CHECK(c.problems().size() == 2);
+  // The refused command is never shown (servers stuff them all the time); the cvar's refusal is.
+  CHECK(c.output().size() == 2 && c.output()[1].find("quit") == std::string::npos);
+  CHECK(c.problems().size() == 2);  // both kept as problems
   // A client's own console cannot set the server's cvar.
   c.execute("sv_fps 10");
   CHECK(c.cvars().find("sv_fps")->value == "60");

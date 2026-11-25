@@ -26,7 +26,7 @@
 // swings each one played. `--death=1` has the player jump once (the sounds heard, the jump's among
 // them) and die, the weapon sinking out of view: a sheet and a GIF. `--switch=1` has him change
 // weapons twice, calmly and with a shot during the change: sheets, a GIF and a chart.
-// `--film=<n> --hand=1` films the weapon in hand breathing at rest, `--exertion=1` as after a run.
+// `--film=<n> --hand=1` films the weapon in hand at rest; `--fire-film=<frames>` films the shot.
 // `--episodes=<done>` plays the campaign as the full game with those episodes done (a bit each),
 // so the start map's bars stand shut in front of the episodes not yet open and open for the next.
 // `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
@@ -81,6 +81,7 @@
 #include "console/ruleset.hpp"
 #include "core/math.hpp"
 #include "core/num_text.hpp"
+#include "detail/debris.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/chart.hpp"
@@ -573,6 +574,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     lab.note("the mod's game library " + lib.filename().string() + " plays the match");
   }
   lo.native_library = &library;
+  // `--lobby=1`: a deathmatch lobby, as `sv_lobby 1` starts one, so `--say=addbot` seats bots.
+  lo.lobby = lab.arg("lobby") == "1";
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
   // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.
@@ -811,6 +814,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   if (!say.empty()) {
     lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
     for (const std::string& line : l.prints) lab.note("said: " + line);
+    // The centre prints over the same time (a program's welcome, a pickup's words).
+    lab.metric("said.centres", static_cast<double>(l.centres.size()), "");
+    for (const std::string& line : l.centres)
+      if (!line.empty()) lab.note("centre: " + line);
   }
   // `--botinfo="model cyborg;skin oni911"`: those user info keys on every player but you (the
   // companions `--say=addbot` seated), as if each had set them.
@@ -1035,20 +1042,79 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
         return n;
       };
       const int alive_before = alive();
+      const int fire_film = static_cast<int>(lab.arg_num("fire-film"));
+      std::vector<gl::Picture> shot_film;
+      std::vector<std::string> shot_names;
+      size_t cases_most = 0;  // the most spent cases out at once during the film (anyone's)
+      // The film's hand throws its spent cases as the window's does (ce_shells, the enhanced look).
+      cl::HeldFire held_fire;
+      if (fire_film > 0 && in_hand && held.hand.at_eye) {
+        std::string fire_error;
+        if (!cl::load_held_fire(held_fire, &fire_error, draw_game.game->held_weapons))
+          lab.note("no muzzle fire in the shot's film: " + fire_error);
+      }
       sh::MoveCmd cmd;
       cmd.msec = 13;
       cmd.angles = {p.pitch, p.yaw, 0};
-      for (int i = 0; i < fire + 40; i++) {
+      for (int i = 0; i < std::max(fire + 40, fire_film); i++) {
         if (p.moved) player.origin = {p.at[0], p.at[1], p.at[2]};
         player.velocity = {};
         cmd.buttons = i < fire ? 1 : 0;
         cl::listen_frame(l, cmd);
         t += 0.013;
         cl::frame_view(l, shown, 1, t, 0.013);
+        if (fire_film > 0) {
+          // The enhanced look's switches, and its models: whose flash throws a case (a soldier's
+          // gun, another player's shotgun) is read off the drawn model's kind.
+          fx_state.on = cl::fx_switches(looks[1]);
+          fx_state.models = &cl::world_models(*world[1]);
+        }
         cl::step_fx(l, shown, fx_state, t, 0.013, fx);
         if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
+        if (fire_film > 0 && in_hand) {
+          cl::fire_held(held_fire, hand, fx_state.on.muzzles, t, fx);
+          cl::held_cases(fx_state.cases, held_fire, hand, fx_state.on.shells, t);
+        }
+        if (fire_film > 0)
+          cases_most = std::max(cases_most, ge::detail::debris_count(fx_state.cases.pool));
+        // --fire-film: the shot in the enhanced look, a frame every other host frame (1/38 s):
+        // the flash, the kick, a spent case thrown out and landing.
+        if (i < fire_film && i % 2 == 0) {
+          ge::render::FrameView on = cl::frame_view(l, shown, 0, t, 0);
+          on.shift_y = 0;
+          cl::draw_world(*device, *world[1], on, fx, in_hand && hand.drawn ? &hand : nullptr, 0.026,
+                         {}, out.view);
+          const ge::gpu::Image fi = ge::gpu::read_now(*device, out);
+          shot_film.push_back(gl::shrink(
+              gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 480));
+          shot_names.push_back(ge::core::num::to_fixed(i * 0.013, 2) + " S");
+        }
         // --fire-after frames on (the default: the smoke settled, the gibs down).
         if (i == fire + static_cast<int>(lab.arg_num("fire-after"))) shoot("-fired");
+      }
+      if (fire_film > 0)
+        lab.metric("fire.cases_most_" + std::to_string(v), static_cast<double>(cases_most), "count",
+                   gl::Det::measured);
+      if (!shot_film.empty()) {
+        std::vector<gl::Picture> picks;
+        std::vector<std::string> pick_names;
+        const size_t every = std::max<size_t>(1, (shot_film.size() + 7) / 8);
+        for (size_t f = 0; f < shot_film.size() && picks.size() < 8; f += every) {
+          picks.push_back(shot_film[f]);
+          pick_names.push_back(shot_names[f]);
+        }
+        lab.shot({"shot-film-" + std::to_string(v),
+                  "THE SHOT FROM VIEW " + std::to_string(v),
+                  "The player holds attack " + std::to_string(fire) +
+                      " frames in the enhanced look, a frame every other host frame from the "
+                      "first: the flash, the kick and, from a gun that throws them, its spent "
+                      "cases out of the breech to the right, falling and lying on the floor.",
+                  "a case leaves the gun's right side as it fires, falls and comes to rest "
+                  "on the floor; none from a gun that throws none",
+                  {{"map", lab.arg("map")}, {"weapon", lab.arg("weapon")}}},
+                 es::sheet_of(picks, pick_names, 4), gl::Det::measured);
+        lab.attach("shot-film-" + std::to_string(v) + ".gif", gl::encode_gif_frames(shot_film, 3),
+                   gl::Det::measured);
       }
       lab.metric("fire.entities_delta_" + std::to_string(v), alive() - alive_before, "",
                  gl::Det::measured);
@@ -1331,6 +1397,9 @@ const gl::LabSpec kSpec{
      {"fire-after", "15",
       "with --fire: frames after attack is let go that the -fired views are drawn (0: as it is let "
       "go, the shot in the air)"},
+     {"fire-film", "0",
+      "with --fire: this many host frames of the shot filmed in the enhanced look (a frame every "
+      "other one): a sheet shot-film-<view> and a GIF (the spent cases thrown under ce_shells)"},
      {"fields", "",
       "with --game: the player's fields set by name first, ';' between (`items 8388735; weapon "
       "8388608`): a mission pack's weapons and items on the status bar"},
@@ -1379,6 +1448,9 @@ const gl::LabSpec kSpec{
       "feed and the caption"},
      {"botinfo", "",
       "with --say=addbot: user info keys on every player but you, ';' between (`model cyborg`)"},
+     {"lobby", "0",
+      "with --game: 1 runs the deathmatch with a lobby (sv_lobby), where `--say=addbot` seats bots "
+      "who fight in the warmup"},
      {"server", "",
       "with --game: the server's lines before the map starts, ';' between (`coop 1`: a coop "
       "game, where `--say=addbot` seats a companion)"}},

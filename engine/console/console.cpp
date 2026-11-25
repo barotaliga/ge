@@ -16,6 +16,7 @@
 
 #include "console/cfg.hpp"
 #include "console/lex.hpp"
+#include "core/output.hpp"
 
 namespace ge::console {
 
@@ -340,8 +341,10 @@ void Console::dispatch(Entry& e) {
     print(name + limit->why);  // a ruleset's refusal reads as the game's words
   } else if (cmd != commands_.end()) {
     if (e.source == Source::server && (cmd->second.flags & kStuffable) == 0) {
-      error("the server may not run '" + name + "' here",
-            "nothing to do: a server's stuffed text runs only the commands a game allows");
+      // Refused quietly: servers stuff such lines all the time (`-attack` on a map change), and the
+      // player can do nothing about it. The `console` channel at debug keeps it for a reader.
+      quiet_error("the server may not run '" + name + "' here",
+                  "nothing to do: a server's stuffed text runs only the commands a game allows");
     } else if (const CommandGate* g = e.source != Source::server ? gate_of(name) : nullptr; g) {
       print(g->why);  // a ruleset's refusal reads as the game's words
     } else {
@@ -349,8 +352,8 @@ void Console::dispatch(Entry& e) {
     }
   } else if (const auto al = aliases_.find(name); al != aliases_.end()) {
     if (e.source == Source::server) {
-      error("the server may not run the alias '" + name + "'",
-            "nothing to do: a server's stuffed text runs no player alias");
+      quiet_error("the server may not run the alias '" + name + "'",
+                  "nothing to do: a server's stuffed text runs no player alias");
     } else {
       // The body runs before what followed the call, one level deeper.
       const std::string body = substitute_args(al->second.body, args.words);
@@ -616,6 +619,16 @@ void Console::error(std::string_view what, std::string_view next, Problem::Sever
   line += p.what;
   if (!p.next.empty()) line += " (" + p.next + ")";
   print(line);
+  problems_.push_back(std::move(p));
+}
+
+void Console::quiet_error(std::string_view what, std::string_view next) {
+  static const core::output::Channel ch = core::output::channel("console");
+  Problem p;
+  if (current_ != nullptr) p.where = current_->where;
+  p.what = std::string(what);
+  p.next = std::string(next);
+  core::output::log_on(ch, core::output::Level::debug, p.what + "; next: " + p.next);
   problems_.push_back(std::move(p));
 }
 

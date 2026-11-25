@@ -1,11 +1,11 @@
 // SHOOTER'S EDGE'S LOOK: the shooter plugin's picture settings and looks (shooter/app/look.hpp:
 // r_look, the r_ and ce_ cvars, the world's and the post's options), read here under the game's
-// own name, and what joins them to the game's effects: the moment's lights kept by kind, the view
-// breathing in a liquid, the screen's tint as the player tones it.
+// own name, and what joins them to the game's effects: the moment's lights kept by kind, the
+// screen's tint as the player tones it.
 //
 // ge:summary Shooter's Edge's look: the plugin's picture settings joined to the game's effects
 // ge:keywords look r_rocketlight r_explosionlight r_powerupglow kept_lights toned_blend
-// ge:keywords v_contentblend gl_cshiftpercent gl_polyblend warped_fov toned_tints
+// ge:keywords v_contentblend gl_cshiftpercent gl_polyblend toned_tints
 // ge:keywords gl_damageblend_frac damage-frame edge-blend
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
@@ -41,10 +41,5 @@ Tints toned_tints(const Picture& picture, const effects::Screen& s, bool rules,
 std::span<const effects::Light> kept_lights(const Picture& picture,
                                             std::span<const effects::Light> lights,
                                             std::vector<effects::Light>& out);
-// The field of view `fov_y` (rad) `t` s after the eye went into `medium` (the plugin's
-// warped_fov, in a liquid unless `medium` is the air).
-inline double warped_fov(const Picture& picture, effects::Medium medium, double fov_y, double t) {
-  return ge::classic::look::warped_fov(picture, medium != effects::Medium::air, fov_y, t);
-}
 
 }  // namespace shooters_edge::look

@@ -38,6 +38,7 @@
 // ge:keywords match-stats weapon-stats accuracy airgib midair splash rl-damage damage-given
 // ge:keywords damage-taken spawn-frags streak quad-run armour-taken stats_lines stats_game
 // ge:keywords shared-stats top-scores stats_top_lines stats_kill stats_hit stats_attack stats_blow
+// ge:keywords stats-words teamstats laststats oldstats stats_words
 // ge:skill net shooter
 // ge:test tests/shooters_edge_match_stats_test.cpp
 #pragma once
@@ -151,5 +152,21 @@ std::vector<std::string> stats_lines(const StatsGame& g, const ge::net::MatchRep
 // scored above 0, the best and every player tied with him ("  Streak: ana, ben (5)"): frags,
 // efficiency, damage given, mid-airs, the highest mid-air, streak, quad run, spawn frags.
 std::vector<std::string> stats_top_lines(const StatsGame& g, const ge::net::MatchReport& r);
+
+// THE STATS WORDS a player types, every game alike: `stats [player]` (the match so far, or the last
+// match's between matches), `teamstats` (each team's kills, deaths, damage dealt and received) and
+// `laststats [player]` (`oldstats`, `lastscores`: the last match's). During a team match the other
+// team's stats wait for its end. The game hands both reports (its columns first) and who asks.
+struct StatsAsk {
+  const ge::net::MatchReport* now = nullptr;   // the match under way (null: none, the warmup)
+  const ge::net::MatchReport* last = nullptr;  // the last match's (null: none played yet)
+  std::string me, my_team;                     // the asker, and his team ("" none)
+  std::vector<std::string> teams;              // the teams' names in order (none: the reports')
+  std::vector<std::string> present;            // the players on the server, counted or not
+};
+// The answer to `line` when it is a stats word, in `out` (lines joined by newlines); false for any
+// other line.
+bool stats_words(const StatsGame& g, const std::string& line, const StatsAsk& ask,
+                 std::string& out);
 
 }  // namespace shooters_edge::server

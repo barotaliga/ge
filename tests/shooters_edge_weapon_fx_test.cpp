@@ -69,6 +69,48 @@ TEST(a_blasts_light_follows_its_fire_and_goes_out) {
   CHECK(!fx::blast_light(blasts[0], 3.0, &gone));
 }
 
+// The other blasts are kin of the common one: the big one the same ball larger and throwing more,
+// the huge one white-hot lighting a hall, the dark one pulling black specks in, the bare one the
+// ball alone; the common one is what it was.
+TEST(a_blasts_kinds_scale_whiten_darken_or_bare_the_common_one) {
+  const double at[3] = {0, 0, 0};
+  std::vector<gr::Blast> common, again, big, huge, dark, bare;
+  fx::Particles pc, pa, pb, ph, pd, pn;
+  fx::blast(at, nullptr, 5, 0.0, &common, &pc);
+  fx::blast(at, nullptr, 5, 0.0, &again, &pa, fx::BlastOf::common);
+  fx::blast(at, nullptr, 5, 0.0, &big, &pb, fx::BlastOf::big);
+  fx::blast(at, nullptr, 5, 0.0, &huge, &ph, fx::BlastOf::huge);
+  fx::blast(at, nullptr, 5, 0.0, &dark, &pd, fx::BlastOf::dark);
+  fx::blast(at, nullptr, 5, 0.0, &bare, &pn, fx::BlastOf::bare);
+  CHECK(common[0].scale == 1 && pc.size() == pa.size());
+  CHECK(std::memcmp(pc.data(), pa.data(), pc.size() * sizeof(pc[0])) == 0);
+  CHECK(big[0].scale == fx::kBigBlast && pb.size() > pc.size());
+  CHECK(huge[0].scale == fx::kHugeBlast && huge[0].look == &fx::huge_look());
+  CHECK(fx::huge_look().core_k > 2 * fx::blast_look().core_k);
+  fx::Light lc, lh, ld;
+  CHECK(fx::blast_light(common[0], 0.02, &lc) && fx::blast_light(huge[0], 0.02, &lh));
+  CHECK(lh.radius > 4 * lc.radius && lh.colour[2] > lc.colour[2]);
+  CHECK(dark[0].look == &fx::dark_look() && !pd.empty());
+  for (const auto& p : pd) {  // every speck drawn in, none glowing
+    CHECK(p.v[0] * p.p[0] + p.v[1] * p.p[1] + p.v[2] * p.p[2] < 0);
+    CHECK(p.kelvin == 0);
+  }
+  CHECK(!fx::blast_light(dark[0], 0.02, &ld) || ld.radius == 0);
+  CHECK(pn.empty() && bare.size() == common.size());
+}
+
+// A hit in a colour of its own: its count, shining its colour, off the face.
+TEST(a_tinted_hit_shines_its_colour_off_the_face) {
+  const double at[3] = {0, 0, 0}, up[3] = {0, 1, 0};
+  fx::TintedHit h;
+  h.rgb[0] = 0.3f, h.rgb[1] = 1, h.rgb[2] = 0.4f;
+  h.count = 12;
+  fx::Particles out;
+  fx::tinted_hit(at, up, h, 9, &out);
+  CHECK(out.size() == 12);
+  for (const auto& p : out) CHECK(p.v[1] >= 0 && p.kelvin < 0 && p.tint[1] == 1);
+}
+
 TEST(the_rockets_trail_spreads_and_its_flame_points_back) {
   const double from[3] = {0, 1, 0}, to[3] = {3, 1, 0}, dir[3] = {1, 0, 0};
   fx::Particles fire, smoke;

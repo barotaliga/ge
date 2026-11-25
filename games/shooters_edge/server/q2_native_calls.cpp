@@ -785,6 +785,7 @@ void run_pmove(Block* pm) {
     m.ladder_mask = true;
     m.ladder_flag = true;
   }
+  native_move_ranges(h, m);
   if (h.thinking >= 0 && h.thinking < h.max_clients) {  // the server's defaults when none thinks
     const int protocol = h.s->clients[size_t(h.thinking)].protocol;
     if (protocol != 0) ge::classic::q2_fly_for_protocol(m, protocol);
@@ -1200,6 +1201,12 @@ void* x_tag_realloc(void* p, size_t size) {
 }
 
 }  // namespace
+
+void native_move_ranges(const NativeHost& h, ge::classic::Q2Move& m) {
+  const bool wide = h.ext == 2;
+  m.coord_bits = wide ? 23 : 16;
+  m.time_shift = wide ? 0 : 3;
+}
 
 int32_t native_features(NativeHost& h) {
   const NativeSetting* c = h.find_setting("g_features");

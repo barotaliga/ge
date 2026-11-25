@@ -342,25 +342,23 @@ int help_pages(const ClassicArt& art) {
   return n;
 }
 
-ClassicLayout classic_screen(int width, int height) {
+ClassicLayout classic_screen(int width, int height, float tall, float want, float share) {
+  const float fit = std::max(1.0f, std::floor(std::min(static_cast<float>(width) / kScreenW,
+                                                       static_cast<float>(height) / tall)));
   ClassicLayout l;
-  l.scale = std::max(1.0f, std::floor(std::min(static_cast<float>(width) / kScreenW,
-                                               static_cast<float>(height) / kScreenH)));
-  l.x = std::floor((static_cast<float>(width) - kScreenW * l.scale) / 2);
-  l.y = std::floor((static_cast<float>(height) - kScreenH * l.scale) / 2);
-  return l;
-}
-
-ClassicLayout classic_screen(const ClassicArt& art, int width, int height) {
-  const float tall = art.screen_height();
-  ClassicLayout l;
-  l.scale = art.scale > 0 ? std::max(1.0f, art.scale)
-                          : std::max(1.0f, std::floor(std::min(static_cast<float>(width) / kScreenW,
-                                                               static_cast<float>(height) / tall)));
+  l.scale = want > 0 ? std::max(1.0f, want) : std::max(1.0f, std::round(fit * share));
   l.x = std::floor((static_cast<float>(width) - kScreenW * l.scale) / 2);
   l.y = std::floor((static_cast<float>(height) - tall * l.scale) / 2) +
         (tall - kScreenH) / 2 * l.scale;
   return l;
+}
+
+ClassicLayout classic_screen(int width, int height) {
+  return classic_screen(width, height, kScreenH, 0, 1);
+}
+
+ClassicLayout classic_screen(const ClassicArt& art, int width, int height) {
+  return classic_screen(width, height, art.screen_height(), art.scale, 1);
 }
 
 bool banner_title(const ClassicPen& pen, std::string_view title, float y) {

@@ -306,6 +306,7 @@ input read, the game stepped by the STEADY time, the frame drawn and presented, 
 | `vid_vsync_lag_tweak` | 1 | The ms the lag fix leaves spare before the refresh: lower is less lag, too low misses refreshes |
 | `scr_showfps` | 0 | 1 the rate in the top-right corner; 2 with the last 120 frames' times as bars, the refresh's interval dashed, a missed refresh red |
 | `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits (the cap's, the GPU's queue's, and the swap chain's for a free image: a frame that waits there is held by the display, one that waits on the GPU is held by its own cost), the display's refresh, the cap, the present mode |
+| `profile [frames]` | 600 | The next frames timed part by part (`prof/frames.hpp` over the timing zones): the frame's median, p99 and worst; each part's own time (mean, median, p99, worst, share) and heap allocations a frame; the time in no part; and the five slowest frames with the parts that made each slow. `profile stop` reports at once. Beside `gpustats` (the GPU's passes), it says whether a slow frame is the CPU's and which part, on the player's own machine |
 
 **Why these defaults** (the `pacing` lab, 120 Hz, a light and a heavy load): the old loop (vsync,
 Metal's three images, nothing else) held every frame ~25 ms from input to picture. Two images and

@@ -95,6 +95,49 @@ TEST(the_base_game_s_item_numbers_are_unchanged) {
   CHECK(sv::sq_count(b, 7) == 1);   // the blaster
 }
 
+TEST(ground_zero_numbers_its_items_in_its_own_order) {
+  const auto gz = Q2Pack::ground_zero;
+  CHECK(sv::sq_numbers(gz) == 62);  // slot 0 and 61 rows
+  CHECK(sv::sq_number_of("weapon_chaingun", gz) == 11);
+  CHECK(sv::sq_number_of("weapon_etf_rifle", gz) == 12);
+  CHECK(sv::sq_number_of("ammo_grenades", gz) == 13);
+  CHECK(sv::sq_number_of("weapon_proxlauncher", gz) == 15);
+  CHECK(sv::sq_number_of("weapon_plasmabeam", gz) == 18);
+  CHECK(sv::sq_number_of("weapon_disintegrator", gz) == 22);
+  CHECK(sv::sq_number_of("ammo_tesla", gz) == 30);
+  CHECK(sv::sq_number_of("item_quad", gz) == 33);
+  CHECK(sv::sq_number_of("item_double", gz) == 43);
+  CHECK(sv::sq_number_of("key_nuke", gz) == 60);
+  CHECK(sv::sq_number_of("item_health", gz) == 61);
+  // The pack's rows are not found in the base game.
+  CHECK(sv::sq_item("weapon_etf_rifle") < 0);
+  CHECK(sv::sq_number_of("weapon_etf_rifle") == 0);
+  CHECK(sv::sq_weapon_numbered(12, gz));   // the ETF rifle
+  CHECK(sv::sq_weapon_numbered(30, gz));   // the tesla, thrown like a grenade
+  CHECK(!sv::sq_weapon_numbered(28, gz));  // flechettes
+  CHECK(sv::sq_powerup_numbered(43, gz));  // double damage
+}
+
+TEST(ground_zero_s_body_carries_its_ammo) {
+  sv::SqBody base = sv::sq_new_body();
+  CHECK(base.max_ammo[int(sv::SqAmmo::flechettes)] == 0);
+  sv::SqBody b = sv::sq_new_body(Q2Pack::ground_zero);
+  CHECK(b.max_ammo[int(sv::SqAmmo::flechettes)] == 200);
+  CHECK(b.max_ammo[int(sv::SqAmmo::prox)] == 50);
+  CHECK(b.max_ammo[int(sv::SqAmmo::tesla)] == 50);
+  CHECK(b.max_ammo[int(sv::SqAmmo::rounds)] == 100);
+  CHECK(b.max_ammo[int(sv::SqAmmo::magslugs)] == 0);  // The Reckoning's
+  // The ammo pack raises the pack's limits and gives one box of each, but no mines.
+  const int pack = sv::sq_item("item_pack", Q2Pack::ground_zero);
+  CHECK(sv::sq_pick_up(pack, b, true, 1, 0, 0));
+  CHECK(b.max_ammo[int(sv::SqAmmo::flechettes)] == 300);
+  CHECK(b.max_ammo[int(sv::SqAmmo::rounds)] == 200);
+  CHECK(b.ammo[int(sv::SqAmmo::flechettes)] == 50);
+  CHECK(b.ammo[int(sv::SqAmmo::rounds)] == 15);
+  CHECK(b.ammo[int(sv::SqAmmo::prox)] == 0);
+  CHECK(b.ammo[int(sv::SqAmmo::tesla)] == 0);
+}
+
 TEST(a_server_is_made_with_its_pack) {
   sv::Q2ServerOptions o;
   o.pack = sv::q2_pack_of_folder("rogue");

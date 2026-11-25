@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "classic/teleporters.hpp"
+#include "core/num.hpp"
 #include "shooter/brush_contents.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooter/turned.hpp"
@@ -28,11 +29,8 @@ namespace gc = ge::classic;
 // (shooter/turned.hpp, as the server traces it).
 struct MoverWorld {
   ge::brush::BrushTracer* tracer = nullptr;
-  struct Mover {
-    uint32_t model = 0;
-    sh::Vec3f at, angles;
-  };
-  std::vector<Mover> movers;
+  std::vector<Q2Mover> movers;  // traced as entities 2..
+  int frames_run = 0;           // the server frames the last run moved them on
   struct Box {
     sh::Vec3f lo, hi;  // the solid box in the world
   };
@@ -68,7 +66,8 @@ gc::Q2Trace mover_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f ma
     best.entity = entity;
   };
   one(0, {}, {}, 0);
-  for (const MoverWorld::Mover& m : w->movers) one(m.model, m.at, m.angles, 1);
+  for (size_t i = 0; i < w->movers.size(); i++)
+    one(w->movers[i].model, w->movers[i].at, w->movers[i].angles, 2 + static_cast<int>(i));
   for (const MoverWorld::Box& b : w->boxes) {  // a disc, a player, a monster: its box
     sh::Vec3f n;
     const float f = shooters_edge::server::sweep_box(start, end, mins, maxs, b.lo, b.hi, n);
@@ -89,6 +88,34 @@ int32_t mover_contents(void* ctx, sh::Vec3f p) {
   auto* w = static_cast<MoverWorld*>(ctx);
   const float q[3] = {p.x, p.y, p.z};
   return w->tracer->contents(q);
+}
+
+constexpr int kQ2FrameMs = 100;  // the server's frame: its movers move once in it
+
+// Each mover with a speed run on by `dt` seconds (at most to its stop), carrying the player who
+// stands on it (`ground`, as the trace numbers it) or shoving him where it moved into him, when his
+// box is clear there (Quake II's standing box; a ducked one is shorter, so clear too).
+void run_movers_on(MoverWorld& w, const std::vector<sh::Vec3f>& from, gc::Q2State& s, int ground,
+                   float dt) {
+  const sh::Vec3f lo{-16, -16, -24}, hi{16, 16, 32};
+  for (size_t i = 0; i < w.movers.size(); i++) {
+    Q2Mover& m = w.movers[i];
+    const float speed = sh::length(m.velocity);
+    if (speed <= 0) continue;
+    const float step = std::min(speed * dt, m.reach - sh::length(m.at - from[i]));
+    if (step <= 0) continue;
+    const sh::Vec3f move = m.velocity * (step / speed);
+    m.at = m.at + move;
+    sh::Vec3f p;
+    for (int a = 0; a < 3; a++) (&p.x)[a] = static_cast<float>(s.origin[a]) * 0.125f;
+    const bool rider = ground == 2 + static_cast<int>(i);
+    if (!rider && !mover_trace(&w, p, lo, hi, p).start_solid) continue;
+    const sh::Vec3f to = p + move;
+    if (mover_trace(&w, to, lo, hi, to).start_solid) continue;
+    for (int a = 0; a < 3; a++)
+      s.origin[a] =
+          static_cast<int32_t>(ge::core::num::to_int32(static_cast<double>((&to.x)[a]) * 8));
+  }
 }
 
 // The server's newest state of the player, as the move carries it. `ms`: the extended limits'
@@ -121,20 +148,36 @@ bool run_ahead(gc::Q2State& s, uint32_t acked, const Q2ClientEnd& c, const gc::Q
                const gc::Q2World& world, int& replayed, bool* on_ground = nullptr,
                int* water_level = nullptr, float* view_height = nullptr,
                const sh::Teleporters* tele = nullptr, int skip = -1, sh::TeleHit* hit = nullptr,
-               uint32_t* hit_move = nullptr) {
+               uint32_t* hit_move = nullptr, MoverWorld* run_on = nullptr) {
   const uint32_t newest = c.ch.outgoing_sequence;  // the next packet's: not yet sent
   if (newest - acked >= static_cast<uint32_t>(kSqSentRing)) return false;
   // The moves made after the acknowledged packet's, sent or still waiting for the next packet.
   const uint32_t first = c.made_at[acked & (kSqSentRing - 1)];
   if (c.made - first >= static_cast<uint32_t>(kSqSentRing)) return false;
   replayed = 0;
+  // The movers run on (`cl_predict_movers`) start where the frame has them and go back after.
+  std::vector<sh::Vec3f> from;
+  if (run_on != nullptr)
+    for (const Q2Mover& m : run_on->movers) from.push_back(m.at);
+  int ground = (s.flags & gc::kSqOnGround) != 0 ? 0 : -1;  // what he stands on: 2.. a mover
+  // The server moves its movers once a frame (kQ2FrameS) and runs each move as it comes in: the
+  // acknowledged move came in as the frame left, each later one as much later as it was made.
+  int elapsed_ms = 0, frames_run = 0;
   for (uint32_t k = first; k != c.made; k++) {
     gc::Q2Move pm;
-    pm.s = s;
     pm.cmd = gc::q2_command(c.sent[k & (kSqSentRing - 1)]);
+    elapsed_ms += pm.cmd.msec;
+    for (; run_on != nullptr && (frames_run + 1) * kQ2FrameMs <= elapsed_ms; frames_run++)
+      run_movers_on(*run_on, from, s, ground, kQ2FrameMs * 0.001f);
+    pm.s = s;
     gc::q2_feel(pm, feel);
     gc::q2_move(pm, world);
     s = pm.s;
+    ground = pm.ground_entity;
+    if (tele != nullptr && s.type == gc::Q2Type::normal) {
+      const int pk = sh::pusher_at(*tele, origin_of(s), pm.mins, pm.maxs, sh::kTeleLinkGrow);
+      if (pk >= 0) gc::q2_push_state(s, (*tele)[static_cast<size_t>(pk)]);
+    }
     if (tele != nullptr && s.type == gc::Q2Type::normal && (s.flags & gc::kSqTimeTeleport) == 0) {
       const int t =
           sh::teleporter_at(*tele, origin_of(s), pm.mins, pm.maxs, sh::kTeleLinkGrow, skip);
@@ -150,6 +193,10 @@ bool run_ahead(gc::Q2State& s, uint32_t acked, const Q2ClientEnd& c, const gc::Q
     if (on_ground != nullptr) *on_ground = pm.ground_entity >= 0;
     if (water_level != nullptr) *water_level = pm.water_level;
     if (view_height != nullptr) *view_height = pm.view_height;
+  }
+  if (run_on != nullptr) {
+    for (size_t i = 0; i < from.size(); i++) run_on->movers[i].at = from[i];
+    run_on->frames_run = frames_run;
   }
   return true;
 }
@@ -172,7 +219,13 @@ void movers_of(const Q2Predict& p, const client::DemoState& st, MoverWorld& mw) 
     if (name.size() < 2 || name[0] != '*') continue;
     const int model = std::atoi(name.c_str() + 1);
     if (model <= 0 || static_cast<size_t>(model) >= p.map->models.size()) continue;
-    mw.movers.push_back({static_cast<uint32_t>(model), e.origin, e.angles});
+    // Where the newest frame put it: the drawn place is between the last two frames.
+    const size_t n = static_cast<size_t>(&e - st.entities.data());
+    Q2Mover m{static_cast<uint32_t>(model), e.origin, {}, 1e30f, e.angles};
+    if (n < p.movers_track.ents.size() && p.movers_track.ents[n].last_model == e.model)
+      m.at = p.movers_track.ents[n].last;
+    if (p.movers) sh::mover_motion(p.movers_track, n, m.velocity, m.reach);
+    mw.movers.push_back(m);
   }
 }
 
@@ -182,10 +235,28 @@ void q2_predict_map(Q2Predict& p, const ge::brush::Map* map) {
   if (map == p.map) return;
   p.map = map;
   p.tracer = map != nullptr ? std::make_unique<ge::brush::BrushTracer>(*map) : nullptr;
-  p.tele = map != nullptr ? gc::q2_teleporters(*map) : sh::Teleporters{};
+  if (map != nullptr)
+    p.tele.fill(gc::q2_teleporters(*map), gc::q2_pushers(*map));
+  else
+    p.tele = {};
   p.guess = {};
   p.smooth = {};
   p.have_base = false;
+  p.movers_track = {};
+  p.movers_last.clear();
+}
+
+void q2_draw_movers_ahead(const Q2Predict& p, client::DemoState& st) {
+  if (!p.movers || !p.predicted) return;
+  for (size_t i = 0; i < st.entities.size() && i < p.movers_track.ents.size(); i++) {
+    const sh::MoverTrack::One& o = p.movers_track.ents[i];
+    if (!st.entities[i].present || o.last_model != st.entities[i].model) continue;
+    sh::Vec3f v;
+    float reach = 0;
+    sh::mover_motion(p.movers_track, i, v, reach);
+    if (v.x != 0 || v.y != 0 || v.z != 0)
+      st.entities[i].origin = sh::mover_ahead(o.last, v, reach, p.movers_ahead_s);
+  }
 }
 
 gc::Q2Feel q2_feel_of(const client::Demo& d) {
@@ -211,22 +282,36 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
     p.have_base = false;
     return false;
   }
+  if (c.frames != p.track_frames) {  // a new frame: the movers' motion read off it
+    p.track_frames = c.frames;
+    sh::mover_track_frame(p.movers_track, st.time);
+    for (size_t n = 0; n < st.entities.size(); n++)
+      if (st.entities[n].present && client::brush_model(st, st.entities[n].model))
+        sh::mover_track_seen(p.movers_track, n, st.entities[n].model, st.entities[n].origin);
+  }
   MoverWorld mw;
   movers_of(p, st, mw);
   const gc::Q2World world{&mw, mover_trace, mover_contents};
+  // The movers as the last prediction had them, for the newest move from the old base.
+  MoverWorld then = mw;
+  if (p.have_base) then.movers = p.movers_last;
+  const gc::Q2World world_then{&then, mover_trace, mover_contents};
+  MoverWorld* run_on = p.movers ? &mw : nullptr;
+  MoverWorld* run_then = p.movers ? &then : nullptr;
   const gc::Q2Feel feel = q2_feel_of(d);
   const uint32_t acked = c.ch.incoming_acknowledged;
-  const sh::Teleporters* tele = p.teleports && !p.tele.empty() ? &p.tele : nullptr;
+  const sh::Teleporters* tele = p.tele.table(p.teleports, p.pushes);
   // A new frame: the newest move predicted from the old base too, the difference folded into the
   // correction.
   const bool fresh = !p.have_base || c.frames != p.base_frames;
   if (fresh && p.have_base) {
     gc::Q2State old = p.base;
     int n = 0;
-    if (run_ahead(old, p.base_acked, c, feel, world, n, nullptr, nullptr, nullptr, tele,
-                  p.guess.skip)) {
+    if (run_ahead(old, p.base_acked, c, feel, world_then, n, nullptr, nullptr, nullptr, tele,
+                  p.guess.skip, nullptr, nullptr, run_then)) {
       gc::Q2State now = state_of(v, ms);
-      if (run_ahead(now, acked, c, feel, world, n, nullptr, nullptr, nullptr, tele, p.guess.skip)) {
+      if (run_ahead(now, acked, c, feel, world, n, nullptr, nullptr, nullptr, tele, p.guess.skip,
+                    nullptr, nullptr, run_on)) {
         ge::shooter::smoothing_frame(p.smooth, origin_of(old), origin_of(now));
         const float miss = ge::shooter::length(origin_of(old) - origin_of(now));
         if (miss > 0) {
@@ -251,16 +336,18 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
   sh::TeleHit hit;
   uint32_t hit_move = 0;
   if (!run_ahead(s, p.base_acked, c, feel, world, p.replayed, &p.on_ground, &p.water_level, &ahead,
-                 tele, p.guess.skip, &hit, &hit_move))
+                 tele, p.guess.skip, &hit, &hit_move, run_on))
     return false;
+  p.movers_last = mw.movers;
+  p.movers_ahead_s = static_cast<float>(mw.frames_run * kQ2FrameMs) * 0.001f;
   // The teleport foreseen: settled by the server's state (a no leaves that teleporter out while
   // the server has him in it), a new one taken; the view turns with the predicted delta angles.
-  if (tele != nullptr) {
+  if (p.teleports && !p.tele.tele.empty()) {
     sh::Vec3f unused;
     const uint32_t first = c.made_at[p.base_acked & (kSqSentRing - 1)];
-    sh::tele_guess_acked(p.guess, *tele, first, origin_of(p.base), sh::kPlayerMins, sh::kPlayerMaxs,
-                         unused);
-    if (hit.cmd >= 0) sh::tele_guess_hit(p.guess, *tele, hit_move + 1, hit.index, {}, unused);
+    sh::tele_guess_acked(p.guess, p.tele.tele, first, origin_of(p.base), sh::kPlayerMins,
+                         sh::kPlayerMaxs, unused);
+    if (hit.cmd >= 0) sh::tele_guess_hit(p.guess, p.tele.tele, hit_move + 1, hit.index, {}, unused);
   }
   p.teleported = hit.cmd >= 0;
   for (int i = 0; i < 3; i++) p.delta_angles[i] = s.delta_angles[i];

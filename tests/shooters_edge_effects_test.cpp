@@ -609,21 +609,15 @@ TEST(r_rocketlight_r_explosionlight_and_r_powerupglow_put_out_their_own_kind) {
   CHECK(left.size() == 3 && left[2].group == fx::kLightPower);
 }
 
-TEST(r_waterwarp_breathes_the_view_in_a_liquid_and_holds_it_in_the_air) {
+TEST(r_waterwarp_reaches_the_world_options_and_never_the_field_of_view) {
   namespace lk = shooters_edge::look;
-  namespace fx = shooters_edge::effects;
   ge::console::Console con;
   lk::Picture pic;
   lk::add_cvars(con, pic);
-  const double fov = 1.2, quarter = 0.25 / lk::kWaterWarpHz;  // the breath at its widest
-  CHECK(lk::warped_fov(pic, fx::Medium::air, fov, quarter) == fov);
-  for (const auto m : {fx::Medium::water, fx::Medium::slime, fx::Medium::lava}) {
-    const double wide = lk::warped_fov(pic, m, fov, quarter);
-    CHECK(wide > fov * (1 + lk::kWaterWarp * 0.99) && wide < fov * (1 + lk::kWaterWarp * 1.01));
-    CHECK(lk::warped_fov(pic, m, fov, 3 * quarter) < fov);
-  }
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).water_warp);
   con.execute("r_waterwarp 0");
-  CHECK(lk::warped_fov(pic, fx::Medium::water, fov, quarter) == fov);
+  CHECK(!pic.water_warp);
+  CHECK(!lk::world_options(lk::Look::modern, {}, pic).water_warp);
 }
 
 TEST(r_drawentities_0_draws_no_model_but_the_map) {
@@ -773,6 +767,30 @@ TEST(quake2_line_effects_space_their_specks_along_the_line) {
   for (const auto& p : one) CHECK(p.v[1] > 0);   // bubbles rise
   for (const auto& p : wall) CHECK(p.v[1] < 0);  // a force wall's specks drift down
   CHECK(ion[0].v[0] == -ion[1].v[0]);            // side to side
+}
+
+// Under ce_bubbles Quake II's bubbles are the engine's bubble sprites: one where each speck would
+// be, moving as it would (map units, z up), from the same seed's numbers; so the switch changes the
+// look, never where or how many.
+TEST(quake2_bubbles_as_the_engine_s_are_where_the_specks_would_be) {
+  const double a[3] = {0, 0, 0}, b[3] = {100 * 0.025, 0, 0};
+  const double ma[3] = {0, 0, 0}, mb[3] = {100, 0, 0};
+  for (const bool second : {false, true}) {
+    fx::Particles specks;
+    fx::q2_bubbles(a, b, second, 3, {}, &specks);
+    std::vector<fx::RisingBubble> bubbles;
+    fx::q2_rising_bubbles(ma, mb, second, 3, &bubbles);
+    CHECK(bubbles.size() == specks.size());
+    for (size_t i = 0; i < bubbles.size() && i < specks.size(); ++i) {
+      // The speck's velocity is in engine metres a second, y up; the bubble's in map units, z up.
+      CHECK(std::fabs(bubbles[i].vel[2] - specks[i].v[1] / 0.025) < 1e-3);
+      CHECK(bubbles[i].vel[2] > 0);
+      CHECK(std::fabs(double(specks[i].life) - bubbles[i].life) < 1e-6);
+    }
+    double up[3];
+    fx::rising_bubble_at(bubbles[0], 0.5, up);
+    CHECK(std::fabs(up[2] - (bubbles[0].at[2] + 0.5 * bubbles[0].vel[2])) < 1e-9);
+  }
 }
 
 // Quake II's bursts: steam's count along its jet, the blue hyperblaster's 40 blue specks, the
