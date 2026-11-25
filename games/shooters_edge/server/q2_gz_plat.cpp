@@ -208,9 +208,7 @@ void gz_plat2_arrived(Q2Server& s, Q2Entity& e) {
     e.count &= ~kCalled;
     if (!toggle) go_after(s, e, 5);
     e.touched_at -= deathmatch(s) ? 1 : 2;
-  } else if (top && (e.spawnflags & kTop) == 0 && !toggle) {
-    go_after(s, e, 2);
-  } else if (!top && (e.spawnflags & kTop) != 0 && !toggle) {
+  } else if (!toggle && top != ((e.spawnflags & kTop) != 0)) {  // off the end it rests at
     go_after(s, e, 2);
   }
   map_use_targets(s, index_of(s, e), e.activator);  // its targets at either end

@@ -763,7 +763,7 @@ sh::Vec3f muzzle_aim(Q2Server& s, int slot, sh::Vec3f from, sh::Vec3f forward) {
   const Q2Player& p = s.players[slot];
   const sh::Vec3f eye = unpack(p.move.origin) + sh::Vec3f{0, 0, p.view_height};
   const sh::Vec3f far = eye + forward * 8192.0f;
-  const Line l = shoot_line(s, eye, far, 1u << slot);
+  const Line l = shoot_line(s, eye, far, 1u << (unsigned(slot) & 31u));  // a slot is 0..31
   if (l.fraction >= 1) return forward;
   sh::Vec3f to = eye + (far - eye) * l.fraction - from;
   sh::normalize(to);
