@@ -505,12 +505,14 @@ int run_main(int argc, char** argv) {
   // for vid_vsync_lag_fix), and after the present the gate told and, while the lag fix is on,
   // the frame's cost to its GPU's last work measured.
   const auto acquire_frame = [&] {
+    GE_ZONE("frame.acquire");
     const uint64_t before = ge::platform::now_ns();
     wgpu::TextureView view = surface.acquire(*device);
     ge::platform::acquired(pacing, before, ge::platform::now_ns());
     return view;
   };
   const auto present_frame = [&] {
+    GE_ZONE("frame.present");
     surface.present();
     gate.submitted(*device);
     if (ge::platform::late_start_on(pacing)) {
@@ -1108,6 +1110,7 @@ int run_main(int argc, char** argv) {
   if (!args.manual.empty())  // every command and setting registered: the manual's source
     return cl::write_manual(console, game_cvars, bindings, game_start, *adapter.game, args.manual);
   while ((args.frames == 0 || presented < args.frames) && !quit) {
+    ge::platform::profile_tick(console, pacing);  // `profile N`: before any zone opens
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
@@ -1127,6 +1130,7 @@ int run_main(int argc, char** argv) {
     // The frame's pacing BEFORE its input is read, so the input is as fresh as the waits allow:
     // the GPU's queue down to vid_framelatency, then the cap (a timedemo runs unpaced).
     if (vsync) {
+      GE_ZONE("frame.wait");  // the GPU's queue and the cap: time waited, not spent
       if (pacing.settings.vsync != vsync_applied || pacing.settings.latency != latency_applied)
         configure_surface();
       const double gpu_s = gate.wait(*device, pacing.settings.latency);
@@ -1968,14 +1972,7 @@ int run_main(int argc, char** argv) {
     save_settings();
   }
   const double seconds = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-  char line[200];
-  std::snprintf(line, sizeof line,
-                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame, the longest %.0f ms) at "
-                "%dx%d, %u GPU errors",
-                presented, seconds,
-                presented ? seconds * 1e3 / static_cast<double>(presented) : 0.0, longest * 1e3, w,
-                h, device->errors.load());
-  out::status(line);
+  out::status(cl::run_line(presented, seconds, longest, w, h, device->errors.load()));
   return device->errors.load() == 0 && !device->lost.load() && bench_failed == 0 ? 0 : 1;
 }
 

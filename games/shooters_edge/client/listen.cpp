@@ -5,6 +5,7 @@
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/listen.hpp"
+#include "prof/zones.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 
@@ -1095,6 +1096,7 @@ double listen_tic(const Listen& l) {
 constexpr int kMuzzleFlashBit = 2;  // the entity's muzzle-flash effect bit
 
 void listen_frame(Listen& l, sh::MoveCmd cmd) {
+  GE_ZONE("listen.frame");
   cmd.msec = static_cast<uint8_t>(ge::core::num::round(listen_tic(l) * 1000));
   cmd.angles = l.view;
   // The easy jump: the aid strafes for him from the server's own player (speedjump_assist.hpp).
@@ -1356,6 +1358,7 @@ void listen_mic(Listen& l, std::span<const float> samples, bool talking) {
 }
 
 int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {
+  GE_ZONE("listen");  // the server frames due, the bots' thinking in them
   const double tic = listen_tic(l);
   l.owed += wall_s;
   int n = 0;

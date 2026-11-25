@@ -20,6 +20,7 @@
 #include "detail/receivers.hpp"
 #include "detail/surfaces.hpp"
 #include "detail/vec.hpp"
+#include "prof/zones.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/app/monster_fx.hpp"
@@ -771,6 +772,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
 }
 
 void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out) {
+  GE_ZONE("fx");
   thread_local FxScene scene;
   fx_scene(l, v, scene);
   step_fx(scene, s, t, dt, out);
