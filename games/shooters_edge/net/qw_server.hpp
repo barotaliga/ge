@@ -64,6 +64,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -72,6 +73,7 @@
 #include "core/prng.hpp"
 #include "net/status.hpp"
 #include "net/transport.hpp"
+#include "net/tunnel.hpp"
 #include "server/bans.hpp"
 #include "server/cmdfilter.hpp"
 #include "server/guards.hpp"
@@ -225,7 +227,11 @@ struct ServerConfig {
   bool antilag_projectiles = false;  // sv_antilag_projectiles: with 2, missiles in flight too
   int antilag_max_ms = 0;            // sv_antilag_max: no further back than this; 0 the history
   bool voice = false;                // offer the voice bit and relay voice
-  bool voice_echo = false;           // sv_voipecho: a speaker is sent his own voice back
+  // sv_native: the socket runs the engine's node (net/tunnel.hpp), and the challenge answers our
+  // client's `getchallenge native` with the ge family's native bit; our clients then join through
+  // the node, everyone else as before on the same port.
+  bool native = false;
+  bool voice_echo = false;                    // sv_voipecho: a speaker is sent his own voice back
   VoiceRoute voice_route = VoiceRoute::team;  // the target a connection starts with
   int earshot =
       1000;  // sv_earshot: how near `say_near` and the near voice reach, map units (0 off)
@@ -386,6 +392,9 @@ struct QwServer {
   const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
+  // NATIVE (`ServerConfig::native`): the tunnel the server's socket runs, `transport` its inner
+  // side; our clients join through its node, the rest plainly, on the one port.
+  std::unique_ptr<gn::Tunnel> tunnel;
   QwClient clients[sh::kMaxClients];
   ge::classic::ChallengeBook challenges;  // classic/protocol/challenges.hpp
   ge::core::Rng rng{1};

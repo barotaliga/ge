@@ -1528,6 +1528,14 @@ compensation by rewind, voice (M17h), the session layer's lobby and chat (M17d),
 traversal (M17e). Gameplay is identical under both: the server's frame and QC do not know
 which protocol a client speaks, and one server serves both kinds of client at once.
 
+**The native link (M18x, slice 1).** The classic stream is carried inside the engine's node
+(`engine/net/tunnel.hpp`): the node's handshake and channel wrap the same datagrams, and the
+datagrams that are not the node's are handed to the classic endpoint as they came, so one port
+serves both kinds of client. Our window asks `getchallenge native`; a server with `sv_native 1`
+(the default) adds the `native` word to its challenge, the window connects its node and asks again
+through it, and a server without one is joined classically (`cl_native 0` always does). Snapshots,
+secure joins, NAT traversal and the replicated moves come in the later slices (`docs/goals/M18x.md`).
+
 **Held by labs on the simulated network**: a compatible client and our server, our client and
 a compatible server, under every condition preset; and, in `se-interop`, our client against an
 existing server program and an existing client against ours, run as black boxes on loopback

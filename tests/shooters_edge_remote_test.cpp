@@ -15,12 +15,13 @@
 // showpackets, showdrop and cl_solid_players are bound to the window. `record` begun late keeps the
 // level from its server data, so the file plays from the signon; a match records itself from the
 // status leaving standby to 4 s into the intermission, and one cut short waits for match_save;
-// the match's console log beside it.
+// the match's console log beside it. On a server with sv_native the window joins through the
+// server's node, a classic player beside it on the same port; one without it is joined classically.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
 // ge:keywords prediction cl_nopred latency predict_other cl_predict_players cl_nolerp lerp
-// ge:keywords item-back items_back
+// ge:keywords item-back items_back native-protocol tunnel cl_native sv_native
 // ge:keywords named-effects ge-ext pointparticles trailparticles voice cl_voip push-to-talk
 // ge:skill net shooter testing
 #include <algorithm>
@@ -1099,4 +1100,61 @@ TEST(a_map_the_window_lacks_is_fetched_before_it_asks_to_spawn) {
   CHECK_MSG(rig.join(), "the window never played on the server");
   CHECK(rig.remote.end.downloaded.count("maps/arena.bsp") == 1);
   CHECK(!said_has(rig.said, "another version"));
+}
+
+// THE NATIVE LINK (M18x): on a server with sv_native the window joins through the server's node
+// and a classic player beside it joins as before, both on the server's one port; the window's
+// moves are predicted where the server puts it as on the classic road, and only its datagrams
+// crossed the network sealed in the node's packets.
+TEST(the_window_joins_through_the_node_beside_a_classic_player_on_one_port) {
+  Rig rig;
+  rig.latency_ms = 50;
+  rig.with_other = true;
+  rig.serve = [](cn::ServerConfig& sc) { sc.native = true; };
+  rig.join_with = [](cn::ClientConfig& cc) { cc.native = true; };
+  CHECK(rig.start());
+  CHECK_MSG(rig.join(), "the window never played through the node");
+  CHECK(rig.remote.end.tunnel != nullptr && gn::tunnel_joined(*rig.remote.end.tunnel));
+  CHECK(rig.server.tunnel != nullptr);
+  CHECK(gn::tunnel_carried(*rig.server.tunnel, gn::sim_address(1, cn::kPortClient)));
+  CHECK(!gn::tunnel_carried(*rig.server.tunnel, gn::sim_address(2, cn::kPortClient)));
+  const std::vector<sh::BrushModel> models = sv::arena_models();
+  cn::remote_world(rig.remote, &models);
+  const int slot = rig.remote.end.playernum;
+  std::vector<sh::Vec3f> predicted(1 << 16);
+  std::vector<bool> kept(1 << 16, false);
+  int compared = 0;
+  float worst = 0;
+  rig.remote.view = {0, 30, 0};
+  for (int f = 0; f < 2 * 77; f++) {
+    rig.remote.hands.forward = 400;
+    rig.remote.hands.side = f % 77 < 30 ? 200 : 0;
+    rig.frame();
+    if (!rig.remote.predicted) continue;
+    const cn::QwClientEnd& c = rig.remote.end;
+    const uint32_t newest = c.ch.outgoing_sequence - 1;
+    predicted[newest & 0xffff] = rig.remote.prediction;
+    kept[newest & 0xffff] = true;
+    const uint32_t acked = c.ch.incoming_acknowledged;
+    if (kept[acked & 0xffff]) {
+      worst = std::fmax(worst, sh::length(predicted[acked & 0xffff] - c.players[slot].origin));
+      compared++;
+    }
+  }
+  CHECK_MSG(compared > 60, "predictions compared through the node: " + std::to_string(compared));
+  CHECK_MSG(worst < 1, "a prediction through the node missed by " + std::to_string(worst));
+  CHECK_MSG(rig.other.stage == cn::ClientStage::active, "the classic player never played");
+  const gn::TunnelStats& ts = rig.server.tunnel->stats;
+  CHECK(ts.carried_in > 100 && ts.carried_out > 100);
+  CHECK(ts.plain_in > 100);  // the classic player's
+  CHECK(rig.remote.end.tunnel->stats.plain_out == 0);
+}
+
+// A window that asks for the node on a server without it joins the classic way, at once.
+TEST(the_window_joins_classically_where_the_server_offers_no_node) {
+  Rig rig;
+  rig.join_with = [](cn::ClientConfig& cc) { cc.native = true; };
+  CHECK(rig.start());
+  CHECK(rig.join());
+  CHECK(rig.remote.end.tunnel == nullptr);
 }

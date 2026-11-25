@@ -47,6 +47,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::ge, false, kGeEveryFrame, "every-frame"},          // Quake II's server only
     {ExtFamily::ge, false, kGeHitReports, "hit-reports"},          // Quake II's server only
     {ExtFamily::ge, false, kGeArsenal, "arsenal"},                 // Quake II's server only
+    {ExtFamily::ge, false, kGeNative, "native"},  // offered with sv_native: join through the node
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);
 
