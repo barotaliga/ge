@@ -32,6 +32,12 @@ void gz_cvars(Q2Server& s) {
                .help = "Whether the Disruptor and its rounds are left on the map.",
                .values = "0: both taken off (the default); 1: both left, and the Bandolier and "
                          "the Ammo Pack carry more rounds"});
+  s.cvars.add(
+      {.name = "huntercam",
+       .fallback = "1",
+       .flags = con::kServer | con::kServerInfo | con::kLatch,
+       .help = "Whether a player killed from afar watches his hunter sphere chase his killer.",
+       .values = "0: off; 1: on, unless players are forced to respawn (the default)"});
 }
 
 std::string_view gz_classname(std::string_view classname) {

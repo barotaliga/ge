@@ -162,6 +162,38 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     e.flash = static_cast<int>(ev.values[3]);
     e.flash_monster = true;
   }
+  // The sound the Quake II client plays itself for one of the packs' temporary entities (the
+  // server sends none for them: q2_temp_fx.hpp), heard where it happened.
+  const auto pack_sound = [&](int code, const sh::Vec3f& at, int entity = -1, int channel = 0) {
+    const Q2TempSound ts = q2_temp_sound(code, 0);
+    if (ts.name == nullptr || !listen_is_q2(l) || l.sounds.size() >= kMostListenSounds) return;
+    DemoSound o;
+    o.entity = entity;
+    o.channel = channel;
+    o.name = ts.name;
+    o.attenuation = ts.attenuation;
+    o.origin = at;
+    l.sounds.push_back(o);
+  };
+  if (ev.kind == sv::EventKind::trail_effect && ev.text == "te_lightning") {
+    // A tesla's bolt: from the tesla (`level`) to what it strikes (`ent`), one bolt a pair, its
+    // crackle on the tesla's weapon channel each time it is sent.
+    e.kind = EffectKind::named_trail;
+    e.entity = ev.level;
+    e.colour = ev.ent;
+    e.at = ev.origin;
+    e.end = {ev.values[0], ev.values[1], ev.values[2]};
+    l.effects.push_back(std::move(e));
+    if (listen_is_q2(l) && l.sounds.size() < kMostListenSounds) {
+      DemoSound o;
+      o.entity = ev.level;
+      o.channel = 1;
+      o.name = "weapons/tesla.wav";
+      o.origin = ev.origin;
+      l.sounds.push_back(o);
+    }
+    return;
+  }
   if (ev.kind == sv::EventKind::trail_effect) {
     e.kind = EffectKind::named_trail;
     e.entity = ev.ent;
@@ -208,12 +240,15 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const bool blast = name == "te_bfg_bigexplosion" || name == "te_bfg_explosion" ||
                      name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
                      name == "te_explosion1" || name == "te_explosion2" ||
-                     name == "te_plasma_explosion";
+                     name == "te_plasma_explosion" || name == "te_plain_explosion" ||
+                     name == "te_tracker_explosion" || name == "te_nukeblast" ||
+                     name == "te_explosion1_big" || name == "te_explosion1_np";
   if (blast) {
     l.explosions.push_back(ev.origin);
     if (const int code = q2_blast_code(name); code > 0 && listen_is_q2(l)) {
       l.explosion_codes.resize(l.explosions.size());  // its ball, light and specks
       l.explosion_codes.back() = static_cast<uint8_t>(code);
+      if (code >= 35) pack_sound(code, ev.origin);  // Ground Zero's: the client's own sound
     }
   }
   if (blast && name != "te_bfg_bigexplosion") return;
@@ -251,6 +286,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   e.at = e.end = ev.origin;
   e.way = {ev.values[0], ev.values[1], ev.values[2]};
   e.count = std::min(count, 64);
+  if (const int code = q2_pack_te_code(name); code > 0) {  // Ground Zero's, by its kind byte
+    e.code = code;
+    pack_sound(code, ev.origin);
+  }
   l.effects.push_back(std::move(e));
 }
 

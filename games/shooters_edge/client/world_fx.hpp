@@ -347,6 +347,21 @@ struct FxState {
     double born = 0;
   };
   std::vector<Q2Laser> q2_lasers;
+  // GROUND ZERO'S HELD LINES (q2_model_fx.hpp's kQ2HeldLineS): a tesla's bolt by its source and
+  // what it strikes, a heat beam by its source (`monster`: a monster's, no rings), each until
+  // `until`; the A-M bomb's blasts growing (engine m, the picture's clock).
+  struct Q2HeldLine {
+    int entity = 0, struck = 0;
+    sh::Vec3f from, to;  // map units
+    bool bolt = false, monster = false;
+    double until = 0;
+  };
+  std::vector<Q2HeldLine> q2_held;
+  struct Q2Nuke {
+    double at[3] = {0, 0, 0};
+    double born = 0;
+  };
+  std::vector<Q2Nuke> q2_nukes;
   // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
   // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
   // its classic trail's side; those gone this frame (where their spit lands); the splashes whose
@@ -607,9 +622,14 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
                       double t, FxFrame& out);
 bool q2_cable(FxState& s, const Effect& e, double t);
 void q2_laser(FxState& s, const Effect& e, double t);
+// Ground Zero's: a tesla's bolt or a heat beam held by its source (false for any other effect),
+// and a point effect by our rules' name (q2_temp_fx.hpp's kQ2PackTes; false for any other).
+bool q2_held_line(FxState& s, const Effect& e, double t);
+bool q2_pack_point(FxState& s, const Effect& e, const double p[3], double t, FxFrame& out);
 void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int me_entity, double t,
                       FxFrame& out);
-// The widow beam-outs still growing at `t`: a sphere of specks each frame (client/world_fx_q2.cpp).
+// The widow beam-outs and the A-M bomb's blasts still growing at `t`: a sphere of specks each frame
+// (client/world_fx_q2.cpp).
 void q2_sustains(FxState& s, double t, FxFrame& out);
 void q2_mark_fx(FxState& s, const Missile& m, bool moved, const double from[3], const double to[3],
                 double t, FxFrame& out);

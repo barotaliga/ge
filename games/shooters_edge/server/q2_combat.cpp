@@ -494,6 +494,21 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
     case kSqByAmBomb:
       words = "was nuked by", tail = "'s antimatter bomb";
       break;
+    case kSqByVengeance:
+      words = "was purged by", tail = "'s vengeance sphere";
+      break;
+    case kSqByDefender:
+      words = "had a blast with", tail = "'s defender sphere";
+      break;
+    case kSqByHunter:
+      words = "was killed like a dog by", tail = "'s hunter sphere";
+      break;
+    case kSqByDoppleVengeance:
+      words = "was purged by", tail = "'s doppleganger";
+      break;
+    case kSqByDoppleHunter:
+      words = "was hunted down by", tail = "'s doppleganger";
+      break;
     case int(SqWeapon::disruptor):
       words = "was annihilated by", tail = "'s disruptor";
       break;

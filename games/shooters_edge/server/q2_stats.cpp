@@ -19,11 +19,8 @@ namespace shooters_edge::server {
 namespace {
 
 bool player(int slot) { return slot >= 0 && slot < 32 && slot < sh::kMaxClients; }
-// The base game's eleven weapons are the report's columns; the packs' own are not counted (the
-// report's shape is the same whichever pack is loaded).
+// The base game's guns (blaster to hand grenade) are counted; a mission pack's are not columns.
 constexpr int kCounted = int(SqWeapon::hand_grenade) + 1;
-static_assert(kCounted <= kStatWeaponsMost);
-
 bool weapon(int w) { return w >= 0 && w < kCounted; }
 
 Q2SlotStats& of(Q2Server& s, int slot) {

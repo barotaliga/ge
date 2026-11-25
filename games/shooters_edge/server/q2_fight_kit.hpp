@@ -58,4 +58,15 @@ int fight_multiplier(const Q2Server& s, const Q2Player& p);
 // damage's at 2, none at 1.
 const char* fight_multiplier_sound(int m);
 
+// While a monster's blow is dealt, which monster deals it (`Q2Server::blow_from`, a map entity;
+// -1 none): a hurt player's defender sphere turns on it.
+struct FightBlowFrom {
+  Q2Server& s;
+  int was;
+  FightBlowFrom(Q2Server& server, int from);
+  ~FightBlowFrom();
+  FightBlowFrom(const FightBlowFrom&) = delete;
+  FightBlowFrom& operator=(const FightBlowFrom&) = delete;
+};
+
 }  // namespace shooters_edge::server
