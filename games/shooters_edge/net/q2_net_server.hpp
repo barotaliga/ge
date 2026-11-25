@@ -431,8 +431,9 @@ bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t
 void q2_net_frame(Q2NetServer& s, int64_t now_us);
 
 // The arsenal's message (svc 118 after its id, to a client that agreed `*ge_ext` bit 4096): the
-// weapons `body` holds as a 16-bit mask by kSqWeapons' row, then its ammunition of each kind
-// (shells, bullets, grenades, rockets, cells, slugs) as 16-bit counts, little-endian.
+// weapons `body` holds as a 32-bit mask by kSqWeapons' row, the count of ammunition kinds (`none`
+// included) as a byte, then its ammunition of each kind from 1 (shells, bullets, grenades,
+// rockets, cells, slugs, then the mission packs' kinds) as 16-bit counts, little-endian.
 std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body);
 // Every client told the server is going, and dropped.
 void q2_net_stop(Q2NetServer& s);

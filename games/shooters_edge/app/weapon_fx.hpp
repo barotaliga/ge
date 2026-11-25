@@ -225,7 +225,8 @@ int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 //   and a pale vapour that rises where the slug burnt the air (`ion_trail`);
 // - the BOLTS (blaster, hyperblaster) in the modern look: a streak of two plasma strands wound
 //   round each other riding each bolt (`plasma_look`), shedding sparks (`plasma_sheds`);
-// - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`); the BFG's burst: a green
+// - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`; Ground Zero's green bolt's
+//   in green); the BFG's burst: a green
 //   ball of specks (`bfg_burst`) under the engine's blast.
 inline constexpr float kBoltRgb[3] = {1.0f, 0.75f, 0.25f};
 inline constexpr float kBfgRgb[3] = {0.35f, 1.0f, 0.35f};
@@ -266,7 +267,7 @@ void ion_trail(const double from[3], const double to[3], uint32_t seed, Particle
 const gr::BeamLook& plasma_look();
 // A few sparks shed off a bolt's stretch `from`..`to` (m) this frame.
 void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Particles* out);
-void blaster_hit(const double at[3], uint32_t seed, Particles* out);
+void blaster_hit(const double at[3], uint32_t seed, Particles* out, bool green = false);
 void bfg_burst(const double at[3], uint32_t seed, Particles* out);
 
 }  // namespace shooters_edge::effects

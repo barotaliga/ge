@@ -66,6 +66,15 @@ void targets_monster_touch(Q2Server& s, Q2Monster& m);
 // A turret driver's frame: it rides its breach and aims it at `enemy` (a slot it sees, or -1),
 // firing once it has seen him for 3 - skill seconds.
 void targets_turret(Q2Server& s, Q2Monster& m, int enemy);
+// The turret_breach entity `d` targets (the last of that name), or -1.
+int targets_breach_of(const Q2Server& s, const Q2Entity& d);
+// Where breach `breach` fires from, as it faces now.
+sh::Vec3f targets_breach_muzzle(const Q2Server& s, int breach);
+// Breach `breach` turned to aim at `at` (held within its arcs: the nearer limit beyond them).
+void targets_breach_aim(Q2Server& s, int breach, sh::Vec3f at);
+// Breach `breach` fires its rocket the way it faces: 100 to 150, at 550 + 50 x skill, entity
+// `from` its owner and `cause` the death's words.
+void targets_breach_fire(Q2Server& s, int breach, int from, int cause);
 // Their world rows: frames, models, what shows.
 void targets_rows(Q2Server& s);
 

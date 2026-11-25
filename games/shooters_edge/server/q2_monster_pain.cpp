@@ -8,6 +8,7 @@
 // ge:test tests/shooters_edge_q2_monsters_test.cpp
 #include "shooters_edge/server/q2_monster_pain.hpp"
 
+#include <algorithm>
 #include <cstdint>
 
 namespace shooters_edge::server {
@@ -24,10 +25,13 @@ constexpr int16_t kAny = 32767;
 
 // A band of blows up to `most`: it flinches at all with chance `odds`, by one of its runs at even
 // odds (a run listed twice counts twice).
+// With `first_odds` set (0 or more), not even odds: its first run with chance `first_odds` +
+// `per_point` × the blow + `per_skill` × the skill, at most `first_cap`, else its second.
 struct PainBand {
   int16_t most = kAny;
   float odds = 1;
   PainRun runs[3] = {};
+  float first_odds = -1, per_point = 0, per_skill = 0, first_cap = 1;
 };
 
 enum class Nightmare : uint8_t {
@@ -43,6 +47,7 @@ struct PainRule {  // NOLINT(clang-analyzer-optin.performance.Padding): a consta
   Nightmare nightmare = Nightmare::nothing;
   bool everywhere = false;  // its cries heard across the whole map
   int16_t never = -1;       // a blow this or less: nothing at all, the wait untouched
+  int16_t cry_most = -1;    // a blow this or less: its first cry alone, no flinch, the wait spent
   int16_t shrug_most = -1;  // a blow this or less shrugged off with chance `shrug`, the wait spent
   float shrug = 0;
   SqSpan busy[2] = {};         // at skill 2 and up, no pain while one of these plays
@@ -119,6 +124,41 @@ constexpr PainRule kPains[] = {
     {.classname = "monster_hover",
      .bands = {{25, 1, {{S(153, 161), "hover/hovpain1.wav"}, {S(141, 152), "hover/hovpain2.wav"}}},
                {kAny, 1, {{S(113, 140), "hover/hovpain1.wav"}}}}},
+    // Ground Zero's hover: a heavy blow's long flinch less likely as the skill rises, else the
+    // middle one (gz-monsters.md § 2.15); read under the pack (q2_gz_base_monsters.cpp).
+    {.classname = "gz/monster_hover",
+     .bands = {{25, 1, {{S(153, 161), "hover/hovpain1.wav"}, {S(141, 152), "hover/hovpain2.wav"}}},
+               {kAny,
+                1,
+                {{S(113, 140), "hover/hovpain1.wav"}, {S(141, 152), "hover/hovpain2.wav"}},
+                0.45f,
+                0,
+                -0.1f}}},
+    // Ground Zero's daedalus: the hover's runs with its own cries, a heavy blow's long flinch
+    // less likely as the skill rises (gz-monsters.md § 2.15, § 7.3).
+    {.classname = "monster_daedalus",
+     .bands = {{25,
+                1,
+                {{S(153, 161), "daedalus/daedpain1.wav"}, {S(141, 152), "daedalus/daedpain2.wav"}}},
+               {kAny,
+                1,
+                {{S(113, 140), "daedalus/daedpain1.wav"}, {S(141, 152), "daedalus/daedpain2.wav"}},
+                0.45f,
+                0,
+                -0.1f}}},
+    // Ground Zero's medic commander: a light blow only cries; a heavy one cries louder and
+    // flinches long with chance 0.005 a point, at most a half (gz-monsters.md § 7.4).
+    {.classname = "monster_medic_commander",
+     .sounds = {"medic_commander/medpain1.wav"},
+     .cry_most = 34,
+     .bands = {{kAny,
+                1,
+                {{S(116, 130), "medic_commander/medpain2.wav"},
+                 {S(108, 115), "medic_commander/medpain2.wav"}},
+                0,
+                0.005f,
+                0,
+                0.5f}}},
     {.classname = "monster_floater",
      .bands = {{kAny,
                 1,
@@ -220,6 +260,12 @@ constexpr DeathRule kDeaths[] = {
     {.classname = "monster_hover",
      .sounds = {"hover/hovdeth1.wav", "hover/hovdeth2.wav"},
      .runs = {{0}}},
+    {.classname = "monster_daedalus",
+     .sounds = {"daedalus/daeddeth1.wav", "daedalus/daeddeth2.wav"},
+     .runs = {{0}}},
+    {.classname = "monster_medic_commander",
+     .sounds = {"medic_commander/meddeth.wav"},
+     .runs = {{0}}},
     {.classname = "monster_boss2",
      .sounds = {"bosshovr/bhvdeth1.wav"},
      .everywhere = true,
@@ -234,6 +280,13 @@ constexpr DeathRule kDeaths[] = {
 
 bool monster_pain_known(std::string_view classname) { return rule_of(classname) != nullptr; }
 
+const char* pain_class(const roster::Kind& k) {
+  if (rule_of(k.classname) != nullptr) return k.classname;
+  for (const DeathRule& d : kDeaths)
+    if (std::string_view(k.classname) == d.classname) return k.classname;
+  return roster::looks_like(k);
+}
+
 PainChoice monster_pain(std::string_view classname, int damage, int skill, float up, int frame,
                         int first, bool act_pain, bool waiting, ge::core::Rng& rng) {
   PainChoice c;
@@ -246,6 +299,10 @@ PainChoice monster_pain(std::string_view classname, int damage, int skill, float
     return c;
   }
   c.spent = true;
+  if (damage <= r->cry_most) {
+    c.sound = r->sounds[0];
+    return c;
+  }
   if (damage <= r->shrug_most && draw(rng) < r->shrug) return c;
   if (skill >= 2)
     for (SqSpan b : r->busy)
@@ -274,7 +331,14 @@ PainChoice monster_pain(std::string_view classname, int damage, int skill, float
     c.run = band->runs[pick].run;
     return c;
   }
-  if (n > 1) pick = static_cast<int>(draw(rng) * n);
+  if (band->first_odds >= 0 && n > 1) {
+    const float odds = std::min(
+        band->first_odds + band->per_point * float(damage) + band->per_skill * float(skill),
+        band->first_cap);
+    pick = draw(rng) < odds ? 0 : 1;
+  } else if (n > 1) {
+    pick = static_cast<int>(draw(rng) * n);
+  }
   pick = pick < n ? pick : n - 1;
   c.sound = cry_of(*r, band->runs[pick], rng);
   c.run = rising ? r->air : band->runs[pick].run;

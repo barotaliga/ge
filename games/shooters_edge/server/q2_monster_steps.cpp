@@ -297,7 +297,7 @@ void sound_at(Q2Server& s, const Q2Monster& m, const char* sample, int channel, 
 
 // The frame's own sound, when the frame shown is new.
 void cue(Q2Server& s, const Q2Monster& m) {
-  const std::string_view name = roster::kKinds[m.kind].classname;
+  const std::string_view name = roster::looks_like(roster::kKinds[m.kind]);
   for (const Cue& c : kCues) {
     if (name != c.classname || c.first != m.pose.span.first || c.frame != m.pose.frame) continue;
     int n = 0;
