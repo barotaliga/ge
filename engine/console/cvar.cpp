@@ -178,13 +178,30 @@ bool Cvars::add_mapped_synonym(std::string_view name, std::string_view target,
   return true;
 }
 
+bool Cvars::add_scaled_synonym(std::string_view name, std::string_view target, double scale,
+                               bool cheat) {
+  if (scale == 0 || !std::isfinite(scale) || !add_synonym(name, target)) return false;
+  Synonym& s = synonyms_.back();
+  if (s.name != lower(name)) return false;  // named before, unscaled
+  s.scale = scale;
+  s.cheat = cheat;
+  return true;
+}
+
 std::string Cvars::mapped_value(const Synonym& s, std::string_view theirs) const {
+  if (s.scale != 0) {
+    double x = 0;
+    return parse_number(theirs, x) ? core::num::to_string(x / s.scale) : std::string();
+  }
   for (const SynonymValue& v : s.values)
     if (same_value(v.theirs, theirs)) return v.ours;
   return {};
 }
 
 std::string Cvars::mapped_words(const Synonym& s) {
+  if (s.scale != 0)
+    return "a number (" + (s.target != nullptr ? s.target->name : std::string()) + "'s times " +
+           core::num::to_string(s.scale) + ")";
   std::string out;
   for (const SynonymValue& v : s.values)
     out.append(out.empty() ? "" : "; ")
@@ -217,6 +234,10 @@ std::vector<std::string> words_of(std::string_view v) {
 }  // namespace
 
 std::string Cvars::synonym_value(const Synonym& s) const {
+  if (s.scale != 0) {
+    double x = 0;
+    return parse_number(s.target->value, x) ? core::num::to_string(x * s.scale) : s.target->value;
+  }
   for (const SynonymValue& v : s.values)  // mapped: the first of its values naming the target's
     if (same_value(v.ours, s.target->value)) return v.theirs;
   if (s.part < 0) return s.target->value;
@@ -234,11 +255,19 @@ void Cvars::hold_cheats(bool held) {
   if (held == cheats_held_) return;
   cheats_held_ = held;
   if (!held) return;
-  for (auto& k : all_)  // every cheat back to its default, as sv_cheats 0 puts them
-    if ((k->flags & kCheat) != 0 && k->value != k->fallback) {
-      store(*k, k->fallback);
-      k->below = k->value;
-    }
+  reset_cheats();  // every cheat back to its default, as sv_cheats 0 puts them
+}
+
+void Cvars::reset_cheats() {
+  const auto reset = [this](Cvar& k) {
+    if (k.value == k.fallback) return;
+    store(k, k.fallback);
+    k.below = k.value;
+  };
+  for (auto& k : all_)
+    if ((k->flags & kCheat) != 0) reset(*k);
+  for (const Synonym& s : synonyms_)  // a cheat by its game's name: what it reaches, too
+    if (s.cheat && s.target != nullptr) reset(*s.target);
 }
 
 Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
@@ -416,8 +445,9 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
     }
   }
   if (c == nullptr) {
-    if (const Synonym* s = synonym(name); s != nullptr && !s->values.empty()) {
-      const std::string ours = mapped_value(*s, value);  // a mapped synonym: its value as ours
+    if (const Synonym* s = synonym(name); s != nullptr && s->mapped()) {
+      if (s->cheat && source != Source::code && !cheats()) return SetResult::cheat;
+      const std::string ours = mapped_value(*s, value);  // mapped or scaled: its value as ours
       return ours.empty() ? SetResult::unmapped : set(*s->target, ours, source);
     }
     if (const Synonym* s = synonym(name)) {  // a part synonym: its word of the target replaced
@@ -486,12 +516,7 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
     if (c.scoped.count(scope_) == 0) c.common = c.value;
   }
   // sv_cheats turned off: every cheat goes back to its default, so none outlives the permission.
-  if (&c == sv_cheats_ && !c.on())
-    for (auto& k : all_)
-      if ((k->flags & kCheat) != 0 && k->value != k->fallback) {
-        store(*k, k->fallback);
-        k->below = k->value;
-      }
+  if (&c == sv_cheats_ && !c.on()) reset_cheats();
   if (!kept.empty()) return SetResult::locked;  // kept inside a lock's range: its words say so
   return c.revision != before ? SetResult::changed : SetResult::same;
 }

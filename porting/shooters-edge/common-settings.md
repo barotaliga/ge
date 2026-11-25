@@ -29,9 +29,9 @@ neither client takes.
 | Status | Settings | Commands | All |
 | --- | --- | --- | --- |
 | one setting | 84 | 53 | 137 |
-| lifted | 20 | 2 | 22 |
+| lifted | 21 | 2 | 23 |
 | to lift | 0 | 0 | 0 |
-| kept apart | 20 | 0 | 20 |
+| kept apart | 19 | 0 | 19 |
 | neither has it | 11 | 0 | 11 |
 | **common to Quake and Quake II** | **135** | **55** | **190** |
 
@@ -77,13 +77,19 @@ neither client takes.
   writes ours and prints both (`cl_predict 0 (cl_nopred: 1)`), asking it reads ours back in its
   words. Quake II's `cl_predict` on `cl_nopred` and `cl_gibs` on `cl_gibfilter`, each the other way
   round. Every kept-apart row was checked again: the rest differ in meaning or mechanism, are
-  other clients' visuals, or need a value map by scale (`fixedtime` in milliseconds against
-  `host_framerate` in seconds).
+  other clients' visuals, or needed a value map by scale (`fixedtime` in milliseconds against
+  `host_framerate` in seconds: B10).
 - **B9 (done, 2026-11-23): the relay password and the rows handed to the Quake II client UI
   thread.** `qtv_password` is the one rule both classic servers read, Quake II's
   `sv_mvd_password` its spelling there. The replacement-texture switches are neither game's
   (classic enhance replaces textures). `crosshaircolor` against `ch_red`/`ch_green`/`ch_blue` and
   `showturtle` against `scr_showturtle` stay apart, each note saying why.
+- **B10 (done, 2026-11-24): a setting in another unit.** A game's spelling whose value is ours
+  times a number is a SCALED synonym (`Cvars::add_scaled_synonym`), which may be a cheat under
+  that name alone. Quake II's `fixedtime` (milliseconds, a cheat) is every game's
+  `host_framerate` (seconds) times 1000: `fixedtime 50` prints `(host_framerate: 0.05)`, and what
+  it set goes back to 0 when cheats go off. The Quake II clock reads `host_framerate` alone;
+  `host_framerate` now goes up to 1 s so `fixedtime` keeps its range up to 1000.
 - **B6 dropped (Niclas, 2026-11-23):** the outlines and square specks are other clients' visuals,
   which are never ported: visuals come from classic enhance. Both rows are kept apart.
 
@@ -267,7 +273,7 @@ neither client takes.
 | setting | `con_timestamps` |  | `con_timestamps` | `con_timestamps` | shell | apart | the classic layer stamps chat lines; Quake II's stamps every line (own) |
 | setting | `crosshair` | `crosshair` | `crosshair` | `crosshair` | engine | apart | Quake 0..2 the engine's marks; Quake II 0..3 its own pictures (Quake II's layer, own) |
 | setting | `crosshaircolor` |  | `crosshaircolor` | `ch_blue`, `ch_green`, `ch_red` | engine | apart | another mechanism: ours a colour for the engine's marks (a palette number or red, green and blue 0..255, "" their own); Quake II's three shares tint its own crosshair pictures (its `crosshair` is its own), with `ch_health` beside them |
-| setting | `host_framerate` | `host_framerate` |  | `fixedtime` | shell | apart | a fixed frame time (Quake II milliseconds, Quake seconds): the same thing in another unit; a value map by scale (not yet in the engine) would lift it |
+| setting | `host_framerate` | `host_framerate` |  | `fixedtime` | shell | lifted B10 | a fixed frame time: Quake II's fixedtime a scaled synonym in milliseconds (times 1000), a cheat by that name |
 | setting | `r_bloom` |  | `r_bloom` | `gl_bloom` | classic | apart | Quake II's gl_bloom a switch, ours a strength 0..1 of the modern look |
 | setting | `r_drawviewmodel` | `r_drawviewmodel` | `r_drawviewmodel` | `cl_gunalpha` | shell | apart | the held gun's opacity (QuakeWorld's r_drawviewmodel is an opacity; Quake's a switch) |
 | setting | `r_waterwarp` | `r_waterwarp` | `r_waterwarp` | `gl_waterwarp` | classic | apart | each game's own warp: Quake's lens breathes, Quake II's view ripples |

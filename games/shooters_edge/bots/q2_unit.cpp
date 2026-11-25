@@ -122,7 +122,7 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
     fighter_init(f, nav.graph, s, k, entities.c_str(), skill,
                  sb::traits_of(skill, sb::Temper::balanced), kHz,
                  opt.seed + 31u * static_cast<uint32_t>(entered) + 7919u * static_cast<uint32_t>(k),
-                 q2_arsenal());
+                 q2_arsenal(opt.pack));
     sb::exits_init(f, nav.graph, s, entities.c_str(), &spec);  // the exits' boxes from the map's
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
@@ -257,6 +257,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   // go that much off the way he means.
   sv::Q2ServerOptions so;
   so.clients_take_view = true;
+  so.pack = opt.pack;
   sv::RulesRunner rules = sv::q2_runner(sv::make_q2_server(so));
   rules.console("deathmatch 0");
   // A party plays co-op (the rules' `coop` 1), each bot a client of its own.

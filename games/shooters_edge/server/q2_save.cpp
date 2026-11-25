@@ -32,7 +32,7 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 13;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
+constexpr uint16_t kChunkVersion = 14;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
                                         // dropped silencer's shots; 5: a corpse's box; 6: a
                                         // monster's liquid; 7: the trail, a monster's hunt and
                                         // calls; 8: a soldier's run-and-shoot and head shot; 9:
@@ -41,7 +41,8 @@ constexpr uint16_t kChunkVersion = 13;  // 2: a monster's duck; 3: a coop weapon
                                         // combat point; 12: the item and ammo tables by length
                                         // (a pack's rows), dual fire, the trap's think; 13:
                                         // Ground Zero's mines, tesla and disruptor stages,
-                                        // double damage, the IR goggles, the chainfist's swing
+                                        // double damage, the IR goggles, the chainfist's swing; 14:
+                                        // Ground Zero's disguise, a monster's anger target
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -196,6 +197,7 @@ void monster(Io& io, Q2Monster& m) {
   io.since(8, m.pose.pain_run.first, int16_t{-1});
   io.since(8, m.pose.pain_run.last, int16_t{-1});
   io.since(11, m.lost_combat, std::string());
+  io.since(14, m.anger, -1);
 }
 
 template <class Io>
@@ -484,6 +486,8 @@ void player(Io& io, Q2Player& p) {
   v3(io, p.dead_angles);
   io(p.god);
   io(p.notarget);
+  io.since(14, p.disguised, false);
+  io.since(14, p.violator_until, 0.0);
   io(p.noclip);
   io(p.last_weapon);
   io(p.held_weapon);

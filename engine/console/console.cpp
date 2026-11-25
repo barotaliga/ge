@@ -371,8 +371,7 @@ void Console::dispatch(Entry& e) {
       const std::string why = set_result_text(r, *c);
       if (!why.empty()) error(why, "");
     }
-  } else if (const Synonym* mapped = cvars_.synonym(name);
-             mapped != nullptr && !mapped->values.empty()) {
+  } else if (const Synonym* mapped = cvars_.synonym(name); mapped != nullptr && mapped->mapped()) {
     // A game's spelling with values of its own: what it sets in ours said beside it, typed or
     // asked, so the player sees the setting it reaches ("r_drawhud 1 (scr_draw2d: 2)").
     if (args.size() == 1) {

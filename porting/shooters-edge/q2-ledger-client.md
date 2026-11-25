@@ -483,8 +483,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.z_perturb | `z_perturb` | debug: fills freed memory (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.host_speeds | `host_speeds` | debug: prints frame timings (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.developer | `developer` | prints developer messages (default 0) | not-taken | Tail (decided 2026-11-23): developer prints of the client; not built. |
-| cvar.timescale | `timescale` | game speed; cheat-protected (default 1) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
-| cvar.fixedtime | `fixedtime` | fixed frame time; cheat-protected (default 0) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
+| cvar.timescale | `timescale` | game speed; cheat-protected (default 1) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35); every game's `host_framerate` in milliseconds, a scaled synonym (M18k5 B10) |
+| cvar.fixedtime | `fixedtime` | fixed frame time; cheat-protected (default 0) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35); every game's `host_framerate` in milliseconds, a scaled synonym (M18k5 B10) |
 | cvar.logfile | `logfile` | 1 writes the console to a new log file, 2 or more adds to it (default 0) | done | `client/console_log.cpp` over the server's log (`engine/server/console_log.hpp`), in Quake II's layer: the same meanings as the server's |
 | cvar.logfile_flush | `logfile_flush` | 0 buffered, 1 each line flushed, 2 or more unbuffered (default 0) | done | `client/console_log.cpp` over `engine/server/console_log.hpp` |
 | cvar.logfile_name | `logfile_name` | the log's name (default `console`) | done | `client/console_log.cpp`, `logs/<name>.log` beside the settings (M18k4 round 35) |

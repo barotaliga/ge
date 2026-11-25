@@ -9,7 +9,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <functional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -453,6 +456,82 @@ void way_blast_steps(WayThrough& w, const Fighter& f, const MapNav& nav,
       w.steps.push_back(st);
     }
   }
+}
+
+int32_t way_arm(WayThrough& w, const Fighter& f, const BotView& s, const Stats& now, bool preys,
+                double t, const std::function<bool(int32_t)>& reach) {
+  int32_t arm = -1;
+  int arm_ent = -1;
+  if (w.complete && preys) {
+    bool dry = true;
+    for (const BotWeapon& bw : f.arsenal->weapons)
+      if (bw.ammo >= 0 && loaded(now, bw)) dry = false;
+    double arm_c = 0;
+    for (const ItemSpot& it : f.items) {
+      if (!dry || it.ent < 0 || it.ent >= s.sv.num_edicts || it.node < 0 || !reach(it.node))
+        continue;
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(it.ent)];
+      // A taken item keeps its model but stops touching: solid not.
+      if (d.free || d.modelindex <= 0 || d.solid == sh::kSolidNot) continue;  // taken
+      if (static_cast<size_t>(it.ent) < w.arm_left.size() &&
+          w.arm_left[static_cast<size_t>(it.ent)] != 0)
+        continue;
+      bool fires = false;
+      if (it.kind == ItemKind::weapon) {
+        fires = (now.items & it.weapon) == 0;
+      } else {
+        const int a = f.arsenal->item_ammo(it.kind);
+        for (const BotWeapon& bw : f.arsenal->weapons)
+          fires |= a >= 0 && bw.ammo == a && (now.items & bw.bit) != 0;
+      }
+      const double c = w.search.cost(it.node);
+      if (fires && (arm < 0 || c < arm_c)) {
+        arm = it.node;
+        arm_ent = it.ent;
+        arm_c = c;
+      }
+    }
+  }
+  // An item gone to past kWayGiveUp_s and twice the walk to it, in all, is one he cannot take:
+  // left for good (e4m7: a box he stood on for ten minutes; e4m8: one on a ledge, turned to
+  // between two others for five).
+  if (arm_ent >= 0 && static_cast<size_t>(arm_ent) < w.arm_spent.size()) {
+    double& sp = w.arm_spent[static_cast<size_t>(arm_ent)];
+    if (arm_ent == w.arm_ent) sp += t - w.arm_tick;
+    if (sp > kWayGiveUp_s + 2 * w.search.cost(arm)) {
+      w.arm_left[static_cast<size_t>(arm_ent)] = 1;
+      w.stats.given_up++;
+      arm_ent = -1;
+      arm = -1;
+    }
+  }
+  w.arm_ent = arm_ent;
+  w.arm_tick = t;
+  return arm;
+}
+
+std::string way_prey_note(const WayThrough& w, const Fighter& f, const BotView& s, int me) {
+  std::string said;
+  char line[160];
+  if (w.prey >= 0 && w.prey < s.sv.num_edicts) {
+    // which one: its model, its health and how long it has been chased
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(w.prey)];
+    std::snprintf(line, sizeof line, " #%d %s hp %.0f for %.0f s", w.prey,
+                  d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size()
+                      ? s.models[static_cast<size_t>(d.modelindex)].c_str()
+                      : "?",
+                  d.health,
+                  static_cast<size_t>(w.prey) < w.prey_spent.size()
+                      ? w.prey_spent[static_cast<size_t>(w.prey)]
+                      : 0.0);
+    said += line;
+    const Stats st = read_stats(s, me, *f.arsenal);
+    std::snprintf(line, sizeof line, " (his weapon %d, ammo %.0f/%.0f/%.0f/%.0f)", st.weapon,
+                  double(ammo_of(st, 0)), double(ammo_of(st, 1)), double(ammo_of(st, 2)),
+                  double(ammo_of(st, 3)));
+    said += line;
+  }
+  return said;
 }
 
 }  // namespace ge::shooterbots

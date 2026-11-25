@@ -9,14 +9,16 @@
 #pragma once
 
 #include "shooterbots/bot_arsenal.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 
 namespace shooters_edge::bots {
 
 using namespace ge::shooterbots;  // NOLINT(google-build-using-namespace): the plugin's bots, by
                                   // their own names, in the game's bot files
 
-// Quake's arsenal (and its maps' book and team words), and Quake II's.
+// Quake's arsenal (and its maps' book and team words), and Quake II's: the base game's, or with a
+// mission pack's own weapons, ammunitions and items on top (its maps lay them down).
 const BotArsenal& first_arsenal();
-const BotArsenal& q2_arsenal();
+const BotArsenal& q2_arsenal(server::Q2Pack pack = server::Q2Pack::base);
 
 }  // namespace shooters_edge::bots
