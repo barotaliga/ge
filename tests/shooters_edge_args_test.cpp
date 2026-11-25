@@ -75,29 +75,31 @@ TEST(a_negative_number_is_a_console_word) {
 TEST(the_first_command_needs_no_plus) {
   cl::Args a;
   std::string why;
-  CHECK(parse_words({"coopgame", "2", "expert", "-mod", "id1", "+map", "e1m2"}, a, why));
+  CHECK(parse_words({"coopgame", "2", "expert", "-game", "id1", "+map", "e1m2"}, a, why));
   CHECK((a.plus == std::vector<std::string>{"coopgame", "2", "expert", "+map", "e1m2"}));
   CHECK(a.game == "id1" && a.game_set);
 }
 
-TEST(the_game_is_picked_by_number_and_a_mod_by_its_folder) {
+TEST(the_game_is_picked_by_its_id_and_a_mod_by_its_folder) {
   cl::Args a;
   std::string why;
   CHECK(a.game_number == 0);
-  CHECK(parse_words({"-game", "1"}, a, why));
+  CHECK(parse_words({"-classic", "q1"}, a, why));
   CHECK(a.game_number == 1 && !a.game_set);
   cl::Args b;
-  CHECK(parse_words({"--game=2", "-mod", "ctf"}, b, why));
-  CHECK(b.game_number == 2 && b.game == "ctf");
-  // A number no game has, or a folder, is refused with the games there are.
+  CHECK(parse_words({"--classic=q2", "-game", "ctf"}, b, why));
+  CHECK(b.game_number == 2 && b.game == "ctf" && b.game_set);
+  cl::Args e;
+  CHECK(parse_words({"--game=rogue"}, e, why));
+  CHECK(e.game == "rogue" && e.game_set && e.game_number == 0);
+  // An id no game has, or a number, is refused with the games there are and where a mod goes.
   cl::Args c;
-  CHECK(!parse_words({"-game", "3"}, c, why));
-  CHECK(why.find("-game 3 is no game") != std::string::npos);
-  CHECK(why.find("1 (the classic game)") != std::string::npos);
-  CHECK(why.find("-mod") == std::string::npos);
+  CHECK(!parse_words({"-classic", "q3"}, c, why));
+  CHECK(why.find("-classic q3 is no game") != std::string::npos);
+  CHECK(why.find("q1 (Quake)") != std::string::npos);
+  CHECK(why.find("-game <folder>") != std::string::npos);
   cl::Args d;
-  CHECK(!parse_words({"-game", "id1"}, d, why));
-  CHECK(why.find("-mod <folder>") != std::string::npos);
+  CHECK(!parse_words({"-classic", "1"}, d, why));
 }
 
 TEST(sizes_by_name_or_width_and_height) {

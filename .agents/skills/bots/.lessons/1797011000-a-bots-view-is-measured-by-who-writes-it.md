@@ -1,7 +1,7 @@
 ---
 title: A bot's view is measured by who writes it and where it aims, and its facing by the enemy appearing
 date: 2026-11-08
-scope: engine/ai/mouse.cpp, plugins/shooter/bot.cpp, plugins/shooter/view_book.hpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/watch.cpp, games/shooters_edge/labs/se_people_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
+scope: engine/ai/mouse.cpp, plugins/shooterbots/bot.cpp, plugins/shooterbots/view_book.hpp, plugins/shooterbots/fighter.cpp, plugins/shooterbots/watch.cpp, games/shooters_edge/labs/se_people_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
 concepts: [mouse, hand, view, view-by, reversals, tilt, turn-back, calm-view, glance, lookway, facing, appear, watch, finger, se-people]
 ---
 

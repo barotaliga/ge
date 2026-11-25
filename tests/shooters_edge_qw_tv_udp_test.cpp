@@ -1,0 +1,383 @@
+// games/shooters_edge/net/qw_tv_udp.hpp and qw_tv_recording.hpp: our TV's face for
+// classic clients on the simulated network. Our classic server runs the test mod with three
+// players; one records its client recording from the connect. The recording is played into the
+// face, and a viewer (our scripted classic client asking for no extension, as the oldest client
+// would) joins the face as a server: it walks the signon, is seated in the recorder's view with no
+// speed of its own, gets the recorder's own lists, sees the players move frame by frame in whole
+// entity lists, and stays on through the loop, which signs it on again with a new count. A second
+// viewer joins late, and a wrong password is refused in a player's words.
+//
+// ge:summary Test: the face for classic clients, viewers watching a client recording in plain 28
+// ge:keywords test classic-tv udp-face viewer client-recording plain-protocol loop
+// ge:keywords late-joiner password
+// ge:skill net shooter testing
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "check.hpp"
+#include "net/conditions.hpp"
+#include "net/sim_network.hpp"
+#include "progs/file.hpp"
+#include "shooters_edge/client/demo_write.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_record.hpp"
+#include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/net/qw_tv_recording.hpp"
+#include "shooters_edge/net/qw_tv_udp.hpp"
+#include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/test_mod.hpp"
+
+namespace cn = shooters_edge::net;
+namespace gn = ge::net;
+namespace sv = shooters_edge::server;
+
+namespace {
+
+constexpr int kPlayers = 3;
+constexpr int kTicks = 700;  // 13 ms each: about 9 s
+constexpr uint16_t kPortTv = 27900;
+
+struct Recorded {
+  std::vector<uint8_t> recording;
+  std::vector<std::string> models;
+  int recorder = -1;
+};
+
+// A match on our server, client 0 recording from its connect.
+Recorded record_match() {
+  Recorded out;
+  std::string error;
+  ge::progs::Progs progs;
+  CHECK_MSG(sv::build_test_mod(progs, error), error);
+  sv::QcServerOptions so;
+  so.loop.max_edicts = 1024;
+  std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(progs, so, error);
+  CHECK(qc != nullptr);
+  sv::MapSpec map;
+  map.name = "arena";
+  map.models = sv::arena_models();
+  map.entities = sv::kArenaEntities;
+  CHECK_MSG(sv::load_map(*qc, map, error), error);
+  gn::LinkConditions lan;
+  gn::conditions_preset("lan", lan);
+  gn::SimNetwork net = gn::make_sim_network(1, lan);
+  gn::Transport st, ct[kPlayers];
+  gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
+  cn::ServerConfig cfg;
+  sv::RulesRunner rules = sv::qc_runner_over(*qc);
+  auto server = std::make_unique<cn::QwServer>();
+  CHECK_MSG(cn::qw_start(*server, rules, st, cfg, error), error);
+  std::vector<std::unique_ptr<cn::QwClientEnd>> c;
+  for (int i = 0; i < kPlayers; i++) {
+    gn::open_sim_transport(ct[i], net,
+                           gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
+    cn::ClientConfig cc;
+    cc.name = "p" + std::to_string(i);
+    cc.qport = static_cast<uint16_t>(100 + i);
+    cc.seed = i + 1;
+    c.push_back(std::make_unique<cn::QwClientEnd>());
+    cn::client_start(*c.back(), ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
+  }
+  cn::ClientRecorder rec;
+  cn::record_start(rec, false);
+  c[0]->record = &rec;
+  int64_t now = 0;
+  for (int f = 0; f < kTicks; f++) {
+    now += 13000;
+    gn::sim_advance(net, now);
+    cn::qw_frame(*server, now);
+    for (auto& k : c) cn::client_tick(*k, now);
+  }
+  cn::record_stop(rec);
+  out.recording = rec.bytes;
+  out.models = c[0]->models;
+  out.recorder = c[0]->playernum;
+  return out;
+}
+
+const Recorded& recorded() {
+  static const Recorded r = record_match();
+  return r;
+}
+
+struct Watch {
+  gn::SimNetwork net;
+  gn::Transport face_t, viewer_t[2];
+  cn::QwTvUdp face;
+  cn::UdpTvRecording demo;
+  std::unique_ptr<cn::QwClientEnd> viewer[2];
+  int64_t now = 0;
+
+  Watch(const std::string& password, bool loop) {
+    gn::LinkConditions lan;
+    gn::conditions_preset("lan", lan);
+    net = gn::make_sim_network(2, lan);
+    gn::open_sim_transport(face_t, net, gn::sim_address(0, kPortTv));
+    cn::UdpTvConfig fc;
+    fc.password = password;
+    cn::udp_tv_start(face, face_t, fc);
+    std::string error;
+    CHECK_MSG(cn::udp_tv_recording_open(demo, recorded().recording, loop, error), error);
+  }
+
+  void join(int i, const std::string& password) {
+    gn::open_sim_transport(viewer_t[i], net,
+                           gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
+    cn::ClientConfig cc;
+    cc.name = "viewer" + std::to_string(i);
+    cc.qport = static_cast<uint16_t>(300 + i);
+    cc.ask = cn::Ext{};  // the oldest client: no extension
+    cc.password = password;
+    cc.fetch_looks = false;
+    viewer[i] = std::make_unique<cn::QwClientEnd>();
+    cn::client_start(*viewer[i], viewer_t[i], gn::sim_address(0, kPortTv), cc,
+                     static_cast<double>(now) / 1e6);
+  }
+
+  void run(int ticks) {
+    for (int f = 0; f < ticks; f++) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::udp_tv_recording_update(demo, face, now);
+      cn::udp_tv_frame(face, now);
+      for (auto& v : viewer)
+        if (v) cn::client_tick(*v, now);
+    }
+  }
+};
+
+}  // namespace
+
+TEST(the_recording_holds_its_signon_and_reads) {
+  const Recorded& r = recorded();
+  CHECK(r.recording.size() > 1000);
+  CHECK(r.recorder >= 0);
+  CHECK(r.models.size() > 2);
+}
+
+TEST(a_viewer_with_no_extension_watches_seated_in_the_recorders_view) {
+  Watch w("", false);
+  w.join(0, "");
+  w.run(400);
+  const cn::QwClientEnd& v = *w.viewer[0];
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer never got into the game: " + v.refused);
+  CHECK(v.playernum == recorded().recorder);  // seated in his view, not a spectator
+  CHECK(v.models == recorded().models);
+  CHECK(v.movevars[2] == 0.0f);  // no speed of its own
+  CHECK(v.player_seen[recorded().recorder]);
+  CHECK(w.face.left_out >= 0);
+  CHECK_MSG(w.face.error.empty(), w.face.error);
+  // Frames came, each with every entity the recorder saw.
+  int valid = 0;
+  for (const cn::ClientFrame& fr : v.frames) valid += fr.valid ? 1 : 0;
+  CHECK(valid > 10);
+  // The players move.
+  const ge::shooter::Vec3f a = v.players[recorded().recorder].origin;
+  w.run(100);
+  const ge::shooter::Vec3f b = w.viewer[0]->players[recorded().recorder].origin;
+  CHECK(a.x != b.x || a.y != b.y || a.z != b.z);
+}
+
+TEST(the_loop_signs_a_viewer_on_again_with_a_new_count) {
+  Watch w("", true);
+  w.join(0, "");
+  w.run(300);
+  CHECK(w.viewer[0]->stage == cn::ClientStage::active);
+  const int first = w.viewer[0]->spawncount;
+  w.run(kTicks + 300);
+  CHECK(w.demo.rounds >= 1);
+  CHECK(w.viewer[0]->stage == cn::ClientStage::active);
+  CHECK(w.viewer[0]->spawncount != first);
+  CHECK(cn::udp_tv_viewers(w.face) == 1);
+}
+
+TEST(a_late_viewer_starts_at_once_from_what_the_face_keeps) {
+  Watch w("", false);
+  w.join(0, "");
+  w.run(350);
+  w.join(1, "");
+  w.run(150);
+  CHECK(w.viewer[1]->stage == cn::ClientStage::active);
+  CHECK(w.viewer[1]->models == recorded().models);
+  CHECK(w.viewer[1]->player_seen[recorded().recorder]);
+}
+
+TEST(a_wrong_password_is_refused_in_a_players_words) {
+  Watch w("secret", false);
+  w.join(0, "wrong");
+  w.run(100);
+  CHECK(w.viewer[0]->stage != cn::ClientStage::active);
+  CHECK(w.viewer[0]->refused.find("password") != std::string::npos);
+  CHECK(w.viewer[0]->refused.find("next:") == std::string::npos);
+  CHECK(w.face.refused >= 1);
+}
+
+// A MULTIVIEW RECORDING at the face: the followed view (the lowest slot playing) from the start,
+// any other player's view converted only once a viewer asks for it, the viewer moved to it there,
+// and the view let go once nobody watches it.
+TEST(a_multiview_recording_gives_any_players_view_on_request_and_only_then) {
+  namespace cl = shooters_edge::client;
+  const cl::MatchScript m = cl::highlight_match();
+  CHECK(m.players.size() >= 3);
+  gn::LinkConditions lan;
+  gn::conditions_preset("lan", lan);
+  gn::SimNetwork net = gn::make_sim_network(2, lan);
+  gn::Transport face_t, viewer_t;
+  gn::open_sim_transport(face_t, net, gn::sim_address(0, kPortTv));
+  cn::QwTvUdp face;
+  cn::udp_tv_start(face, face_t, {}, 8);
+  face.views_on_request = true;
+  cn::UdpTvMultiview mv;
+  std::string error;
+  CHECK(!cn::udp_tv_multiview_open(mv, recorded().recording, 8, false, error));  // one view only
+  CHECK_MSG(!error.empty(), "a refusal says why");
+  CHECK_MSG(cn::udp_tv_multiview_open(mv, cl::write_multiview_match(m), 8, false, error), error);
+  gn::open_sim_transport(viewer_t, net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "viewer";
+  cc.qport = 300;
+  cc.ask = cn::Ext{};  // the oldest client: no extension
+  cc.fetch_looks = false;
+  cc.brain = [](int) { return ge::shooter::MoveCmd{}; };  // hands off: no fire pressed
+  cn::QwClientEnd v;
+  cn::client_start(v, viewer_t, gn::sim_address(0, kPortTv), cc, 0);
+  int64_t now = 0;
+  const auto run = [&](int ticks) {
+    for (int f = 0; f < ticks; f++) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::udp_tv_multiview_update(mv, face, now);
+      cn::udp_tv_frame(face, now);
+      cn::client_tick(v, now);
+    }
+  };
+  run(200);
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer never got in: " + v.refused);
+  CHECK_MSG(mv.error.empty(), mv.error);
+  CHECK(v.playernum == 0);  // the followed view: the lowest slot playing
+  CHECK(mv.started == 0);   // nobody asked for another: nothing else converted
+  int on = 0;
+  for (const auto& view : mv.views) on += view.on ? 1 : 0;
+  CHECK(on == 1);
+  // The track keys ask for slot 2: its view is turned on partway and the viewer seated in it.
+  cn::client_command(v, "ptrack 2");
+  run(200);
+  CHECK(mv.started == 1);
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer did not come back: " + v.refused);
+  CHECK(v.playernum == 2);
+  CHECK(face.switches >= 1);
+  // Back to the followed view; slot 2's is let go once nobody has watched it for a while.
+  cn::client_command(v, "ptrack");
+  run(1000);
+  CHECK(v.stage == cn::ClientStage::active);
+  CHECK(v.playernum == 0);
+  CHECK(mv.let_go == 1);
+  CHECK_MSG(face.error.empty(), face.error);
+}
+
+TEST(a_multiview_recordings_followed_view_rides_the_auto_tracks_pick) {
+  namespace cl = shooters_edge::client;
+  // The written match, with the followed player (slot 0) killed by slot 2 at 12 s and down until
+  // 20 s: the plan cuts to slot 2, the hottest alive, once he has been down 2 s.
+  cl::MatchScript m = cl::highlight_match();
+  for (size_t i = 240; i < 400; i++) m.players[0].health[i] = -30;
+  for (size_t i = 240; i < m.players[2].frags.size(); i++) m.players[2].frags[i]++;
+  gn::LinkConditions lan;
+  gn::conditions_preset("lan", lan);
+  gn::SimNetwork net = gn::make_sim_network(2, lan);
+  gn::Transport face_t, viewer_t;
+  gn::open_sim_transport(face_t, net, gn::sim_address(0, kPortTv));
+  cn::QwTvUdp face;
+  cn::udp_tv_start(face, face_t, {}, 8);
+  face.views_on_request = true;
+  cn::UdpTvMultiview mv;
+  std::string error;
+  const cl::AutotrackSettings track = cn::tv_autotrack_settings();
+  CHECK_MSG(cn::udp_tv_multiview_open(mv, cl::write_multiview_match(m), 8, false, error, &track),
+            error);
+  CHECK(mv.autotrack);
+  CHECK_MSG(mv.plan.cuts.size() >= 2, "the plan has a cut after the start");
+  CHECK(cl::autotrack_at(mv.plan, 1) == 0);
+  CHECK(cl::autotrack_at(mv.plan, 16) == 2);
+  gn::open_sim_transport(viewer_t, net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "viewer";
+  cc.qport = 301;
+  cc.ask = cn::Ext{};
+  cc.fetch_looks = false;
+  cc.brain = [](int) { return ge::shooter::MoveCmd{}; };
+  cn::QwClientEnd v;
+  cn::client_start(v, viewer_t, gn::sim_address(0, kPortTv), cc, 0);
+  int64_t now = 0;
+  const auto run_to = [&](double s) {
+    while (now < static_cast<int64_t>(s * 1e6)) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::udp_tv_multiview_update(mv, face, now);
+      cn::udp_tv_frame(face, now);
+      cn::client_tick(v, now);
+    }
+  };
+  run_to(8);
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer never got in: " + v.refused);
+  CHECK(v.playernum == 0);  // the plan's first pick
+  CHECK(mv.started == 0);   // nothing else converted yet
+  run_to(19);
+  CHECK_MSG(mv.error.empty(), mv.error);
+  CHECK(mv.tracked == 2);
+  CHECK(mv.cuts == 1);
+  CHECK(mv.started == 1);  // the pick's view turned on when the cut came, not before
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer did not come back: " + v.refused);
+  CHECK(v.playernum == 2);  // moved with the TV's pick: it chose no player of its own
+  CHECK_MSG(face.error.empty(), face.error);
+}
+
+TEST(a_single_player_recording_is_converted_and_watched_by_the_oldest_client) {
+  namespace cl = shooters_edge::client;
+  gn::LinkConditions lan;
+  gn::conditions_preset("lan", lan);
+  gn::SimNetwork net = gn::make_sim_network(2, lan);
+  gn::Transport face_t, viewer_t;
+  gn::open_sim_transport(face_t, net, gn::sim_address(0, kPortTv));
+  cn::QwTvUdp face;
+  cn::udp_tv_start(face, face_t, {});
+  cn::UdpTvRecording rec;
+  std::string error;
+  const cl::DemoScript s = cl::loop_script("halls", {128, 192, 24}, 64, 400);
+  CHECK_MSG(cn::udp_tv_recording_open(rec, cl::write_single_demo(s), false, error), error);
+  CHECK(rec.from_single);
+  gn::open_sim_transport(viewer_t, net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "viewer";
+  cc.qport = 302;
+  cc.ask = cn::Ext{};  // the oldest client: no extension
+  cc.fetch_looks = false;
+  cc.brain = [](int) { return ge::shooter::MoveCmd{}; };
+  cn::QwClientEnd v;
+  cn::client_start(v, viewer_t, gn::sim_address(0, kPortTv), cc, 0);
+  int64_t now = 0;
+  ge::shooter::Vec3f first{};
+  for (int f = 0; f < 600; f++) {
+    now += 13000;
+    gn::sim_advance(net, now);
+    cn::udp_tv_recording_update(rec, face, now);
+    cn::udp_tv_frame(face, now);
+    cn::client_tick(v, now);
+    if (f == 300) first = v.players[v.playernum < 0 ? 0 : v.playernum].origin;
+  }
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer never got in: " + v.refused);
+  CHECK(v.playernum >= 0);
+  const ge::shooter::Vec3f last = v.players[v.playernum].origin;
+  CHECK_MSG(first.x != last.x || first.z != last.z, "the recorder moves round his loop");
+  CHECK(rec.packets > 100);
+  // The viewer's packets are each answered with a frame, though the recording has fewer: a
+  // classic client's view stops when the server's packets fall far behind its own.
+  int64_t frames = 0;
+  for (const auto& w : face.viewers) frames += w.frames;
+  CHECK_MSG(frames >= 400, "a frame for each of the viewer's packets");
+  CHECK_MSG(face.error.empty(), face.error);
+  // Anything else is refused in words that say what it takes.
+  CHECK(!cn::udp_tv_recording_open(rec, std::vector<uint8_t>{1, 2, 3}, false, error));
+  CHECK(!error.empty());
+}

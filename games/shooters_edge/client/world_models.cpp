@@ -20,19 +20,22 @@
 #include "assets/image.hpp"
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
+#include "classic/flash_blend.hpp"
 #include "classic/vweps.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
 #include "classicenhance/replace.hpp"
+#include "classicenhance/shells.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/figure_frames.hpp"
-#include "shooters_edge/client/sequel_look.hpp"
+#include "shooters_edge/client/model_shadow.hpp"
+#include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/qc_server.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/search.hpp"
 
 namespace shooters_edge::client {
@@ -46,7 +49,7 @@ namespace {
 
 // The made frames drawn for the pack's flare and bubble sprites (ce_flares, ce_bubbles): their
 // texels, their size in the world, and how far a bubble wobbles off its path as it rises.
-constexpr uint32_t kFlarePx = 64, kBubblePx = 32;
+constexpr uint32_t kFlarePx = 64, kBubblePx = 32, kGlowDiscPx = 64;
 constexpr double kFlareM = 1.3, kBubbleM = 0.07, kBubbleWobbleM = 0.015;
 
 // Whether the bubble the server moves as `entity` is one of the `share` (0..1) drawn: a fixed pick
@@ -64,9 +67,10 @@ constexpr float kRelightUnits = 1;      // a move that takes the light again
 // The 38 family's rule for a model's light: the floor's light in full from every side,
 // as much again toward a light fixed 45 degrees above the map's +x, and a face turned away from it
 // losing 0.3 of that; a floor looked for up to 8192 units down.
-constexpr float kSequelBack = 0.3f;
-constexpr double kSequelDir[3] = {0.70710678118654752, 0.70710678118654752, 0};
-constexpr float kSequelReach = 8192;
+constexpr float kQ2Back = 0.3f;
+constexpr double kQ2Dir[3] = {0.70710678118654752, 0.70710678118654752, 0};
+constexpr float kQ2Reach = 8192;
+constexpr float kHologramShellUnits = 0.5f;  // an item hologram's shell out from its faces
 
 uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback) {
   const std::string v = sv::info_value(c.userinfo, key);
@@ -101,6 +105,16 @@ void frames_of(const ModelKind& k, const Placed& p, double at, uint32_t& a, uint
   }
   a = b = models::frame_in(k.frames, frame, at);
   f = 0;
+}
+
+// A Quake II entity's frame cycled by its animation bits (`q2_texture_frame`) on the picture's
+// clock `t`, shared so every such entity steps together; its own flow between frames set aside.
+Placed q2_cycled(const Placed& p, double t) {
+  Placed c = p;
+  c.frame = q2_texture_frame(uint32_t(p.q2_anim), p.frame, t);
+  c.frame_from = -1;
+  c.lerp = false;
+  return c;
 }
 
 void to_world(const sh::Vec3f& p, double out[3]) {
@@ -252,7 +266,7 @@ void read_player_skins(const SearchPath& files, ModelsRead& m) {
 
 // One figure's morph model read into `k`, its skins left a texel each: what it wears is another
 // model's or a slot's (`MorphDraw::skin`, `slot`), so no picture is held twice; the first skin as
-// it was goes to `own` when asked. `keep`: its own skins kept (a first-game figure's, worn in the
+// it was goes to `own` when asked. `keep`: its own skins kept (a Quake figure's, worn in the
 // player's colours when no picture of the folder's is).
 void add_figure_kind(const mo::Model& model, std::span<const uint8_t> palette, ModelKind& k,
                      std::vector<gr::MorphModel>& morphs, gr::MorphSkin* own = nullptr,
@@ -279,7 +293,7 @@ void own_pictures(std::vector<gr::MorphModel>& morphs, uint32_t first,
 }
 
 // THE FIGURES: every folder under `players/` with a figure (`tris.md2`, else `tris.mdl`; at most
-// kMaxFigures; the second game's own, or one a player of the first game names in `model`, its
+// kMaxFigures; Quake II's own, or one a player of Quake names in `model`, its
 // frames mapped from the game's figure's by name: app/figure_frames.hpp), the weapons the server
 // lists as carried (`#<file>`) in each that has them (their shared picture once, the first one's),
 // each folder kept while the atlas holds it; and the pictures in each (`<skin>.tga`, `.png` or
@@ -302,7 +316,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       const auto same = std::find_if(folders.begin(), folders.end(),
                                      [&folder](const auto& f) { return f.first == folder; });
       if (same != folders.end()) {
-        if (file == "tris.md2") same->second = file;  // the second game's figure first
+        if (file == "tris.md2") same->second = file;  // Quake II's figure first
       } else if (folders.size() < kMaxFigures) {
         folders.emplace_back(folder, std::string(file));
       }
@@ -321,7 +335,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
   // Each folder's plain weapon too: what its figure carries under cl_vwep 0.
   if (!carried.empty()) carried.emplace_back(kPlainWeapon);
   std::vector<gr::AtlasRect> rects;
-  std::vector<std::string> own_frames;  // the second game's figure's frames, the first one read
+  std::vector<std::string> own_frames;  // Quake II's figure's frames, the first one read
   for (const auto& [folder, figure_file] : folders) {
     OpenedModel opened;
     std::string error;
@@ -336,7 +350,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       for (const mo::Frame& fr : opened.morph.frames) own_frames.push_back(fr.name);
     const size_t morphs_before = m.morphs.size(), kinds_before = m.figure_kinds.size();
     ModelKind k;
-    k.figure = painted;  // a first-game figure wears its own skins in the player's colours
+    k.figure = painted;  // a Quake figure wears its own skins in the player's colours
     add_figure_kind(opened.morph, palette, k, m.morphs, nullptr, !painted);
     if (!m.player_frames.empty()) {
       std::vector<std::string> names;
@@ -364,8 +378,8 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       carried_here.emplace_back(std::move(key), uint32_t(m.figure_kinds.size()));
       m.figure_kinds.push_back(std::move(wk));
     }
-    // A figure of the second game worn by a first-game player: the folder's weapon in its hand,
-    // since the first game's figure has its weapon in its own mesh and the server names none.
+    // A figure of Quake II worn by a Quake player: the folder's weapon in its hand,
+    // since Quake's figure has its weapon in its own mesh and the server names none.
     if (painted && !m.player_frames.empty()) {
       std::string at = "players/";
       at.append(folder).append("/weapon.md2");
@@ -403,9 +417,9 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
     m.figures.emplace(folder, body);
     for (auto& [key, at] : carried_here) m.figure_carried.emplace(key, at);
   }
-  // The first game's figure, which stands alone (classic remix's `cr_models`,
-  // profiles/remix_arsenal.hpp's `kRemixFigures`): read as its row's folder in the second game's
-  // window when the files hold it, in its own pictures, its frames mapped from the second game's.
+  // Quake's figure, which stands alone (classic remix's `cr_models`,
+  // profiles/remix_arsenal.hpp's `kRemixFigures`): read as its row's folder in Quake II's
+  // window when the files hold it, in its own pictures, its frames mapped from Quake II's.
   for (const profiles::RemixFigure& f : profiles::kRemixFigures) {
     const std::string folder(f.folder), path(f.file);
     if (path.empty() || own_frames.empty() || !m.player_frames.empty() ||
@@ -484,9 +498,23 @@ bool read_skin(const SearchPath& files, std::span<const uint8_t> palette, const 
 
 }  // namespace
 
+void list_worn_pictures(WorldModels& m, std::span<const Placed> placed) {
+  for (const Placed& p : placed) {
+    if (p.skin_picture.empty()) continue;
+    const std::string key = "picture:" + p.skin_picture;
+    const auto [at, fresh] = m.player_skins.try_emplace(key, uint32_t(m.skin_files.size()));
+    if (fresh) m.skin_files.push_back({key, true, {p.skin_picture}});
+  }
+}
+
 const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   const ModelKind& k = m.kinds[size_t(p.modelindex)];
   *worn = {};
+  if (!p.skin_picture.empty()) {  // a picture in place of its own skin, once it is listed
+    const auto at = m.player_skins.find("picture:" + p.skin_picture);
+    if (at != m.player_skins.end()) worn->file = at->second;
+    return k;
+  }
   // One figure every player is drawn as (classic remix's `cr_models`), when it was read.
   const std::string& all = m.skin_choice.figure;
   const bool forced = !all.empty() && m.figures.contains(all);
@@ -504,7 +532,7 @@ const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   }
   if ((!k.figure && k.carried.empty()) || m.figures.empty()) return k;
   if (forced && !m.figure_kinds[m.figures.at(all)].figure) {
-    // The first game's figure on the second game's players, in its own skin: its weapon is in
+    // Quake's figure on Quake II's players, in its own skin: its weapon is in
     // its own mesh, so the one carried is not drawn.
     static const ModelKind kNothing;
     return k.figure ? m.figure_kinds[m.figures.at(all)] : kNothing;
@@ -569,7 +597,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
                                : std::string{};
   const int models = int(s.models.size());
   const bool qc = l.rules != nullptr && sv::qc_of(*l.rules) != nullptr;
-  const bool sequel = l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr;
+  const bool q2 = l.rules != nullptr && sv::q2_of(*l.rules) != nullptr;
   for (int e = 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[size_t(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || e == me) continue;
@@ -591,12 +619,20 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.skin = row.skin;
       p.turns = row.turns;
       if (row.carried_model > 0 && row.carried_model < models) p.carried = row.carried_model;
-      if (sequel) {  // the sequel's look bits: an item's glow, a power's shell
-        const SequelLook look =
-            sequel_look(static_cast<uint32_t>(row.effects), static_cast<uint32_t>(row.render_fx));
+      if (q2) {  // Quake II's look bits: an item's glow, a power's shell
+        const Q2Look look =
+            q2_look(static_cast<uint32_t>(row.effects), static_cast<uint32_t>(row.render_fx));
         p.pulse = look.pulse;
+        p.spinning = look.spinning;
+        p.bobs = look.bobs;
+        p.full_bright = look.full_bright;
+        p.min_light = look.min_light;
+        p.no_shadow = look.no_shadow;
         p.shell = look.shell;
         p.bleeds = look.bleeds;
+        p.green_blood = look.green_blood;
+        p.flies = look.flies;
+        p.q2_anim = row.effects & 0x3c00;
         for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
       }
     }
@@ -609,10 +645,30 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.top = colour_row(c, "topcolor", 0);
       p.bottom = colour_row(c, "bottomcolor", 0);
       p.skin_name = sv::info_value(c.userinfo, "skin");
+      if (q2 && size_t(e) < s.world.entities.size() &&
+          (uint32_t(s.world.entities[size_t(e)].render_fx) & kRfUseDisguise) != 0)
+        p.skin_name = q2_disguised(p.skin_name);
       p.model_name = sv::info_value(c.userinfo, "model");
       p.side = models::side_of(teamplay, mine, sv::info_value(c.userinfo, "team"));
     }
     out.push_back(p);
+    if (q2 && size_t(e) < s.world.entities.size() &&
+        (s.world.entities[size_t(e)].effects & int(kSqPowerScreen)) != 0) {
+      // A power screen that took a blow: its plate, frame 0, where its bearer stands, green.
+      const auto plate = std::find(s.models.begin(), s.models.end(), kSqPowerScreenModel);
+      if (plate != s.models.end()) {
+        Placed w = p;
+        w.entity = e + kPlateEntity;
+        w.modelindex = int(plate - s.models.begin());
+        w.frame = w.skin = w.carried = 0;
+        w.frame_from = -1;
+        w.shell = w.shell_only = true;
+        w.shell_rgb[0] = w.shell_rgb[2] = 0;
+        w.shell_rgb[1] = 1;
+        w.pulse = false;
+        out.push_back(w);
+      }
+    }
     if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
       Placed w = p;
       w.entity = e + kCarriedEntity;
@@ -637,6 +693,45 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
     p.angles = st.angles;
     out.push_back(p);
   }
+}
+
+void place_returning(const Listen& l, double within_s, std::vector<Returning>& out) {
+  out.clear();
+  if (!l.server) return;
+  const sv::RulesCommon& s = *l.server;
+  const int models = int(s.models.size());
+  const int n = std::min(s.world.entity_count, int(s.world.entities.size()));
+  for (int e = sh::kMaxClients + 1; e < n; e++) {
+    const sv::WorldEntity& row = s.world.entities[size_t(e)];
+    if (row.back_in < 0 || row.back_in > within_s) continue;
+    if (row.back_model <= 0 || row.back_model >= models) continue;
+    Returning r;
+    r.in_s = row.back_in;
+    Placed& p = r.item;
+    p.entity = e;
+    p.modelindex = row.back_model;
+    p.frame = row.frame;
+    p.skin = row.skin;
+    p.turns = row.turns;
+    p.scale = row.scale;
+    p.origin = row.origin;
+    p.angles = row.angles;
+    out.push_back(r);
+  }
+}
+
+int made_case(std::string_view name) {
+  for (int k = 0; k < ge::classicenhance::kCasings; ++k)
+    if (name == kEffectModels[size_t(EffectModel::case_hull) + size_t(k)]) return k;
+  return -1;
+}
+
+Placed hologram_of(const Placed& item, const ge::classicenhance::HologramLook& h) {
+  Placed p = item;
+  p.alpha = h.alpha;
+  p.holo_blue = h.blue;
+  p.holo_shell = h.shell_alpha;
+  return p;
 }
 
 ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette,
@@ -710,12 +805,17 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       continue;
     }
     if (i == 1 || name.empty()) continue;
+    k.path = name;
     const ge::classicenhance::Replacement* rep = ge::classicenhance::replacement_of(name);
     if (rep != nullptr) k.effect = rep->effect;
     OpenedModel opened;
     std::string error;
-    if (!game.open_model(game, files, name, opened, error) &&
-        !(vwep && stand_in(name, opened, skin_of[i]))) {
+    if (const int made = own ? made_case(name) : -1; made >= 0) {  // the spent cases: made here
+      opened.form = ModelForm::morph;
+      opened.morph =
+          ge::classicenhance::casing_model(static_cast<ge::classicenhance::Casing>(made), palette);
+    } else if (!game.open_model(game, files, name, opened, error) &&
+               !(vwep && stand_in(name, opened, skin_of[i]))) {
       // Not in the files (the map itself is not in the packs by this name either) or refused.
       if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
       continue;
@@ -726,7 +826,10 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       // The visible weapons' body wears each player's skin and colours as the figure does.
       k.player = name == kPlayerModel || (vwep && i == vwep_at);
       if (k.player)
-        for (const mo::Frame& fr : model.frames) m.player_frames.push_back(fr.name);
+        for (const mo::Frame& fr : model.frames) {
+          m.player_frames.push_back(fr.name);
+          k.frame_names.push_back(fr.name);
+        }
       k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
       if (k.player || k.figure) {  // where a body lies still (cl_deadbodyfilter)
         std::vector<std::string> frame_names;
@@ -842,6 +945,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
   bool any_figure = false;
   for (const ModelKind& k : m.kinds) any_figure = any_figure || k.figure;
   if (any_figure || any_player) read_figures(files, palette, game, m);
+  m.glow_disc = uint32_t(frames.size());  // gl_flashblend's disc, whatever the map holds
+  frames.push_back(gr::glow_disc_frame(kGlowDiscPx));
   m.ramps = models::palette_ramps(palette);
   if (!map.models.empty()) m.probe = models::make_probe(map);
   if (!m.skin_files.empty()) {
@@ -863,6 +968,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   m.figure_first_skins = std::move(read.figure_first_skins);
   m.figure_kinds = std::move(read.figure_kinds);
   m.vweps = read.vweps;
+  m.glow_disc = read.glow_disc;
   m.skin_files = std::move(read.skin_files);
   m.files = read.files;
   m.palette = std::move(read.palette);
@@ -892,7 +998,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   }
 }
 
-void place_brushes(const WorldModels& m, std::span<const Placed> placed,
+void place_brushes(const WorldModels& m, std::span<const Placed> placed, double t,
                    std::vector<ba::Mover>& out) {
   out.clear();
   if (m.kinds.empty() || m.brushes < 2) return;
@@ -908,11 +1014,18 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
     ba::Mover& mv = out[n - 1];
     mv.hidden = false;
     to_world(p.origin, mv.offset);
+    // Turned by its angles about the map's origin, where a rotating model is built round its
+    // centre (pitch not reversed: that is the vertex-animated models' own quirk).
+    const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+    if (ang[0] != 0 || ang[1] != 0 || ang[2] != 0) models::rotation_of(ang, false, mv.rotation);
+    mv.frame = p.q2_anim < 0 ? -1 : q2_texture_frame(uint32_t(p.q2_anim), p.frame, t);
   }
 }
 
-bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out) {
+bool body_triangles(const WorldModels& m, const Placed& placed, double time_s,
+                    std::vector<float>& out) {
   out.clear();
+  const Placed p = placed.q2_anim > 0 ? q2_cycled(placed, time_s) : placed;
   if (p.modelindex <= 0 || size_t(p.modelindex) >= m.kinds.size()) return false;
   Worn worn_skin;
   const ModelKind& k = drawn_kind(m, p, &worn_skin);
@@ -937,6 +1050,27 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
       out.push_back(f > 0 ? va + (pb[size_t(i) * 3 + c] - va) * f : va);
     }
   return !out.empty();
+}
+
+bool body_rest(const WorldModels& m, const Placed& p, double time_s, uint32_t tri, float a, float b,
+               float out[3]) {
+  if (p.modelindex <= 0 || size_t(p.modelindex) >= m.kinds.size()) return false;
+  Worn worn_skin;
+  const ModelKind& k = drawn_kind(m, p, &worn_skin);
+  if (k.is != ModelKind::Is::alias) return false;
+  const double at =
+      k.synced ? time_s : time_s + double(uint32_t(p.entity) * 2654435761u % 1000) * 1e-3;
+  const uint32_t model = k.first + models::frame_in(k.skins, p.skin, at);
+  if (model >= m.shapes.size()) return false;
+  const gr::MorphModel& shape = m.shapes[model];
+  if (shape.positions.empty() || size_t(tri) * 3 + 2 >= shape.indices.size()) return false;
+  const std::vector<float>& rest = shape.positions[0];
+  float c[3][3];
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j) c[i][j] = rest[size_t(shape.indices[size_t(tri) * 3 + i]) * 3 + j];
+  for (int j = 0; j < 3; ++j)
+    out[j] = (c[0][j] + a * (c[1][j] - c[0][j]) + b * (c[2][j] - c[0][j])) * p.scale;
+  return true;
 }
 
 bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
@@ -1004,7 +1138,7 @@ std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters
     }
     const ModelKind& k = m.kinds[size_t(p.modelindex)];
     const bool flame = k.bare != ModelKind::kNone || k.effect.starts_with("fire");
-    const uint32_t flags = k.flags | (p.bleeds ? effects::kTrailGib : 0u);  // the sequel's pieces
+    const uint32_t flags = k.flags | (p.bleeds ? effects::kTrailGib : 0u);  // Quake II's pieces
     if (hidden_by(f, flags, k.resting, p.frame, flame)) continue;
     bool body = true;
     uint32_t weapon = 0;
@@ -1079,7 +1213,7 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
 
 namespace {
 
-// The sequel's shell over the plain draw `plain` (sequel_look.hpp): the same model, pose and
+// Quake II's shell over the plain draw `plain` (q2_look.hpp): the same model, pose and
 // motion, pushed out along its normals, one flat colour, see-through; its colour pulses with the
 // glow.
 void add_shell(WorldModels& m, const Placed& p, const PowerLook& look, const gr::MorphDraw& plain,
@@ -1088,10 +1222,109 @@ void add_shell(WorldModels& m, const Placed& p, const PowerLook& look, const gr:
   gr::MorphDraw shell = plain;
   shell.shell_push = float(kSqShellPushUnits * br::kUnitM) * p.scale;
   for (int c = 0; c < 3; c++) shell.shell[c] = look.shell_rgb[c];
-  if (look.pulse) sequel_pulse(shell.shell, t);
+  if (look.pulse) q2_pulse(shell.shell, t);
   shell.alpha = kSqShellAlpha;
   shell.burn = {};
+  shell.blood = {};
   m.morph_draws.push_back(shell);
+}
+
+// An item coming back (ce_respawns): its light turned toward the hologram's blue by `blue`, lit
+// evenly (a projection carries its own light, no shading side).
+void hologram_light(gr::MorphDraw& g, float blue) {
+  for (int c = 0; c < 3; c++) {
+    const float own = g.ambient[c] + g.shade[c];
+    const float b = ge::classicenhance::kHologramBlue[c] * std::max(0.6f, own);
+    g.ambient[c] += blue * (b - g.ambient[c]);
+    g.shade[c] *= 1 - blue;
+  }
+  g.glow *= 1 - 0.5f * blue;
+}
+
+// Its blue shell over the plain draw, a little out from it, see-through by `holo_shell`.
+void add_hologram_shell(WorldModels& m, const Placed& p, const gr::MorphDraw& plain) {
+  if (m.morph_draws.size() >= gr::kMaxMorphDraws) return;
+  gr::MorphDraw shell = plain;
+  shell.shell_push = float(kHologramShellUnits * br::kUnitM) * p.scale;
+  for (int c = 0; c < 3; c++) shell.shell[c] = ge::classicenhance::kHologramBlue[c];
+  shell.alpha = p.holo_shell;
+  shell.burn = {};
+  shell.blood = {};
+  m.morph_draws.push_back(shell);
+}
+
+// Its ground shadow (model_shadow.hpp) under the plain draw `plain`: the same model, pose and
+// motion squashed onto the floor `lit` found under it, black, see-through; `quake_light` Quake's
+// fixed lean (the 29 family's maps), else Quake II's along the way it faces.
+void add_shadow(WorldModels& m, const Placed& p, const ModelKind& k, const WorldModels::Lit& lit,
+                int mode, bool quake_light, const gr::MorphDraw& plain) {
+  if (m.morph_draws.size() >= gr::kMaxMorphDraws) return;
+  float radius = 0;
+  if (mode >= 2 && plain.model < m.shapes.size()) {
+    auto [found, fresh] = m.radius.try_emplace(plain.model, 0.0f);
+    if (fresh && !m.shapes[plain.model].positions.empty()) {
+      const std::vector<float>& f = m.shapes[plain.model].positions[0];
+      float most = 0;
+      for (size_t i = 0; i + 2 < f.size(); i += 3)
+        most = std::max(most, f[i] * f[i] + f[i + 1] * f[i + 1] + f[i + 2] * f[i + 2]);
+      found->second = std::sqrt(most);
+    }
+    radius = found->second * p.scale / float(br::kUnitM);
+  }
+  const Shadow s = shadow_of({.mode = mode,
+                              .animated = k.is == ModelKind::Is::alias,
+                              .see_through = p.alpha < 1,
+                              .no_shadow = p.no_shadow,
+                              .floor_found = lit.floor_found,
+                              .floor_up = lit.floor.up,
+                              .height_units = p.origin.z - lit.floor.z,
+                              .radius_units = radius,
+                              .yaw_deg = p.angles.y,
+                              .fixed_light = quake_light});
+  if (s.alpha <= 0) return;
+  gr::MorphDraw shadow = plain;
+  shadow.flat = true;
+  shadow.flat_y = float(double(lit.floor.z + kShadowLiftUnits) * br::kUnitM);
+  shadow.flat_lean[0] = s.lean_x;  // the map's x is the engine's x, its y the engine's z
+  shadow.flat_lean[1] = s.lean_y;
+  shadow.shell[0] = shadow.shell[1] = shadow.shell[2] = 0;
+  shadow.alpha = s.alpha;
+  shadow.burn = {};
+  shadow.blood = {};
+  m.morph_draws.push_back(shadow);
+}
+
+// gl_flashblend: each of the moment's `lights` a glow disc turned to the eye, added to the picture
+// (classic/flash_blend.hpp, QuakeWorld's colours), none for the player's own (`self`); an eye
+// inside one tints the screen instead (`flash_tint`).
+void add_glow_discs(WorldModels& m, const gr::FrameView& view,
+                    std::span<const ba::DynamicLight> lights, int self) {
+  for (const ba::DynamicLight& l : lights) {
+    ge::classic::FlashIn in{.radius_units = l.radius / br::kUnitM,
+                            .game = ge::classic::FlashGame::quakeworld,
+                            .own = self != 0 && l.entity == self};
+    for (int a = 0; a < 3; a++) {  // map units, axes as the engine's: the rule turns no axis
+      in.light[a] = l.pos[a] / br::kUnitM;
+      in.colour[a] = l.colour[a];
+      in.eye[a] = view.eye[a] / br::kUnitM;
+    }
+    const ge::classic::Glow g = ge::classic::flash_glow(in);
+    m.flash_tint = std::max(m.flash_tint, g.tint);
+    if (!g.disc || !m.has_sprites || m.glow_disc == ModelKind::kNone ||
+        m.sprite_draws.size() >= gr::kMaxSprites)
+      continue;
+    gr::SpriteDraw s;
+    s.frame = m.glow_disc;
+    s.facing = gr::SpriteFacing::parallel;
+    s.blend = gr::SpriteBlend::add;
+    s.outdoor = 0;
+    s.smooth = true;
+    s.glow = 1;
+    s.scale = float(2 * g.radius_units * br::kUnitM / kGlowDiscPx);
+    for (int c = 0; c < 3; c++) s.colour[c] = float(std::pow(g.colour[c], 2.2));  // added as shown
+    for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = g.centre[a] * br::kUnitM;
+    m.sprite_draws.push_back(s);
+  }
 }
 
 }  // namespace
@@ -1100,9 +1333,11 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
                     double minlight, bool smooth, const InPlace& in_place,
                     std::span<const ge::brush::app::DynamicLight> dynamic, double dynamic_strength,
-                    const Burning* burning) {
+                    const Burning* burning,
+                    std::span<const std::pair<int, gr::MorphBlood>> bloodied) {
+  list_worn_pictures(m, placed);
   const bool bare_flames = in_place.flames;
-  const bool sequel = map.family == br::Family::v38;
+  const bool q2 = map.family == br::Family::v38;
   m.morph_draws.clear();
   m.sprite_draws.clear();
   m.near.clear();
@@ -1119,8 +1354,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
   // The nearest first, so a crowded map drops the far ones.
   std::sort(m.near.begin(), m.near.end());
   const double t = view.time_s;
+  Placed cycled;
   for (const auto& [dist, i] : m.near) {
-    const Placed& p = placed[i];
+    const Placed& p = placed[i].q2_anim > 0 ? (cycled = q2_cycled(placed[i], t)) : placed[i];
     Worn worn;
     const ModelKind& k = drawn_kind(m, p, &worn);
     double w[3];
@@ -1172,7 +1408,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       s.glow = 1;  // a sprite lights itself
       s.outdoor = 0;
       s.smooth = smooth;
-      if (sequel && p.alpha < 1) {  // the sequel's see-through sprites (the BFG's ball) blend
+      if (q2 && p.alpha < 1) {  // Quake II's see-through sprites (the BFG's ball) blend
         s.blend = gr::SpriteBlend::over;
         s.colour[3] = p.alpha;
       }
@@ -1189,9 +1425,18 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       frames_of(k, p, at, frame_a, frame_b, blend);
     }
     for (int c = 0; c < 3; c++) g.now.position[c] = w[c];
+    if (p.bobs && !in_place.items_still) g.now.position[1] += float(q2_bob_units(t) * br::kUnitM);
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
     if (k.spin || p.turns) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
     if (p.turns) ang[0] = ang[2] = 0;  // yaw only
+    if (in_place.roll_hack && p.entity > 0 && p.entity <= sh::kMaxClients &&
+        p.entity != in_place.self)
+      ang[2] = -ang[2];            // cl_rollhack: another player's lean the other way
+    if (p.spinning && !p.turns) {  // upside down, its own yaw turned on 500 degrees a second
+      ang[0] = 0;
+      ang[2] = 180;
+      ang[1] = float(std::fmod(t * kSqSpinDegPerS + p.angles.y, 360.0));
+    }
     models::rotation_of(ang, k.is == ModelKind::Is::alias, g.now.rotation);
     g.now.frame_a = frame_a;
     g.now.frame_b = frame_b;
@@ -1202,13 +1447,15 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.warp = p.warp;
     g.alpha = p.alpha;
     if (burning != nullptr) g.burn = burn_skin_of(*burning, p.entity);
+    for (const auto& [entity, blood] : bloodied)
+      if (entity == p.entity) g.blood = blood;
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;
     models::forced_colours(m.skin_choice, p.side, &g.tint[0], &g.tint[1]);
     g.skin = worn.model;
     if (worn.file != Worn::kNoFile) g.slot = worn_slot(d, m, worn.file);
-    if (k.figure || !k.carried.empty()) {  // the second game's skins wear their own colours
+    if (k.figure || !k.carried.empty()) {  // Quake II's skins wear their own colours
       g.tint[0] = models::kShirtRow;
       g.tint[1] = models::kPantsRow;
     }
@@ -1219,8 +1466,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                      std::abs(lit.at.z - p.origin.z);
     if (fresh || dm > kRelightUnits) {
       const float above[3] = {p.origin.x, p.origin.y, p.origin.z + 8};
-      if (!models::light_under(m.probe, map, above, lit.rgb, sequel ? kSequelReach : 512))
-        lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
+      lit.floor_found =
+          models::light_under(m.probe, map, above, lit.rgb, q2 ? kQ2Reach : 512, &lit.floor);
+      if (!lit.floor_found) lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
       lit.at = p.origin;
     }
     // The frame's dynamic lights at its middle (a figure's chest, an item's top), added as they
@@ -1232,15 +1480,31 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const bool a_player = (k.player || k.figure) && p.entity > 0 && p.entity <= sh::kMaxClients;
     const double fullbright = a_player ? std::clamp(m.fullbright, 0.0, 1.0) : 0;
     double floor_lum = 0, dyn_lum = 0;
+    // Quake II's render bits: full light, its dynamic lights left out; or a tenth at least.
+    double raw_rgb[3] = {lit.rgb[0], lit.rgb[1], lit.rgb[2]};
+    if (p.infra_red) {
+      raw_rgb[0] = 1;
+      raw_rgb[1] = raw_rgb[2] = 0;
+      dyn[0] = dyn[1] = dyn[2] = 0;
+    } else if (p.full_bright) {
+      raw_rgb[0] = raw_rgb[1] = raw_rgb[2] = 1;
+      dyn[0] = dyn[1] = dyn[2] = 0;
+    } else if (p.min_light) {
+      const double r = raw_rgb[0] + dyn[0], g2 = raw_rgb[1] + dyn[1], b = raw_rgb[2] + dyn[2];
+      const double len = std::sqrt(r * r + g2 * g2 + b * b);
+      if (len < 0.1)
+        for (int c = 0; c < 3; c++)
+          raw_rgb[c] = len <= 0 ? 0.1 : (raw_rgb[c] + dyn[c]) * 0.1 / len - dyn[c];
+    }
     for (int c = 0; c < 3; c++) {
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads
       // as the walls round it do.
-      const double raw = lit.rgb[c];
-      const double floor = std::sqrt(raw * raw + minlight * minlight);
-      const float l = float((floor + dyn[c]) * brightness);
+      const double raw = raw_rgb[c];
+      const double floor = p.infra_red ? raw : std::sqrt(raw * raw + minlight * minlight);
+      const float l = float((floor + dyn[c]) * brightness * in_place.light);
       // The tint on its light, not its glow.
-      g.ambient[c] = (sequel ? 1 : kAmbientShare) * l * p.colormod[c];
-      g.shade[c] = (sequel ? 1 : kShadeShare) * l * p.colormod[c];
+      g.ambient[c] = (q2 ? 1 : kAmbientShare) * l * p.colormod[c];
+      g.shade[c] = in_place.flat ? 0.0f : (q2 ? 1 : kShadeShare) * l * p.colormod[c];
       if (fullbright > 0) {
         // r_fullbrightskins: lifted toward full light (a lightmap's 1, a wall as painted, at this
         // brightness, or its own light where that is more) with its shading gone; never darker.
@@ -1256,9 +1520,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const double len = std::sqrt(dist) + 1e-9;
     // On a 38 map, from the fixed light above the map's +x.
     double sd[3] = {-0.3 * (w[0] - view.eye[0]) / len, 0.9, -0.3 * (w[2] - view.eye[2]) / len};
-    if (sequel)
-      for (int c = 0; c < 3; c++) sd[c] = kSequelDir[c];
-    g.shade_back = sequel ? kSequelBack : 0;
+    if (q2)
+      for (int c = 0; c < 3; c++) sd[c] = kQ2Dir[c];
+    g.shade_back = q2 ? kQ2Back : 0;
     const double sd_len = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]);
     const double share = dyn_lum / (dyn_lum + floor_lum + 1e-9);
     for (int c = 0; c < 3; c++) sd[c] = (1 - share) * sd[c] / sd_len + share * toward[c];
@@ -1268,7 +1532,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.glow = 1;
     g.smooth = smooth;
     g.light_in_white = true;
-    PowerIn power_in{.sequel = sequel,
+    PowerIn power_in{.q2 = q2,
                      .player = p.entity > 0 && p.entity <= sh::kMaxClients,
                      .effects = static_cast<uint32_t>(p.effects),
                      .model_flags = k.flags,
@@ -1276,9 +1540,12 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                      .pulse = p.pulse};
     for (int c = 0; c < 3; c++) power_in.shell_rgb[c] = p.shell_rgb[c];
     const PowerLook power = power_look(power_in, in_place.power_shells, in_place.item_pulse);
-    if (power.pulse && !power.shell) sequel_pulse(g.ambient, t);  // an item's glow
-    m.morph_draws.push_back(g);
+    if (power.pulse && !power.shell) q2_pulse(g.ambient, t);  // an item's glow
+    if (p.holo_blue > 0) hologram_light(g, p.holo_blue);
+    if (!p.shell_only) m.morph_draws.push_back(g);
+    if (in_place.shadows > 0 && !p.shell_only) add_shadow(m, p, k, lit, in_place.shadows, !q2, g);
     if (power.shell) add_shell(m, p, power, g, t);
+    if (p.holo_shell > 0) add_hologram_shell(m, p, g);
     // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.
     if (k.held != ModelKind::kNone && k.held < m.figure_kinds.size() &&
         m.morph_draws.size() < gr::kMaxMorphDraws) {
@@ -1296,6 +1563,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       if (power.shell) add_shell(m, p, power, hw, t);
     }
   }
+  m.flash_tint = 0;
+  if (in_place.flash_blend) add_glow_discs(m, view, dynamic, in_place.self);
   if (m.has_morph) gr::prepare_morph(d, m.morph, m.morph_draws, view);
   if (m.has_sprites) gr::prepare_sprites(d, m.sprites, m.sprite_draws, view);
 }

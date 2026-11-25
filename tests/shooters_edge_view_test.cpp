@@ -19,6 +19,7 @@
 #include "assets/gltf.hpp"
 #include "assets/pose.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 #include "console/cvar.hpp"
 #include "shooters_edge/view/hand.hpp"
 #include "shooters_edge/view/weapons.hpp"
@@ -306,7 +307,7 @@ TEST(the_cvars_move_the_row) {
   in.fired = true;
   const se::HandFrame f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
   CHECK(!f.drawn && f.flashing);
-  // The sequel's hand 2 (held in the middle) draws no weapon either.
+  // Quake II's hand 2 (held in the middle) draws no weapon either.
   s.draw = true;
   s.hand = 2;
   se::Hand middle;
@@ -314,6 +315,41 @@ TEST(the_cvars_move_the_row) {
   s.hand = 0;
   se::Hand right;
   CHECK(se::step_hand(right, in, s, models(), eye(), 1.0 / 60).drawn);
+}
+
+TEST(the_gun_drawn_on_the_left_is_mirrored_and_fires_from_there) {
+  // cl_gun 1 follows the hand; 2 and 3 force a side; 0 and -1 draw none.
+  se::ViewSettings s;
+  const int want[5][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}, {1, -1, 0, 0}, {1, 1, 1, 0}, {-1, -1, -1, 0}};
+  for (int gun = -1; gun <= 3; ++gun)
+    for (int hand = 0; hand <= 2; ++hand) {
+      s.gun = gun;
+      s.hand = hand;
+      CHECK(se::gun_side(s) == want[gun + 1][hand]);
+    }
+  se::HandInput in;
+  in.weapon = se::Weapon::shotgun;
+  s.gun = 1;
+  s.hand = 0;
+  se::Hand rh, lh;
+  se::HandFrame r, l;
+  for (int i = 0; i < 30; ++i) {
+    in.fired = i == 29;
+    r = se::step_hand(rh, in, s, models(), eye(), 1.0 / 60);
+  }
+  s.hand = 1;
+  for (int i = 0; i < 30; ++i) {
+    in.fired = i == 29;
+    l = se::step_hand(lh, in, s, models(), eye(), 1.0 / 60);
+  }
+  CHECK(!r.placement.mirror && l.placement.mirror && l.drawn);
+  // The same place in the view, flipped across the eye looking down +z: x the other way.
+  const double x = eye().eye.x;
+  CHECK(std::fabs((l.muzzle_at[0] - x) + (r.muzzle_at[0] - x)) < 1e-9);
+  CHECK(std::fabs(l.muzzle_at[1] - r.muzzle_at[1]) < 1e-9 &&
+        std::fabs(l.muzzle_at[2] - r.muzzle_at[2]) < 1e-9);
+  CHECK(std::fabs(l.muzzle_dir[0] + r.muzzle_dir[0]) < 1e-9);
+  CHECK(l.flashing && std::fabs((l.flash.position[0] - x) + (r.flash.position[0] - x)) < 1e-9);
 }
 
 TEST(centre_and_hands_cvars) {
@@ -415,13 +451,19 @@ TEST(a_nailgun_held_firing_steps_a_frame_a_shot_from_each_barrel_in_turn) {
   for (int i = 0; i < 4; ++i) se::step_hand(hand, in, s, set, eye(), dt);
   std::vector<int> frames;
   std::vector<double> xs;
+  int last = 0;  // the rest frame before the first shot
   for (int shot = 0; shot < 6; ++shot) {
     in.fired = true;
     const se::HandFrame f = se::step_hand(hand, in, s, set, eye(), dt);
     in.fired = false;
-    const se::HandFrame held = se::step_hand(hand, in, s, set, eye(), dt);
-    CHECK(f.frame_a == f.frame_b && held.frame_a == f.frame_a);  // held, not blended on
-    frames.push_back(f.frame_a);
+    const se::HandFrame half = se::step_hand(hand, in, s, set, eye(), dt);
+    // Turned to from the last shot's frame (from rest on the first) over the frame's 0.1 s: at the
+    // shot, then half way a picture later.
+    CHECK(f.frame_a == last && f.frame_t == 0);
+    CHECK(half.frame_a == last && half.frame_b == f.frame_b &&
+          std::fabs(half.frame_t - 0.5) < 1e-9);
+    last = f.frame_b;
+    frames.push_back(f.frame_b);
     xs.push_back(f.muzzle_at[0]);
   }
   CHECK((frames == std::vector<int>{1, 2, 3, 4, 1, 2}));  // a frame a shot, round the clip
@@ -438,7 +480,33 @@ TEST(a_nailgun_held_firing_steps_a_frame_a_shot_from_each_barrel_in_turn) {
   for (int i = 0; i < 2; ++i) f = se::step_hand(hand, in, s, set, eye(), dt);
   CHECK(f.frame_a == 0 && f.frame_b == 0);
   in.fired = true;
-  CHECK(se::step_hand(hand, in, s, set, eye(), dt).frame_a == 1);
+  const se::HandFrame again = se::step_hand(hand, in, s, set, eye(), dt);
+  CHECK(again.frame_a == 0 && again.frame_b == 1);  // from rest to the clip's first frame
+}
+
+TEST(a_nailgun_held_firing_without_the_blend_shows_each_shots_frame_at_once) {
+  vm::HeldModel gun;
+  gun.frames.resize(5);
+  for (vm::HeldFrame& fr : gun.frames) fr.positions = {-0.05f, 0, 0.5f, 0.05f, 0, 0.5f, 0, 0.1f, 0};
+  gun.indices = {0, 1, 2};
+  gun.clips.push_back({.name = "fire", .first = 1, .count = 4, .fps = 10, .frame_a_shot = true});
+  std::vector<vm::HeldModel> set(se::kWeapons, gun);
+  se::Hand hand;
+  hand.at_eye = true;
+  se::HandInput in;
+  in.weapon = se::Weapon::nailgun;
+  se::ViewSettings s;
+  s.lerp = false;  // r_lerpmodels 0
+  const double dt = 0.05;
+  se::step_hand(hand, in, s, set, eye(), dt);
+  for (int shot = 0; shot < 5; ++shot) {
+    in.fired = true;
+    const se::HandFrame f = se::step_hand(hand, in, s, set, eye(), dt);
+    in.fired = false;
+    const se::HandFrame held = se::step_hand(hand, in, s, set, eye(), dt);
+    CHECK(f.frame_a == f.frame_b && f.frame_t == 0 && f.frame_b == 1 + shot % 4);
+    CHECK(held.frame_a == f.frame_b && held.frame_b == f.frame_b && held.frame_t == 0);
+  }
 }
 
 TEST(an_axe_of_two_swings_plays_one_swing_a_shot) {
@@ -489,4 +557,38 @@ TEST(an_axe_of_two_swings_plays_one_swing_a_shot) {
   int second = 0;
   for (int i = 0; i < 40; ++i) second += swing(hand, 0);
   CHECK(second > 8 && second < 32);
+}
+
+// gun_next and gun_prev step the frame shown (held at 0, the game's own), each saying it;
+// gun_model names a weapon of the game's set by its folder, and with no name gives it back.
+TEST(the_gun_commands_show_a_frame_and_a_weapon_in_place_of_the_games) {
+  static constexpr std::string_view kHeld[] = {"models/weapons/v_blast/tris.md2",
+                                               "models/weapons/v_rail/tris.md2"};
+  ge::console::Console con;
+  se::ViewSettings s;
+  se::add_gun_commands(con, s, kHeld);
+  con.execute("gun_next; gun_next");
+  CHECK(s.gun_frame == 2 && con.output().back() == "frame 2");
+  con.execute("gun_prev; gun_prev; gun_prev");
+  CHECK(s.gun_frame == 0 && con.output().back() == "frame 0");
+  con.execute("gun_model weapons/v_rail");
+  CHECK(s.gun_model == 1);
+  con.execute("gun_model weapons/v_nothing");
+  CHECK(s.gun_model == -1);
+  con.execute("gun_model weapons/v_blast; gun_model");
+  CHECK(s.gun_model == -1);
+}
+
+TEST(cl_gunalpha_draws_the_weapon_see_through) {
+  // Quake II's cl_gunalpha (hand.hpp's ViewSettings::alpha) is the share of the weapon drawn.
+  const std::vector<vm::HeldModel>& m = models();
+  se::Hand hand;
+  se::HandInput in;
+  in.weapon = se::weapon_looks().front().weapon;
+  se::ViewSettings s;
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 1);
+  s.alpha = 0.4;
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 0.4f);
+  s.alpha = 3;  // held to solid
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 1);
 }

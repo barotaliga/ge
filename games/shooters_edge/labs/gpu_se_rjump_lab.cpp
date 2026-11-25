@@ -1,10 +1,10 @@
 // LAB `se-rjump`: DO +RJUMP AND +RRJUMP ROCKET-JUMP THE PLAYER IN BOTH GAMES, AS THE SERVER ALLOWS?
 // The rocket jump helpers (plugins/shooter/rjump_assist.hpp, games/shooters_edge/server/
-// rjump_rules.hpp) on the window's own server, once on the first game's rules (the baseline mod)
-// and once on the sequel's, each on a real map when its files are given.
+// rjump_rules.hpp) on the window's own server, once on Quake's rules (the baseline mod)
+// and once on Quake II's, each on a real map when its files are given.
 //
 // FOUR RUNS A GAME, each from the same spot (the most open place the map puts a thing, or
-// `--spot` in the first game), the launcher and
+// `--spot` in Quake), the launcher and
 // rockets given and another weapon in hand: a plain jump; +rjump (the request with a jump, the view
 // level); +rrjump with the view 60 degrees down (the rocket behind, the push forward); and +rjump
 // with `sv_rjump 0` (refused, the player told). The player's height over time and his path from the
@@ -14,7 +14,7 @@
 // the helper turned only the shot), in each game.
 //
 // ge:summary Lab: the rocket jump helpers (+rjump, +rrjump) in both games, gated by sv_rjump
-// ge:keywords lab se-rjump rjump rrjump rocket-jump sv_rjump sv_rrjump listen-server sequel
+// ge:keywords lab se-rjump rjump rrjump rocket-jump sv_rjump sv_rrjump listen-server q2
 // ge:keywords height-over-time accessibility
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_rjump_test.cpp
@@ -29,7 +29,7 @@
 #include "brush/read.hpp"
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
@@ -49,10 +49,10 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
-#include "shooters_edge/server/sequel_items.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -84,7 +84,7 @@ std::vector<uint8_t> pack_of(const std::string& name, std::vector<uint8_t> bsp, 
   return out;
 }
 
-// Our own fixtures when no files are given: the first game's halls and the sequel's tall hall.
+// Our own fixtures when no files are given: Quake's halls and Quake II's tall hall.
 bool classic_fixture(cl::SearchPath& files, std::string& err) {
   br::Fixture f = br::sample_fixture();
   f.entities.push_back(
@@ -94,7 +94,7 @@ bool classic_fixture(cl::SearchPath& files, std::string& err) {
   return cl::add_archive(files, "pak0.pak", pack_of("halls", std::move(bsp), err), err);
 }
 
-bool sequel_fixture(cl::SearchPath& files, std::string& err) {
+bool q2_fixture(cl::SearchPath& files, std::string& err) {
   br::BrushWorld world;
   world.models.resize(1);
   const auto box = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
@@ -132,7 +132,7 @@ struct Spot {
 // The player's numbers either game keeps.
 struct Player {
   cl::Listen& l;
-  sv::SequelServer* sq = nullptr;
+  sv::Q2Server* sq = nullptr;
   sh::Vec3f origin() const { return l.server->world.entities[1].origin; }
   float rockets() const {
     return sq != nullptr ? float(sq->players[0].body.ammo[int(sv::SqAmmo::rockets)])
@@ -144,7 +144,7 @@ struct Player {
   // The launcher and 50 rockets given, another weapon kept in hand.
   void arm() {
     if (sq != nullptr) {
-      sv::SequelPlayer& p = sq->players[0];
+      sv::Q2Player& p = sq->players[0];
       p.body.counts[sv::sq_item("weapon_rocketlauncher")] = 1;
       p.body.ammo[int(sv::SqAmmo::rockets)] = 50;
       return;
@@ -214,10 +214,10 @@ struct Player {
       if (score > best) best = score, best_at = floor, best_yaw = yaw;
     }
     if (sq != nullptr) {
-      ge::classic::SequelState& st = sq->players[0].move;
+      ge::classic::Q2State& st = sq->players[0].move;
       st.origin[0] = int16_t(best_at.x * 8), st.origin[1] = int16_t(best_at.y * 8);
       st.origin[2] = int16_t(best_at.z * 8);
-      for (int16_t& v : st.velocity) v = 0;
+      for (int32_t& v : st.velocity) v = 0;
     } else {
       sh::Edict& me = l.server->sv.edicts[1];
       me.origin = best_at;
@@ -253,7 +253,7 @@ bool run_way(const cl::SearchPath& files, const std::string& map_name, Way way, 
   cl::Listen l;
   if (!cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), err))
     return false;
-  Player me{l, sv::sequel_of(*l.rules)};
+  Player me{l, sv::q2_of(*l.rules)};
   for (int i = 0; i < kRate * 3 / 2; i++) cl::listen_frame(l, {});  // spawned and landed
   me.place(spot);
   me.arm();
@@ -375,14 +375,14 @@ void one_game(gl::Lab& lab, ge::gpu::Device* device, const std::string& game,
   cl::SearchPath files;
   const bool own = dir.empty();
   const bool opened =
-      own ? (game == "sequel" ? sequel_fixture(files, err) : classic_fixture(files, err))
+      own ? (game == "q2" ? q2_fixture(files, err) : classic_fixture(files, err))
           : cl::open_game_dir(dir, std::string(content.base_dir), files, err, content);
   if (!opened) {
     lab.fail(game + ": " + err, "Pass the folder holding " + std::string(content.base_dir) +
                                     "/ with its packs. Skill: shooter.");
     return;
   }
-  if (own) map = game == "sequel" ? "hall" : "halls";
+  if (own) map = game == "q2" ? "hall" : "halls";
   Spot spot;
   if (!parse_spot(spot_text, spot)) {
     lab.fail("--spot \"" + spot_text + "\" is not x,y,z,yaw", "Give four numbers. Skill: labs.");
@@ -426,10 +426,10 @@ void one_game(gl::Lab& lab, ge::gpu::Device* device, const std::string& game,
              "Check rjump_allowed. Skill: shooter.");
   gl::LineChart height;
   height.spikes = false;
-  height.frame = {std::string(game == "sequel" ? "THE SEQUEL" : "THE FIRST GAME") +
-                      ": HEIGHT OVER TIME, " + map,
-                  "the window's own server, the same spot, four presses", "t (s)",
-                  "height above the start (units)"};
+  height.frame = {
+      std::string(game == "q2" ? "QUAKE II" : "THE FIRST GAME") + ": HEIGHT OVER TIME, " + map,
+      "the window's own server, the same spot, four presses", "t (s)",
+      "height above the start (units)"};
   height.traces = {plain.height, down.height, back.height, refused.height};
   shoot_chart(lab, game + "-height", height,
               "The player's height after each press on " + map + ": a plain jump rises " +
@@ -444,7 +444,7 @@ void one_game(gl::Lab& lab, ge::gpu::Device* device, const std::string& game,
               "the +rjump line climbing far above the plain jump; the refused line as the plain");
   gl::LineChart side;
   side.spikes = false;
-  side.frame = {std::string(game == "sequel" ? "THE SEQUEL" : "THE FIRST GAME") +
+  side.frame = {std::string(game == "q2" ? "QUAKE II" : "THE FIRST GAME") +
                     ": THE FLIGHTS FROM THE SIDE, " + map,
                 "along the way he faced", "distance along his facing (units)", "height (units)"};
   side.traces = {plain.side, down.side, back.side};
@@ -462,10 +462,9 @@ void run(gl::Lab& lab) {
   if (!device && ls::gpu_required())
     lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
              "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
-  one_game(lab, device ? &*device : nullptr, "classic", lab.arg("classic"), lab.arg("map"),
+  one_game(lab, device ? &*device : nullptr, "q1", lab.arg("classic"), lab.arg("map"),
            lab.arg("spot"), w, h);
-  one_game(lab, device ? &*device : nullptr, "sequel", lab.arg("sequel"), lab.arg("sequel-map"), "",
-           w, h);
+  one_game(lab, device ? &*device : nullptr, "q2", lab.arg("q2"), lab.arg("q2-map"), "", w, h);
 }
 
 const gl::LabSpec kSpec{
@@ -474,16 +473,16 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "the rocket jump helpers (+rjump, +rrjump: shooter/rjump_assist.hpp, server/rjump_rules.hpp)",
     "shooter",
-    "Do +rjump and +rrjump rocket-jump the player on the first game's rules and the sequel's, and "
+    "Do +rjump and +rrjump rocket-jump the player on Quake's rules and Quake II's, and "
     "does sv_rjump 0 refuse them?",
     {{"size", "960,540", "the eyes' pictures' width and height, px"},
      {"classic", "",
-      "the folder holding the first game's id1/ packs (private pictures only); none: our halls"},
-     {"map", "dm2", "the first game's map"},
-     {"spot", "", "x,y,z,yaw the first game's runs start from (none: the map's most open place)"},
-     {"sequel", "",
-      "the folder holding the sequel's baseq2/ packs (private pictures only); none: our hall"},
-     {"sequel-map", "q2dm1", "the sequel's map"}},
+      "the folder holding Quake's id1/ packs (private pictures only); none: our halls"},
+     {"map", "dm2", "Quake's map"},
+     {"spot", "", "x,y,z,yaw Quake's runs start from (none: the map's most open place)"},
+     {"q2", "",
+      "the folder holding Quake II's baseq2/ packs (private pictures only); none: our hall"},
+     {"q2-map", "q2dm1", "Quake II's map"}},
     "--size=320,180",
     run,
 };

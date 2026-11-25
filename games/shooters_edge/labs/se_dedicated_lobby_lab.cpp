@@ -1,5 +1,5 @@
 // LAB `se-dedicated-lobby`: the engine's lobby on Shooter's Edge's dedicated server
-// (net/classic_game.hpp, `sv_lobby 1`), with `--bots` bots seated and two classic clients joining
+// (net/qw_game.hpp, `sv_lobby 1`), with `--bots` bots seated and two classic clients joining
 // over the simulated network. Every map opens in warmup with the limits held; each client says
 // `ready` a few seconds into each warmup, the countdown runs into the match (the map restarted with
 // every seat on it), the match plays to its `--match` seconds, the mod changes the map and warmup
@@ -14,12 +14,13 @@
 // ge:keywords lab se-dedicated-lobby lobby sv_lobby sv_bots bots warmup countdown match ready
 // ge:keywords scoreboard local-seat match-restart sv_countdown sv_intermission intermission
 // ge:skill net labs
-// ge:test tests/shooters_edge_classic_game_test.cpp
+// ge:test tests/shooters_edge_qw_game_test.cpp
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "console/cvar.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
@@ -29,9 +30,9 @@
 #include "server/match.hpp"
 #include "server/playback.hpp"
 #include "server/server.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 
@@ -82,13 +83,17 @@ int phase_of(const std::string& status) {
 }
 
 Session run_session(uint32_t seed, int bots, double seconds, double match_s, double countdown_s,
-                    double intermission_s) {
+                    double intermission_s, const std::string& modern) {
   Session r;
   gn::LinkConditions lan;
   gn::SimNetwork net = gn::make_sim_network(seed, lan);
   gn::Transport port;
   gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
   gs::ServerConfig c;
+  // The server's console over the config, so `sv_modern` sets what it means for this game.
+  ge::console::Cvars cvars;
+  gs::add_server_cvars(cvars, c, se::qw_game());
+  cvars.set("sv_modern", modern, ge::console::Source::local);
   c.hostname = "Lobby Night";
   c.map = "arena";
   c.maxclients = 8;
@@ -99,9 +104,9 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s, dou
   c.intermission_s = intermission_s;
   c.rules["timelimit"] = gc::num::to_fixed(match_s / 60, 4);
   gs::Server s;
-  if (!gs::server_open(s, se::classic_game(), c, &port, nullptr, r.error)) return r;
+  if (!gs::server_open(s, se::qw_game(), c, &port, nullptr, r.error)) return r;
   gn::Transport ct[kClients];
-  se::ClassicClientEnd ends[kClients];
+  se::QwClientEnd ends[kClients];
   double ready_at[kClients] = {-1, -1};
   for (int i = 0; i < kClients; i++)
     gn::open_sim_transport(ct[i], net, gn::sim_address(static_cast<uint32_t>(i + 1), kClientPort));
@@ -213,7 +218,7 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s, dou
   }
   r.t.push_back(seconds);
   r.phase.push_back(last);
-  const se::ClassicClientEnd& me = ends[0];
+  const se::QwClientEnd& me = ends[0];
   r.seat_names.resize(8);
   for (int i = 0; i < 32; i++) {
     const std::string& info = me.userinfos[i];
@@ -248,17 +253,18 @@ void run(gl::Lab& lab) {
   const double match_s = lab.arg_num("match");
   const double countdown_s = lab.arg_num("countdown");
   const double intermission_s = lab.arg_num("intermission");
+  const std::string modern = lab.arg("modern");
   if (bots < 0 || bots > 5) {
     lab.fail("--bots=" + lab.arg("bots") + " does not leave the two clients their seats",
              "Pick 0 to 5 bots (the lab's server has 8 slots, slot 0 kept for a player); "
              "skill: net.");
     return;
   }
-  const Session a = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s);
-  const Session b = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s);
+  const Session a = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s, modern);
+  const Session b = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s, modern);
   if (!a.error.empty()) {
     lab.fail("the dedicated server did not open: " + a.error,
-             "Fix what the error names in games/shooters_edge/net/classic_game.cpp's create, then "
+             "Fix what the error names in games/shooters_edge/net/qw_game.cpp's create, then "
              "run the lab again; skill: net.");
     return;
   }
@@ -312,7 +318,7 @@ void run(gl::Lab& lab) {
                  " matches recorded by themselves, " + std::to_string(kept_wrong) +
                  " views played back wrong, " + std::to_string(a.phase_disagrees) +
                  " frames the core's phase differs from the lobby's",
-             "next: run make test T=server_autorecord and read classic_game.cpp's phase hook; "
+             "next: run make test T=server_autorecord and read qw_game.cpp's phase hook; "
              "skill: replay.");
   lab.table(std::move(rounds));
   lab.table(std::move(board));
@@ -362,7 +368,7 @@ const gl::LabSpec kSpec{
     "se-dedicated-lobby",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_game (the lobby and bots on the dedicated server)",
+    "games/shooters_edge/net/qw_game (the lobby and bots on the dedicated server)",
     "net",
     "Does the dedicated server's lobby take every round from warmup through the countdown into "
     "the match and back, with its bots as seats every client sees, and replay to the bit; does "
@@ -373,6 +379,7 @@ const gl::LabSpec kSpec{
         {"intermission", "0",
          "the scores up after each match before the next map, s (sv_intermission)"},
         {"match", "15", "each match's length (the mod's timelimit), s"},
+        {"modern", "0", "sv_modern: 1 every shot and projectile rewound, as a modern server"},
         {"seconds", "60", "server time to run, s"},
         {"seed", "1", "the network's and the game's stream"},
     },

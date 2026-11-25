@@ -44,7 +44,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 
@@ -218,7 +218,7 @@ void cpu_half(gl::Lab& lab) {
 
 // ---- ON A REAL MAP --------------------------------------------------------------------------
 
-// A cell's contents in the first game's codes, whatever the map's family (survey.hpp's cells), so
+// A cell's contents in Quake's codes, whatever the map's family (survey.hpp's cells), so
 // the lab finds a pool on either game's maps.
 int code_of(br::Cell c) {
   switch (c) {
@@ -401,7 +401,7 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
              std::string("Pass --") + name + "=<a map of the folder>. Skill: shooter.");
     return;
   }
-  float a[3], b[3];
+  float a[3] = {0, 0, 0}, b[3] = {0, 0, 0};
   if (!find_walk(map->bsp.map, kind, a, b)) {
     lab.fail("se-wade: " + map_name + " has no " + name + " pool a body wades 96 units through",
              std::string("Pass --") + name + "=<a map with one>. Skill: shooter.");

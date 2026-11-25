@@ -1,0 +1,710 @@
+// THE PILOT: a route on the nav graph (nav.hpp) played as a player plays it, one command at a time,
+// through the same move. It reads only what a client knows of its own player (where it stands,
+// how fast it moves, whether it is on the ground) and of the movers it can see (their boxes now),
+// and writes only a command: the view's yaw, the forward and side axes, the jump. So it can do
+// nothing a player cannot, and whatever the move does to a person it does to the pilot.
+//
+// Each command (`pilot_step`), the link it is on (from `route[k]` to `route[k + 1]`) decides:
+//   walk, drop  pure pursuit: the view turned at the point `look` units along the route (carried
+//               through the level walks that follow, so no stop at each node), steered from where
+//               the player will be `lead_s` ahead (late hands); forward pressed by how much the
+//               view already faces the way, and slowed into the goal. A node is passed within
+//               `arrive` units, or within `corner` of the next link's line on its height.
+//   jump        a jump link is proven from its start moving toward the target at its own `speed`.
+//               The walk into the start runs at the start on the jump's line, slowing to that
+//               speed before the run-up; the jump is pressed at the start, on the line, moving
+//               0.9 to 1.15 of it toward the target. Arriving off the line or past the start
+//               without the speed, it goes back to the RUN-UP point (`run_up` units behind the
+//               start), stands there turned down the jump, and runs again. In the air the view
+//               turns at the target with forward full, as the proof did.
+//   ride        stand still on the mover's top until it carries the player within 2 units of the
+//               top node's height (wherever on the top it stands), then on.
+//   a mover     a link onto a ridden mover waits until the mover is back at rest; a link a door's
+//               box now meets waits. The pilot waits stepped clear of the mover's box and of its
+//               travel, out of its nearer side (a plat stopped on a player stands still). A wait
+//               at a door longer than `wait_s` bars that door and plans again round it.
+//   strafe      a stretch of walks on level ground in a near-straight line longer than
+//               `strafe_min` units is run as strafe jumps: the jump pressed on every landing, in
+//               the air the view held along the velocity and the side axis pressed to the full
+//               (the air's 30 unit/s cap adds the most speed with the wish at right angles to the
+//               velocity), its sign the side the target is on; left `strafe_end` units before the
+//               stretch ends.
+//   hop         with `hop` set (an expert) the strafe gives way to the BUNNY HOP, as a recorded
+//               pro moves (docs/movement.md § The bunny hop): any stretch of walks and drops with
+//               no mover or jump, `hop_min` units or more, curves and stairs too. In the air the
+//               side key alone and the view led on the velocity by the move's most turn (the
+//               most gain); the side the route `hop_look_s` ahead lies on, switched past
+//               `hop_hold` (`hop_air_hold` in the air) after `hop_side_s` (at once past
+//               `hop_swing`); the back key when the aim is `hop_brake` off. The jump is let
+//               go in the air and pressed on the landing's command (no friction taken). With
+//               the map's solids in the sense, a side whose arc meets a wall within
+//               `hop_see_s` gives way to the other. Left `hop_end` units before the stretch
+//               ends, or landing under `hop_slow` x maxspeed.
+//               `hop_simple` (an average player) holds forward and the side the route turns to.
+// STUCK: no nearer the target for `stuck_s` on the ground plans again from the node nearest where
+// it stands; LOST (more than `lost` units from the link, on the ground) the same. Every decision
+// is recorded on the `ai::Why` handed in (`link`: the mode chosen, with its facts), and the intent
+// before the hands (`hands`: yaw, forward, side).
+//
+// THE HANDS (`ai::Hands`): yaw, forward and side pass through them, the jump untouched.
+// `none` presses what the pilot wants; `human` reacts about 0.15 s late (too late to hop);
+// `practised` (an expert's) no reaction or settle; `steady` (an average's) a little late.
+//
+// Allocates only when it plans; deterministic to the bit (angles through core's libm). Drawn by
+// the `se-pilot` and `se-hop` labs.
+//
+// ge:summary The pilot: a nav route played one command at a time through the player move
+// ge:keywords pilot bot route follow usercmd command jump run-up ride plat door wait strafe-jump
+// ge:keywords bunny-hop air-strafe stuck replan lost hands why pilot_step pilot_go pilot_source
+// ge:keywords rocket-jump flip back-rocket-jump strafe-turn flip_keys headroom lintel last-jump
+// ge:skill shooterbots bots
+// ge:test tests/shooterbots_pilot_test.cpp
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <span>
+#include <vector>
+
+#include "ai/hands.hpp"
+#include "ai/path.hpp"
+#include "ai/why.hpp"
+#include "core/prng.hpp"
+#include "shooterbots/circle_jump.hpp"
+#include "shooterbots/cmd_source.hpp"
+#include "shooterbots/look_ahead.hpp"
+#include "shooterbots/nav.hpp"
+#include "shooterbots/nav_field.hpp"
+#include "shooterbots/recipes.hpp"
+
+#include "shooterbots/kit.hpp"
+
+namespace ge::shooterbots {
+
+struct PilotSettings {
+  float arrive = 12;       // a node is reached within this across, units
+  float corner = 24;       // a walk turns at the next node's target within this of its own
+  float stuck_s = 1;       // no nearer the target for this long on the ground: plan again
+  float lost = 96;         // this far off the link on the ground: plan again
+  float wait_s = 5;        // a mover in the way this long is barred and the way planned round
+  bool strafe = true;      // run long straight stretches as strafe jumps
+  float strafe_min = 448;  // the shortest stretch strafed, units
+  float strafe_end = 160;  // strafing stops this far before the stretch's end
+  float line = 20;         // a stretch's nodes lie within this of its straight line, units
+  float look = 64;         // a walk aims this far along the route, units
+  float lead_s = 0;        // and steers from where it will be this long ahead (late hands), s
+  // THE HOP (an expert's bunny hop, off by default; replaces the strafe when on):
+  bool hop = false;     // hop the route's walks and drops, round its curves too
+  float hop_min = 256;  // the shortest stretch hopped, along the route, units
+  // STAIRS WALKED (`stairs`): a hop's stretch ends at a walk that climbs `hop_climb` units or more
+  // (a stair, a steep ramp): a jump up a stair loses speed; people walk up and hop from the top.
+  // STAIR CORNERS (`slopes`): a walk link up or down a stair no steeper than 45 degrees is level
+  // to the walk (its nodes passed and looked past as on the flat), not only one within a step
+  // (a stair of 20 a tread between nodes 32 apart was reached node by node, overshot at a turn).
+  bool slopes = false;
+  // THE RUN-UP STEPPED BACK (`backstep`): a jump's run-up point is gone to with the view kept down
+  // the jump (the back and side keys, as a person steps back into line), and a run-up already
+  // moving down the jump's line behind its start runs on from there, not from a stop.
+  bool backstep = false;
+  // `runupkeys`: the stepped-back run-up's keys pressed for the view as it will be when they land.
+  bool runup_keys = false;
+  // `jumpfly`: a run at a jump that reaches its start off the line or the speed (or nears it from
+  // `kFlyFrom` behind) jumps anyway when the jump, flown by the move from where it is (and a
+  // command or two late under a keyboard), lands by the far end; it lines up again only when none
+  // does.
+  bool jump_fly = false;
+  // `gappast`: a gap's jump that comes down on past its far node, on its floor and line, lands
+  // (pilot_gaps.hpp `gap_lands`): this far past, units (0: within the landing's 48 only).
+  float gap_past = 0;
+  // `lipjump`: a hop on the ground about to run off its floor jumps there (pilot.cpp).
+  bool lip_jump = false;
+  // `airgap`: a gap's jump forecast and flown strafed across (the air's gain), not forward held.
+  bool gap_strafe = false;
+  // `pilotcast`: a hop's jump at a gap judged by a copy of this pilot flying it on a copy of the
+  // move (pilot_gaps.hpp `hop_cast`), not by a flight held forward at the landing.
+  bool pilot_cast = false;
+  // `gapbuild`: a hop's first jump into a gap trick over water is a circle jump aimed across at
+  // its landing, taken as soon as a jump from there lands across; short of the lip a landing runs
+  // on along the ground (straight, curving or side to side, rolled through the hands:
+  // pilot_gaps.hpp `gap_run`) to where a jump does, and far out it runs on rather than gives up.
+  bool gap_circle = false;
+  // `gaplava`: `gap_circle`'s curve and run taken into a gap over lava or slime too.
+  bool gap_lava = false;
+  // (`bridgeseen`) The shut links (onto a bridge or a floor door still in) honoured on every link
+  // (`nav_route`'s `shut`): they carry no mover, so as cut links they were taken all the same.
+  bool shut_every = false;
+  // `brinkline`: the walk's look point stops at a node beside a lip over lava or slime.
+  bool brink_line = false;
+  // `sidebrink`: a link whose side step falls into lava or slime (`NavLink::brink_side`) is a lip
+  // as a `brink` one is (every check of `brink` and `brink_line` reads it).
+  bool brink_side = false;
+  // `fallseen`: the walk foreseen (`ahead`) counts a flight that leaves the floor over lava or
+  // slime as the worst way (look_ahead.hpp `WalkStart::harm`).
+  bool walk_falls = false;
+  // `liplook`: within reach of lava or slime the walk aims this long ahead at its speed (at
+  // least `look`), s; 0: `look` always.
+  float lip_look_s = 0;
+  // `curvekeys`: the keys are a keyboard's (a caller's, held on `curve_keys`): the run to a gap's
+  // lip rolled out as keys, forward and the side key full at once a command late, not through the
+  // hands' slew of the side axis.
+  bool curve_keys = false;
+  bool hop_stairs_walked = false;
+  float hop_climb = 10;
+  // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or
+  // slime (`NavLink::brink`): an arc in the air there comes down in it.
+  bool brink = false;
+  float hop_end = 96;  // hopping stops this far along the route before the stretch's end
+  // A GAP'S LANDING HELD (`gaphold`): a hop's jump held in the air for the landing frame with a gap
+  // trick ahead when the takeoff from the forecast landing would jump (pilot_gaps.hpp).
+  bool gap_hold = false;
+  float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
+  float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
+  float hop_air_hold = 12;  // and in the air (`hoparc`: 25, one wide arc a jump), deg
+  float hop_side_s = 0.2f;  // and for at least this long (a hand's rhythm), unless the aim is
+  float hop_swing = 45;     // this far off: then the side it is on at once, deg
+  float hop_brake = 70;     // the aim this far off the velocity: the back key pressed too, deg
+  float hop_slow = 0.75f;   // landed under this share of maxspeed: the hop ends (run instead)
+  float hop_see_s = 0.12f;  // the arc ahead checked for a wall this long, s (with a world)
+  // PEOPLE'S RHYTHM (`hoprhythm`): a swap of side in the air kept `hop_air_keep_s` before any
+  // cause swaps back (the two arcs walled alike, and a wall against the aim, swapped back and
+  // forth every command); a wall in both arcs and straight on clearer: the side held and flown
+  // straight (`hop_straight`); the wall's check run on the landing too, so the side is set with
+  // the jump (`hop_wall_ground`).
+  float hop_air_keep_s = 0;
+  // THE AIM'S SWAP ON THE GROUND (`swapground`): the side the aim asks for taken at the landing,
+  // not in the air, unless the aim lies `hop_swing` off (a wall's swap stays in the air): people
+  // swap at the landing two times in three (dm2, 25 ms frames), the bots half the time.
+  bool hop_swap_ground = false;
+  // THE SIDE CLEAR OF A WALL SET WITH THE JUMP (`wallplan`): on the ground the arc is checked this
+  // long ahead (a flight), so the side clear of a wall is the one jumped with; 0: `hop_see_s`.
+  float hop_see_ground_s = 0;
+  bool hop_straight = false;
+  bool hop_wall_ground = false;
+  // THE SWAP AT THE LANDING (`hopland`, the maintainer's hop): the side swapped only `hop_swap_s`
+  // or less before the landing (or on it), once the heading has come round past the aim; never
+  // in the air before. The flight's turn paced so the heading lands past the aim by as much as
+  // it was past at the last swap (`hop_arc_lo`..`hop_arc_hi` degrees, the most falling to
+  // `hop_arc_lo` as the speed rises: speed built, the hop keeps it): the view's lead into the
+  // turn (`hop_lead`) raised when the turn is behind that pace, lowered when ahead.
+  bool hop_land = false;
+  float hop_swap_s = 0.04f;
+  float hop_arc_lo = 10, hop_arc_hi = 35;
+  float hop_arc_fast_lo = 350, hop_arc_fast_hi = 650;  // the arc's most falls between, units/s
+  // The SIMPLE hop (an average player's): forward held with the side key of the way the route
+  // turns, the view kept 45 degrees outside the velocity so the two keys' wish lies across it;
+  // no side switch to weave, no look ahead for walls, no brake.
+  bool hop_simple = false;
+  // THE HEADROOM (`headroom`): a hop's jump not pressed when its flight would meet a ceiling over
+  // the route ahead (a lintel over a stair down): run on under it along the route, jump past it;
+  // and the stretch's last jump one whose flight lands before the stretch ends (a climb, a lip).
+  bool hop_headroom = false;
+  // THE LIPS HOPPED (`liphop`): a hop's stretch runs on along a lip over lava or slime (a `brink`
+  // link) instead of ending there: the brink guard holds the feet off it in the air as on the
+  // ground, so the hop needs no stop of its own (hops along dm2's pits: share 9-11 % -> 14-15 %;
+  // head to head ~50 frags a set: kept for the speed, which passes for a person more than frags).
+  bool hop_lips = false;
+  // (`sidehop`) A hop's stretch ends at a link whose side step falls into lava or slime too
+  // (`NavLink::brink_side`: dm2's yellow-armour stair), walked, not hopped.
+  bool hop_side_off = false;
+  // THE CIRCLE JUMP (`circlejump`, circle_jump.hpp): a hop's first jump taken out of a curve on
+  // the ground, forward and a side key, the view on the velocity, as people's are (their standing
+  // jumps take off at ~430): until `circle.target` speed, `circle.most_s` or past the route's line.
+  bool hop_circle = false;
+  // THE CHAIN (`chainhop`): a hop's landing with a hop stretch ahead jumps again at once, with no
+  // walk's start between (its speed check, a circle jump, a copied start).
+  bool hop_chain = false;
+  // THE LANDING'S WALL (`landwall`): a hop's landing whose jump would fly into a wall within this
+  // long, s, on every curve the air can give it (straight, and the side keys either way), runs on
+  // instead, the ground's keys along the route, and jumps once the way is clear: a flight that
+  // meets a wall lands at ~100 units/s and ends the hop, a run that meets one slides along it at
+  // a run's speed. 0: off.
+  float hop_land_wall_s = 0;
+  // THE STRETCH'S END FLOWN TO THE LANDING (`airend`): a hop's stretch that runs out at a climb,
+  // the goal or a plain link while the flight is up keeps the hop's air to the landing (aimed
+  // along the route past the end) and ends there, no jump held: the walk took a flight over at
+  // once, and a glance or a look its view, and it flew on straight into the wall at a turn.
+  bool hop_air_end = false;
+  // THE JUMP HELD FOR THE LANDING (`hopjump`, M18r.md 0v): in a hop's air the jump is let go on the
+  // way up and held on the way down, so it goes off on the landing frame, before any friction (a
+  // press on the ground lands 2-3 commands late under a keyboard); not for a landing under
+  // `hop_slow` (a run gains faster there: hopping on from one cost 23 units/s on dm2).
+  bool hop_jump_held = false;
+  // NO FORWARD IN A HOP (`hopside`): its air and its landing pressed with the strafe key alone.
+  bool hop_side_only = false;
+  // TOWARD THE OPEN (`hopopen`): the hop's side away from a wall for every skill (its air), and a
+  // circle jump's curve, the way near straight ahead, out to the side whose arc stays clear.
+  bool hop_open = false;
+  // THE LIFT NOT THERE (`liftbrake`): walking to a node whose next link boards a lift that is not
+  // at its rest, the keys let go within the run's stop of it (the wait is at its edge, not in the
+  // shaft under it).
+  bool lift_brake = false;
+  // `walkmash`: a walk at a full run on dry ground, nothing ahead to brake for and no lava or slime
+  // near, holds forward and a strafe key swapped every `mash_s` (the ground's speed built past the
+  // run's to ~395 units/s); off, forward alone (320).
+  bool walk_mash = false;
+  // `giveup`: the run-ups at a jump counted by its end (within `kJumpKin`) and kind, so a plan that
+  // starts it from the node beside does not count afresh; a jump given up takes the jumps beside it
+  // of its own kind (a rocket jump's too, not only plain jumps').
+  bool give_up = false;
+  // `stairbump`: the walk's look ahead counts no bump for a step it climbs (look_ahead.hpp).
+  bool stair_free = false;
+  // `mashstart`: a walk mashing its strafe keys holds the hop's first jump until its run is built
+  // (370 units/s, or 0.4 s of mashing); off, the hop began at the walk's 256+.
+  bool mash_start = false;
+  // `straightfly`: on a straight way ahead with the aim near the run, the hop's air flies straight
+  // (the side held, the view where its wish adds nothing across), as people fly a corridor.
+  bool straight_fly = false;
+  // `aimground`: under a fight's view, no hop jump while the run is under 360 units/s.
+  bool aim_ground = false;
+  float mash_s = 0.1f;
+  // THE SCRIPT FROM ITS START (`scriptfresh`): a scripted way left (another goal, a fight's
+  // replan) and come back to is flown from its first step, not the step it was left at (e1m2's YA
+  // stairs: a climb left on the walkway's step aimed at it from the floor, into the riser or
+  // under the walkway into the pool).
+  bool script_fresh = false;
+  // THE GAP TURNED TO (`gapturn`): a gap trick near its lip with the run heading away from its
+  // jump (a route just planned through it from a run the other way) is turned to on the ground,
+  // `kGapTurnMost_s` at most, before it is given up (it was given up at once, and the way round
+  // was through the water: e1m2's pool, 68 % of the refusals wet within 4 s).
+  bool gap_turn = false;
+  // A GAP NOT PLANNED NEAR (`gapnear`): a route is not planned through a gap trick whose takeoff
+  // is within `kGapCurveFrom` unless the run already heads at it at `kGapNearShare` of its speed
+  // (planned from a run that could not take it, it was given up on the next landing and kept off
+  // every route for `kGapOff_s`).
+  bool gap_near = false;
+  // THE SCRIPT'S ENTRY HAD NEAR IT (`scriptentry`, nav_script.hpp `script_keys`' loose entry).
+  bool script_entry = false;
+  // THE WAY READ OFF THE GOAL'S FIELD (`fieldway`, nav_field.hpp): a route is the field's way to
+  // the goal for `jumper` when it has one with no button on it and none of its links is barred,
+  // cut or shut now; else it is searched as before. Null: always searched.
+  NavFields* fields = nullptr;
+  CircleSettings circle;
+  // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
+  // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
+  // level and at its price (`NavJumper`); played as a jump, the view
+  // `rocket_pitch` down (or the link's own, `NavLink::pitch`: the one its proof landed) and the
+  // trigger pressed with the jump; a flip (`NavLink::back`) turned into from as long before its
+  // start as the view's hand takes to turn round (its delay and its slew over 180 degrees), its
+  // run-up that much longer, and `rocket_back_pitch` down behind.
+  NavJumper jumper;
+  // `retarget`: a new goal while walking or hopping runs on from the node ahead (`pilot_retarget`)
+  // rather than planned again from a stop's state (the caller's `bot_goal` keeps the mode).
+  bool retarget = false;
+  float rocket_pitch = 80;
+  float rocket_back_pitch = 55;
+  // AIR STEERING (`air` below); off, a flight is flown with the view at its target and forward.
+  bool air_steer = true;
+  float swim_arrive = 24;  // a swim node is reached within this, units (any way, not across)
+  // A POOL'S FLOOR SWUM: a swimmer (waist deep, off the ground) on a walk between a pool's floor
+  // nodes is anywhere in the water over them, not on the floor: it reaches and passes them by
+  // the distance across, up to `floor_swim_up` over them; and it plans again when no nearer or
+  // off the way as a walker on the ground does (on a walk whose ends lie over `lost_under` above
+  // it, it was knocked or fell into the water under the way). Off: the floor's nodes are reached
+  // standing on them, and a swimmer on a walk never plans again by itself.
+  bool floor_swim = true;
+  // A ride's plat away from its rest with the player under it and not aboard is in his way: he
+  // waits clear of it (standing in its field holds a raised plat up for good, so it never came
+  // down for him: base2's lift). Off by default (the deathmatch sets were judged without it).
+  bool under_plat = false;
+  float floor_swim_up = 96;
+  float lost_under = 48;
+  // `underway`: the same on the ground: a walker whose link's ends both lie over `lost_under`
+  // above its feet fell under the way (a hop off a ledge) and plans again at once, and so does a
+  // run-up or a jump's run fallen well under its start or into water; off, a walker circles under
+  // the node until the stuck check (no nearer across for `stuck_s`).
+  bool under_way = false;
+  // `liftoff`: a jump asked for and not yet off the ground (a keyboard's jump key lands a few
+  // commands after the ask) is waited for, the jump still asked, for `kLeapLiftOff_s`; off, the
+  // next command on the ground reads as a jump landed short (`missed_jump`, planned again).
+  bool lift_off = false;
+  // `rjready`: a rocket jump's shot only with the launcher in hand and ready to fire
+  // (`PilotSense::rocket_ready`); not, the run goes on past its start and lines up again. Off, the
+  // shot went with whatever was in hand (another weapon's shot, no blast: a plain jump).
+  bool rocket_wait = false;
+  // THE LANE: a person does not walk the route's line. On a level walk with room either side (the
+  // graph's `nav_room`), the walker keeps `lane` of that room off the line, to one side or the
+  // other: a side and an amount drawn every `lane_min_s`..`lane_max_s` off its own stream, eased in
+  // over `lane_ease_s`, back to the line before a jump, a drop, a mover, water or a narrow place.
+  float lane = 0;  // 0: on the line
+  float lane_min_s = 1.2f, lane_max_s = 3.0f, lane_ease_s = 0.8f;
+  // THE WALK'S LOOK AHEAD (`ahead`, with a world): a proven link is clear, the line a walker runs
+  // round a corner at 320 u/s is not. Two halves: the AIM pulled back along the route (the look
+  // halved, its lane kept and then dropped) until the player's box reaches it straight; and THE
+  // WALK FORESEEN: where the box swept along the velocity meets a wall within the hands' delay and
+  // `ahead_s`, the keys are flown through the move itself (player_move over the map's solids: the
+  // keys already pressed for the delay, then the pursuit's, the turn braked, the next node, or no
+  // keys) and a way that does not bump is pressed, the nearest to the aim (a person knows how
+  // their body meets the room). dm2, 24 ten-minute seeds, one side with it: its wall bumps 12.0 ->
+  // 9.8 a bot-minute, its speed no lower, head to head even (+0.4 frags a match over both sides).
+  bool ahead = false;
+  float ahead_s = 0.25f;  // the walk's flights foreseen this long past the hands' delay, s
+  // OTHER PLAYERS' BOXES in the walk foreseen (`bodies`, with `ahead`): the players the sense
+  // hands over (`PilotSense::others`) flown as boxes along their velocities, so a way that runs
+  // into a mate or an enemy is a bump, and one standing on the walk's line is walked round
+  // (look_ahead.hpp `body_on_way`), or waited for where there is no room; off, the walk knows the
+  // map's solids alone. dm2, 24 ten-minute seeds, one side with it: its player bumps 5.4 -> 4.4 a
+  // bot-minute, its speed +6 u/s, head to head +1.6 frags a match over both sides; on both sides
+  // player bumps 5.5 -> 4.1 and speed 174 -> 182.
+  bool ahead_bodies = false;
+  // PEOPLE'S HOP STARTS PLAYED (`recipes`, pilot_recipes.hpp): a hopper on the ground slower than
+  // a run, with a hop's stretch ahead, takes one of people's starts out of `recipes` (a game's
+  // book, recipes.hpp) of its `recipe_level`: the nearest to its own speed and heading, turned to
+  // its way and flown by the move from where it stands (no wall, its end on the route), then
+  // played key by key and view by view until it leaves the ground, the hop's after; off (or no
+  // book), it runs straight to a run's speed and hops from there.
+  // `recipe_keys_s`: each frame's keys asked this long early (a keyboard's press: the recording's
+  // keys are when they were down).
+  RecipeBook recipes;
+  uint8_t recipe_level = 2;
+  float recipe_keys_s = 0;
+  // `recipe_heading` (`starthead`): the proven start taking off closest to the hop's aim from its
+  // takeoff, among `kRecipeTriesHeading` flown; off, the nearest proven one.
+  bool recipe_heading = false;
+  // (`startease`) The start's recorded view offset to begin at the pilot's own and the offset eased
+  // to none over `recipe_ease_s`, the proof flown on the eased view (its keys under it): the
+  // recording's entry view, set at once, snapped the view in and out of every start.
+  float recipe_ease_s = 0;
+  // and charged for a flight after the takeoff that meets a wall within 0.4 s (`startclear`)
+  bool recipe_clear = false;
+  // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air
+  // can only let go or turn the way the mouse does, so a jump whose flight straight on meets a
+  // wall within this long, s, is not held for the landing nor pressed on it: the landing runs on
+  // along the route and jumps once clear. 0: off.
+  float aim_land_s = 0;
+};
+
+// `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
+// onto a dry node out of the water by the climb the nav proved (swim.hpp `swim_out`).
+// `air`: in a flight (a jump's, a rocket jump's, a grenade jump's) STEERED as a player steers in
+// the air: the aim its target, or near it a point a little past it toward the node after it when
+// the route walks on (the momentum carried round the corner it turns there); off the velocity's
+// line, the side key toward the turn (pressed by how far off) and the view led on the velocity by
+// the move's turn, as the hop does (the air's 30 unit/s cap turns a fast flight only with the wish
+// across it: forward does nothing past 30 units/s); on the line, the view along the velocity and no
+// key; slow, or the aim behind, forward at it as the proof flew. A flip's view turns back to its
+// target first (`flip_keys`). `grenade`: a GRENADE JUMP (nav.hpp `NavKind::grenade`), on the
+// ground: to its start and still there, the view on the target and `NavLink::pitch` down, the
+// grenade fired (only while the sense says the launcher is in hand), then to the link's `lead` past
+// where it will lie (the nav's `grenade_at`, with the world), and jump as the fuse runs out (the
+// jump key passes the hands at once); the flight is a jump's.
+enum class PilotMode : uint8_t {
+  idle,
+  walk,
+  run_up,
+  jump,
+  air,
+  wait,
+  ride,
+  strafe,
+  arrived,
+  hop,
+  swim,
+  grenade
+};
+inline constexpr int kPilotModes = 12;  // PilotMode's count: a table indexed by mode is this long
+const char* pilot_mode_name(PilotMode m);
+
+enum class PilotHands : uint8_t { none, human, practised, steady };
+// The hands' axes: yaw (degrees), forward and side (shares of maxspeed), jump.
+std::vector<ai::AxisHands> pilot_hands(PilotHands profile);
+// How far ahead a pilot with these hands steers from (their delay), s.
+float pilot_lead_s(PilotHands profile);
+
+// What the pilot reads before each command: its own player and the movers' boxes now.
+inline constexpr int8_t kNoCurveKeys = -2;  // `Pilot::curve_keys`: no curve this command
+
+struct PilotSense {
+  Vec3f origin, velocity;
+  bool onground = false;
+  int waterlevel = 0;  // 0 dry .. 3 eyes under
+  float maxspeed = 320;
+  std::span<const NavMover> movers;  // each mover's entity and box as it stands now
+  // The map's solids, when the pilot may look ahead through them (the hop checks its arc for a
+  // wall, as a player sees the room); null: the hop flies blind.
+  const MoveWorld* world = nullptr;
+  bool grenade_ready = true;  // the grenade launcher in hand: a grenade jump fires only then
+  bool rocket_ready = true;   // the rocket launcher in hand: a rocket out of a pit fires only then
+  // The view is a fight's, not the pilot's (`aimland`): the hop's air turns only with the mouse.
+  bool aimed = false;
+  // The other players alive near, as the client was sent them (look_ahead.hpp `OtherBox`): the
+  // walk foreseen flies them as boxes (`ahead_bodies`).
+  std::span<const OtherBox> others;
+};
+
+// Why a copied hop start under way ended on the ground (PilotStats::recipe_ends): a node passed
+// (`advance`), a new plan, the stretch read again on a new goal, the hop's stretch at its end (or
+// slow, or a roof), anything else; of the plans, a new goal the caller gave (`goal`) and the way
+// planned again by the pilot (`replan`: lost, stuck, a gap given up, a door ...).
+enum class RecipeEnd : uint8_t { advance, plan, retarget, hop_end, other, goal, replan, count };
+inline constexpr const char* kRecipeEndNames[] = {"advance", "plan", "retarget", "hop-end",
+                                                  "other",   "goal", "replan"};
+
+struct PilotStats {
+  int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
+  int32_t mashed = 0;          // `walkmash`: walk commands pressed forward and a swapped strafe key
+  int32_t field_ways = 0;      // `fieldway`: routes read off the goal's field, not searched
+  int32_t aim_grounds = 0;     // `aimground`: aimed hop jumps not taken, the run slow
+  int32_t straight_flies = 0;  // `straightfly`: hop air commands flown straight on a straight way
+  int32_t mash_starts = 0;     // `mashstart`: commands a hop's start was held while the walk mashed
+  int32_t rides = 0, strafes = 0;
+  int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
+  int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)
+  int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
+  int32_t land_walls = 0;           // landings' commands run on for a wall in the jump (`landwall`)
+  int32_t aim_lands = 0;            // landings' commands run on under a fight's view (`aimland`)
+  int32_t circles = 0;              // hops started by a circle jump
+  float circle_speed = 0;           // their takeoff speeds, summed, units/s
+  int32_t rocket_jumps = 0;         // rocket jumps fired
+  int32_t flips = 0;                // of them, taken as the flip
+  int32_t grenade_jumps = 0;        // grenades fired for a grenade jump
+  int32_t combos = 0;               // rockets fired on a grenade for a combo
+  int32_t escapes = 0;              // rockets fired out of a pit's liquid (escape.hpp)
+  int32_t escapes_out = 0;          // and of them, landed on their ledge
+  int32_t gap_jumps = 0;            // gap tricks jumped out of a hop (nav_gaps.hpp)
+  int32_t gap_landed = 0;           // and of them, landed by their landing node
+  int32_t gap_refused = 0;          // gaps given up at the lip: no jump from there lands across
+  int32_t gap_near = 0;             // (`gapnear`) routes planned round a gap too near to take
+  float gap_speed = 0;              // the gap jumps' takeoff speeds across, summed, units/s
+  int32_t recipe_asks = 0;          // hop starts looked for in the book (`recipes`)
+  int32_t recipe_commits = 0;       // and one proven and begun
+  int32_t recipe_aborts = 0;        // of them, left off the proof's way before the takeoff
+  int32_t recipe_takeoffs = 0;      // and those that left the ground
+  int32_t recipe_cuts = 0;          // ended on the ground by the hop left (a plan, a new goal)
+  int32_t recipe_ranouts = 0;       // ended on the ground with its frames played (no jump)
+  std::array<int32_t, static_cast<size_t>(RecipeEnd::count)> recipe_ends{};  // and by restart
+  float recipe_speed = 0;   // their takeoff speeds across, summed, units/s
+  int32_t retargets = 0;    // new goals run on to from the node ahead (`pilot_retarget`)
+  int32_t vias = 0;         // goals chained on past a pickup (`pilot_chain`)
+  int32_t via_touched = 0;  // and of them, the pickup's point run through
+  int32_t via_missed = 0;   // and those run past it, not through it
+  float via_speed = 0;      // the speed through the touched ones, summed, units/s
+  double time_s = 0;        // the commands' time since the last pilot_go
+};
+
+struct Pilot {
+  const NavGraph* g = nullptr;
+  PilotSettings set;
+  std::vector<int32_t> route;  // the nodes; empty: none
+  size_t k = 0;                // on the link route[k] -> route[k + 1]
+  int32_t goal = -1;
+  PilotMode mode = PilotMode::idle;
+  float yaw = 0;                 // the view's yaw last pressed, degrees, unwrapped
+  float best = 0, best_s = 0;    // the nearest the target has been and when (the stuck check)
+  float wait_s = 0;              // waiting at a mover this long
+  int32_t strafe_end_node = -1;  // the route index a strafe or hop stretch ends at
+  int8_t strafe_side = 0;        // the side axis's sign in the air, -1 left, 1 right
+  float side_s = 0;              // the hop's side held this long, s
+  // Why the hop's side last swapped (a trace's `hswap`): "aim" the aim crossed `hop_air_hold`
+  // (`hop_hold` on the ground), "swing" it lay `hop_swing` off, "wall" the other arc the clearer,
+  // "land" `hopland`'s swap at the landing, "" none yet.
+  const char* side_why = "";
+  // Why the hop last ended (a trace's `hend`): "end" the stretch's end near, "slow" landed under
+  // `hop_slow`, "room" too little stretch left for a jump, "restretch" a new way with no stretch,
+  // "plan" a new plan (`pilot_go`), "off" the hop turned off; "" none yet.
+  const char* hop_end_why = "";
+  // And, for "end" and "room", what the stretch ended at (`hop_stretch_end`): "goal", "climb",
+  // "leap", "mover", "teleport", "lip", "side", "link", "" none.
+  const char* hop_end_at = "";
+  bool hop_out =
+      false;  // (`airend`) the stretch has ended in the air: the hop flies to the landing
+  bool hop_air_swapped = false;  // (`hoprhythm`) the side swapped in this flight already
+  // (`hopland`) The floor's height at the last ground command, the heading's turn toward the side
+  // (filtered, degrees a second), the heading the last command, how far past the aim the flight
+  // lands, degrees, and the view's lead into the turn the bot's hand is asked for (`hop_lead_on`).
+  float hop_floor_z = 0, hop_rate = 0, hop_vh_was = 0, hop_arc_end = 20, hop_lead = 0;
+  bool hop_lead_on = false;
+  float circle_s = -1;        // on the circle jump's curve this long, s (-1: not on it)
+  int8_t circle_side = 0;     // and the side key it curves on (0: not chosen yet)
+  bool circling_now = false;  // this command curves for a circle jump (bot.cpp `circlekeys`)
+  bool no_circle = false;     // the caller's: no curve now, the hop's jump at once (`circleaim`)
+  bool jump_pressed = false;  // the jump button in the last command
+  int8_t mash_side = 1;       // `walkmash`: the strafe key held now (+1 right, -1 left)
+  double mash_at = -1e9;      // and when it went down (`clock_s`)
+  double mash_from = -1e9;    // and when this walk's mashing began (`mashstart`)
+  bool airborne = false;      // left the ground on the current jump link
+  double leap_s = -1e9;       // when that jump was asked for (`clock_s`; `liftoff`)
+  float grenade_s = -1;       // a grenade jump's: since its shot, s (-1: not fired yet)
+  Vec3f grenade_stand;        // and where the jumper stands for its blast
+  float grenade_yaw = 0;      // and the view's yaw at the shot, held through the fuse
+  int32_t barred[4] = {-1, -1, -1, -1};      // doors found shut: planned round
+  std::vector<NavExtraLink> cut;             // links an open door's leaf stands across: round
+  std::vector<NavExtraLink> short_jumps;     // jumps missed (short, or no nearer), one entry a time
+  std::vector<NavExtraLink> failed;          // those missed twice: never planned again
+  int32_t try_from = -1, try_to = -1;        // the jump being lined up for
+  int tries = 0;                             // and the run-ups at it
+  NavKind try_kind = NavKind::walk;          // and its kind (`giveup`)
+  int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
+  int32_t ladder_from = -1, ladder_to = -1;  // the ladder being climbed (NavLink::ladder)
+  bool climbing = false;  // on a ladder this command, facing it: the view is the pilot's alone
+  size_t script_step = 0, script_seen = 0;  // its step aimed at, and the furthest yet
+  double script_at = -1e9;                  // the clock it was last flown at (`script_fresh`)
+  bool script_done = false;                 // its last step reached
+  const char* because = "";                 // the last command's reason, for a trace
+  // A rocket jump's shot ahead (this command's, read by the view's hand): the view it fires with
+  // (pitch 0: none ahead), the time until it, s (0: this command), and whether this command fires
+  // it. Under a hand that flies the view itself (`shot_hand`, set by its owner), the shot waits
+  // until the owner says the view is there (`shot_ready`, set each command).
+  float shot_pitch = 0, shot_yaw = 0, shot_in_s = 0;
+  bool shot_now = false;
+  bool shot_hand = false, shot_ready = true;
+  // OUT OF A PIT (escape.hpp, `NavLink::escape`): the escape under way, how long it has backed
+  // (-1: still swimming to its takeoff), and whether this command is one of it (the backing or
+  // its flight: the view's owner keeps the swim's 3D wish off then).
+  int32_t escape_on = -1;
+  float escape_back_s = -1;
+  bool escaping = false;
+  bool plan_on_landing = false;  // a goal given in its flight: planned once it lands
+  // A GAP TRICK in the hop's stretch (nav_gaps.hpp, `NavLink::gap`): the route index of its
+  // start (-1: none), whether the flight under way is its jump, and whether the move said the
+  // flight under way lands safe (then nothing else brakes it: `brink_free`).
+  int32_t gap_k = -1;
+  std::vector<NavExtraLink> gaps_off;  // gap tricks given up, off every route until `gaps_off_s`
+  std::vector<double> gaps_off_s;      // (the pilot's own clock, `clock_s`)
+  double clock_s = 0;                  // the commands' time, never reset
+  // Each ridden mover's height at the last command and when it last moved (`clock_s`): a plat is
+  // stepped onto only at its rest and silent, still a beat (pilot.cpp `mover_in_way`).
+  struct MoverSeen {
+    int32_t ent = -1;
+    float z = 0;
+    double moved_at = -1e9;
+  };
+  // (Room for every ridden mover of a big map: with 8, bunk1's ninth and later were never seen
+  // moving, so its sinking floor was walked under on its way down.)
+  MoverSeen movers_seen[48];
+  // (`under_plat`) A ridden mover on its way within reach of him at the last command
+  // (pilot_movers.hpp `over_him`): his own keys step clear, and no one else's run him under it.
+  bool crushing = false;
+  int crush_try = 0;        // which of its sides he runs out of (the nearest first)
+  double crush_slow_s = 0;  // how long he has been held running out of that one, s
+  bool gap_flight = false;
+  // (`gapturn`) the gap turned to (its start node) and since when (`clock_s`)
+  int32_t gap_turn_node = -1;
+  double gap_turn_s = 0, gap_turn_last_s = -1e9;
+  bool gap_back = false;  // this command: running back to the curve's start, `gap_back_at`
+  Vec3f gap_back_at{};
+  NavExtraLink gap_link;     // the gap jumped (`gap_flight`): judged where it comes down
+  bool gap_aloft = false;    // and its flight has left the ground (a bot's keys may press late)
+  double gap_pressed_s = 0;  // when its jump was pressed (`clock_s`)
+  int32_t gap_way = -1;      // the run to a gap's lip under way (pilot_gaps.hpp `gap_run`; -1 none)
+  int32_t gap_way_i = 0;     // and its commands so far
+  bool safe_flight = false;
+  // A LIP'S JUMP in the air (`lipjump`): pressed at a lip (`clock_s`, -1 none), flown across at
+  // the far side (pilot.cpp `strafe_across`), not woven as a hop.
+  double lip_pressed_s = -1;
+  float hop_aim_yaw = 0;  // a hop's way this command: the heading to its aim point, degrees
+  // and how much tighter than the air can turn at this speed the way ahead runs (past 1: too
+  // tight; pilot.cpp `hop_turn_need`, recorded only)
+  float hop_tight = 0;
+  // and what the hop's wall check saw this command (recorded only): how long the held side's arc
+  // and the other side's stay clear, s (-1 not looked)
+  float arc_mine = -1, arc_other = -1;
+  // A WALK IN THE AIR this command (a hop's stretch ended mid-flight, a drop off an edge; not a
+  // jump's flight): the heading to the walk's target, degrees (`airwalk`: bot.cpp presses the
+  // air's key set toward it).
+  bool walk_air = false;
+  float walk_air_yaw = 0;
+  float lip_yaw = 0;  // and the heading across to the nearest floor beyond (`lip_crossing`)
+  // A COPY flying a forecast (`hop_cast`): its own forecasts off, its first landing's jump pressed.
+  bool forecasting = false;
+  bool brink_free = false;  // this command's keys are a flight the move proved: no brink guard
+  // A CURVE ON THE GROUND this command (a circle jump's, a run to a gap's lip): the keys it means,
+  // forward and the side key (-1 left, 1 right, 0 forward alone); `kNoCurveKeys` none. A keyboard
+  // holds them (`curvekeys`) rather than reading a key set off the hands' slewed side axis.
+  int8_t curve_keys = kNoCurveKeys;
+  // A HOP START UNDER WAY (`recipes`, pilot_recipes.hpp): its entry in the book (-1 none), played
+  // mirrored or not, for this long; its frames turned to the way, and the proof's origins and
+  // their clock (the closed loop's yardstick); whether its jump has been pressed; the next look
+  // into the book not before `recipe_retry_s` (`clock_s`).
+  int32_t recipe = -1;
+  const char* recipe_note = "-";  // why this command took no start (`recipes`), for a trace
+  bool recipe_jumped = false;
+  float recipe_s = 0;
+  double recipe_retry_s = 0;
+  double hop_air_s = -1;  // the last command a hop was in the air (`clock_s`): a landing's chain
+  std::vector<RecipeFrame> recipe_frames;
+  std::vector<Vec3f> recipe_trail;
+  std::vector<float> recipe_trail_t;
+  int8_t curve_keys_last = kNoCurveKeys;  // and the last command's
+  // A GOAL CHAINED ON PAST A PICKUP (`pilot_chain`): the route index of the item's node the route
+  // runs through to the next goal (-1: none), the point to run through (the item itself, beside
+  // its node), and the last one left behind (its node and when, `clock_s`).
+  int32_t via_k = -1;
+  Vec3f via_at;
+  float via_near = 1e30f;  // the nearest across the player has come to it
+  int32_t via_left = -1;
+  double via_left_at = -1e9;
+  std::vector<int32_t> shut;             // doors the caller knows are shut: never planned through
+  std::vector<NavExtraLink> shut_links;  // and links it knows are (onto a bridge still in)
+  // Hollow doors the caller knows (a lift's car: its nodes on the car's floor, found clear with it
+  // at rest): a link between two of its nodes is walked while it rests, never waited out.
+  std::vector<int32_t> hollow;
+  std::vector<NavExtraLink> cut_all;                   // cut and shut_links together, for the route
+  NavExtraLink near_cut{-1, -1, NavKind::jump, 0, 0};  // (`gapnear`) a gap left out of one plan
+  double wanted[3] = {}, pressed[3] = {};              // the last command's yaw, forward, side
+  float lane = 0, lane_want = 0, lane_until = 0;       // the lane now, wanted, and until when (s)
+  float offset = 0;                                    // units off the line now (signed, left +)
+  core::Rng lane_rng{1};
+  ai::Hands hands;
+  ai::Search search;
+  PilotStats stats;
+};
+
+// A pilot on `g` (kept alive and unmoved) with `hands` (from pilot_hands), its wander off `seed`.
+void pilot_init(Pilot& p, const NavGraph& g, const PilotSettings& set,
+                std::span<const ai::AxisHands> hands, double hz, uint32_t seed);
+// The view turned to `yaw` (degrees) with the hands at rest there: a pilot taking over a player
+// already moving (a run started from a recorded player's place and velocity).
+void pilot_face(Pilot& p, float yaw);
+// Plans the way to node `goal` from where the pilot stands; false when there is none.
+bool pilot_go(Pilot& p, int32_t goal, const PilotSense& sense);
+// THE CHAIN (`chains`): the route on from its goal to `next`, so the walk and the hop run on
+// through the goal (a pickup: through the point `at`, the item beside its node) instead of
+// slowing into it and planning again. The goal is `next` then; the old one is the VIA, aimed at
+// through `at` and dropped once run through or past. False (unchanged) with no route on, or none
+// planned. `pilot_unchain` cuts the route back at the via (the goal it was) while it is ahead.
+bool pilot_chain(Pilot& p, int32_t next, Vec3f at);
+// THE GOAL RETARGETED (`retarget`): a new goal while the pilot walks or hops a walk's link, its way
+// planned on from the node ahead and spliced onto the route under way, the mode kept (a hop on
+// its stretch read again), when that way is no slower than one from where it stands; otherwise
+// (and anywhere else: a jump, a mover, a swim) `pilot_go`. A person changing their mind keeps
+// running; only a way that turns back stops them.
+bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s);
+void pilot_unchain(Pilot& p);
+// The way the pilot would plan from node `from` to `goal` now: round the doors barred and shut,
+// off the links cut, missed, given up and onto a bridge still in; empty when there is none. A
+// caller weighing a choice of ways (a door's errand, `errandworth`) plans as the pilot would.
+NavRoute pilot_way(Pilot& p, int32_t from, int32_t goal);
+// The next command, `msec` long.
+MoveCmd pilot_step(Pilot& p, const PilotSense& sense, int msec, ai::Why* why = nullptr);
+
+// The line the pilot at `at` means to walk, to draw: the route ahead with its lane applied along
+// the level walks (each node moved off the line by the offset it keeps now), the nodes as they
+// are from the first link that is not one. `breaks`, when given, marks each point the line does
+// not run to (a teleporter's: the player is there at once, nothing is walked between).
+std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at, std::vector<uint8_t>* breaks = nullptr);
+
+// A pilot filling a server's slot: it reads the slot's player and the movers' edicts. Kept alive
+// and unmoved while the slot is filled. `goals` are visited in turn, round and round; a goal with
+// no way to it is skipped, and the doors barred are forgotten at each new goal.
+struct PilotBot {
+  Pilot pilot;
+  std::vector<int32_t> goals;
+  size_t next_goal = 0;
+  // Chained on past the goal planned next (`pilot_chain`) through the point `then_at`; -1: none.
+  int32_t then = -1;
+  Vec3f then_at;
+  // A new goal to run on to from the route under way (`retarget`); -1: none.
+  int32_t retarget = -1;
+  std::vector<NavMover> now;                   // the movers as they stand (reused)
+  std::array<OtherBox, kWalkOthers> others{};  // the players near (`PilotSense::others`)
+  MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)
+  bool grenade_ready = true;   // the grenade launcher in hand (the caller's say, each command)
+  bool rocket_ready = true;    // the rocket launcher in hand (the caller's say, each command)
+  bool aimed = false;          // the view is a fight's (the caller's say: its last command)
+  ai::Why* why = nullptr;
+  int64_t command = 0;
+  int32_t arrivals = 0;
+};
+CmdSource pilot_source(PilotBot& b);
+
+}  // namespace ge::shooterbots

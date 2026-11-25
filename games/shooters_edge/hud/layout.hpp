@@ -2,8 +2,7 @@
 // by the `hud_style` cvar and each element still the player's to move, resize, fade or hide with
 // its `hud_<id>_*` cvars.
 //
-//   - CLASSIC: the status bar across the bottom centre, flush with the screen's bottom edge, as the
-//   classic game drew it, in art
+//   - CLASSIC: the status bar across the bottom centre, flush with the bottom edge, in art
 //     pixels: the armour's icon and figure, the portrait, the health, the ammunition's icon and
 //     figure on the bar; above it the inventory bar with the four ammunition counts on its top
 //     line, the guns in a row (the one in hand lit, a new one flashing), the keys and powerups in
@@ -28,22 +27,21 @@
 //   - MINIMAL: figures only, small and a little faded: health and armour bottom left, the rounds
 //     bottom right, the keys and the powerups only while held.
 //
-// THE OPTIONS, each a cvar: `hud_sbar 0` draws the classic look's pieces without its two panels
-// (the see-through bar); `hud_vitals left|right` puts the health and armour of every look but the
-// classic one on that side of the screen, the rest on the other (`right` is the engine's mirrored
-// layout); `hud_guns ammo|pairs|row` groups the guns (Grouping;
-// `look`, the default, each look's own); `hud_guns_all 0` shows only the guns owned and
-// `hud_ammo_all 0` only the ammunition in hand. The armour's icon shows its type in every look.
-// While the classic bars show, the weapon in hand is raised over them (`status_lift`).
+// THE OPTIONS, each a cvar: `hud_sbar 0` draws the classic look without its two panels, the guns
+// owned and the ammunition counts in a column on the inventory row's right end (`hud_swap 1`:
+// left); `hud_vitals left|right` puts every other look's health and armour on that side (`right`
+// mirrored); `hud_guns ammo|pairs|row` groups the guns (`look`: each look's own); `hud_guns_all 0`
+// shows only the guns owned, `hud_ammo_all 0` only the ammunition in hand. The armour's icon shows
+// its type; while the classic bars show, the weapon in hand is raised over them (`status_lift`).
 //
-// `viewsize` steps the bars away as the classic game did: at 100 or under every element shows; at
+// `viewsize` steps the bars away as Quake did: at 100 or under every element shows; at
 // 110 the classic look drops its inventory bar (the status bar alone); at 120 every look drops its
 // status elements (the bar, the corners, the arcs), leaving the crosshair, the feed and the centre
 // message.
 //
-// Every look also shows the crosshair, the notify feed (pickups and frags, top left) and the
-// centre message, and with cl_weapongroups 1 the WEAPON GROUP (`hud_wgroup_*`): a column on the
-// right edge that opens on a number key to the group's weapons and folds down into the one in
+// Every look shows the crosshair, the notify feed (top left), scr_chathud's `chat` (lower left)
+// and the centre message, and with cl_weapongroups 1 the WEAPON GROUP (`hud_wgroup_*`): a column on
+// the right edge that opens on a number key to the group's weapons and folds down into the one in
 // hand, a gold `+` on it while its group holds another. A look draws with the HUD's ART (art.hpp):
 // the free set, or the player's own classic pictures (its digits, icons, portrait and guns), only
 // placed and sized anew.
@@ -52,8 +50,10 @@
 // (health or armour 25 or under, ammunition 10 or under); the shield shows "666" over its disc.
 //
 // ge:summary Shooter's Edge's HUDs: the classic status bar and five other looks, hud_style
+// ge:keywords place_chat_px restore_chat scr_chathud_x scr_chathud_y
 // ge:keywords hud shooter status-bar inventory-bar classic modern compact hud_style looks hud_sbar
 // ge:keywords sbar-background transparent arena tactical minimal shield-bar loadout hud_vitals
+// ge:keywords hud_swap cl_hudswap cl_sbar overlay-column sbar_column
 // ge:keywords hud_guns hud_guns_all hud_ammo_all grouping pairs status_lift lift health armour ammo
 // ge:keywords face portrait weapons keys powerups runes frags crosshair notify centre-message ring
 // ge:keywords arcs fill_hud add_cvars layout elements viewsize wgroup weapon-group hud_wgroup
@@ -61,6 +61,7 @@
 // ge:test tests/shooters_edge_hud_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -104,15 +105,25 @@ struct Hud {
   std::string look = "classic";  // bound to hud_style
   int32_t viewsize = 100;        // bound to viewsize: 110 drops the inventory bar, 120 every bar
   int32_t sbar = 1;  // hud_sbar: the classic look's two panels drawn (0: its pieces alone)
+  int32_t swap = 0;  // hud_swap: hud_sbar 0's column of guns and counts on the left edge
   std::string vitals = "left";  // hud_vitals: the side health and armour stand on (right: mirrored)
   std::string guns = "look";    // hud_guns: ammo, pairs or row; look: each look's own
   int32_t guns_all = 1;         // hud_guns_all: every gun, those not owned dim (0: owned ones)
   int32_t ammo_all = 1;         // hud_ammo_all: all four counts (0: the kind in hand alone)
   ge::hud::Feed notify{4, 4.0, 0.8, 0.15};
+  ge::hud::Feed* chat = nullptr;         // the chat lines on screen (scr_chathud), the client's
   ge::hud::ReadoutSettings readouts;     // show_speed, scr_clock (the top-right corner)
   ge::hud::CrosshairSettings crosshair;  // crosshair, crosshaircolor, crosshairsize, crosshairalpha
   std::string centre;                    // the centre message; empty for none
   double centre_until = 0;
+  // When each bit of the status's items word last rose (the client's clock): a gun's pickup
+  // flash; and the word as last filled.
+  std::array<double, 32> rose_at = [] {
+    std::array<double, 32> a{};
+    a.fill(-1e9);
+    return a;
+  }();
+  uint32_t items_seen = 0;
 };
 
 // The table: every look's elements, parents before their children.
@@ -124,6 +135,16 @@ void add_cvars(ge::console::Console& con, Hud& hud);
 // Writes every element's content for this frame from the status and the art: the active look's
 // elements on (as the status calls for), every other look's off.
 void fill_hud(Hud& hud, const Status& s, const HudArt& art);
+// After `fill_hud`: every element off but the chat lines (scr_chathud), for a game whose own bar
+// draws the rest (Quake II's).
+void keep_chat_only(Hud& hud);
+// The chat lines placed by pixels of a game's own 2D drawing (Quake II's scr_chathud_x and _y),
+// `scale` screen px each, on frame `f`: `x` from the left; `y` the lines' top from the top, or
+// when negative their foot up from the bottom. Returns the player's place (hud_chat_*) it
+// replaced, which `restore_chat` puts back after the draw.
+ge::hud::ElementPlace place_chat_px(Hud& hud, const ge::hud::Frame& f, double x, double y,
+                                    int scale);
+void restore_chat(Hud& hud, const ge::hud::ElementPlace& kept);
 
 // The share of a `height` px screen the classic status bars covered when last drawn (0 with
 // hud_sbar 0, another look, or the bars hidden).

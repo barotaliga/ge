@@ -2,6 +2,7 @@
 // and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
+// ge:keywords gl_damageblend_frac damage-frame
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
@@ -80,6 +81,25 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .max = 4,
         .values = "0: unlit; 0..4: that many times the classic's (0.15 the default)"},
        &picture.fx_glow);
+  // Every game's (docs/porting-games.md § One name, one meaning): the lightmaps' scale (Quake II's
+  // gl_modulate and QuakeWorld's, 1 in both) and the textures' slant taps (QuakeWorld's and Quake
+  // II's gl_anisotropy; Quake II's layer gives its 1).
+  bind(cv,
+       {.name = "gl_modulate",
+        .flags = gc::kArchive,
+        .help = "How strongly the maps' light shows: their light times this.",
+        .min = 0,
+        .max = 1000000,
+        .values = "1: as the maps were lit; 2: twice as bright"},
+       &picture.light_modulate);
+  bind(cv,
+       {.name = "gl_anisotropy",
+        .flags = gc::kArchive,
+        .help = "How sharp the textures stay on surfaces seen at a slant, when they are smoothed.",
+        .min = 0,
+        .max = 16,
+        .values = "0: the renderer's own; 1: off; 2..16: that many samples, sharper"},
+       &picture.anisotropy);
   bind(cv,
        {.name = "r_bloom",
         .help = "The modern look's bloom, read when the picture is built.",
@@ -114,8 +134,9 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
   bind(cv,
        {.name = "r_arrival",
         .flags = gc::kArchive,
-        .help = "How strongly your own arrival, at a spawn or a teleporter's far end, sweeps "
-                "the view in a flash and a warp, with ce_warps on in the modern look.",
+        .help = "How strongly your own arrival, at a spawn or a teleporter's far end, tints "
+                "and streaks the edges of the view for a moment, with ce_warps on in the "
+                "modern look.",
         .min = 0,
         .max = 1,
         .values = "0: none; 0..1: that strength (1 the default)"},
@@ -128,6 +149,54 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .max = 1,
         .values = "0: none; 0..1: that share, 1 every one the game blows (0.3 the default)"},
        &picture.bubbles_share);
+  bind(cv,
+       {.name = "ce_blood_time",
+        .flags = gc::kArchive,
+        .help = "How long blood stays on the walls and the floors with ce_blood on, darkening "
+                "as it dries.",
+        .min = 0,
+        .max = 3600,
+        .values = "0: until newer marks need its place; 1..3600: that many seconds, drying in "
+                  "the first half and fading at the end (120 the default)"},
+       &picture.blood_time);
+  bind(cv,
+       {.name = "ce_blood_reflect",
+        .flags = gc::kArchive,
+        .help = "How strongly wet pools of blood mirror the room, with ce_blood and "
+                "ce_reflections on.",
+        .min = 0,
+        .max = 2,
+        .values = "0: no reflections; 0..2: that share of what the wet blood's gloss and the "
+                  "angle give, a dried pool mirroring nothing at any strength (1 the default)"},
+       &picture.blood_reflect);
+  bind(cv,
+       {.name = "ce_ao_radius",
+        .flags = gc::kArchive,
+        .help = "How far a wall, a step or a figure still darkens the surface beside it, with "
+                "ce_ao on.",
+        .min = 8,
+        .max = 256,
+        .values = "8..256: that many units (48 the default, about a crate's width)"},
+       &picture.ao_radius);
+  bind(cv,
+       {.name = "ce_ao_strength",
+        .flags = gc::kArchive,
+        .help = "How dark the closed corners and the floor under figures grow, with ce_ao on.",
+        .min = 0,
+        .max = 1,
+        .values = "0: no darkening; 0..1: that share of the light a closed corner loses (0.8 the "
+                  "default)"},
+       &picture.ao_strength);
+  bind(cv,
+       {.name = "ce_blood_amount",
+        .flags = gc::kArchive,
+        .help = "How much bodies bleed with ce_blood on: the spray, the splashes and pools, the "
+                "stains on the body and its drips.",
+        .min = 0,
+        .max = 3,
+        .values = "0: no blood; 0..3: that much of it, more drops, bigger splashes, pools and "
+                  "stains (1 the default)"},
+       &picture.blood_amount);
   bind(cv,
        {.name = "ce_water_specks",
         .flags = gc::kArchive,
@@ -253,6 +322,16 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "1: every gun's (the default); 2: the others' alone, not your own; 0: none"},
        &picture.muzzle_flash);
   bind(cv,
+       {.name = "cl_fakeshaft",
+        .flags = gc::kArchive,
+        .help = "How closely your own lightning beam follows your aim between the server's "
+                "updates.",
+        .min = 0,
+        .max = 1,
+        .values = "1: it follows your view every frame (the default); 0: the server's line; "
+                  "between: part of the way"},
+       &picture.fake_shaft);
+  bind(cv,
        {.name = "gl_picmip",
         .flags = gc::kArchive,
         .help = "How much detail the walls' textures lose.",
@@ -362,6 +441,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
           .values = "0: none; 0..1: that share of it; 1: all of it (the default)"},
          t.value);
   bind(cv,
+       {.name = "cl_bonusflash",
+        .fallback = "1",
+        .flags = gc::kArchive,
+        .help = "Whether taking an item flashes the view gold.",
+        .kind = gc::CvarKind::boolean,
+        .values = "1: it does, as the game always did (the default); 0: never"},
+       &picture.bonus_flash);
+  bind(cv,
        {.name = "gl_cshiftpercent",
         .flags = gc::kArchive,
         .help = "How strongly every tint of the view shows, in percent.",
@@ -376,6 +463,17 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .kind = gc::CvarKind::boolean,
         .values = "1: it is (the default); 0: never"},
        &picture.poly_blend);
+  bind(cv,
+       {.name = "gl_damageblend_frac",
+        .flags = gc::kArchive,
+        .help = "How deep a hit's flash reaches in from the screen's edges, so the middle stays "
+                "clear.",
+        .kind = gc::CvarKind::number,
+        .min = 0,
+        .max = 0.5,
+        .values = "0: over the whole view (the default); 0..0.5: a frame that share of the "
+                  "screen's shorter side deep, fading inward"},
+       &picture.damage_frac);
   bind(cv,
        {.name = "r_lightmap",
         .flags = gc::kArchive,
@@ -545,6 +643,18 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "1..100: that many ms (8.3 the default, for 120 Hz)"},
        &picture.budget_ms);
   ge::classicenhance::bind_switches(cv, &picture.ce);
+  bind(cv,
+       {.name = "ce_enabled",
+        .fallback = "1",
+        .flags = gc::kArchive,
+        .help = "Classic enhance as a whole: off, the game as its packs have it, whatever each ce_ "
+                "switch says.",
+        .kind = gc::CvarKind::boolean,
+        .min = 0,
+        .max = 1,
+        .values = "0: none of it, every ce_ switch kept as set for when it is on again; 1: each "
+                  "ce_ switch as set (the default)"},
+       &picture.ce_enabled);
   // Each dear switch's level when it is on (Stops), beside its ce_ switch.
   const auto level = [&](const char* name, const char* help, const char* values,
                          std::string* field) {
@@ -570,6 +680,18 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         "the far land round the map seen from high up (the default)",
         &picture.skies_quality);
   ge::brush::app::add_weather_cvars(cv, picture.weather);
+}
+
+void apply_ce_enabled(Picture& picture, const gc::Cvars& cvars) {
+  if (!picture.ce_enabled) {
+    for (const ge::classicenhance::SwitchSpec& s : ge::classicenhance::switches())
+      picture.ce.*s.field = false;
+  } else if (!picture.ce_applied) {
+    for (const ge::classicenhance::SwitchSpec& s : ge::classicenhance::switches())
+      if (const gc::Cvar* c = cvars.find("ce_" + std::string(s.id)); c != nullptr)
+        picture.ce.*s.field = c->on();
+  }
+  picture.ce_applied = picture.ce_enabled;
 }
 
 Look look_of(const Picture& picture) {
@@ -759,6 +881,22 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.wall_colour, base.wall_colour);
   rgb_words(picture.floor_colour, base.floor_colour);
   rgb_words(picture.sky_colour, base.sky_colour);
+  // Quake II's own (classic/q2_fx_switches.hpp; another game's defaults change nothing):
+  // gl_drawsky 0 a black sky, gl_bilerp_skies 0 a sharp one, gl_saturation and gl_invert on the
+  // walls' and floors' textures.
+  const ge::classic::Q2FxSwitches& q2 = picture.q2fx;
+  if (!q2.draw_sky) {
+    base.fast_sky = true;
+    base.sky_colour[0] = base.sky_colour[1] = base.sky_colour[2] = 0;
+  }
+  base.crisp_sky = !q2.smooth_sky;
+  base.saturation = q2.saturation;
+  base.invert = q2.invert;
+  // gl_anisotropy (every game's) the filtered textures' taps.
+  if (picture.anisotropy > 0) base.anisotropy = static_cast<int>(std::lround(picture.anisotropy));
+  base.lightmap_saturation = q2.lightmap_saturation;  // gl_coloredlightmaps
+  base.lerp_styles = q2.lerp_styles;                  // cl_lerp_lightstyles
+  if (q2.dlight_falloff >= 0) base.dlight_falloff = q2.dlight_falloff == 0 ? 2 : 1;
   base.picmip = std::clamp(picture.picmip, 0, 4);  // gl_picmip
   base.fullbright = picture.fullbright;            // r_fullbright
   if (picture.lightmap_only) {                     // r_lightmap: grey faces, the light alone
@@ -767,6 +905,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   }
   if (look == Look::classic) {
     base.mode = ba::Mode::classic;
+    base.classic_light = world_light_scale(picture);  // intensity, gl_modulate (_world)
+    base.classic_lift = std::clamp(picture.light_lift, -1.0, 1.0);  // gl_brightness
     if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light
     base.lighting = ba::Lighting::lightmaps;
     base.crisp = crisp_textures(picture, look);  // gl_texturemode, else crisp
@@ -775,6 +915,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   } else {
     base.mode = ba::Mode::v2;
     base.lighting = ba::Lighting::lights;
+    base.brightness *= world_light_scale(picture);  // intensity, gl_modulate: the map's light
+    base.strength *= world_light_scale(picture);
     base.crisp = crisp_textures(picture, look);  // gl_texturemode, else filtered
     base.dynamic_strength = picture.dynamic ? picture.fx_lights : 0;
     base.lava_glow = picture.lava_glow;
@@ -801,6 +943,9 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.flicker = picture.ce.flicker;  // ce_flicker: the flames' light and the styles waver
     // ce_reflections: the room mirrored in the faces by their gloss.
     base.reflections = picture.ce.reflections ? std::max(picture.reflect, 0.0) : 0;
+    // ce_ao: the corners, creases and the floor under the figures darkened by how little they see.
+    base.ao = picture.ce.ao ? std::clamp(picture.ao_strength, 0.0, 1.0) : 0;
+    base.ao_radius_m = std::max(picture.ao_radius, 1.0) * ge::brush::kUnitM;
   }
   return base;
 }
@@ -812,7 +957,34 @@ double effects_glow(Look look, const Picture& picture) {
 gr::PostSettings post_settings(Look look, const Picture& picture) {
   gr::PostSettings s;
   s.bloom = look == Look::classic ? 0 : picture.bloom;
+  // The classic look is the painted colours times their light, worked out as the games did: shown
+  // as it is, at the scale the world's passes write (a white face's luminance times the lightmaps'
+  // brightness), never exposed or through the tone curve's toe, which sank the dark textures
+  // toward black and took the blue out of their greys.
+  if (look == Look::classic) s.display = ba::Options{}.brightness;
+  // The modern look keeps the tone curve's shoulder but not its toe: the classic textures are
+  // painted dark, and the toe took their blues and greys to brown.
+  s.toe = false;
   return s;
+}
+
+double world_light_scale(const Picture& picture) {
+  return light_scale(picture) * std::max(picture.q2fx.modulate_world, 0.0);
+}
+
+double model_light(const Picture& picture, Look look) {
+  const ge::classic::Q2FxSwitches& q2 = picture.q2fx;
+  const double mod = std::max(picture.light_modulate, 0.0);
+  const double once = mod * std::max(q2.modulate_entities, 0.0);
+  const double total = q2.double_light ? once * once : once;
+  if (look == Look::classic) return total;  // the classic models take no other modulate
+  // The modern look's models are lit at the world's brightness, its modulate in it already.
+  const double world = mod * std::max(q2.modulate_world, 0.0);
+  return world > 0 ? total / world : 0;
+}
+
+double light_scale(const Picture& picture) {
+  return std::clamp(picture.light_intensity, 1.0, 5.0) * std::max(picture.light_modulate, 0.0) / 2;
 }
 
 std::vector<float> palette_grade(std::span<const uint8_t> palette) {

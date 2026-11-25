@@ -5,6 +5,7 @@
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo_video.hpp"
+#include "shooters_edge/client/entity_debug.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -33,8 +34,9 @@
 #include "shooters_edge/client/demo_sound.hpp"
 #include "shooters_edge/client/demo_voice.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/client/sequel_bar.hpp"
-#include "shooters_edge/client/sequel_look.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
+#include "shooters_edge/client/q2_bar.hpp"
+#include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
@@ -53,7 +55,7 @@ const char* format_name(DemoFormat f) {
   return f == DemoFormat::single      ? "single"
          : f == DemoFormat::client    ? "client"
          : f == DemoFormat::multiview ? "multiview"
-                                      : "sequel";
+                                      : "q2";
 }
 
 // The entity the listener's own sounds come from: the view entity, or the recording player's.
@@ -84,7 +86,7 @@ bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std:
 // the packs' own; `from` says which ("charset" with neither: `glyphs` left empty).
 void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& from) {
   if (!content_packs(files).empty()) {
-    const std::filesystem::path cache = ge::classicenhance::find_cache(content_packs(files));
+    const std::filesystem::path cache = content_cache(files);
     // The enhanced sheet (upscaled, still 16 x 16 cells) first, then the cache's original.
     if (!cache.empty() &&
         (caption_glyphs_from_png(cache / "pictures" / "enhanced" / "conchars.png", &glyphs) ||
@@ -100,28 +102,67 @@ void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& f
   from = caption_glyphs_from_packs(find, &glyphs, &why) ? "packs" : "charset";
 }
 
-// A sequel entity's look bits (sequel_look.hpp) onto its placing; its effect bits are the
-// sequel's own, so none of them reaches the effects that read the first game's.
-void sequel_placed(const DemoEntity& e, Placed& p) {
-  const SequelLook look =
-      sequel_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
+// A Quake II entity's look bits (q2_look.hpp) onto its placing; its effect bits are the
+// Quake II's own, so none of them reaches the effects that read Quake's.
+void q2_placed(const DemoEntity& e, Placed& p) {
+  const Q2Look look = q2_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
   p.effects = 0;
   p.turns = look.turns;
+  p.spinning = look.spinning;
+  p.bobs = look.bobs;
+  p.full_bright = look.full_bright;
+  p.min_light = look.min_light;
+  p.no_shadow = look.no_shadow;
   p.alpha *= look.alpha;
   p.pulse = look.pulse;
   p.shell = look.shell;
   p.bleeds = look.bleeds;
+  p.green_blood = look.green_blood;
+  p.flies = look.flies;
+  p.q2_anim = e.effects & 0x3c00;  // its frames cycled by the picture's clock (q2_texture_frame)
   for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
+}
+
+// Quake II's model 255 (`kQ2OwnLook`): the player's own figure (`EffectModel::figure_q2`) in the
+// look his slot names (the skin's low byte), or its folder's disguise; -1 for any other model.
+// `carried`: the weapon he carries (his second model 255: the skin's high byte, its place among the
+// list's carried names from 1), else 0.
+int q2_own_look(const DemoState& s, const DemoEntity& e, Placed& p, int* carried) {
+  *carried = 0;
+  if (e.model != kQ2OwnLook) return -1;
+  const int listed = static_cast<int>(s.models.size());
+  const size_t slot = static_cast<size_t>(e.skin & 0xff);
+  p.modelindex = effect_model(listed, EffectModel::figure_q2);
+  p.skin = 0;
+  p.skin_name = slot < s.looks.size() ? s.looks[slot] : std::string();
+  if ((static_cast<uint32_t>(e.render_fx) & kRfUseDisguise) != 0)
+    p.skin_name = q2_disguised(p.skin_name);
+  if (e.more[0] == kQ2OwnLook) {
+    const int place = (e.skin >> 8) & 0xff;
+    for (int i = 1, seen = 0; i < listed && place > 0; i++)
+      if (!s.models[size_t(i)].empty() && s.models[size_t(i)][0] == '#' && ++seen == place) {
+        *carried = i;
+        break;
+      }
+  }
+  return p.modelindex;
 }
 
 }  // namespace
 
-void demo_placed(const DemoState& s, std::vector<Placed>& out) {
+void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, float own_alpha) {
   out.clear();
   const int models = static_cast<int>(s.models.size());
-  const int me = listener_of(s);
+  const int listener = listener_of(s);
+  const int me = draw_own ? -1 : listener;
+  const bool q2 = s.format == DemoFormat::q2;
   const auto put = [&](int entity, const DemoEntity& e) {
-    if (e.model <= 0 || e.model >= models) return;
+    if (e.model <= 0 || (e.model >= models && !(q2 && e.model == kQ2OwnLook))) return;
+    if (entity_hidden(hidden_entities(), entity,
+                      e.model < models ? s.models[static_cast<size_t>(e.model)] : std::string()))
+      return;  // a recipe's enthide (entity_debug.hpp)
+    if (entity != listener && encloses_eye(e.origin, s.eye))
+      return;  // a figure the eye stands in (a match mod's marker at a spawn): inside out, no shape
     Placed p;
     p.entity = entity;
     p.modelindex = e.model;
@@ -129,12 +170,36 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
-    if (s.format == DemoFormat::sequel) sequel_placed(e, p);
+    if (s.format == DemoFormat::q2) {
+      q2_placed(e, p);
+      if (q2_extended(s.protocol)) {  // a picture of the server's list worn as its skin
+        p.skin_picture = q2_custom_skin(static_cast<uint32_t>(e.render_fx), e.skin, s.images);
+        if (!p.skin_picture.empty()) p.skin = 0;
+      }
+      p.infra_red =
+          q2_infra_red(s.rdflags, static_cast<uint32_t>(e.render_fx), p.shell, p.full_bright);
+    }
     p.scale = e.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;
     p.angles = e.angles;
+    if (entity == listener) p.alpha *= own_alpha;  // cl_thirdperson's fade near a wall
+    int carried = 0;
+    if (q2) q2_own_look(s, e, p, &carried);
     out.push_back(p);
+    if (!q2) return;
+    // Quake II's other models at its place on its frame: the weapon a player carries (in his
+    // figure's folder), any other one plain.
+    for (int k = 0; k < 3; k++) {
+      const int more = k == 0 && e.more[0] == kQ2OwnLook ? carried : e.more[k];
+      if (more <= 0 || more >= models) continue;
+      Placed w = p;
+      w.entity = entity + (k == 0 ? kCarriedEntity : kPlateEntity << k);
+      w.modelindex = more;
+      w.skin = w.carried = 0;
+      w.shell = w.shell && more == carried;
+      out.push_back(w);
+    }
   };
   int player_model = -1;  // the standard figure's place on the list (a body drawn as eyes: none)
   for (size_t i = 1; i < s.models.size(); i++)
@@ -150,6 +215,9 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
       out.back().bottom = static_cast<uint32_t>(s.bottom[n - 1]);
     }
   }
+  // The player's own missiles the prediction threw ahead of the server (own_missiles.hpp).
+  for (size_t k = 0; k < s.own_missiles.size() && k < s.own_missile_ids.size(); k++)
+    put(kOwnMissileEntity + s.own_missile_ids[k], s.own_missiles[k]);
   if (s.format != DemoFormat::single) {
     bool teamplay = false;
     for (const auto& [key, value] : s.serverinfo)
@@ -157,13 +225,15 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     const std::string mine =
         s.player >= 0 && size_t(s.player) < s.teams.size() ? s.teams[size_t(s.player)] : "";
     for (size_t k = 0; k < s.players.size(); k++)
-      if (static_cast<int>(k) != s.player && s.players[k].present) {
+      if ((draw_own || static_cast<int>(k) != s.player) && s.players[k].present) {
         put(static_cast<int>(k) + 1, s.players[k]);
         if (!out.empty() && out.back().entity == static_cast<int>(k) + 1 && k < s.top.size()) {
           out.back().top = static_cast<uint32_t>(s.top[k]);
           out.back().bottom = static_cast<uint32_t>(s.bottom[k]);
-          out.back().skin_name = s.skins[k];
-          out.back().model_name = s.figures[k];
+          if (!q2) {  // Quake II's look is its slot's (q2_own_look)
+            out.back().skin_name = s.skins[k];
+            out.back().model_name = s.figures[k];
+          }
           out.back().side = models::side_of(teamplay, mine, s.teams[k]);
           // The weapon he carries (world_models.hpp's Placed::vwep); a server's recording draws
           // a fallen body without its gun, and no weapon on a gibbed one.
@@ -177,9 +247,37 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
   for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
 }
 
+namespace {
+
+// The stream's own Quake II tint into `out`: the whole of it, and where the damage flash came
+// apart (an extended recording's), the rest and the flash, the flash laid over the rest.
+void q2_stream_blend(const DemoState& s, FxScene& out) {
+  float whole[4], apart[4], hit[4];
+  for (int k = 0; k < 4; k++) {
+    apart[k] = static_cast<float>(s.q2_blend[k]) / 255.0f;
+    hit[k] = static_cast<float>(s.q2_damage[k]) / 255.0f;
+    whole[k] = apart[k];
+  }
+  if (hit[3] > 0) {  // laid over the rest: the alpha A + (1 - A) a, the colour keeping A / A'
+    const float now = apart[3] + (1 - apart[3]) * hit[3];
+    const float keep = apart[3] / now;
+    for (int k = 0; k < 3; k++) whole[k] = apart[k] * keep + hit[k] * (1 - keep);
+    whole[3] = now;
+  }
+  for (int k = 0; k < 4; k++) {
+    out.q2_blend[k] = s.protocol == 34 ? whole[k] : 0;
+    out.q2_apart[k] = s.protocol == 34 ? apart[k] : 0;
+    out.q2_damage[k] = s.protocol == 34 ? hit[k] : 0;
+  }
+}
+
+}  // namespace
+
 void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
                    const ge::render::FrameView& view, FxScene& out) {
   out.map = map;
+  out.areas = s.areas;
+  out.light_styles = s.light_styles;
   out.server = nullptr;
   out.pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
   out.pose.yaw = view.heading;
@@ -187,13 +285,36 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.pose.fov_y = view.fov_y;
   out.missiles = fx.missiles;
   out.explosions = fx.explosions;
+  out.explosion_codes = fx.explosion_codes;
   out.effects = fx.effects;
   out.blows = {};
+  out.bonuses = s.bonuses;
   out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
-  out.flash_bit = s.protocol != 34;               // the sequel's bit 2 is no gun's flash
-  out.sequel = s.protocol == 34;                  // its own arrivals (its events)
+  out.flash_bit = s.protocol != 34;               // Quake II's bit 2 is no gun's flash
+  out.q2 = s.protocol == 34;                      // its own arrivals (its events)
+  q2_stream_blend(s, out);
   out.effect_models = static_cast<int>(s.models.size());
-  demo_placed(s, out.models);
+  out.beam_model = listed_model(s.models, "progs/beam.mdl");
+  demo_placed(s, out.models, fx.draw_own, fx.own_alpha);
+  // A live stream's items coming back (our server's `item-back`), each not drawn already.
+  out.returning.clear();
+  for (const DemoItemBack& b : s.items_back) {
+    const double in = b.at - s.time;
+    if (!(in > 0) || in > ge::classicenhance::kHologramLeadS) continue;
+    if (b.model <= 0 || static_cast<size_t>(b.model) >= s.models.size()) continue;
+    if (std::any_of(out.models.begin(), out.models.end(),
+                    [&](const Placed& p) { return p.entity == b.entity; }))
+      continue;
+    Returning r;
+    r.in_s = in;
+    r.item.entity = b.entity;
+    r.item.modelindex = b.model;
+    r.item.skin = b.skin;
+    r.item.origin = b.origin;
+    r.item.angles = {0, b.yaw, 0};
+    r.item.turns = s.format == DemoFormat::q2;  // Quake II's items turn as they lie
+    out.returning.push_back(r);
+  }
   // A player whose gun flashed in the last kGunFlashS (the muzzle-flash message) carries the
   // entity's muzzle-flash bit, as one on a server of ours sends it, so the effects light it alike.
   for (Placed& p : out.models)
@@ -201,7 +322,9 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
       p.effects |= kMuzzleFlashBit;
   // The players: a client's or multiview's by slot, the single protocol's the first entities.
   const bool single = s.format == DemoFormat::single;
-  const DemoEntity* players = single ? s.entities.data() + 1 : s.players.data();
+  // (No entities yet: none, not one past a null pointer.)
+  const DemoEntity* players =
+      single ? (s.entities.empty() ? nullptr : s.entities.data() + 1) : s.players.data();
   const size_t count = single ? std::min<size_t>(s.entities.size() > 0 ? s.entities.size() - 1 : 0,
                                                  static_cast<size_t>(s.max_clients))
                               : s.players.size();
@@ -218,19 +341,23 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.me.health = static_cast<float>(s.stats[kStatHealth]);
   out.me.dead = out.me.health <= 0;
   out.me_effects = own ? own->effects : 0;
+  out.me_items = s.stats[kStatItems];  // the powers' tints (effects::take_powers)
   out.waterlevel = out.watertype = 0;
   out.placed_of = [players, count, &s](int e) {
     Placed p;
     if (e < 1 || static_cast<size_t>(e) > count) return p;
     const DemoEntity& d = players[e - 1];
-    if (d.model <= 0 || static_cast<size_t>(d.model) >= s.models.size()) return p;
+    const bool own_look = s.format == DemoFormat::q2 && d.model == kQ2OwnLook;
+    if (d.model <= 0 || (static_cast<size_t>(d.model) >= s.models.size() && !own_look)) return p;
     p.entity = e;
     p.modelindex = d.model;
     p.frame = d.frame;
     p.skin = d.skin;
     p.effects = d.effects;
     p.alpha = d.alpha;
-    if (s.format == DemoFormat::sequel) sequel_placed(d, p);
+    if (s.format == DemoFormat::q2) q2_placed(d, p);
+    int carried = 0;
+    if (own_look) q2_own_look(s, d, p, &carried);
     p.scale = d.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = d.colormod[c];
     p.origin = d.origin;
@@ -264,7 +391,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     return false;
   }
   Timedemo t;
-  if (!timedemo_start(files, o.demo, t, error, o.game != nullptr ? *o.game : classic_adapter()))
+  if (!timedemo_start(files, o.demo, t, error, o.game != nullptr ? *o.game : qw_adapter()))
     return false;
   t.demo.track = o.track;
   t.start.track = o.track;
@@ -335,8 +462,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     load_effects(files, book, faults);
   }
   fx_state.book = &book;
-  const DemoState& read = t.demo.state;   // the last frame read (what is heard)
-  SequelBar sequel_bar{.files = &files};  // a sequel recording's own bar, from its program
+  const DemoState& read = t.demo.state;  // the last frame read (what is heard)
+  Q2Bar q2_bar{.files = &files};         // a Quake II recording's own bar, from its program
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
   double length = o.seconds;              // its length (0: to the end)
@@ -414,6 +541,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   }
   report.from_s = from;
   DemoEyes eyes;
+  eyes.behind = o.behind;
   const ge::camera::FirstPersonRow classic_row =
       ge::camera::classic_first_person(ge::brush::kUnitM);
   for (int64_t k = 0;; k++) {
@@ -432,7 +560,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     if (map && (!world || s.models.size() != world_models)) {
       world.reset();
       world = create_world_draw(device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, look,
-                                {}, error, {s.models, {}, demo_vweps(s)});
+                                {}, error, {s.models, {}, demo_vweps(s)},
+                                o.game != nullptr ? *o.game : qw_adapter());
       if (!world) return false;
       world_models = s.models.size();
     }
@@ -444,11 +573,13 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
             ? demo_eyes_view(s, read, eyes, o.view_row != nullptr ? *o.view_row : classic_row,
                              ground, {}, fov, read.time - (vt - at), at)
             : demo_view(s, fov, at);
+    if (!o.classic_view) demo_view_behind(s, o.behind, ground, view);
+    demo_fx.draw_own = o.behind > 0;
     view.frame = static_cast<uint64_t>(k);
     ge::ui::DrawList overlay;
     overlay.begin(o.width, o.height);
     if (o.hud && !s.intermission &&
-        !draw_recorded_sequel_bar(overlay, sequel_bar, read, o.width, o.height)) {  // its own
+        !draw_recorded_q2_bar(overlay, q2_bar, read, o.width, o.height)) {  // its own
       se::fill_hud(hud, demo_status(s, at), art);
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
                       se::hud_style(art));
@@ -587,7 +718,7 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.hud = video.hud;
   const shooters_edge::profiles::GameProfile* game =
       shooters_edge::profiles::find_game(args.profile);
-  if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (the sequel's too)
+  if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (Quake II's too)
   o.text = video.text;
   o.messages = video.messages;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;

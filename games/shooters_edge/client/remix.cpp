@@ -10,6 +10,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <system_error>
 
 #include "brush/cells.hpp"
 #include "brush/read.hpp"
@@ -18,10 +20,11 @@
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/load_order.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_monsters.hpp"
-#include "shooters_edge/server/sequel_combat.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
+#include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_native.hpp"
 
 namespace shooters_edge::client {
 
@@ -46,6 +49,22 @@ void count(RemixReport& r, std::string_view from, std::string_view to) {
   r.swaps.push_back({std::string(from), std::string(to), 1});
 }
 
+std::string lower_ascii(std::string_view s) {
+  std::string out(s);
+  for (char& c : out)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return out;
+}
+
+// The folder of the install at `basedir` named `name` in any case, as it is spelled on disk, or "".
+std::string pack_folder(const std::string& basedir, std::string_view name) {
+  std::error_code ec;
+  for (const std::filesystem::directory_entry& e : std::filesystem::directory_iterator(basedir, ec))
+    if (e.is_directory(ec) && lower_ascii(e.path().filename().string()) == name)
+      return e.path().filename().string();
+  return {};
+}
+
 void write_block(const ge::progs::EntityBlock& b, std::string& out) {
   out += "{\n";
   for (const auto& [k, v] : b.pairs) {
@@ -60,6 +79,10 @@ void write_block(const ge::progs::EntityBlock& b, std::string& out) {
 
 }  // namespace
 
+// What a cr_ switch naming a game takes: a game's id, as -classic and SELECT GAME know it.
+constexpr std::string_view kWhoseValues =
+    "\"\": the played game's own (the default); q1: Quake's; q2: Quake II's";
+
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
   cvars.bind({.name = "cr_enabled",
               .fallback = "0",
@@ -71,49 +94,37 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
                         "the other full game's maps load too, and cr_items may swap the items"},
              &out->enabled);
   cvars.bind({.name = "cr_items",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose items a map is played with under classic remix; the HUD follows "
                       "them.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->items);
   cvars.bind({.name = "cr_models",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose figure the players are drawn as under classic remix, from the next "
                       "map.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->models);
   cvars.bind({.name = "cr_physics",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose movement the players run, jump and strafe with under classic remix, "
                       "from the next map.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->physics);
   cvars.bind({.name = "cr_sounds",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose sounds a match is heard with under classic remix: the shots, blasts, "
                       "pickups and the players' jumps, pain and deaths. The items keep the "
                       "played game's sounds unless this names another game.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->sounds);
   cvars.bind({.name = "cr_over_mods",
               .fallback = "0",
@@ -126,38 +137,39 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
                         "the mod's"},
              &out->over_mods);
   cvars.bind({.name = "cr_monsters",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose monsters a map is played with under classic remix, each with its own "
                       "health, attacks and sounds, from the next map.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->monsters);
   cvars.bind({.name = "cr_menu",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose menu is drawn under classic remix: its pictures, titles and cursor. "
                       "The pages and their settings stay the played game's.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->menu);
   cvars.bind({.name = "cr_charset",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose letters the menu, the console and the status bar's counts are "
                       "written in under classic remix.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->charset);
+  cvars.bind({.name = "cr_expansions",
+              .fallback = "1",
+              .flags = ge::console::kArchive,
+              .help = "Whether classic remix takes the mission packs in too: the other game's "
+                      "packs' maps, their weapons and items swapped by what they do, and the "
+                      "played pack's own weapons laid down where it has them.",
+              .kind = ge::console::CvarKind::boolean,
+              .values = "0: the base games alone, a pack's own items left out; 1: the packs "
+                        "installed beside each game too (the default)"},
+             &out->expansions);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -259,13 +271,14 @@ RemixState remix_check(const RemixSettings& s, std::string_view played,
   st.on = true;
   st.other = other->id;
   st.other_basedir = other->basedir;
+  st.expansions = s.expansions;
   return st;
 }
 
 std::string_view items_game(const RemixSettings& s, std::string_view played) {
-  const auto n = static_cast<size_t>(s.items);
-  if (s.items <= 0 || n > std::size(ce::kProfiles)) return played;
-  return ce::kProfiles[n - 1].id;
+  for (const ce::Profile& p : ce::kProfiles)
+    if (p.id == s.items) return p.id;
+  return played;  // "" or an id no game has: the played game's own
 }
 
 const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixState& state,
@@ -370,14 +383,14 @@ std::string worn_line(const RemixFiles& r) {
 
 bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
                     std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out) {
-  // A game library of the sequel's in the game's folder plays the match: the sequel's held set by
-  // the sequel's names, read from the mod's folder over the sequel's packs (its own guns first).
+  // A game library of Quake II's in the game's folder plays the match: Quake II's held set by
+  // Quake II's names, read from the mod's folder over Quake II's packs (its own guns first).
   if (std::filesystem::path lib;
       !own.folder.empty() && !remix.files.vfs.sources.empty() &&
       server::find_native_library(std::filesystem::path(own.folder).parent_path(),
                                   std::filesystem::path(own.folder).filename().string(), "", lib) &&
       lib.parent_path() == std::filesystem::path(own.folder))
-    return load_held_set(sequel_adapter(), remix.files, dirs, out);
+    return load_held_set(q2_adapter(), remix.files, dirs, out);
   if (remix.worn == nullptr && remix.looks == nullptr) return load_held_set(game, own, dirs, out);
   profiles::GameProfile dressed = *game.game;
   // The renamed rules' own view models, in their weapon order, by the names the players are told.
@@ -407,6 +420,8 @@ struct Item {
   std::string becomes;  // "" dropped
   int32_t bits = 0;
   const pf::PoolItem* pool = nullptr;
+  const pf::PackSpawn* pack = nullptr;  // the played pack's own weapon for its role, if any
+  std::string by_role;                  // what the role table gave, before the balance
 };
 
 std::string where(const Item& it) {
@@ -609,7 +624,7 @@ void lay_pools(std::vector<Item>& items, std::string_view to, const pf::RemixBal
 
 bool remix_entities(std::string_view text, std::string_view from, std::string_view to,
                     std::string& out, RemixReport* report, std::string& error,
-                    const pf::RemixBalance& balance) {
+                    const pf::RemixBalance& balance, const pf::RemixPacks& packs) {
   RemixReport mine;
   RemixReport& r = report != nullptr ? *report : mine;
   r = {};
@@ -633,15 +648,23 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
                 &it.at[1], &it.at[2]);
     it.pool = pf::pool_item(from, to, cls);
     if (it.pool == nullptr) {
-      const pf::ItemSwap swap = pf::remix_item(from, to, cls, it.flags);
+      const pf::ItemSwap swap = pf::remix_item(from, to, cls, it.flags, packs);
       it.becomes = std::string(swap.becomes);
       it.bits = swap.bits;
+      it.by_role = it.becomes;
+      if (swap.known) it.pack = pf::pack_spawn(from, to, cls, it.flags, packs);
     }
     items.push_back(std::move(it));
   }
   r.items = static_cast<int>(items.size());
   lay_pools(items, to, balance, r);
   balance_weapons(items, to, balance, r);
+  // The played pack's own weapon where the balance left the role's base weapon standing.
+  for (Item& it : items)
+    if (it.pack != nullptr && !it.becomes.empty() && it.becomes == it.by_role) {
+      it.becomes = std::string(it.pack->class_name);
+      it.bits = it.pack->bits;
+    }
   std::vector<const Item*> by_block(blocks.size(), nullptr);
   for (const Item& it : items) {
     by_block[it.block] = &it;
@@ -717,14 +740,30 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
     return false;
   }
   std::string why;
-  SearchPath own;
-  if (!open_game_dir(state.other_basedir, "", r.files, why, *other) ||
+  SearchPath base, own;
+  if (!open_game_dir(state.other_basedir, "", base, why, *other) ||
       !open_game_dir(basedir, game, own, why, *mine)) {
     error = "Classic remix could not open the games' files: " + why;
     r.files = {};
     return false;
   }
-  for (ge::vfs::Source& src : own.vfs.sources) {  // the played game's over the other's
+  // The other game's mission packs first (`cr_expansions`), under its base game, so only what the
+  // packs alone hold (their maps) comes from them; then the played game's over both.
+  if (state.expansions)
+    for (const ce::MissionPack& p : other->packs) {
+      const std::string dir = pack_folder(state.other_basedir, p.folder);
+      if (!dir.empty() && !ge::vfs::add_game(&r.files.vfs, state.other_basedir, dir, &why,
+                                             load_order_of(*other).layout)) {
+        error = "Classic remix could not open the games' files: " + why;
+        r.files = {};
+        return false;
+      }
+    }
+  std::vector<ge::vfs::Source> sources = std::move(base.vfs.sources);
+  for (ge::vfs::Source& src : own.vfs.sources) sources.push_back(std::move(src));
+  for (const ce::MissionPack& p : mine->packs)
+    if (state.expansions && lower_ascii(game) == p.folder) r.pack = std::string(p.folder);
+  for (ge::vfs::Source& src : sources) {  // the other's base, then the played game's over it
     const bool ok =
         src.kind == ge::vfs::SourceKind::directory
             ? ge::vfs::add_directory(&r.files.vfs, src.path, src.game, &why)
@@ -801,10 +840,10 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   if (!m) return nullptr;  // the played game's own refusal stands
   const ce::Profile* mine = ce::find_profile(remix->played);
   const std::string whose = mine != nullptr ? std::string(mine->what) : remix->played;
-  // The sequel's rules trace brushes: a map of the classic family is given them, its point
+  // Quake II's rules trace brushes: a map of the classic family is given them, its point
   // tree's cells made brushes (brush/cells.hpp).
   std::shared_ptr<ge::brush::Map> cells;
-  if (m->spec.brushes == nullptr && remix->played != "classic") {
+  if (m->spec.brushes == nullptr && remix->played != "q1") {
     if (!m->from_file) {
       error = "Classic remix cannot play " + name + " in " + whose + ".";
       return nullptr;
@@ -815,7 +854,7 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   RemixReport rep;
   std::string text;
   if (!remix_entities(m->spec.entities, remix->state.other, remix->played, text, &rep, why,
-                      remix->balance)) {
+                      remix->balance, {remix->state.expansions, remix->pack})) {
     error = "Classic remix could not read " + name + "'s items: " + why;
     return nullptr;
   }
@@ -829,7 +868,7 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   }
   m->spec.entities = std::move(text);
   m->from_game = remix->state.other;
-  m->program_rules = m->spec.brushes != nullptr && remix->played == "classic";
+  m->program_rules = m->spec.brushes != nullptr && remix->played == "q1";
   if (said != nullptr) *said = remix_line(rep, remix->played);
   if (!monsters_of(*m, *remix, error, said)) return nullptr;
   return m;

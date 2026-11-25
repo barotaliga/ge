@@ -10,25 +10,31 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <numbers>
 #include <sstream>
 #include <vector>
 
 #include "assets/pcx.hpp"
-#include "assets/tga.hpp"
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_fog.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
+#include "brush/map.hpp"
 #include "brush/survey.hpp"
 #include "camera/pose.hpp"
-#include "capture/jpeg.hpp"
+#include "classic/flash_blend.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
+#include "render/ao.hpp"
 #include "render/beams.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
@@ -45,9 +51,11 @@
 #include "shooters_edge/app/ladder.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
+#include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/client/room_ear.hpp"
 #include "shooters_edge/client/world_extras.hpp"
-#include "shooters_edge/server/sequel_wire.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 #include "viewmodel/light.hpp"
 
 namespace shooters_edge::client {
@@ -84,6 +92,7 @@ struct WorldDraw {
   gr::Bloom bloom;
   // The scene kept a frame for the faces' reflections (ce_reflections), and the last frame's camera
   // its march steps through.
+  gr::Ao ao;  // the contact shade (ce_ao): its passes run only while it is on
   gr::Mirror mirror;
   gr::FrameHistory history;
   gr::Post post[2];
@@ -102,6 +111,7 @@ struct WorldDraw {
   std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
   double in_liquid_s = 0;  // s the eye has been in a liquid (0 in the air): r_waterwarp's clock
   std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
+  std::vector<gr::BeamLook> beam_looks;    // a laser's own look, beside its shape
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
   std::vector<gr::Particle> lit_births;
@@ -139,9 +149,13 @@ void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
 
 namespace {
 ge::audio::Synth* g_ear = nullptr;  // the synth every world's room is heard on (hear_worlds_on)
+const UnderEar* g_under = nullptr;  // its muffle under water's settings (null: never muffled)
 }  // namespace
 
-void hear_worlds_on(ge::audio::Synth* synth) { g_ear = synth; }
+void hear_worlds_on(ge::audio::Synth* synth, const UnderEar* under) {
+  g_ear = synth;
+  g_under = under;
+}
 
 namespace {
 
@@ -195,6 +209,7 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   gr::bind_haze_targets(d, f.haze, f.targets);
   if (f.has_map) ba::create_bsp_targets(d, f.bsp, f.targets);
   if (f.extras) bind_extras_targets(d, *f.extras, f.targets);
+  if (f.ao.p_apply != 0) gr::create_ao_targets(d, f.ao, f.w, f.h, f.uniforms, f.targets.depth_view);
 }
 
 // The pack's textures as classic-enhance left them in its cache (`user` the pack's cache folder):
@@ -313,7 +328,9 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   pose.pitch = view.pitch;
   pose.fov_y = view.fov_y;
   pose.near_m = view.near_m;
-  const float grip[3] = {static_cast<float>(h.placement.m[3]), static_cast<float>(h.placement.m[7]),
+  // A gun drawn on the left is lit where it is seen (its flash is already beside it).
+  const double right = h.placement.mirror ? -h.placement.m[3] : h.placement.m[3];
+  const float grip[3] = {static_cast<float>(right), static_cast<float>(h.placement.m[7]),
                          static_cast<float>(h.placement.m[11])};
   f.held_lights.clear();
   if (lit_by_room) {
@@ -321,22 +338,25 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
     room_lights(f, moment, view.eye, h.flashing, f.held_lights);
   }
   g.light = vm::light_held(probe, f.held_lights, pose, grip);
+  if (h.placement.mirror) vm::mirror_lighting(g.light);
   return g;
 }
 
-// THE MAP'S OWN SKY BOX: `r_skyname` (`chosen`), else the worldspawn's `sky` (or `_sky`, or
-// `skyname`), names six pictures
+// THE MAP'S OWN SKY BOX: the one `sky` typed for this map (classic/sky_typed.hpp, turned as typed),
+// else `r_skyname`, else the worldspawn's `sky` (or `_sky`, or `skyname`), names six pictures
 // (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
-// the sky texture's layers are, with a status line saying why. A sequel map's sky is the one its
-// server sends (`sequel_sky`: the world's `sky`, else the server's own), turned by its `skyaxis`
-// and `skyrotate`.
+// the sky texture's layers are, with a status line saying why. A Quake II map's sky is the one its
+// server sends (`q2_sky`: the world's `sky`, else the server's own), turned by its `skyaxis`
+// and `skyrotate`. A map in a sky group (`skygroup`, classic/content/map_groups.hpp) draws the box
+// named after its group in place of any other.
 void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
-                  const std::string& chosen) {
-  std::string name = chosen;
+                  const look::Picture& picture, std::string_view map) {
+  const bool typed = picture.sky_typed.for_map(map);
+  std::string name = typed ? picture.sky_typed.name : picture.sky_name;
   if (scene.map.family == ge::brush::Family::v38) {
-    sv::SequelWireOptions sent;
-    sv::sequel_sky(scene.map, sent);
+    sv::Q2WireOptions sent;
+    sv::q2_sky(scene.map, sent);
     if (name.empty()) name = sent.sky;
     std::istringstream axis(sent.sky_axis);
     for (double& a : scene.sky_axis)
@@ -349,6 +369,14 @@ void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba:
     if (name.empty()) name = world.get("_sky");
     if (name.empty()) name = world.get("skyname");
   }
+  if (typed) {
+    std::copy(picture.sky_typed.axis.begin(), picture.sky_typed.axis.end(), scene.sky_axis);
+    scene.sky_rotate = picture.sky_typed.rotate;
+  }
+  if (files.groups && !typed)
+    if (std::string group = ge::classic::content::group_of(files.groups->skies, map);
+        !group.empty())
+      name = std::move(group);
   if (name.empty()) return;
   GE_ZONE("world.sky_box");
   SkyBoxFiles found;
@@ -362,26 +390,8 @@ void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba:
   for (size_t i = 0; i < 6; ++i) {
     const std::string& at = found.paths[i];
     const std::span<const uint8_t> bytes = found.bytes[i];
-    const std::string ext = at.substr(at.size() - 4);
     std::string why;
-    std::optional<ge::assets::Image> img;
-    if (ext == ".tga") {
-      img = ge::assets::decode_tga(bytes, &why);
-    } else if (ext == ".png") {
-      img = ge::assets::decode_png(bytes);
-    } else if (ext == ".jpg") {
-      if (std::optional<ge::lab::Picture> p = ge::capture::decode_jpeg(bytes, why)) {
-        img = ge::assets::Image{p->width, p->height, std::move(p->rgba)};
-      }
-    } else {
-      ge::assets::IndexedImage indexed;
-      if (ge::assets::decode_pcx(bytes, at, &indexed, &why)) {
-        img = ge::assets::Image{
-            indexed.width, indexed.height,
-            ge::assets::pcx_rgba(indexed,
-                                 indexed.palette.empty() ? palette : std::span<const uint8_t>{})};
-      }
-    }
+    std::optional<ge::assets::Image> img = decode_picture(bytes, at, palette, &why);
     if (!img || img->width <= 0 || img->height <= 0) {
       std::string line = "shooters_edge: " + at + " did not read";
       if (!why.empty()) line.append(" (").append(why).append(")");
@@ -449,14 +459,12 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
     const std::span<const uint8_t> other = game_palette(files, other_store, *from);
     if (other.size() >= 768) map_palette.assign(other.begin(), other.end());
   }
-  if (grey.empty()) r->grade_palette = palette_copy;
+  if (grey.empty() && game.game->palette_look) r->grade_palette = palette_copy;
   r->classic_grade = look::palette_grade(r->grade_palette);  // a search of the palette: on here
   // The enhanced cache, when this pack's were enhanced (the in-game menu's ENHANCE): keyed by the
   // packs' bytes, looked up once for the textures, the rebake and the skins.
   const bool any = picture.ce.textures || picture.ce.rebake || picture.ce.models;
-  const std::filesystem::path cache = any && !content_packs(files).empty()
-                                          ? ge::classicenhance::find_cache(content_packs(files))
-                                          : std::filesystem::path{};
+  const std::filesystem::path cache = any ? content_cache(files) : std::filesystem::path{};
   // ce_textures: the enhanced textures.
   ba::TextureSource source;
   if (picture.ce.textures && !cache.empty()) {
@@ -468,12 +476,14 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   // The map's textures as the game's adapter reads them.
   std::vector<uint8_t> picture_store;
   // Another game's map (classic remix) reads its textures as its own game stores them.
-  const GameAdapter& map_game = map.from_game == "classic"  ? classic_adapter()
-                                : map.from_game == "sequel" ? sequel_adapter()
-                                                            : game;
+  const GameAdapter& map_game = map.from_game == "q1"   ? qw_adapter()
+                                : map.from_game == "q2" ? q2_adapter()
+                                                        : game;
   const std::vector<ge::brush::MapPicture> pictures =
       map_game.map_textures(map_game, files, map.name, map.file, picture_store);
   source.pictures = &pictures;
+  source.lamps =
+      picture.ce.glow;  // ce_glow: a lamp's bright texels glow (Quake II's surface lights)
   // The map's coloured light, a .lit file beside it or in lits/, over the light it carries.
   std::vector<uint8_t> lit_store;
   std::string lit_path, lit_refused;
@@ -495,7 +505,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
             : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
                   "; drawn with the map's own light");
   }
-  read_sky_box(files, map_palette, r->scene, picture.sky_name);
+  read_sky_box(files, map_palette, r->scene, picture, map.name);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {
@@ -507,6 +517,9 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
     }
   }
   r->has_map = true;
+  // A Quake II map's sky is its box: our sky's style is picked by what the box shows.
+  if (r->scene.map.family == ge::brush::Family::v38 && r->scene.sky_box_face > 0)
+    r->scene.sky_colours = ba::sky_box_colours(r->scene);
   r->sky = ba::pick_sky(r->scene.sky_colours, map.name);
   r->night = r->sky;
   ba::night_over(r->night, map.name);
@@ -550,6 +563,8 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::create_sky(d, f.pipelines, f.skypass, f.uniforms, f.layout);
     gr::create_clouds(d, f.pipelines, f.clouds, f.layout);
     gr::create_mirror(d, f.pipelines, f.mirror);
+    gr::create_ao_pipelines(d, f.pipelines, f.ao);  // ce_ao's, run only while it is on
+    gr::create_ao_apply(d, f.pipelines, f.ao);
     gr::BloomSettings bs;
     bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
     gr::create_bloom_pipelines(d, f.pipelines, f.bloom, bs);
@@ -572,6 +587,7 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::create_beams(d, f.pipelines, f.beams, f.layout, gr::mark_beam_settings(kMarks));
     gr::create_haze(d, f.pipelines, f.haze, f.layout);
     f.beam_shapes.resize(gr::kMaxBeamDraws);
+    f.beam_looks.resize(gr::kMaxBeamDraws);
     f.beam_draws.reserve(gr::kMaxBeamDraws);
     if (!f.weapons.empty()) {
       if (gr::create_viewmodel(d, f.pipelines, f.held, f.layout, f.weapons))
@@ -673,6 +689,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::span<const ba::Mover> world_movers(const WorldDraw& w) { return w.movers; }
+
 std::span<const ba::PointLight> world_lights(const WorldDraw& w) { return w.scene.lights; }
 
 std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
@@ -688,6 +706,26 @@ void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
 void own_sky(WorldDraw& f, bool own) { f.own_sky = own; }
 
 void from_above(WorldDraw& f, bool on) { f.from_above = on; }
+
+double time_refresh(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
+                    int frames, bool one_frame, int width, int height,
+                    const std::function<wgpu::TextureView()>& acquire,
+                    const std::function<void()>& present) {
+  ge::ui::DrawList none;
+  none.begin(width, height);
+  const double heading = view.heading;
+  const auto from = std::chrono::steady_clock::now();
+  wgpu::TextureView target;
+  for (int i = 0; i < frames; ++i) {
+    if (!one_frame || !target) target = acquire();
+    if (!target) return 0;
+    view.heading = heading + 2 * std::numbers::pi * i / frames;
+    draw_world(d, f, view, fx, nullptr, 0, none, target);
+    if (!one_frame) present();
+  }
+  if (one_frame) present();
+  return std::chrono::duration<double>(std::chrono::steady_clock::now() - from).count();
+}
 
 bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;
@@ -713,6 +751,7 @@ ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
 // was typed (or sent) since the world was made, else the map's own; its sky share the map's
 // `skyfog`, else r_skyfog. A new map is its own fog again.
 gr::FlatFog world_fog(const WorldDraw& f) {
+  if (!f.picture->q2fx.fog) return {};  // Quake II's gl_fog 0: none at all
   ge::brush::MapFog fog = f.fog;
   if (f.picture->fog_serial != f.made.fog_serial) ge::brush::parse_fog(f.picture->fog, &fog);
   return ba::map_flat_fog(fog, f.picture->sky_fog);
@@ -752,6 +791,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (g_ear != nullptr)
     hear_room(f.ear, *g_ear, f.has_map ? &f.scene.map : nullptr, f.picture->ce.acoustics, view.eye,
               view.heading, view.time_s);
+  if (g_ear != nullptr && g_under != nullptr)  // muffled under water (s_underwater)
+    hear_under(f.ear, *g_ear, *g_under, fx.screen.medium != effects::Medium::air);
   // The map's own sky (its pick), keeping the eye and the look the caller set.
   const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;
@@ -762,7 +803,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   ba::Options o = look::world_options(lk, {}, *f.picture, f.stops);
   if (o.mode == ba::Mode::v2 && f.has_map && f.scene.map.family == ge::brush::Family::v38) {
-    // A sequel map's light is mostly its lamps' and its sky's faces', bounced round its rooms
+    // A Quake II map's light is mostly its lamps' and its sky's faces', bounced round its rooms
     // when it was built, which no point light restates: the modern look lights it by its own
     // lightmaps, coloured as they are. Its sky and its liquids are ours, as on every map (the
     // map's own box with ce_skies off, or in the classic look). With ce_rebake on and the cache's
@@ -791,11 +832,18 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.picture) set_extras_flames(*f.extras, f.picture->draw_flame);
     dress_extras(*f.extras, view, o, dt);
   }
+  // The contact shade (ce_ao): its passes made the first frame it is on, off with no map.
+  const bool ao = o.ao > 0 && f.has_map;
+  if (ao) gr::set_ao(d, f.ao, {.strength = o.ao, .radius_m = o.ao_radius_m});
   // From above (the live map's dive): faces seen from behind left out, every leaf's faces drawn.
   o.from_above = f.from_above;
   if (f.from_above) o.pvs = false;
   f.rec.begin_frame(d);
   // The last frame's camera for the reflections' march (none with them off: nothing reads it).
+  // The night lifted through the sky faces (the veil): the moon's disc drawn so as to come out as
+  // the eye sees it, not lifted with the dark sky round it (a red moon clipped to flat pink).
+  if (o.mode == ba::Mode::v2 && !o.pack_sky)
+    view.sky_lift = std::max(o.sky_light * o.sky_seen, 1e-6);
   gr::fill_uniforms(f.staged, view, f.w, f.h, o.reflections > 0 ? &f.history : nullptr);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.skypass, view);
@@ -816,13 +864,24 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
           : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
-    ba::set_dynamic_lights(f.bsp, lights);
+    // gl_flashblend: the moment's lights glow as discs (prepare_models) and light no wall, door or
+    // lift; the figures still take them.
+    ba::set_dynamic_lights(
+        f.bsp, f.picture && f.picture->flash_blend ? std::span<const effects::Light>() : lights);
+    for (size_t k = 0; k < fx.light_styles.size();
+         k++)  // the server's flicker, pulses and switches
+      if (f.bsp.light_styles[k] != fx.light_styles[k])
+        ba::set_light_style(f.bsp, static_cast<int>(k), fx.light_styles[k]);
+    ba::set_areas(f.bsp,
+                  f.from_above ? std::span<const uint8_t>() : std::span<const uint8_t>(fx.areas));
     // The moving models' shadows (M54): every model near the eye and the player himself.
     const bool self = fx.has_self && (!f.picture || f.picture->draw_entities);
     shadow_casters(f.models, drawn, self ? &fx.self : nullptr, view, f.casters, f.caster_boxes);
     ba::set_shadow_casters(f.bsp, f.casters, f.caster_boxes);
-    place_brushes(f.models, fx.models, f.movers);
+    place_brushes(f.models, fx.models, view.time_s, f.movers);
     ba::set_movers(f.bsp, f.movers);
+    // Quake II's world turns its textures twice a second.
+    ba::set_texture_rate(f.bsp, f.scene.map.family == ge::brush::Family::v38 ? 2 : ba::kFrameRate);
     ba::prepare_bsp(d, f.bsp, view, o);
     // The far land shows through the sky faces where our sky does (the modern look's own sky), at
     // the skies' top stop.
@@ -853,6 +912,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     GE_ZONE("world.extras");
     // The players wading in lava or slime part its surface (ce_wade).
     wade_extras(*f.extras, fx.models, fx.has_self ? &fx.self : nullptr, view.time_s);
+    burn_extras(*f.extras, fx.fires);  // the hot marks' flames (ce_decals)
     prepare_extras(d, *f.extras, f.bsp, view, o, f.staged);
   }
   {
@@ -861,6 +921,19 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // where it was born, the blasts' and the flames' smoke the light where they are.
     f.lit_births.assign(fx.births.begin(), fx.births.end());
     f.lit_births.insert(f.lit_births.end(), f.burning.births.begin(), f.burning.births.end());
+    // Quake II's gl_partscale: each speck sized by its depth in front of the eye.
+    if (f.picture->q2fx.part_scale > 0) {
+      const double forward[3] = {std::sin(view.heading) * std::cos(view.pitch),
+                                 std::sin(view.pitch),
+                                 std::cos(view.heading) * std::cos(view.pitch)};
+      for (gr::Particle& q : f.lit_births) {
+        if (q.grow > 0) continue;  // a puff of smoke keeps its own
+        double depth = 0;
+        for (int k = 0; k < 3; ++k) depth += (q.p[k] - view.eye[k]) * forward[k];
+        q.size *= static_cast<float>(
+            ge::classic::q2_speck_scale(f.picture->q2fx, depth / ge::brush::kUnitM));
+      }
+    }
     for (gr::Particle& q : f.lit_births) {
       if (q.grow <= 0 || q.kelvin != 0) continue;
       const double at[3] = {q.p[0], q.p[1], q.p[2]};
@@ -883,21 +956,39 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::emit_particles(f.particles, f.fire_births);
     }
     f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
+    // Quake II's gl_partshape and gl_partstyle (-1 and 0 in another game: the engine's own).
+    f.particles.settings.shape =
+        f.picture->q2fx.part_shape < 0
+            ? gr::ParticleShape::capsule
+            : static_cast<gr::ParticleShape>(f.picture->q2fx.part_shape + 1);
+    f.particles.settings.additive = f.picture->q2fx.additive_parts;
     gr::prepare_particles(d, f.particles, dt, view, f.w, f.h);
     gr::prepare_explosions(d, f.explosions, f.lit_puffs, view, f.w, f.h, f.lit_flames);
     f.beam_draws.clear();
     for (const HeldBeam& b : fx.beams) {
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
-      const gr::BeamLook* look = b.coil     ? &effects::rail_coil_look()
-                                 : b.rail   ? &effects::rail_look()
-                                 : b.plasma ? &effects::plasma_look()
-                                 : b.across ? &effects::prong_arc_look()
-                                            : &effects::bolt_look();
+      if (b.laser) f.beam_looks[f.beam_draws.size()] = effects::laser_look(b.laser_m, b.laser_rgb);
+      if (b.q2_trail)
+        f.beam_looks[f.beam_draws.size()] =
+            effects::q2_rail_trail_look(b.trail_m, b.trail_radius_m, b.trail_rgb, b.trail_fade_s);
+      // Quake II's gl_beamstyle 1: a laser or the rail's core a plain solid tube, no glow.
+      if ((b.laser || b.q2_trail) && f.picture->q2fx.round_beams)
+        effects::round_beam(f.beam_looks[f.beam_draws.size()]);
+      const gr::BeamLook* look = b.laser || b.q2_trail ? &f.beam_looks[f.beam_draws.size()]
+                                 : b.coil              ? &effects::rail_coil_look()
+                                 : b.rail              ? &effects::rail_look()
+                                 : b.plasma            ? &effects::plasma_look()
+                                 : b.across            ? &effects::prong_arc_look()
+                                                       : &effects::bolt_look();
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
-    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd);
+    // Wet blood on a floor mirrors the room with the faces (ce_reflections, ce_blood_reflect).
+    const float paint_mirror = o.reflections > 0 && f.picture != nullptr
+                                   ? static_cast<float>(f.picture->blood_reflect)
+                                   : 0.0f;
+    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd, paint_mirror);
     gr::prepare_haze(d, f.haze, fx.haze, view);
   }
   if (f.has_map) {
@@ -909,7 +1000,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .explosions = on.explosions,
                            .bubbles_share = f.picture->bubbles_share,
                            .power_shells = f.picture->power_shells,
-                           .item_pulse = f.picture->item_pulse};
+                           .item_pulse = f.picture->item_pulse && !f.picture->no_glow,
+                           .items_still = f.picture->items_still,
+                           .light = look::model_light(*f.picture, lk),
+                           .flat = !f.picture->q2fx.dot_shading,
+                           .roll_hack = f.picture->q2fx.roll_hack,
+                           .self = fx.has_self ? fx.self.entity : 0,
+                           .shadows = f.picture->model_shadows,
+                           .flash_blend = f.picture->flash_blend};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
@@ -925,21 +1023,38 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // ce_smooth: the models shaded smooth across their facets where the textures are filtered.
     prepare_models(d, f.models, f.scene.map, drawn, view, o.brightness, o.minlight,
                    !o.crisp && f.picture->ce.smooth, in_place, lights, o.dynamic_strength,
-                   &f.burning);
+                   &f.burning, fx.bloodied);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);
   {
     // The screen's tint toned by the player (v_contentblend and kin, gl_cshiftpercent,
-    // gl_polyblend).
-    double blend[4];
-    look::toned_blend(*f.picture, round ? fx.screen_dry : fx.screen, blend);
-    gr::set_post_blend(d, f.post[p], blend);
+    // gl_polyblend; Quake II's the rules' own), a hit's flash round the edge at
+    // gl_damageblend_frac.
+    look::Tints tints = look::toned_tints(*f.picture, round ? fx.screen_dry : fx.screen,
+                                          fx.rules_blend, fx.blend, fx.apart, fx.damage);
+    // An eye inside one of gl_flashblend's glows: the screen tinted orange, as the other tints
+    // (gl_polyblend 0 none).
+    if (f.has_map && f.picture->poly_blend)
+      ge::classic::flash_tint(f.models.flash_tint, tints.flat);
+    gr::set_post_blend(d, f.post[p], tints.flat);
+    gr::set_post_edge_blend(d, f.post[p], tints.edge, f.picture->damage_frac);
   }
   // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
   gr::set_post_warp(
       d, f.post[p],
       gr::arrival_warp(fx.arrival_s, fx_switches(*f.picture).arrival, fx.arrival_tint));
+  // Quake II's gl_waterwarp: under a liquid the whole view ripples, 0.25 % of the screen, five
+  // waves, a radian a second.
+  gr::PostRipple ripple;
+  if (f.picture->q2fx.water_warp && fx.screen.medium != effects::Medium::air) {
+    ripple.share = 0.0025;
+    ripple.phase = view.time_s;
+  }
+  gr::set_post_ripple(d, f.post[p], ripple);
+  // Quake II's viewsize under 100: the whole view drawn smaller in the middle.
+  const Q2ViewRect vr = q2_view_rect(f.w, f.h, f.picture->view_size);
+  gr::set_post_view(d, f.post[p], {vr.x, vr.y, vr.w, vr.h}, f.w, f.h);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's
@@ -960,6 +1075,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
     if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
+    if (ao) {  // over the map and its models as drawn, before the sky and what is see-through
+      gr::encode_ao(f.ao, f.pipelines, f.rec, e);
+      gr::encode_ao_apply(f.ao, f.pipelines, f.rec, e, f.targets.hdr_view);
+    }
     gr::encode_far_land(f.far, f.pipelines, f.rec, e, f.targets, f.frame, false);
     gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
     // The map's cloud from the skies' medium stop up (none to fill under the pack's own sky).
@@ -1003,6 +1122,8 @@ gr::MorphBurn world_burn(const WorldDraw& f, int entity) { return burn_skin_of(f
 void set_air_draws(WorldDraw& f, int n) {
   if (f.extras) set_extras_air_draws(*f.extras, n);
 }
+
+const gr::FrameStats& world_stats(const WorldDraw& f) { return f.rec.stats; }
 
 void record_span(const WorldDraw& f, PassTimes& p) {
   span_add(p, f.rec.stats.gpu_span_ms());

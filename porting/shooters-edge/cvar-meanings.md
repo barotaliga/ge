@@ -1,7 +1,7 @@
 # Settings that share a name across the three classic games
 
 Which of the console settings Shooter's Edge names exist in the first game (the 1996 release
-and its multiplayer client and server), the sequel and the third game, and in the modern
+and its multiplayer client and server), Quake II and the third game, and in the modern
 multiplayer client of the first game; with each one's default, values, flags and effect, whether
 a shared name means the same thing in each game, the same concept under different spellings, the
 shadow settings, and the modern client's defaults against the original's. So each game binds its
@@ -19,7 +19,7 @@ reference), **[derived]** (worked out by combining facts read) or **[measured]**
 run). Nothing here is copied from the source.
 
 **Abbreviations.** **Q1** = the 1996 single-player engine (software build "SW", GL build "GL").
-**QW** = the first game's multiplayer release (client "QWc", server "QWs"). **Q2** = the sequel.
+**QW** = the first game's multiplayer release (client "QWc", server "QWs"). **Q2** = Quake II.
 **Q3** = the third game. **EZ** = the modern multiplayer client of the first game (it also contains
 a built-in server; its server rows are marked "EZ server").
 
@@ -279,7 +279,7 @@ name exists in a game only as a console COMMAND (not a setting), the row says so
 | `sv_accelerate` | Q1, QWs, EZ server | 10 | per second | none | Ground acceleration; ALSO used in the air (with the wished speed capped at 30) [read] |
 | `sv_airaccelerate` | QWs | 0.7 | | none | Sent to clients but NOT used by the player move: air acceleration uses `sv_accelerate` [read] |
 | `sv_airaccelerate` | EZ server | 10 | | none | Same: sent, unused by the player move [read] |
-| `sv_airaccelerate` | Q2 | 0 | 0 or nonzero | latched; deathmatch only | A switch: 0 gives the sequel's air move (normal acceleration rule at factor 1, no 30 cap); nonzero gives the capped air move, but at the fixed factor 10, not at this value [read] |
+| `sv_airaccelerate` | Q2 | 0 | 0 or nonzero | latched; deathmatch only | A switch: 0 gives Quake II's air move (normal acceleration rule at factor 1, no 30 cap); nonzero gives the capped air move, but at the fixed factor 10, not at this value [read] |
 | `sv_wateraccelerate` | QWs, EZ server | 10 | per second | none | Acceleration in water [read] |
 | `sv_waterfriction` | QWs, EZ server | 4 | per second | none | Friction in water [read] |
 | `sv_spectatormaxspeed` | QWs, EZ server | 500 | units per second | none | Spectator top speed [read] |
@@ -539,7 +539,7 @@ over steps or edges [derived].
 leaning along the model's facing, scaled with the model's own scale; skipped for fully lit models,
 translucent models and models flagged not to cast one [read]. Only its classic renderer draws it; in its modern renderer the setting does nothing [read].
 
-**Sequel (Q2).** GL renderer: `gl_shadows`, default 0, saved [read]. Nonzero draws the same kind
+**Quake II (Q2).** GL renderer: `gl_shadows`, default 0, saved [read]. Nonzero draws the same kind
 of flattened black silhouette at 50 % opacity under each animated model, leaning along the
 model's facing; translucent models and the held weapon cast none [read]. Software renderer: no
 shadows [read].

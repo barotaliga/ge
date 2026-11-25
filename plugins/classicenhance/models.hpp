@@ -12,7 +12,7 @@
 //   files (`skin_paths`, a frame's `picture`): each is read out of the pack as the game reads it.
 // - A model's or sprite's name in the cache is `model_name` of its path: the path under its
 //   kind's folder (`progs/armor.mdl` is `armor`, `models/items/armor/tris.md2` is
-//   `items/armor/tris`), so the sequel's many `tris` models never land on one another;
+//   `items/armor/tris`), so Quake II's many `tris` models never land on one another;
 //   `safe_name` (cache.hpp) makes it a folder name.
 // - `models/index.txt` lists every model and sprite, and `replaced.txt` what the engine draws in
 //   their place (`replace.hpp`); a replaced model with glowing parts loses those pieces, and
@@ -67,6 +67,6 @@ morph::Model drop_glowing(const morph::Model& m);
 bool enhance_models(std::span<const uint8_t> pack, const Palette& palette,
                     const std::filesystem::path& dir, const ModelOptions& opts,
                     const EnhanceOptions& textures, ModelStats* stats, std::string* error,
-                    const Profile& profile = classic_profile());
+                    const Profile& profile = q1_profile());
 
 }  // namespace ge::classicenhance

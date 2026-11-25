@@ -3,11 +3,11 @@
 How a game on this engine loads a mod a player wrote in C++: the ABI between the two, the rules
 that keep a modded match deterministic, what the loader checks, the form a mod takes on each
 platform, the package, and the `ge mod` commands that make one. `engine/mod` is built to this
-page, and Shooter's Edge is the first game that offers hooks (`docs/goals.md` M52). Where a part
+page, and Shooter's Edge is Quake that offers hooks (`docs/goals.md` M52). Where a part
 is not built yet, this page is the plan; change it in the same PR that changes the plan.
 
 This is the engine's OWN mod format, for any game on it. It is not Shooter's Edge's
-compatibility with the classic game's mods (`plugins/progs`, M18p), which runs an existing
+compatibility with Quake's mods (`plugins/progs`, M18p), which runs an existing
 mod's bytecode unchanged: those mods keep working, and this format sits beside them.
 
 ## What a mod is
@@ -307,7 +307,7 @@ and no `long` in it (the sample keeps `int32_t`s and bytes).
   of the engine.
 - **Native libraries bundled in the app and chosen at run time**: the same as ahead-of-time
   linking with more steps, and still no player-made mods.
-- **The classic game's bytecode VM for the engine's own mods**: its instruction set is a 32-bit
+- **Quake's bytecode VM for the engine's own mods**: its instruction set is a 32-bit
   float machine built for one game, with no C++ compiler targeting it.
 
 ## The package
@@ -467,7 +467,7 @@ the loop's digest (with no mod it is the loop's own).
 - **Which rules take one.** The runners on the loop's program seam: the bytecode program and the
   compiled module (`RunnerCalls::program_seam`). A function of the mod's stored in a field is
   called by the loop, never by the bytecode: a bytecode program that calls an entity's think or
-  touch itself (`self.think()`) and finds a mod's number there faults. The sequel's rules keep
+  touch itself (`self.think()`) and finds a mod's number there faults. Quake II's rules keep
   their own entities off that seam and lay the mods over them themselves (`RunnerCalls::own_mods`,
   below).
 - **Where a server finds one.** `sv_mod` (`--mod=`) names folders, comma-separated: a folder
@@ -478,36 +478,36 @@ the loop's digest (with no mod it is the loop's own).
   included. A sound a mod starts reaches only the clients that have its name in the server's
   sound list.
 
-### On the sequel's rules
+### On Quake II's rules
 
-The sequel's rules keep their own players and map entities and mirror them into the loop's pool
-only to send them (`games/shooters_edge/server/sequel_mods.hpp`). The same tables reach them, so one
+Quake II's rules keep their own players and map entities and mirror them into the loop's pool
+only to send them (`games/shooters_edge/server/q2_mods.hpp`). The same tables reach them, so one
 package stacks on either game's rules:
 
-- **The hooks at the sequel's points.** `match_start` once the map is spawned, `start_frame` at
+- **The hooks at Quake II's points.** `match_start` once the map is spawned, `start_frame` at
   the top of each 100 ms rules frame, the pre- and post-think around each command a packet brings,
   `put_client_in_server` at every spawn, connect and disconnect, and two the hook table grew for
   these rules (entries added at its end, so an older mod's shorter table still loads): `damage`, a
   blow about to land on a player, which each mod answers with the points to deal, the lowest first,
   and `death`, once a death is scored. The classic rules do not call those two: their damage and
   deaths are the program's own.
-- **The services over the sequel's state,** numbered as the pool's rows are: 0 the world, 1..32
+- **The services over Quake II's state,** numbered as the pool's rows are: 0 the world, 1..32
   the players, then the map's entities in the map's order. A player's origin and velocity (packed
   to the eighth of a unit, as the move keeps them, and settable), his view, box and health
   (settable; at 0 or under he dies by the world); an entity's origin, angles, velocity, box and
   health. What these rules keep for themselves (a mod's own entity, its functions, the movers'
   places, a field with no slot here) is refused like a bad field: a warning in the mod's log, a
   getter's 0, and the match goes on.
-  *Not taken:* mirroring the sequel's state into the loop's entities and running the classic seam
-  over them, because the sequel's rules would then have to read every field back after each hook
-  (two copies of every player, kept in step by hand), and a field the sequel has no meaning for
+  *Not taken:* mirroring Quake II's state into the loop's entities and running the classic seam
+  over them, because Quake II's rules would then have to read every field back after each hook
+  (two copies of every player, kept in step by hand), and a field Quake II has no meaning for
   (a think, a touch) would look settable and do nothing.
 
 `tests/shooters_edge_rules_mod_test.cpp` holds it: the sample stacked on a bytecode runner speeds
-its rockets, is in the digest and replays to the bit; the sample `vampire` on the sequel's runner
+its rockets, is in the digest and replays to the bit; the sample `vampire` on Quake II's runner
 feeds the shooter by her blows, sees the kill, replays to the bit and is refused what those rules
 keep; the playable server takes the package from `sv_mod` and replays, and refuses one built for
-ABI 2.0. The `mod` lab draws the sequel's duel with and without it.
+ABI 2.0. The `mod` lab draws Quake II's duel with and without it.
 
 ## Rules as a package
 
@@ -556,5 +556,5 @@ game's memory, and the cost measured above is small.
 | M52d | Signing and distribution |
 | M52e | A second game (Fall Line's hooks), the replay's keyframes and the network's prediction carrying the block, ABI 1.1 adding entries |
 | M52f | Mods on the real server: a package stacked on the bytecode and compiled-module runners, from `sv_mod` |
-| M52g | Mods on the sequel's rules: the hooks and services where the rules keep their own entities |
+| M52g | Mods on Quake II's rules: the hooks and services where the rules keep their own entities |
 | M52h | Our own rules in C++: the classic server's calls as a typed services table, the arena and campaign as packages, the QC sources deleted |

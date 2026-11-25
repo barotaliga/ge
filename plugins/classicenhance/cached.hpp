@@ -46,8 +46,8 @@
 namespace ge::classicenhance {
 
 // The cache folder of the pack with these bytes under `root` (default_cache_root() when empty);
-// an empty path when its textures were never enhanced there. The pack's digest is worked once for
-// the bytes where they lie (any thread), so asking again is a few file lookups.
+// an empty path when neither its textures nor its pictures were enhanced there. The pack's digest
+// is worked once for the bytes where they lie (any thread), so asking again is a few file lookups.
 std::filesystem::path find_cache(std::span<const uint8_t> pack,
                                  const std::filesystem::path& root = {});
 // The same for a set of packs, first to last (the full game's pak0, pak1 ...), keyed as the
@@ -85,7 +85,7 @@ bool cached_rebake(const std::filesystem::path& dir, std::string_view name, size
                    brush::Rebaked* out);
 
 // The enhanced copy of sound `name` (its path under the game's sounds folder,
-// "weapons/rocket1i.wav" under the first game's `sound/`) as WAV bytes into `*wav`; false (and
+// "weapons/rocket1i.wav" under Quake's `sound/`) as WAV bytes into `*wav`; false (and
 // `*wav` untouched) when the cache has none or the name climbs out of the folder.
 bool cached_sound(const std::filesystem::path& dir, std::string_view name,
                   std::vector<uint8_t>* wav);

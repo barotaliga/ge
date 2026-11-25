@@ -305,6 +305,7 @@ gl::Picture reference(const vm::HeldModel& gun, const vm::Placement& place,
   g.fov_y = fov_y;
   g.near_m = gr::kHeldNearM;
   g.hidden = gun.flame;
+  g.mirror = place.mirror;
   vm::draw_lit(t, g, light);
   gl::Picture out{w, h, vm::resolve(t, 1.0)};
   for (size_t i = 0; i < t.depth.size(); ++i)
@@ -441,9 +442,9 @@ void run(gl::Lab& lab) {
     vm::place_point(rest, tip, muzzle);
   }
   constexpr double kWhiteLux = 1000;  // what the held unit's 1 is on the frame (cancels resolved)
-  auto held_draw = [&](const vm::Lighting& light) {
+  auto held_draw = [&](const vm::Lighting& light, const vm::Placement& place) {
     gr::HeldDraw g;
-    g.now = g.last = rest;
+    g.now = g.last = place;
     g.fov_y = gun_fov;
     g.light = light;
     g.white_lux = kWhiteLux;
@@ -459,7 +460,7 @@ void run(gl::Lab& lab) {
       const vm::StageLights l = vm::stage_lights(kind, view, muzzle);
       const vm::Lighting light = vm::light_held(l.probe, l.lights, view, grip, l.floor);
       const gl::Picture cpu = reference(gun, rest, light, gun_fov, iw, ih);
-      const gl::Picture gpu = resolved(d, s, fv, {}, held_draw(light));
+      const gl::Picture gpu = resolved(d, s, fv, {}, held_draw(light, rest));
       const Diff diff = compare(cpu, gpu);
       const std::string name(vm::stage_light_name(kind));
       lab.metric("reference." + name + ".mean", diff.mean, "levels", Det::measured);
@@ -472,18 +473,40 @@ void run(gl::Lab& lab) {
       labels.insert(labels.end(),
                     {"CPU " + name, "GPU " + name, "DIFF x8 MEAN " + fixed(diff.mean, 2)});
     }
-    lab.shot(
-        {"reference",
-         "THE GPU BESIDE ITS CPU REFERENCE",
-         "The weapon alone under each of the stage's six lights (day, dim, dark, a torch, its "
-         "own muzzle flash, a red and a blue lamp), lit by the lights light_held kept: the CPU "
-         "raster, the GPU pass's resolved twin, and their difference times eight (magenta "
-         "where only one drew).",
-         "the CPU and GPU columns alike; the difference black but for a thin outline; the "
-         "sight's dot glowing in the dark; no muzzle flash drawn",
-         {{"stated", "mean <= " + fixed(kMeanMost, 1) + ", p99 <= " + fixed(kP99Most, 0) +
-                         " levels, coverage <= " + fixed(kCoverageMost * 100, 0) + "%"}}},
-        sheet(panels, labels, 3), Det::measured);
+    // A left-handed player's gun under the torch: the placement mirrored, lit at its grip mirrored
+    // and the light flipped to its side, on the GPU and the CPU alike.
+    {
+      vm::Placement left = rest;
+      left.mirror = true;
+      const float at[3] = {-grip[0], grip[1], grip[2]};
+      const vm::StageLights l = vm::stage_lights(vm::StageLight::torch, view, muzzle);
+      vm::Lighting light = vm::light_held(l.probe, l.lights, view, at, l.floor);
+      vm::mirror_lighting(light);
+      const gl::Picture cpu = reference(gun, left, light, gun_fov, iw, ih);
+      const gl::Picture gpu = resolved(d, s, fv, {}, held_draw(light, left));
+      const Diff diff = compare(cpu, gpu);
+      lab.metric("reference.mirrored.mean", diff.mean, "levels", Det::measured);
+      lab.metric("reference.mirrored.p99", diff.p99, "levels", Det::measured);
+      lab.metric("reference.mirrored.coverage", diff.coverage, "share", Det::measured);
+      worst_mean = std::max(worst_mean, diff.mean);
+      worst_p99 = std::max(worst_p99, diff.p99);
+      worst_cov = std::max(worst_cov, diff.coverage);
+      panels.insert(panels.end(), {cpu, gpu, diff.heat});
+      labels.insert(labels.end(),
+                    {"CPU MIRRORED", "GPU MIRRORED", "DIFF x8 MEAN " + fixed(diff.mean, 2)});
+    }
+    lab.shot({"reference",
+              "THE GPU BESIDE ITS CPU REFERENCE",
+              "The weapon alone under each of the stage's six lights (day, dim, dark, a torch, its "
+              "own muzzle flash, a red and a blue lamp), and under the torch drawn mirrored for a "
+              "left hand, lit by the lights light_held kept: the CPU raster, the GPU pass's "
+              "resolved twin, and their difference times eight (magenta "
+              "where only one drew).",
+              "the CPU and GPU columns alike; the difference black but for a thin outline; the "
+              "sight's dot glowing in the dark; no muzzle flash drawn",
+              {{"stated", "mean <= " + fixed(kMeanMost, 1) + ", p99 <= " + fixed(kP99Most, 0) +
+                              " levels, coverage <= " + fixed(kCoverageMost * 100, 0) + "%"}}},
+             sheet(panels, labels, 3), Det::measured);
     lab.metric("reference.worst-mean", worst_mean, "levels", Det::measured);
     lab.metric("reference.worst-p99", worst_p99, "levels", Det::measured);
     lab.metric("reference.worst-coverage", worst_cov, "share", Det::measured);
@@ -510,7 +533,7 @@ void run(gl::Lab& lab) {
       lamps.reserve(l.lights.size());
       for (const vm::PointLight& p : l.lights) lamps.push_back(gr::lamp_of(p, kWhiteLux));
       const gl::Picture cpu = reference(gun, rest, light, gun_fov, iw, ih);
-      const gl::Picture gpu = resolved(d, s, fv, lamps, held_draw(bare));
+      const gl::Picture gpu = resolved(d, s, fv, lamps, held_draw(bare, rest));
       const Diff diff = compare(cpu, gpu);
       const std::string name(vm::stage_light_name(kind));
       lab.metric("lamps." + name + ".mean", diff.mean, "levels", Det::measured);
@@ -562,7 +585,7 @@ void run(gl::Lab& lab) {
       const gl::Picture room{iw, ih,
                              vm::draw_stage(vm::corridor_stage(), l, view, none, rest, shot)};
       panels.push_back(cpu);
-      panels.push_back(over(room, resolved(d, s, fv, {}, held_draw(light))));
+      panels.push_back(over(room, resolved(d, s, fv, {}, held_draw(light, rest))));
       const std::string name(vm::stage_light_name(kind));
       labels.insert(labels.end(), {"CPU " + name, "GPU " + name});
     }

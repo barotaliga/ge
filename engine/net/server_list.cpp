@@ -7,6 +7,8 @@
 #include "net/server_list.hpp"
 
 #include <algorithm>
+#include <memory>
+#include <regex>
 
 namespace ge::net {
 
@@ -55,7 +57,7 @@ void send_queries(ServerList& l, int64_t now_us) {
   l.next_send_us = std::max(l.next_send_us, now_us - 4 * l.config.gap_us);
   for (ServerEntry& e : l.entries) {
     if (l.next_send_us > now_us) return;
-    if (e.answered || e.tries >= l.config.tries) continue;
+    if ((e.answered && !e.again) || e.tries >= l.config.tries) continue;
     if (e.asked_us >= 0 && now_us - e.asked_us < l.config.timeout_us) continue;
     send_status(l, e.address, now_us);
     e.tries++;
@@ -74,6 +76,7 @@ void read_master(ServerList& l, int m, const uint8_t* data, size_t size, int64_t
   l.stats.master_replies++;
   l.stats.master_addresses += got.size();
   for (const Address& a : got) server_list_add(l, a, kServerFromMaster, now_us);
+  l.masters[static_cast<size_t>(m)].got = std::move(got);
 }
 
 // The game servers the engine's masters listed since the last call, each queried like any other.
@@ -113,6 +116,7 @@ void read_reply(ServerList& l, const Address& from, const uint8_t* data, size_t 
   const int64_t sent = e.asked_us;
   const bool first = !e.answered;
   e.answered = true;
+  e.again = false;
   e.info = std::move(info);
   if (first && sent >= 0) e.ping_ms = static_cast<int>((now_us - sent + 999) / 1000);
   l.stats.replies++;
@@ -272,12 +276,15 @@ void server_list_view(const ServerList& l, const ServerFilter& filter, ServerSor
     if (!(e.from & filter.from)) continue;
     if (filter.hide_silent && !e.answered) continue;
     if (filter.hide_full && s.max_players > 0 && s.players >= s.max_players) continue;
-    if (filter.hide_empty && s.players == 0) continue;
+    const bool empty = s.players + s.spectators == 0;
+    if (filter.hide_empty && empty) continue;
+    if (filter.hide_not_empty && !empty) continue;
     if (filter.max_ping_ms > 0 && (e.ping_ms < 0 || e.ping_ms > filter.max_ping_ms)) continue;
     if (!filter.mode.empty() && compare_text(s.mode, filter.mode) != 0) continue;
     if (!filter.name_has.empty() && !has(s.name, filter.name_has) && !has(s.map, filter.name_has) &&
         !has(s.mode, filter.name_has))
       continue;
+    if (!filter.info.empty() && !info_filter_passes(filter.info, s.keys)) continue;
     rows.push_back(static_cast<int>(i));
   }
   auto before = [&](int ia, int ib) {
@@ -308,6 +315,277 @@ void server_list_view(const ServerList& l, const ServerFilter& filter, ServerSor
     return c < 0;
   };
   std::sort(rows.begin(), rows.end(), before);
+}
+
+const char* server_column_name(ServerColumn c) {
+  switch (c) {
+    case ServerColumn::name:
+      return "name";
+    case ServerColumn::address:
+      return "address";
+    case ServerColumn::ping:
+      return "ping";
+    case ServerColumn::game:
+      return "game";
+    case ServerColumn::map:
+      return "map";
+    case ServerColumn::players:
+      return "players";
+    case ServerColumn::mode:
+      return "mode";
+    case ServerColumn::skill:
+      return "skill";
+    case ServerColumn::key:
+      return "key";
+    case ServerColumn::activity:
+      return "activity";
+  }
+  return "?";
+}
+
+namespace {
+
+const std::string* key_value(const ServerInfo& s, const std::string& key) {
+  for (const auto& [k, v] : s.keys)
+    if (k == key) return &v;
+  return nullptr;
+}
+
+int compare_int(int a, int b) { return a == b ? 0 : a < b ? -1 : 1; }
+
+// The activity's group: 0 playing and not full, 1 full, 2 empty.
+int activity_group(const ServerInfo& s) {
+  if (s.players == 0) return 2;
+  return s.max_players > 0 && s.players >= s.max_players ? 1 : 0;
+}
+
+int compare_column(const ServerEntry& a, const ServerEntry& b, const ServerSortKey& k) {
+  const ServerInfo &x = a.info, &y = b.info;
+  switch (k.column) {
+    case ServerColumn::name:
+      return compare_text(x.name, y.name);
+    case ServerColumn::address:
+      return compare_address(a.address, b.address);
+    case ServerColumn::ping:
+      return compare_int(a.ping_ms, b.ping_ms);
+    case ServerColumn::game:
+      return compare_text(x.game, y.game);
+    case ServerColumn::map:
+      return compare_text(x.map, y.map);
+    case ServerColumn::players:
+      return compare_int(x.players, y.players);
+    case ServerColumn::mode:
+      return compare_text(x.mode, y.mode);
+    case ServerColumn::skill:
+      return compare_int(x.skill, y.skill);
+    case ServerColumn::key: {
+      const std::string* va = key_value(x, k.key);
+      const std::string* vb = key_value(y, k.key);
+      return compare_text(va != nullptr ? *va : std::string(), vb != nullptr ? *vb : std::string());
+    }
+    case ServerColumn::activity: {
+      const int ga = activity_group(x), gb = activity_group(y);
+      if (ga != gb) return compare_int(ga, gb);
+      return ga == 1 ? compare_int(y.players, x.players) : compare_int(a.ping_ms, b.ping_ms);
+    }
+  }
+  return 0;
+}
+
+}  // namespace
+
+void server_list_view(const ServerList& l, const ServerFilter& filter,
+                      const std::vector<ServerSortKey>& keys, std::vector<int>& rows) {
+  server_list_view(l, filter, ServerSort::ping, rows);
+  static const std::vector<ServerSortKey> kActivity = {{ServerColumn::activity, false, {}}};
+  const std::vector<ServerSortKey>& by = keys.empty() ? kActivity : keys;
+  std::stable_sort(rows.begin(), rows.end(), [&](int ia, int ib) {
+    const ServerEntry& a = l.entries[static_cast<size_t>(ia)];
+    const ServerEntry& b = l.entries[static_cast<size_t>(ib)];
+    const bool sa = a.ping_ms < 0, sb = b.ping_ms < 0;  // the silent last, whatever the order
+    if (sa != sb) return sb;
+    for (const ServerSortKey& k : by) {
+      const int c = compare_column(a, b, k);
+      if (c != 0) return k.descending ? c > 0 : c < 0;
+    }
+    return compare_address(a.address, b.address) < 0;
+  });
+}
+
+void server_list_requery(ServerList& l, int index) {
+  if (index < 0 || static_cast<size_t>(index) >= l.entries.size()) return;
+  ServerEntry& e = l.entries[static_cast<size_t>(index)];
+  if (!e.answered) return;  // still being asked by the refresh
+  e.again = true;
+  e.tries = 0;
+  e.asked_us = -1;
+}
+
+struct InfoPattern {
+  std::regex re;
+};
+
+std::vector<InfoRule> parse_info_filter(std::string_view text, std::vector<std::string>* problems) {
+  std::vector<std::string> words;
+  for (size_t i = 0; i < text.size();) {
+    while (i < text.size() && (text[i] == ' ' || text[i] == '\t')) i++;
+    if (i >= text.size()) break;
+    std::string w;
+    if (text[i] == '"') {
+      i++;
+      while (i < text.size() && text[i] != '"') w += text[i++];
+      if (i < text.size()) i++;
+    } else {
+      while (i < text.size() && text[i] != ' ' && text[i] != '\t') w += text[i++];
+    }
+    words.push_back(std::move(w));
+  }
+  std::vector<InfoRule> out;
+  for (const std::string& w : words) {
+    const size_t eq = w.find('=');
+    const std::string key = w.empty()
+                                ? std::string()
+                                : w.substr(1, eq == std::string::npos ? std::string::npos : eq - 1);
+    if (w.empty() || (w[0] != '+' && w[0] != '-') || key.empty()) {
+      if (problems) problems->push_back("The server filter's word " + w + " isn't +key or -key.");
+      continue;
+    }
+    InfoRule r;
+    r.show = w[0] == '+';
+    r.key = key;
+    if (eq != std::string::npos) r.pattern = w.substr(eq + 1);
+    if (!r.pattern.empty() && r.pattern[0] == '*') r.pattern.clear();
+    if (!r.pattern.empty()) {
+      try {
+        r.compiled = std::make_shared<const InfoPattern>(
+            InfoPattern{std::regex(r.pattern, std::regex::icase)});
+      } catch (const std::regex_error&) {
+        if (problems)
+          problems->push_back("The server filter's pattern " + r.pattern + " can't be read.");
+        continue;
+      }
+    }
+    out.push_back(std::move(r));
+  }
+  return out;
+}
+
+bool info_filter_passes(const std::vector<InfoRule>& rules,
+                        const std::vector<std::pair<std::string, std::string>>& keys) {
+  for (const InfoRule& r : rules) {
+    if (r.key == "*") return r.show;
+    const std::string* value = nullptr;
+    for (const auto& [k, v] : keys)
+      if (k == r.key) value = &v;
+    if (value == nullptr) continue;
+    bool match = false;
+    if (r.compiled == nullptr)
+      match = !value->empty();
+    else
+      match = std::regex_search(*value, r.compiled->re);
+    if (match) return r.show;
+  }
+  return rules.empty() || !rules.back().show;
+}
+
+namespace {
+
+std::vector<std::string_view> split_on(std::string_view text, char sep) {
+  std::vector<std::string_view> out;
+  size_t at = 0;
+  while (true) {
+    const size_t next = text.find(sep, at);
+    out.push_back(text.substr(at, next == std::string_view::npos ? text.npos : next - at));
+    if (next == std::string_view::npos) return out;
+    at = next + 1;
+  }
+}
+
+// A field kept on one line: tabs and line ends become spaces.
+std::string one_line(std::string_view text) {
+  std::string out(text);
+  for (char& c : out)
+    if (c == '\t' || c == '\n' || c == '\r') c = ' ';
+  return out;
+}
+
+bool read_int(std::string_view text, int& out) {
+  if (text.empty() || text.size() > 9) return false;
+  bool negative = text.front() == '-';
+  if (negative) text.remove_prefix(1);
+  if (text.empty()) return false;
+  int v = 0;
+  for (const char c : text) {
+    if (c < '0' || c > '9') return false;
+    v = v * 10 + (c - '0');
+  }
+  out = negative ? -v : v;
+  return true;
+}
+
+}  // namespace
+
+std::string server_list_cache_text(const ServerList& l) {
+  std::string out;
+  for (const ServerEntry& e : l.entries) {
+    if (!e.answered) continue;
+    out += to_string(e.address) + '\t' + std::to_string(e.ping_ms) + '\t' +
+           std::to_string(e.info.players) + '\t' + std::to_string(e.info.max_players) + '\t' +
+           one_line(e.info.name) + '\t' + one_line(e.info.map) + '\t' + one_line(e.info.game) +
+           '\t' + one_line(e.info.mode) + '\n';
+  }
+  return out;
+}
+
+int server_list_read_cache(ServerList& l, std::string_view text, int* bad) {
+  int read = 0, wrong = 0;
+  for (std::string_view line : split_on(text, '\n')) {
+    if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+    if (line.empty()) continue;
+    const std::vector<std::string_view> f = split_on(line, '\t');
+    Address a;
+    if (!parse_address(std::string(f[0]), a)) {
+      wrong++;
+      continue;
+    }
+    ServerInfo info;
+    int ping = -1;
+    if (f.size() != 1 && (f.size() != 8 || !read_int(f[1], ping) || !read_int(f[2], info.players) ||
+                          !read_int(f[3], info.max_players))) {
+      wrong++;
+      continue;
+    }
+    const int i = server_list_add(l, a, kServerFromCache, 0);
+    if (i < 0) break;
+    read++;
+    if (f.size() == 1) continue;
+    ServerEntry& e = l.entries[static_cast<size_t>(i)];
+    info.name = std::string(f[4]);
+    info.map = std::string(f[5]);
+    info.game = std::string(f[6]);
+    info.mode = std::string(f[7]);
+    e.info = std::move(info);
+    e.ping_ms = ping;
+    e.answered = true;
+  }
+  if (bad != nullptr) *bad = wrong;
+  return read;
+}
+
+std::string address_lines(const std::vector<Address>& addresses) {
+  std::string out;
+  for (const Address& a : addresses) out += to_string(a) + '\n';
+  return out;
+}
+
+std::vector<Address> parse_address_lines(std::string_view text) {
+  std::vector<Address> out;
+  for (std::string_view line : split_on(text, '\n')) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.remove_suffix(1);
+    Address a;
+    if (!line.empty() && parse_address(std::string(line), a)) out.push_back(a);
+  }
+  return out;
 }
 
 }  // namespace ge::net

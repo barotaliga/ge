@@ -227,6 +227,7 @@ struct Q {
   void WriteByte(float to, float v) { run(52, to, v); }
   void WriteShort(float to, float v) { run(54, to, v); }
   void WriteCoord(float to, float v) { run(56, to, v); }
+  void WriteAngle(float to, float v) { run(57, to, v); }
   void WriteString(float to, int32_t s) { run(58, to, s); }
   void WriteEntity(float to, int32_t e) { run(59, to, e); }
   void movetogoal(float dist) { run(67, dist); }

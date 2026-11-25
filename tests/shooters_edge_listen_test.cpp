@@ -30,10 +30,11 @@
 #include "audio/wav.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "golden.hpp"
 #include "progs/vm.hpp"
 #include "save/file.hpp"
+#include "shooterbots/party.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -44,13 +45,13 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/weapon_groups.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
 #include "shooters_edge/server/qvm_test_mod.hpp"
-#include "shooters_edge/server/sequel_items.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
 #include "vfs/pak.hpp"
 
@@ -255,6 +256,23 @@ TEST(a_game_stopped_lets_go_and_starts_again) {
   CHECK(start(l));
 }
 
+// `net_restart` and `quit`'s farewell in the window: with no match others can join (a game alone,
+// or none at all) there is nothing to open again and nobody to tell.
+TEST(net_restart_and_the_farewell_need_a_match_others_join) {
+  cl::Listen l;
+  int port = 27910;
+  std::string said;
+  CHECK(!cl::listen_net_restart(l, port, said));
+  CHECK(said.find("No game is hosted") == 0 && port == 27910);
+  cl::listen_farewell(l, "maintenance", true);  // nothing hosted: nothing happens
+  if (!start(l)) return;
+  said.clear();
+  CHECK(!cl::listen_net_restart(l, port, said));  // played alone: no socket to open again
+  CHECK(said.find("No game is hosted") == 0);
+  cl::listen_farewell(l, "", false);
+  CHECK(l.match != nullptr);  // the game goes on until the window closes
+}
+
 TEST(the_player_rocket_jumps_off_the_hall_floor) {
   const Rjump& r = the_jump();
   CHECK_MSG(std::fabs(r.ground_z - 24) < 0.1f, "stands at z " + std::to_string(r.ground_z));
@@ -270,7 +288,7 @@ TEST(the_player_rocket_jumps_off_the_hall_floor) {
 }
 
 // The health a hard landing takes in the hall: dropped from near its ceiling already falling at
-// 400 down, under the arena's `sv_falldamage` (classic remix with the sequel's physics) or not.
+// 400 down, under the arena's `sv_falldamage` (classic remix with Quake II's physics) or not.
 float fall_hurt(bool falldamage) {
   cl::Listen l;
   if (!start(l, falldamage ? std::vector<std::string>{"set sv_falldamage 1"}
@@ -298,7 +316,7 @@ TEST(a_mods_compiled_module_plays_the_windows_match) {
 }
 
 #if defined(GE_NATIVE_ROOT)
-// A mod's game library of the sequel's interface (our own, tests/sequel_native_fixture_game.cpp)
+// A mod's game library of Quake II's interface (our own, tests/q2_native_fixture_game.cpp)
 // plays the window's match on a classic map: it traces the map's clip hulls, its player stands on
 // the floor with its numbers, and its prints, sounds and sparks reach the window.
 TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
@@ -308,7 +326,7 @@ TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
   cl::Listen l;
   if (!start(l, {}, nullptr, &library)) return;
   for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
-  CHECK(l.rules != nullptr && shooters_edge::server::native_sequel_of(*l.rules) != nullptr);
+  CHECK(l.rules != nullptr && shooters_edge::server::native_q2_of(*l.rules) != nullptr);
   if (l.server == nullptr) return;
   CHECK(std::find(l.prints.begin(), l.prints.end(), "player 1 entered the game\n") !=
         l.prints.end());
@@ -330,13 +348,13 @@ TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
   CHECK_MSG(!l.effects.empty(), "the game's spark (a temporary entity) reached the window");
   // Its own bar, run by the window in place of the classic one.
   int64_t frame = 0;
-  const shooters_edge::server::RulesWorld* world = cl::sequel_bar_world(l.rules, frame);
+  const shooters_edge::server::RulesWorld* world = cl::q2_bar_world(l.rules, frame);
   CHECK(world != nullptr && world->status_bar == "yb -24 xv 0 hnum");
   if (world == nullptr) return;
-  cl::SequelBar bar;
-  cl::run_sequel_bar(bar, *world, 0, frame, 640, 480);
+  cl::Q2Bar bar;
+  cl::run_q2_bar(bar, *world, 0, frame, 640, 480);
   CHECK_MSG(!bar.ops.empty(), "the game's bar program drew its health number");
-  // The hand holds the gun the game names (the sequel's first, by its view model's name).
+  // The hand holds the gun the game names (Quake II's first, by its view model's name).
   cl::ViewState shown;
   cl::HeldState held;
   cl::frame_view(l, shown, 1, 1, 0.013);
@@ -398,6 +416,23 @@ TEST(keys_and_the_mouse_make_the_command_and_turn_the_view) {
   CHECK(std::fabs(view.x + 3.3f) < 1e-3f);         // up is a negative pitch
 }
 
+TEST(bind_defaults_brings_back_every_key_a_saved_unbindall_took) {
+  ge::console::Console con;
+  cl::ControlSettings c;
+  cl::add_cvars(con, c);
+  cl::default_binds(con);
+  // A saved config that starts from no binds and keeps few (the player's binds gone).
+  con.execute("unbindall; bind ` toggleconsole; bind w +back; bind k +jump");
+  con.run();
+  CHECK(con.binds().get(ge::console::BindMode::game, "mouse1").empty());
+  con.execute("bind_defaults");
+  con.run();
+  CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+forward");
+  CHECK(con.binds().get(ge::console::BindMode::game, "mouse1") == "+attack");
+  CHECK(con.binds().get(ge::console::BindMode::game, "k").empty());
+  CHECK(con.binds().get(ge::console::BindMode::game, "`") == "toggleconsole");
+}
+
 TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   ge::console::Console con;
   cl::ControlSettings c;
@@ -442,13 +477,21 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
   con.key("shift", false);
   con.run();
-  // No crouch in the classic game: C is bound to nothing; +movedown swims down where bound.
+  // No crouch in Quake: C is bound to nothing; +movedown swims down where bound.
   CHECK(con.binds().get(ge::console::BindMode::game, "c").empty());
   con.execute("bind c +movedown");
   con.key("c", true);
   con.run();
   CHECK(cl::read_controls(cl::button_moves(c), in, c).up == -800);
   con.key("c", false);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
+  // +moveup swims up, and in Quake II's move an up of 10 or more on the ground is its jump.
+  con.execute("bind v +moveup");
+  con.key("v", true);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up >= 10);
+  con.key("v", false);
   con.run();
   CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
   // lookstrafe: the mouse's sideways counts sidestep and leave the yaw alone.
@@ -459,6 +502,11 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   cl::turn_view(in, m, c, 0.01, view);
   CHECK(view.y == 90);
   CHECK(cl::read_controls(m, in, c).side > 0);
+  // m_side scales it: 50 counts at sensitivity s and m_side 2 are 100 s units sideways.
+  con.execute("m_side 2");
+  const double sens = c.sensitivity;
+  CHECK(cl::read_controls(m, in, c).side == static_cast<int>(50 * sens * 2));
+  con.execute("m_side 0.8");
   // The menu took the keys: everything let go.
   cl::release_buttons(c);
   CHECK(cl::read_controls(cl::button_moves(c), {}, c).forward == 0);
@@ -659,6 +707,79 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sin
   CHECK(!step().drawn);
 }
 
+TEST(a_predicted_shot_or_the_server_s_shot_sound_fires_the_hand_once) {
+  // net/qw_weapon.hpp counts each predicted shot in own_shots: the hand fires on each, once.
+  cl::DemoState s;
+  s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;
+  s.stats[cl::kStatActiveWeapon] = 8;  // the super nailgun
+  s.format = cl::DemoFormat::client;
+  s.players.resize(32);
+  cl::HeldState held;
+  const shooters_edge::view::ViewSettings settings;
+  const ge::render::FrameView frame;
+  const auto step = [&] { return cl::step_demo_held(s, held, settings, {}, frame, 0, 0.013); };
+  CHECK(!step().fired);
+  s.own_shots = 1;
+  CHECK(step().fired);
+  CHECK(!step().fired);
+  s.own_shots = 3;  // two in one window frame: one shot drawn
+  CHECK(step().fired);
+  // Unpredicted, under rules that never animate the weapon: the server's weapon sound on the
+  // player fires the hand, once per frame read (a Quake join, a demo of our server).
+  s.sounds = {"", "weapons/spike2.wav", "player/axhit2.wav"};
+  cl::DemoSound snd;
+  snd.entity = 1;
+  snd.channel = 1;
+  snd.sound = 2;  // not a shot
+  s.started = {snd};
+  s.frames = 10;
+  CHECK(!step().fired);
+  s.started[0].sound = 1;
+  s.frames = 11;
+  CHECK(step().fired);
+  CHECK(!step().fired);  // the same frame read: not again
+  // A server whose rules never send a weapon frame other than 0 leaves the frames to the hand.
+  CHECK(!held.frames_live);
+  s.players[0].weapon_frame = 2;
+  step();
+  CHECK(held.frames_live);
+}
+
+TEST(r_viewmodellastfired_keeps_a_recording_s_last_fired_weapon_while_another_is_looked_at) {
+  cl::DemoState s;
+  s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;
+  s.stats[cl::kStatActiveWeapon] = 32;  // the rocket launcher
+  s.format = cl::DemoFormat::single;
+  cl::HeldState held;
+  held.recording = true;
+  shooters_edge::view::ViewSettings settings;
+  settings.last_fired = true;
+  const ge::render::FrameView frame;
+  const auto step = [&] { return cl::step_demo_held(s, held, settings, {}, frame, 0, 0.013); };
+  s.weapon_frame = 3;  // firing
+  CHECK(step().weapon == shooters_edge::view::Weapon::rocket_launcher);
+  s.weapon_frame = 0;
+  s.stats[cl::kStatActiveWeapon] = 1;  // the shotgun looked at, not fired
+  CHECK(held.last_fired == static_cast<int>(shooters_edge::view::Weapon::rocket_launcher));
+  CHECK(step().weapon == shooters_edge::view::Weapon::rocket_launcher);
+  s.weapon_frame = 1;  // the shotgun fires: it is shown from now on (switched to)
+  for (int i = 0; i < 40; i++) step();
+  CHECK(held.last_fired == static_cast<int>(shooters_edge::view::Weapon::shotgun));
+  s.weapon_frame = 0;
+  for (int i = 0; i < 40; i++) step();
+  CHECK(step().weapon == shooters_edge::view::Weapon::shotgun);
+  // Off, or a server joined: the weapon held.
+  s.stats[cl::kStatActiveWeapon] = 32;
+  held.recording = false;
+  for (int i = 0; i < 40; i++) step();
+  CHECK(step().weapon == shooters_edge::view::Weapon::rocket_launcher && held.last_fired == -1);
+  // A stuffed text's item-taken lines.
+  CHECK(cl::bonus_lines("bf\n") == 1 && cl::bonus_lines("bf\nbf\n") == 2);
+  CHECK(cl::bonus_lines("bfx\n") == 0 && cl::bonus_lines("say bf\n") == 0);
+}
+
 TEST(the_hud_counts_down_the_quad_and_the_shield_and_drops_them_when_they_run_out) {
   cl::Listen l;
   if (!start(l)) return;
@@ -826,7 +947,7 @@ std::vector<uint8_t> brush_hall() {
   return bsp;
 }
 
-// On the sequel's rules outside deathmatch (a single-player or coop game) a level change keeps the
+// On Quake II's rules outside deathmatch (a single-player or coop game) a level change keeps the
 // server, so the body the player leaves with is the one he enters the next level with; in
 // deathmatch every map's rules are new and the body starts afresh.
 TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
@@ -847,7 +968,7 @@ TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
     CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
     if (l.rules == nullptr) return;
     for (int i = 0; i < 30; i++) cl::listen_frame(l, {});
-    shooters_edge::server::SequelServer* before = shooters_edge::server::sequel_of(*l.rules);
+    shooters_edge::server::Q2Server* before = shooters_edge::server::q2_of(*l.rules);
     CHECK(before != nullptr);
     if (before == nullptr) return;
     before->players[0].body.counts[shotgun] = 1;
@@ -860,7 +981,7 @@ TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
     CHECK_MSG(cl::listen_change(l, std::move(next), error), error);
     for (int i = 0; i < 30; i++) cl::listen_frame(l, {});
     CHECK(l.map->name == "next");
-    shooters_edge::server::SequelServer* after = shooters_edge::server::sequel_of(*l.rules);
+    shooters_edge::server::Q2Server* after = shooters_edge::server::q2_of(*l.rules);
     CHECK(after != nullptr);
     if (after == nullptr) return;
     CHECK_MSG((after == before) == coop, coop ? "coop: new rules" : "deathmatch: rules kept");
@@ -871,10 +992,31 @@ TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
   }
 }
 
-// In the sequel's single-player game `addbot` seats a companion beside the player: the game turns
+// In Quake II's single-player game `addbot` seats a companion beside the player: the game turns
 // cooperative for it, the companion keeps near him as he walks off, stays seated through a level
 // change (the same rules), and the last one sent away makes the game single player again.
-TEST(a_companion_joins_the_sequel_s_single_player_game_and_follows_through_a_level_change) {
+// `sv_lobby 1` (the window's default) is a match's lobby: a single-player game, `deathmatch 0`
+// before the map, starts with the map, in Quake II's rules too; deathmatch warms up in the lobby.
+TEST(a_single_player_game_starts_with_its_map_whatever_sv_lobby_says) {
+  std::string error;
+  cl::SearchPath files;
+  const std::vector<uint8_t> hall = brush_hall();
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/hall.bsp", hall}}), error));
+  for (const bool dm : {false, true}) {
+    cl::ListenOptions opt = shooters_edge::net::listen_options();
+    opt.lobby = true;
+    opt.console = {dm ? "deathmatch 1" : "deathmatch 0"};
+    cl::Listen l;
+    std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "hall", error);
+    CHECK_MSG(map != nullptr, error);
+    if (!map) return;
+    CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
+    CHECK_MSG((l.room != nullptr) == dm, dm ? "deathmatch had no lobby" : "single player had one");
+    if (l.server != nullptr) CHECK(l.server->cvars.find("deathmatch")->on() == dm);
+  }
+}
+
+TEST(a_companion_joins_q2_s_single_player_game_and_follows_through_a_level_change) {
   std::string error;
   cl::SearchPath files;
   const std::vector<uint8_t> hall = brush_hall();
@@ -930,8 +1072,50 @@ TEST(a_companion_joins_the_sequel_s_single_player_game_and_follows_through_a_lev
   CHECK_MSG(said("You play alone again."), "no word that the game is single player again");
 }
 
+// A HELPER (`addbot expert helper`) works the level near the people rather than at the player's
+// shoulder (shooterbots/party.hpp): with nothing left near him in the hall it comes back to the
+// player, never runs off beyond the leash, and an unknown word is refused in the game's words.
+TEST(a_helper_joins_q2_s_coop_game_and_keeps_to_the_people) {
+  std::string error;
+  cl::SearchPath files;
+  const std::vector<uint8_t> hall = brush_hall();
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/hall.bsp", hall}}), error));
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0", "coop 0"};
+  cl::Listen l;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "hall", error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
+  if (l.rules == nullptr) return;
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  const auto said = [&](const std::string& part) {
+    for (const std::string& line : l.prints)
+      if (line.find(part) != std::string::npos) return true;
+    return false;
+  };
+  CHECK(cl::listen_lobby(l, "addbot expert sidekick"));
+  for (int i = 0; i < 4; i++) cl::listen_frame(l, {});
+  CHECK_MSG(said("unknown word \"sidekick\""), "no word that sidekick is not a role");
+  CHECK(!l.server->clients[1].active);
+  CHECK(cl::listen_lobby(l, "addbot helper expert"));
+  for (int i = 0; i < 4; i++) cl::listen_frame(l, {});
+  CHECK_MSG(said("mate1 (expert, helper) joins the game"), "no word of the helper joining");
+  CHECK(l.server->clients[1].active);
+  float farthest = 0;
+  for (int i = 0; i < 600; i++) {
+    cl::listen_frame(l, {});
+    const sh::Vec3f me = l.server->sv.edicts[1].origin, mate = l.server->sv.edicts[2].origin;
+    const float dx = me.x - mate.x, dy = me.y - mate.y;
+    farthest = std::max(farthest, std::sqrt(dx * dx + dy * dy));
+  }
+  CHECK_MSG(farthest < ge::shooterbots::kPartyLeash,
+            "the helper went " + std::to_string(farthest) + " units off");
+  CHECK(l.server->clients[1].active);
+}
+
 // A map of the family that carries brushes (version 38) plays on the rules that trace them: the
-// window's listen server runs the sequel's runner on it whatever the program, the player spawns at
+// window's listen server runs Quake II's runner on it whatever the program, the player spawns at
 // the map's start facing its way, stands on its floor and walks across it that way, the turn the
 // spawn gave him taken once by the window's view (docs/goals/M18v.md, M18v2).
 TEST(a_map_of_brushes_plays_on_the_rules_that_trace_brushes_and_the_player_walks_it) {
@@ -964,7 +1148,7 @@ TEST(a_map_of_brushes_plays_on_the_rules_that_trace_brushes_and_the_player_walks
       cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error),
       error);
   if (l.rules == nullptr) return;
-  CHECK(shooters_edge::server::sequel_of(*l.rules) != nullptr);
+  CHECK(shooters_edge::server::q2_of(*l.rules) != nullptr);
   const auto me = [&] { return l.server->world.entities[1]; };
   for (int i = 0; i < 120; i++) cl::listen_frame(l, {});  // spawned, fallen onto the floor
   CHECK(!me().free);
@@ -982,7 +1166,7 @@ TEST(a_map_of_brushes_plays_on_the_rules_that_trace_brushes_and_the_player_walks
   CHECK(std::fabs(walked.z - stood.z) < 1.0f);  // on the same floor
 }
 
-// A floor with a plat on the sequel's rules, lowered at the start (its top 8 up), the player
+// A floor with a plat on Quake II's rules, lowered at the start (its top 8 up), the player
 // started at `origin`.
 bool open_lift_hall(cl::Listen& l, const char* origin) {
   br::BrushWorld world;
@@ -1011,10 +1195,10 @@ bool open_lift_hall(cl::Listen& l, const char* origin) {
   return l.rules != nullptr;
 }
 
-// A lift on the sequel's rules moves only in their frames (ten a second), the rider with it; the
+// A lift on Quake II's rules moves only in their frames (ten a second), the rider with it; the
 // window spreads each frame's rise over the frame, so the drawn eye climbs a little every window
 // frame, never standing still between jumps (docs/goals/M18v.md, the lift's ride).
-TEST(the_eye_rides_a_sequel_lift_up_smoothly) {
+TEST(the_eye_rides_a_q2_lift_up_smoothly) {
   cl::Listen l;
   if (!open_lift_hall(l, "0 0 40")) return;
   cl::ViewState shown;
@@ -1046,9 +1230,9 @@ TEST(the_eye_rides_a_sequel_lift_up_smoothly) {
                                       std::to_string(mean) + " m a frame");
 }
 
-// The sequel's rules roll the view as he sidesteps, a tenth at a time; the window eases each
+// Quake II's rules roll the view as he sidesteps, a tenth at a time; the window eases each
 // tenth's roll across it, so the drawn roll leans a little every window frame.
-TEST(the_view_rolls_smoothly_as_he_sidesteps_on_the_sequel_s_rules) {
+TEST(the_view_rolls_smoothly_as_he_sidesteps_on_q2_s_rules) {
   cl::Listen l;
   if (!open_lift_hall(l, "-300 0 24")) return;
   cl::ViewState shown;
@@ -1079,15 +1263,15 @@ TEST(the_view_rolls_smoothly_as_he_sidesteps_on_the_sequel_s_rules) {
                 std::to_string(biggest) + " of " + std::to_string(full) + " rad");
 }
 
-// On the sequel's rules the window's status names the sequel's own weapon keys (key k + 1 its
+// On Quake II's rules the window's status names Quake II's own weapon keys (key k + 1 its
 // weapon k), so the weapon groups pick from its eleven: with the shotgun and shells, key 3's group
 // (the super shotgun, then the shotgun) asks for the shotgun, key 2.
-TEST(the_weapon_groups_pick_the_sequel_s_weapons_by_its_own_keys) {
+TEST(the_weapon_groups_pick_q2_s_weapons_by_its_own_keys) {
   cl::Listen l;
   if (!open_lift_hall(l, "300 300 24")) return;
   for (int i = 0; i < 30; i++) cl::listen_frame(l, {});
   namespace sv = shooters_edge::server;
-  sv::SequelPlayer& p = sv::sequel_of(*l.rules)->players[0];
+  sv::Q2Player& p = sv::q2_of(*l.rules)->players[0];
   p.body.counts[sv::sq_item("weapon_shotgun")] = 1;
   p.body.ammo[int(sv::SqAmmo::shells)] = 10;
   const shooters_edge::hud::Status s = cl::status_of(l, 1);
@@ -1098,17 +1282,60 @@ TEST(the_weapon_groups_pick_the_sequel_s_weapons_by_its_own_keys) {
   CHECK(s.keyed.ammo[1] == -1 && s.keyed.ammo[2] == 10);  // the blaster spends none
   cl::WeaponGroups g;
   g.on = true;
-  g.game = shooters_edge::profiles::find_game("sequel")->weapon_groups;
+  g.game = shooters_edge::profiles::find_game("q2")->weapon_groups;
   cl::Moves m;
   m.impulse = 3;
   cl::group_moves(g, s, 1, m);
   CHECK_MSG(m.impulse == 2, std::to_string(m.impulse));
 }
 
-// The window's own game on the sequel's rules throws the sequel's world as a joined client draws
+// On Quake II's rules the hand sees each shot, though the server fires a frame and steps past it
+// in one rules frame: a gun that fires on its first frame (the shotguns) is seen firing as the
+// step that starts the run passes it, and a held machine gun once for each round of its loop.
+TEST(the_hand_sees_q2_s_shotguns_fire_on_their_first_frame) {
+  namespace sv = shooters_edge::server;
+  const auto shots_of = [](sv::SqWeapon weapon, int held_frames) {
+    cl::Listen l;
+    if (!open_lift_hall(l, "300 300 24")) return -1;
+    sv::Q2Server* sq = sv::q2_of(*l.rules);
+    if (sq == nullptr) return -1;
+    const sv::SqWeaponRow& row = sv::kSqWeapons[static_cast<int>(weapon)];
+    sq->players[0].body.counts[sv::sq_item(row.item)] = 1;
+    sq->players[0].body.ammo[static_cast<int>(row.ammo)] = 100;
+    l.rules->client_command(0, std::string("use ") + row.name);
+    cl::ViewState shown;
+    cl::HeldState held;
+    constexpr double kTic = 0.013;
+    double t = 0;
+    const auto run = [&](int frames, sh::MoveCmd cmd) {
+      for (int i = 0; i < frames; i++) {
+        cl::listen_frame(l, cmd);
+        t += kTic;
+        cl::frame_view(l, shown, 1, t, kTic);
+        cl::step_held(l, shown, held, {}, {}, t, kTic);
+      }
+    };
+    run(150, {});
+    if (sq->players[0].hand.weapon != static_cast<int>(weapon)) return -2;
+    sh::MoveCmd fire;
+    fire.buttons = sh::kButtonAttack;
+    run(held_frames, fire);
+    run(150, {});
+    return held.shots;
+  };
+  CHECK_MSG(shots_of(sv::SqWeapon::super_shotgun, 4) == 1,
+            std::to_string(shots_of(sv::SqWeapon::super_shotgun, 4)));
+  CHECK_MSG(shots_of(sv::SqWeapon::shotgun, 4) == 1,
+            std::to_string(shots_of(sv::SqWeapon::shotgun, 4)));
+  // Held for a second: about ten rounds, each one seen (the server steps ten frames a second).
+  const int rounds = shots_of(sv::SqWeapon::machinegun, 77);
+  CHECK_MSG(rounds >= 8 && rounds <= 11, std::to_string(rounds));
+}
+
+// The window's own game on Quake II's rules throws Quake II's world as a joined client draws
 // it: a teleporter pad's rising specks once a rules frame (ten a second, never once per window
 // frame), and an item's glow once as it shows again.
-TEST(the_sequels_pads_rise_and_its_items_glow_back_in_the_windows_own_game) {
+TEST(q2_pads_rise_and_its_items_glow_back_in_the_windows_own_game) {
   br::BrushWorld world;
   world.models.resize(1);
   const float lo[3] = {-512, -512, -16}, hi[3] = {512, 512, 0};
@@ -1133,7 +1360,7 @@ TEST(the_sequels_pads_rise_and_its_items_glow_back_in_the_windows_own_game) {
       cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error),
       error);
   if (l.rules == nullptr) return;
-  shooters_edge::server::SequelServer* sq = shooters_edge::server::sequel_of(*l.rules);
+  shooters_edge::server::Q2Server* sq = shooters_edge::server::q2_of(*l.rules);
   CHECK(sq != nullptr);
   if (sq == nullptr) return;
   int specks = 0, glows = 0;
@@ -1153,7 +1380,7 @@ TEST(the_sequels_pads_rise_and_its_items_glow_back_in_the_windows_own_game) {
   CHECK_MSG(specks >= frames - 1 && specks <= frames + 1,
             std::to_string(specks) + " specks over " + std::to_string(frames) + " frames");
   CHECK(glows == 0);
-  for (shooters_edge::server::SequelEntity& e : sq->entities)
+  for (shooters_edge::server::Q2Entity& e : sq->entities)
     if (e.item >= 0) {
       e.hidden = true;  // as if taken, back in a moment
       e.respawn_at = sq->level_time + 0.3;
@@ -1163,4 +1390,22 @@ TEST(the_sequels_pads_rise_and_its_items_glow_back_in_the_windows_own_game) {
     count();
   }
   CHECK_MSG(glows == 1, std::to_string(glows));
+}
+
+TEST(quake_twos_gun_sway_turns_and_moves_the_held_weapon_and_sets_ours_aside) {
+  // Its degrees (pitch down, yaw left, roll right side down) as the hand's turn (yaw right, pitch
+  // up, roll right side down); its place along the world's axes as right, up and forward of the
+  // view; the hand's own lag set aside.
+  shooters_edge::view::HandInput in;
+  shooters_edge::client::q2_gun_sway({2, 4, 6}, {0, 40, 0}, {0, 90, 0}, in);
+  constexpr double kRad = 0.017453292519943295;
+  CHECK(in.game_sway);
+  CHECK(std::fabs(in.place.game_turn[0] + 4 * kRad) < 1e-6);
+  CHECK(std::fabs(in.place.game_turn[1] + 2 * kRad) < 1e-6);
+  CHECK(std::fabs(in.place.game_turn[2] - 6 * kRad) < 1e-6);
+  // Facing +y (yaw 90), 40 units along +y is a metre forward.
+  CHECK_MSG(std::fabs(in.place.game_shift_m[2] - 1.0) < 1e-5 &&
+                std::fabs(in.place.game_shift_m[0]) < 1e-5 &&
+                std::fabs(in.place.game_shift_m[1]) < 1e-5,
+            std::to_string(in.place.game_shift_m[2]));
 }

@@ -143,6 +143,37 @@ TEST(the_screen_blend_is_nothing_in_clear_air_and_stacks_what_is_held) {
   CHECK(rgba[3] > water_share && rgba[3] <= 1);
 }
 
+TEST(the_classic_tints_are_the_originals_one_power_at_a_time) {
+  double rgba[4];
+  fx::Screen s;
+  s.classic = true;
+  fx::screen_blend(s, rgba);
+  CHECK(rgba[3] == 0);
+  // The quad's pure blue at 30 of 255; held with the pentagram, the quad's alone shows.
+  s.powerup = fx::Powerup::quad;
+  fx::screen_blend(s, rgba);
+  CHECK(std::abs(rgba[3] - 30.0 / 255) < 1e-12 && rgba[2] == 1 && rgba[0] == 0);
+  // Under water the brown (130, 80, 50) at 128 of 255 first, the quad's blue over it.
+  s.powerup = fx::Powerup::none;
+  s.medium = fx::Medium::water;
+  fx::screen_blend(s, rgba);
+  CHECK(std::abs(rgba[3] - 128.0 / 255) < 1e-12 && std::abs(rgba[0] - 130.0 / 255) < 1e-12);
+  // A blow's tint: 3 x its count (at least 10) added, kept at 150; its colour by the armour.
+  double strength = 0, rgb[3];
+  fx::take_classic_hurt(strength, rgb, 0, 4);
+  CHECK(strength == 30 && rgb[0] == 255 && rgb[1] == 0);
+  fx::take_classic_hurt(strength, rgb, 2, 20);
+  CHECK(strength == 63 && rgb[0] == 220 && rgb[1] == 50);
+  fx::take_classic_hurt(strength, rgb, 60, 20);
+  CHECK(strength == 150 && rgb[0] == 200 && rgb[1] == 100);
+  // The pickup flash: gold (215, 186, 69) at 50 of 255.
+  fx::Screen bonus;
+  bonus.classic = true;
+  bonus.bonus = fx::kBonusFlash;
+  fx::screen_blend(bonus, rgba);
+  CHECK(std::abs(rgba[3] - 50.0 / 255) < 1e-12 && std::abs(rgba[1] - 186.0 / 255) < 1e-12);
+}
+
 TEST(the_classic_grade_keeps_the_palettes_colours) {
   std::vector<uint8_t> palette(768);
   for (size_t i = 0; i < 256; ++i) {
@@ -230,6 +261,28 @@ TEST(ce_skies_picks_our_sky_or_the_packs_in_the_modern_look) {
   con.execute("ce_skies 0");
   CHECK(lk::world_options(lk::Look::modern, {}, pic).pack_sky);
   CHECK(!lk::world_options(lk::Look::classic, {}, pic).pack_sky);  // the classic's own already
+}
+
+TEST(ce_enabled_0_turns_every_switch_off_and_1_gives_each_its_own_back) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  con.execute("ce_decals 0");
+  con.run();
+  con.execute("ce_enabled 0");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies && !pic.ce.textures && !pic.ce.flames && !pic.ce.decals);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).pack_sky);  // the pack's sky
+  CHECK(con.cvars().find("ce_skies")->on());                     // the player's switch kept as set
+  con.execute("ce_flames 0");  // set while it is off: kept for when it is on again
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies);
+  con.execute("ce_enabled 1");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(pic.ce.skies && pic.ce.textures && !pic.ce.decals && !pic.ce.flames);
 }
 
 TEST(ce_relief_and_ce_parallax_light_the_enhanced_textures_in_the_modern_look) {
@@ -432,6 +485,91 @@ TEST(the_v_cvars_tone_each_layer_of_the_screens_tint) {
   CHECK(std::fabs(b[3] - a[3] / 2) < 1e-12);  // half the flash
 }
 
+TEST(an_item_taken_flashes_the_view_gold_for_half_a_second_unless_cl_bonusflash_is_0) {
+  double b = fx::fade_bonus(0, 0.01, 1);
+  CHECK(b == fx::kBonusFlash);
+  b = fx::fade_bonus(b, 0.25, 0);
+  CHECK(std::fabs(b - 25) < 1e-9);
+  b = fx::fade_bonus(b, 0.3, 0);
+  CHECK(b == 0);                                          // gone in half a second
+  CHECK(fx::fade_bonus(10, 0.01, 2) == fx::kBonusFlash);  // another one lights it again
+  fx::Screen took;
+  took.bonus = fx::kBonusFlash;
+  double a[4];
+  fx::screen_blend(took, a);
+  CHECK(std::fabs(a[3] - 50 / 255.0) < 1e-12 && a[0] > a[1] && a[1] > a[2]);  // gold
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(pic.bonus_flash);
+  con.execute("cl_bonusflash 0");
+  CHECK(!pic.bonus_flash);
+  lk::toned_blend(pic, took, a);
+  CHECK(a[3] == 0);
+}
+
+TEST(the_powers_tint_by_the_items_held_never_by_the_own_glow) {
+  // A match's prewar: the server lights the player's own figure blue (effects 64) with no quad
+  // held; the items stat holds none, so no tint.
+  fx::Screen prewar;
+  fx::take_powers(prewar, 0);
+  CHECK(!prewar.power && !prewar.shield && !prewar.suit && !prewar.stealth);
+  CHECK(prewar.powerup == fx::Powerup::none);
+  double a[4];
+  fx::screen_blend(prewar, a);
+  CHECK(a[3] == 0);
+  fx::Screen quad;
+  fx::take_powers(quad, fx::kItemQuad | fx::kItemPent);
+  CHECK(quad.power && quad.shield && !quad.suit && quad.powerup == fx::Powerup::quad);
+  fx::screen_blend(quad, a);
+  CHECK(a[3] > 0 && a[2] > a[0]);
+  fx::Screen pent;
+  fx::take_powers(pent, fx::kItemPent);
+  CHECK(pent.powerup == fx::Powerup::pent && !pent.power);
+  fx::Screen suit;
+  fx::take_powers(suit, fx::kItemSuit | fx::kItemRing);  // the suit before the ring
+  CHECK(suit.powerup == fx::Powerup::suit && suit.stealth);
+}
+
+TEST(gl_damageblend_frac_moves_a_hit_s_flash_to_a_frame_round_the_view) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(pic.damage_frac == 0);  // the classic look's own: Quake's flash over the whole view
+  fx::Screen hit;
+  hit.hurt = 100;
+  hit.medium = fx::Medium::water;
+  const double none[4] = {0, 0, 0, 0};
+  double whole[4];
+  lk::toned_blend(pic, hit, whole);
+  lk::Tints t = lk::toned_tints(pic, hit, false, none, none, none);
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == whole[k] && t.edge[k] == 0);  // as it was
+  con.execute("gl_damageblend_frac 0.2");
+  CHECK(pic.damage_frac == 0.2);
+  t = lk::toned_tints(pic, hit, false, none, none, none);
+  fx::Screen water;
+  water.medium = fx::Medium::water;
+  double wet[4];
+  lk::toned_blend(pic, water, wet);
+  for (int k = 0; k < 4; k++) CHECK(std::fabs(t.flat[k] - wet[k]) < 1e-12);  // the water alone
+  CHECK(t.edge[3] > 0 && t.edge[0] > t.edge[1]);                             // the red flash
+  con.execute("gl_polyblend 0");
+  t = lk::toned_tints(pic, hit, false, none, none, none);
+  CHECK(t.flat[3] == 0 && t.edge[3] == 0);
+  con.execute("gl_polyblend 1");
+  // Quake II's: the rules' own tint as it came, split where the flash came apart.
+  const double q2_whole[4] = {0.5, 0.1, 0.1, 0.4}, q2_rest[4] = {0, 0, 1, 0.08},
+               q2_hit[4] = {1, 0, 0, 0.3};
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_rest, q2_hit);
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == q2_rest[k] && t.edge[k] == q2_hit[k]);
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_whole, none);  // a stock server's: flat
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == q2_whole[k] && t.edge[k] == 0);
+  con.execute("gl_damageblend_frac 0; gl_cshiftpercent 50");
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_rest, q2_hit);
+  for (int k = 0; k < 3; k++) CHECK(t.flat[k] == q2_whole[k]);
+  CHECK(t.flat[3] == 0.2 && t.edge[3] == 0);
+}
+
 TEST(r_lightmap_draws_every_solid_face_grey_under_its_light) {
   namespace lk = shooters_edge::look;
   ge::console::Console con;
@@ -529,16 +667,16 @@ TEST(gl_picmip_draws_the_textures_from_a_coarser_mip_in_either_look) {
     CHECK(lk::world_options(look, {}, pic).picmip == 2);
 }
 
-// The sequel's arrivals in its own numbers: a teleport's lattice of 1053 greys flying out, an
+// Quake II's arrivals in its own numbers: a teleport's lattice of 1053 greys flying out, an
 // item's 64 greens, an entry's 500 (green, red leaving, yellow respawned), a pad's 8 a frame.
-TEST(the_sequels_arrivals_throw_their_own_counts_and_colours) {
+TEST(q2_arrivals_throw_their_own_counts_and_colours) {
   const double at[3] = {1, 2, 3};
   fx::Particles burst, item, login, logout, fountain;
-  fx::sequel_teleport_burst(at, 5, {}, &burst);
-  fx::sequel_item_back(at, 5, {}, &item);
-  fx::sequel_player_flash(at, fx::kSqLogin, 5, {}, &login);
-  fx::sequel_player_flash(at, fx::kSqLogout, 5, {}, &logout);
-  fx::sequel_fountain(at, 5, {}, &fountain);
+  fx::q2_teleport_burst(at, 5, {}, &burst);
+  fx::q2_item_back(at, 5, {}, &item);
+  fx::q2_player_flash(at, fx::kSqLogin, 5, {}, &login);
+  fx::q2_player_flash(at, fx::kSqLogout, 5, {}, &logout);
+  fx::q2_fountain(at, 5, {}, &fountain);
   CHECK(burst.size() == 1053 && item.size() == 64 && login.size() == 500 && fountain.size() == 8);
   // Without a palette each index is its grey: the burst's 7..14, the item's 212..215.
   float lo[3], hi[3];
@@ -555,13 +693,36 @@ TEST(the_sequels_arrivals_throw_their_own_counts_and_colours) {
   for (const auto& p : fountain) CHECK(p.v[1] > 1.9f && p.p[1] < at[1]);  // up, from under it
 }
 
+// A boss teleporting out: 4096 specks in its four colours that fly out and down, then are pulled
+// back in and pushed up (their own acceleration), living 1.67 to 2.67 s.
+TEST(q2_boss_teleport_swirls_in_and_rises) {
+  const double at[3] = {1, 2, 3};
+  fx::Particles swirl;
+  fx::q2_boss_teleport(at, 5, {}, &swirl);
+  CHECK(swirl.size() == 4096);
+  int wrong = 0;
+  for (ge::render::Particle p : swirl) {
+    const double out[2] = {p.p[0] - at[0], p.p[2] - at[2]};
+    const double going = out[0] * p.v[0] + out[1] * p.v[2];           // outward at first
+    const double pulled = p.v[0] * p.accel[0] + p.v[2] * p.accel[2];  // against it
+    wrong += (going < 0 || pulled > 0 || p.v[1] >= 0 || p.accel[1] <= 0 || p.life < 1.66f ||
+              p.life > 2.67f || p.p[1] <= at[1])
+                 ? 1
+                 : 0;
+    p.drag = 0;
+    for (int k = 0; k < 120; ++k) ge::render::step_particle(p, 1.0f / 60);  // 2 s on: rising
+    wrong += p.v[1] > 0 ? 0 : 1;
+  }
+  CHECK_MSG(wrong == 0, std::to_string(wrong));
+}
+
 // A player's entry, exit and respawn flashes light the room for their frame: green, red and
 // yellow, reaching 200 to 231 units.
-TEST(the_sequels_flashes_light_green_red_and_yellow) {
+TEST(q2_flashes_light_green_red_and_yellow) {
   const double at[3] = {1, 2, 3};
-  const fx::Light in = fx::sequel_arrival_light(at, fx::kSqLogin, 5);
-  const fx::Light out = fx::sequel_arrival_light(at, fx::kSqLogout, 5);
-  const fx::Light back = fx::sequel_arrival_light(at, fx::kSqRespawn, 5);
+  const fx::Light in = fx::q2_arrival_light(at, fx::kSqLogin, 5);
+  const fx::Light out = fx::q2_arrival_light(at, fx::kSqLogout, 5);
+  const fx::Light back = fx::q2_arrival_light(at, fx::kSqRespawn, 5);
   CHECK(in.colour[0] == 0 && in.colour[1] > 0 && in.colour[2] == 0);
   CHECK(out.colour[0] > 0 && out.colour[1] == 0 && out.colour[2] == 0);
   CHECK(back.colour[0] > 0 && back.colour[0] == back.colour[1] && back.colour[2] == 0);
@@ -569,5 +730,173 @@ TEST(the_sequels_flashes_light_green_red_and_yellow) {
   for (const fx::Light& l : {in, out, back}) {
     CHECK(l.radius >= plain.radius && l.radius < plain.radius * 232 / 200);
     CHECK(l.pos[0] == 1 && l.pos[1] == 2 && l.pos[2] == 3);
+  }
+}
+
+TEST(a_quake2_trail_thins_as_its_piece_flies) {
+  // 100 units in one go: two specks a unit at first, the count at its floor by the end.
+  const double a[3] = {0, 0, 0}, b[3] = {100 * 0.025, 0, 0}, c[3] = {200 * 0.025, 0, 0};
+  int count = fx::kSqTrailStart;
+  fx::Particles first, later;
+  fx::q2_trail(a, b, fx::Q2Trail::blood, count, 3, {}, &first);
+  CHECK(count == fx::kSqTrailFloor);
+  fx::q2_trail(b, c, fx::Q2Trail::blood, count, 4, {}, &later);
+  CHECK_MSG(first.size() > 80 && first.size() < 140, std::to_string(first.size()));
+  CHECK_MSG(later.size() > 5 && later.size() < 40, std::to_string(later.size()));
+  // Blood is thrown down with no gravity, living 1 to 1.4 s; smoke rises.
+  for (const auto& p : later) CHECK(p.fall == 0 && p.life >= 1.0f && p.life <= 1.4f);
+  fx::Particles smoke;
+  count = fx::kSqTrailStart;
+  fx::q2_trail(a, b, fx::Q2Trail::smoke, count, 5, {}, &smoke);
+  CHECK(!smoke.empty() && smoke[0].fall < 0);
+  // A blaster's bolt: a speck every 5 units.
+  fx::Particles bolt;
+  fx::q2_bolt_trail(a, b, 6, {}, &bolt);
+  CHECK(bolt.size() == 20);
+}
+
+// Quake II's line effects over 100 units: bubbles (a speck every 32 units, the second kind's every
+// 8), a force wall (about seven in ten of a speck every 4 units, falling), a flag's column (every 5
+// units) and the ion ripper's specks shaken from side to side.
+TEST(quake2_line_effects_space_their_specks_along_the_line) {
+  const double a[3] = {0, 0, 0}, b[3] = {100 * 0.025, 0, 0};
+  fx::Particles one, two, wall, column, ion;
+  fx::q2_bubbles(a, b, false, 3, {}, &one);
+  fx::q2_bubbles(a, b, true, 3, {}, &two);
+  fx::q2_force_wall(a, b, 208, 3, {}, &wall);
+  fx::q2_column_trail(a, b, 242, 3, {}, &column);
+  int side = 1;
+  fx::q2_ion_trail(a, b, side, 3, {}, &ion);
+  CHECK_MSG(one.size() == 4 && two.size() == 13, std::to_string(one.size()));
+  CHECK_MSG(wall.size() > 10 && wall.size() < 25, std::to_string(wall.size()));
+  CHECK(column.size() == 20 && ion.size() == 20);
+  for (const auto& p : one) CHECK(p.v[1] > 0);   // bubbles rise
+  for (const auto& p : wall) CHECK(p.v[1] < 0);  // a force wall's specks drift down
+  CHECK(ion[0].v[0] == -ion[1].v[0]);            // side to side
+}
+
+// Quake II's bursts: steam's count along its jet, the blue hyperblaster's 40 blue specks, the
+// widow's 256 round it, and a plain light whose level is its reach over 128 units.
+TEST(quake2_bursts_throw_their_counts_and_lights) {
+  const double at[3] = {1, 2, 3}, jet[3] = {0, 0, 50}, up[3] = {0, 0, 1};
+  fx::Particles steam, blue, widow;
+  fx::q2_steam(at, jet, 10, 8, 40, 5, {}, &steam);
+  fx::q2_blue_hit(at, up, 5, {}, &blue);
+  fx::q2_widow_splash(at, 5, {}, &widow);
+  CHECK(steam.size() == 10 && blue.size() == 40 && widow.size() == 256);
+  const fx::Light l = fx::q2_point_light(at, 400, 1, 1, 1);
+  CHECK(l.colour[0] > 3.1f && l.colour[0] < 3.2f && l.pos[1] == 2);
+  fx::Particles none;
+  const double still[3] = {0, 0, 0};
+  fx::q2_steam(at, still, 10, 8, 40, 5, {}, &none);
+  CHECK(none.empty());
+}
+
+// The trap's glow: 13 rising specks in a column and 8 thrown out that fall; the disruptor's
+// strands a speck every 3 units, black, rising; a tracker's dark shell of 300 black specks.
+TEST(quake2_trap_and_tracker_marks) {
+  const double at[3] = {1, 2, 3}, b[3] = {1 + 30 * 0.025, 2, 3};
+  fx::Particles trap, strands, shell;
+  fx::q2_trap(at, 4, {}, &trap);
+  fx::q2_tracker_trail(at, b, 4, {}, &strands);
+  fx::q2_tracker_shell(at, 40, 4, {}, &shell);
+  CHECK(trap.size() == 21);
+  for (size_t i = 0; i < 13; ++i) CHECK(trap[i].fall < 0);   // the column rises
+  for (size_t i = 13; i < 21; ++i) CHECK(trap[i].fall > 0);  // the thrown ones fall
+  CHECK_MSG(strands.size() == 10, std::to_string(strands.size()));
+  for (const auto& p : strands) CHECK(p.v[1] > 0 && p.tint[0] == 0);
+  CHECK((strands[0].p[1] > at[1]) != (strands[1].p[1] > at[1]));  // one strand each side
+  CHECK(shell.size() == 300);
+  for (const auto& p : shell)
+    CHECK(std::abs(std::sqrt((p.p[0] - at[0]) * (p.p[0] - at[0]) +
+                             (p.p[1] - at[1]) * (p.p[1] - at[1]) +
+                             (p.p[2] - at[2]) * (p.p[2] - at[2])) -
+                   1.0) < 1e-3);
+}
+
+// A power splash: 256 green specks round the box moving out; the widow's beam-out: 300 on a
+// sphere that grows to 45 units, still (none of them moving).
+TEST(quake2_power_splash_and_beam_out) {
+  const double at[3] = {0, 0, 0};
+  fx::Particles splash, half, none;
+  fx::q2_power_splash(at, 20, 3, {}, &splash);
+  fx::q2_beam_out(at, 0.5, 3, {}, &half);
+  CHECK(splash.size() == 256 && half.size() == 300);
+  for (const auto& p : half) {
+    const double r = std::sqrt(p.p[0] * p.p[0] + p.p[1] * p.p[1] + p.p[2] * p.p[2]);
+    CHECK(std::abs(r - 22.5 * 0.025) < 1e-3 && p.v[0] == 0 && p.v[1] == 0);
+  }
+}
+
+TEST(quake2_flies_swarm_up_hold_and_thin_over_a_minute) {
+  CHECK(fx::q2_flies_count(0) == 0);
+  CHECK(fx::q2_flies_count(10) == 81);
+  CHECK(fx::q2_flies_count(30) == fx::kSqFliesMax);
+  CHECK(fx::q2_flies_count(50) == 81);
+  CHECK(fx::q2_flies_count(60) == 0);
+  const double at[3] = {1, 2, 3};
+  fx::Particles flies;
+  fx::q2_flies(at, 7.5, 30, 0.02, {}, &flies);
+  CHECK(flies.size() == 81);
+  for (const auto& p : flies) {  // black, within 80 units of the corpse, living the frame
+    const double d =
+        std::sqrt((p.p[0] - at[0]) * (p.p[0] - at[0]) + (p.p[1] - at[1]) * (p.p[1] - at[1]) +
+                  (p.p[2] - at[2]) * (p.p[2] - at[2]));
+    CHECK(d <= 80 * 0.025 + 1e-4 && p.tint[0] == 0 && p.life == 0.02f);
+  }
+}
+
+TEST(v_cshift_tints_the_view_in_open_air_and_not_under_water) {
+  double rgba[4];
+  for (const bool classic : {false, true}) {
+    fx::Screen air;
+    air.classic = classic;
+    air.air = 128;
+    air.air_rgb[0] = 0, air.air_rgb[1] = 0, air.air_rgb[2] = 255;  // a mod's blue
+    fx::screen_blend(air, rgba);
+    CHECK(rgba[3] > 0.45 && rgba[3] < 0.55);
+    CHECK(rgba[2] > 0.99 && rgba[0] < 0.01);
+    air.medium = fx::Medium::water;  // the liquid's own tint in its place
+    fx::screen_blend(air, rgba);
+    CHECK(rgba[0] > rgba[1] || rgba[1] > rgba[0]);  // not the pure blue
+    CHECK(!(rgba[2] > 0.99 && rgba[0] < 0.01 && rgba[1] < 0.01));
+    fx::Screen clear;  // strength 0, the default: nothing
+    clear.classic = classic;
+    fx::screen_blend(clear, rgba);
+    CHECK(rgba[3] == 0);
+  }
+}
+
+// The mission packs' explosion2: 512 specks taking the colour run in turn, 0.3 s each, flung out
+// faster and faster; a program's burst: its count of specks in its colour's row of 8, all thrown
+// along its way.
+TEST(explosion2_takes_its_colours_in_turn_and_a_burst_its_colours_row) {
+  const std::vector<uint8_t> pal = test_palette();
+  const double at[3] = {0, 0, 0};
+  fx::Particles blast;
+  fx::explosion2(at, 224, 8, 1, pal, &blast);
+  CHECK(blast.size() == 512);
+  for (size_t i = 0; i < blast.size(); ++i) {
+    float c[3];
+    fx::palette_rgb(pal, 224 + static_cast<int>(i % 8), c);
+    CHECK(blast[i].tint[0] == c[0] && blast[i].tint[1] == c[1]);
+    CHECK(blast[i].life == 0.3f && blast[i].drag < 0);
+  }
+  fx::Particles none;
+  fx::explosion2(at, 224, 0, 1, pal, &none);  // a run of no colours throws nothing
+  CHECK(none.empty());
+  fx::Particles burst;
+  const double way[3] = {0.5, 0, 0};
+  fx::burst(at, 30, 101, way, 2, pal, &burst);
+  CHECK(burst.size() == 30);
+  for (const auto& p : burst) {
+    bool row = false;
+    for (int k = 96; k < 104; ++k) {
+      float c[3];
+      fx::palette_rgb(pal, k, c);
+      row = row || (p.tint[0] == c[0] && p.tint[1] == c[1]);
+    }
+    CHECK(row);
+    CHECK(p.v[0] == 0.5f && p.life <= 0.43f);
   }
 }

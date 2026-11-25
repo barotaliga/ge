@@ -29,16 +29,16 @@
 #include <string>
 #include <string_view>
 
-#include "shooter/team_talk.hpp"
+#include "shooterbots/team_talk.hpp"
 
 namespace shooters_edge::bots {
 
-using ge::shooter::Said;
-using ge::shooter::say_kind_name;
-using ge::shooter::SayKind;
-using ge::shooter::SayStatus;
-using ge::shooter::Strategy;
-using ge::shooter::strategy_name;
+using ge::shooterbots::Said;
+using ge::shooterbots::say_kind_name;
+using ge::shooterbots::SayKind;
+using ge::shooterbots::SayStatus;
+using ge::shooterbots::Strategy;
+using ge::shooterbots::strategy_name;
 
 // The item words (in a message's own spelling), as the item kinds' callouts name them.
 bool item_word(std::string_view w);
@@ -52,5 +52,8 @@ Said parse_say(std::string_view text);
 // A team line as the server prints it to a teammate, "(name): text", split; false when the line
 // is not one.
 bool split_team_line(std::string_view line, std::string& name, std::string& text);
+
+// `say_text` and `parse_say` as the bots' team words (an arsenal's `talk`).
+const ge::shooterbots::TeamWords& team_words();
 
 }  // namespace shooters_edge::bots

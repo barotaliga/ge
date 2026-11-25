@@ -7,7 +7,7 @@
 // drawn from the player's start, with its place names counted (client/place_names.hpp).
 //
 // Without `--parent` the installs are our own: three folders written under the temporary folder
-// (the first game's shareware and registered packs, the sequel's demo, by their sizes alone, and a
+// (Quake's shareware and registered packs, Quake II's demo, by their sizes alone, and a
 // folder with a game's name but no game), so the table and its digest need no game data. With
 // `--parent=<folder>` they are the player's (private pictures only).
 //
@@ -139,7 +139,7 @@ void run(gl::Lab& lab) {
   for (const cl::FoundInstall& f : found) {
     const std::string folder = fs::path(f.basedir).filename().string();
     const pf::GameProfile* game = pf::find_game(f.content->id);
-    const cl::GameAdapter& adapter = cl::adapter_of(game != nullptr ? *game : pf::classic_game());
+    const cl::GameAdapter& adapter = cl::adapter_of(game != nullptr ? *game : pf::q1_game());
     cl::SearchPath files;
     std::string error;
     if (!cl::open_game_dir(f.basedir, cl::game_of(f.basedir, *f.content), files, error,

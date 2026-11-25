@@ -50,6 +50,7 @@ namespace ge::camera {
 struct FirstPersonRow {
   double eye_stand_m = 1.62;
   double eye_crouch_m = 1.0;
+  double eye_lift_m = 0;  // the player's own raise (+) or drop (-) of the eye over both heights
   double crouch_halflife_s = 0.05;
   double step_rise_mps = 2.0;  // how fast the eyes climb a step
   double step_max_m = 0.3;     // the most they lag the body
@@ -57,6 +58,9 @@ struct FirstPersonRow {
   double bob_cycle_s = 0.6;
   double bob_up = 0.5;
   double bob_lo_m = -0.18, bob_hi_m = 0.10;
+  // How many of the stride's bob the eye carries: 1 its own; 0 none (the bob still kept in the
+  // state for a held weapon); 2 a game that moves the weapon's own bob onto the head too.
+  double bob_eye = 1;
   double roll_angle = 0.0349;   // rad (2 deg)
   double roll_speed_mps = 5.0;  // the sideways speed that reaches it
   double kick_pitch = 0.0105;   // rad of pitch a unit of a hit's size (0.6 deg)
@@ -70,7 +74,12 @@ struct FirstPersonRow {
   double fov_y = 1.287;  // vertical, rad (90 deg horizontal at 4:3)
   double zoom_fov_y = 0.55;
   double zoom_halflife_s = 0.06;
-  double idle = 0.0;            // rad of sway at 1 (0: off)
+  double idle = 0.0;  // rad of sway at 1 (0: off)
+  // The sway's shape: each axis's share of `idle` (its sign the way it turns) and its period, s
+  // (0: that axis still). The rig's own: yaw and pitch whole every 2 s and 1 s, roll 0.3 every
+  // 0.5 s; a game sets its own (Shooter's Edge's v_i* settings).
+  double idle_yaw_share = 1, idle_pitch_share = 1, idle_roll_share = 0.3;
+  double idle_yaw_period_s = 2, idle_pitch_period_s = 1, idle_roll_period_s = 0.5;
   bool bob_hold_air = false;    // in the air: the stride's clock stopped, the last bob held
   bool kick_to_source = false;  // a hit tips the view toward where it came from, not away
 };
@@ -80,6 +89,7 @@ struct FirstPersonState {
   double clock = 0;       // the rig's own clock, s (the bob's, unless it holds in the air)
   double bob_clock = 0;   // with `bob_hold_air`: the stride's clock, run on the ground only, s
   double bob_held = 0;    // with `bob_hold_air`: the last bob on the ground, m
+  double bob = 0;         // the last frame's bob before `bob_eye`, m (what a held weapon rides)
   double eye_base = 0;    // the smoothed body height under the eyes, m
   double eye_height = 0;  // the smoothed view height, m
   bool was_grounded = true;

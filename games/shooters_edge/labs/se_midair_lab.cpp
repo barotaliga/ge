@@ -1,20 +1,20 @@
 // LAB `se-midair`: MIDAIR on the rules every game's server shares (plugins/shooter/midair.hpp),
-// played today by the sequel's rules (the classic arena's come with its rules' move to C++).
+// played today by Quake II's rules (the classic arena's come with its rules' move to C++).
 //
 // - THE RULES: the least height by `k_midair_minheight`, the frags by the rise, and the push a
 //   rocket gives by its target's height above the floor, as a chart.
-// - THE SEQUEL'S RULES, STAGED: on the sequel's runner (server/sequel_server.hpp, `k_midair 1`) a
+// - QUAKE II'S RULES, STAGED: on Quake II's runner (server/q2_server.hpp, `k_midair 1`) a
 //   player holds a target still at a height above the floor (`--heights`) and fires one rocket at
 //   him from the floor: whether it counts, the frags it scores, the line everyone reads, and how
 //   fast the blow throws him; then one at the feet of a target standing on the floor (the lift).
-//   On a hall built here, or on `--sequel-map` from `--sequel-basedir`'s game folder (the
-//   sequel's packs), the target at the map's first spawn point.
+//   On a hall built here, or on `--q2-map` from `--q2-basedir`'s game folder (the
+//   Quake II's packs), the target at the map's first spawn point.
 //
 // Deterministic: the digest holds the counts.
 //
-// ge:summary Lab: midair's shared rules charted and the sequel's hits staged on a map
+// ge:summary Lab: midair's shared rules charted and Quake II's hits staged on a map
 // ge:keywords lab se-midair midair k_midair k_midair_minheight air-shot rocket bands push lift
-// ge:keywords endif sequel
+// ge:keywords endif q2
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_midair_test.cpp
 #include <algorithm>
@@ -32,9 +32,9 @@
 #include "lab/raster.hpp"
 #include "shooter/midair.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/server/sequel_fight.hpp"
-#include "shooters_edge/server/sequel_map.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace {
 
@@ -94,7 +94,7 @@ void rules(gl::Lab& lab) {
            gl::to_picture(gl::line_chart(push).plot));
 }
 
-// ---- the sequel, staged ----
+// ---- Quake II, staged ----
 
 br::Entity entity(std::vector<std::pair<std::string, std::string>> pairs) {
   br::Entity e;
@@ -116,20 +116,19 @@ std::shared_ptr<const br::Map> hall(std::string& error) {
   return map;
 }
 
-std::shared_ptr<const br::Map> sequel_map(const gl::Lab& lab, std::string& name,
-                                          std::string& error) {
-  const std::string& basedir = lab.arg("sequel-basedir");
+std::shared_ptr<const br::Map> q2_map(const gl::Lab& lab, std::string& name, std::string& error) {
+  const std::string& basedir = lab.arg("q2-basedir");
   if (basedir.empty()) {
     name = "hall";
     return hall(error);
   }
-  name = lab.arg("sequel-map");
+  name = lab.arg("q2-map");
   cl::SearchPath files;
-  if (!cl::open_game_dir(basedir, lab.arg("sequel-game"), files, error)) return nullptr;
+  if (!cl::open_game_dir(basedir, lab.arg("q2-game"), files, error)) return nullptr;
   std::vector<uint8_t> store;
   const std::span<const uint8_t> f = cl::find_file(files, "maps/" + name + ".bsp", store);
   if (f.empty()) {
-    error = "no maps/" + name + ".bsp in the sequel's game folder";
+    error = "no maps/" + name + ".bsp in Quake II's game folder";
     return nullptr;
   }
   auto map = std::make_shared<br::Map>();
@@ -140,15 +139,15 @@ std::shared_ptr<const br::Map> sequel_map(const gl::Lab& lab, std::string& name,
 struct Stage {
   sv::RulesRunner r;
   uint32_t sequence = 0;
-  sv::SequelServer& s() const { return *sv::sequel_of(r); }
-  sv::SequelPlayer& p(int i) const { return s().players[i]; }
+  sv::Q2Server& s() const { return *sv::q2_of(r); }
+  sv::Q2Player& p(int i) const { return s().players[i]; }
 };
 
-void put(sv::SequelPlayer& p, sh::Vec3f at) {
+void put(sv::Q2Player& p, sh::Vec3f at) {
   p.move.origin[0] = static_cast<int16_t>(at.x * 8);
   p.move.origin[1] = static_cast<int16_t>(at.y * 8);
   p.move.origin[2] = static_cast<int16_t>(at.z * 8);
-  for (int16_t& v : p.move.velocity) v = 0;
+  for (int32_t& v : p.move.velocity) v = 0;
   for (int16_t& v : p.move.delta_angles) v = 0;  // the view his commands give, not a spawn's turn
   p.forced = false;
 }
@@ -169,10 +168,29 @@ void tick(Stage& d, uint8_t buttons, float pitch, float yaw) {
   d.r.frame(packets, 2);
 }
 
+constexpr int32_t kWorld = sh::kSqSolid | sh::kSqWindow;
+
+// Ana steps 64 units off her start, the first way with room, before Ben spawns: a spawn on a
+// standing player kills that player.
+void step_off_start(Stage& d) {
+  tick(d, 0, 0, 0);
+  const sv::Q2Player& ana = d.p(0);
+  const sh::Vec3f at{float(ana.move.origin[0]) / 8.0f, float(ana.move.origin[1]) / 8.0f,
+                     float(ana.move.origin[2]) / 8.0f};
+  const sh::Vec3f lo{-16, -16, -24}, hi{16, 16, 32};
+  const float ways[4][2] = {{-64, 0}, {64, 0}, {0, -64}, {0, 64}};
+  for (const auto& w : ways) {
+    const sh::Vec3f to = at + sh::Vec3f{w[0], w[1], 0};
+    if (sv::map_trace(d.s(), at, lo, hi, to, kWorld).fraction < 1) continue;
+    put(d.p(0), to);
+    return;
+  }
+}
+
 std::unique_ptr<Stage> stage(const std::shared_ptr<const br::Map>& map, const std::string& name,
                              int level, std::string& error, bool midair = true) {
   auto d = std::make_unique<Stage>();
-  d->r = sv::sequel_runner(sv::make_sequel_server({}));
+  d->r = sv::q2_runner(sv::make_q2_server({}));
   d->r.console("deathmatch 1");
   d->r.console(midair ? "k_midair 1" : "k_midair 0");
   d->r.console("k_midair_minheight " + std::to_string(level));
@@ -181,6 +199,7 @@ std::unique_ptr<Stage> stage(const std::shared_ptr<const br::Map>& map, const st
   spec.brushes = map;
   if (!d->r.start(spec, error)) return nullptr;
   d->r.connect(0, "Ana", false, false);
+  step_off_start(*d);
   d->r.connect(1, "Ben", false, false);
   if (!midair) {  // the launcher in hand as midair gives it
     sv::SqBody& body = d->p(0).body;
@@ -192,7 +211,6 @@ std::unique_ptr<Stage> stage(const std::shared_ptr<const br::Map>& map, const st
   return d;
 }
 
-constexpr int32_t kWorld = sh::kSqSolid | sh::kSqWindow;
 constexpr float kDist = 200;  // the target's distance ahead of the shooter
 
 // Where the shooter stands and which way he fires (one of the four axes, so a slice of the map
@@ -210,15 +228,15 @@ struct Spot {
 };
 
 Spot find_spot(const Stage& d) {
-  const sv::SequelServer& s = d.s();
+  const sv::Q2Server& s = d.s();
   Spot best;
   best.from = {0, 0, 34};
   best.ceiling = -1;
-  for (const sv::SequelEntity& e : s.entities) {
+  for (const sv::Q2Entity& e : s.entities) {
     if (e.classname != "info_player_deathmatch") continue;
     // The floor under the spawn point, and the player's origin 24 above it.
     const sh::Vec3f top = e.origin + sh::Vec3f{0, 0, 16};
-    const ge::classic::SequelTrace down =
+    const ge::classic::Q2Trace down =
         sv::map_trace(s, top, {}, {}, top - sh::Vec3f{0, 0, 256}, kWorld);
     if (down.fraction >= 1) continue;
     const sh::Vec3f from = down.end + sh::Vec3f{0, 0, 24};
@@ -227,10 +245,10 @@ Spot find_spot(const Stage& d) {
       const sh::Vec3f eye = from + sh::Vec3f{0, 0, 22};
       const sh::Vec3f ahead = from + c.dir() * kDist;
       if (sv::map_trace(s, eye, {}, {}, ahead + sh::Vec3f{0, 0, 22}, kWorld).fraction < 1) continue;
-      const ge::classic::SequelTrace fl =
+      const ge::classic::Q2Trace fl =
           sv::map_trace(s, ahead, {}, {}, ahead - sh::Vec3f{0, 0, 64}, kWorld);
       if (fl.fraction >= 1 || fl.end.z < from.z - 26 || fl.end.z > from.z - 22) continue;
-      const ge::classic::SequelTrace up =
+      const ge::classic::Q2Trace up =
           sv::map_trace(s, ahead, {}, {}, ahead + sh::Vec3f{0, 0, 2048}, kWorld);
       c.ceiling = up.end.z - fl.end.z;
       if (c.ceiling > best.ceiling) best = c;
@@ -254,8 +272,8 @@ struct Shot {
 // 40 units in front of a standing target).
 Shot fire_at(Stage& d, const Spot& sp, float height, bool feet) {
   Shot out;
-  sv::SequelPlayer& shooter = d.p(0);
-  sv::SequelPlayer& target = d.p(1);
+  sv::Q2Player& shooter = d.p(0);
+  sv::Q2Player& target = d.p(1);
   out.at = sp.from + sp.dir() * kDist + sh::Vec3f{0, 0, height};
   out.height = height;
   // His armour whole again (its wear shows the blow); without midair, his health too.
@@ -285,7 +303,7 @@ Shot fire_at(Stage& d, const Spot& sp, float height, bool feet) {
   for (int i = 0; i < 160 && target.alive; i++) {
     if (target.body.armour_count != armour) {
       out.landed = true;
-      out.up_speed = target.move.velocity[2] / 8.0f;
+      out.up_speed = float(target.move.velocity[2]) / 8.0f;
       break;
     }
     put(target, out.at);  // held there until the blow lands
@@ -295,7 +313,11 @@ Shot fire_at(Stage& d, const Spot& sp, float height, bool feet) {
   out.landed = out.landed || out.killed;
   out.frags = shooter.frags - frags;
   if (d.s().obituaries.size() > lines) out.line = d.s().obituaries.back();
-  for (int i = 0; i < 300 && !target.alive; i++) tick(d, 0, 0, sp.yaw());  // back by himself
+  // Back by himself, the shooter off the start he spawns on.
+  for (int i = 0; i < 300 && !target.alive; i++) {
+    put(shooter, sp.from + sp.dir() * (kDist / 2));
+    tick(d, 0, 0, sp.yaw());
+  }
   return out;
 }
 
@@ -343,7 +365,7 @@ gl::Picture slice_picture(const Stage& d, const Spot& sp, const std::vector<Shot
   }
   const double eu = along_x ? eye.x : eye.y;
   gl::draw_text(p, 8, 8,
-                "the sequel's rules, k_midair_minheight " + std::to_string(level) + " (" +
+                "Quake II's rules, k_midair_minheight " + std::to_string(level) + " (" +
                     sh::midair_level_name(level) + ")",
                 {230, 230, 230}, 1);
   gl::draw_text(p, 8, 20, "green: killed (frags) / amber: hit, no harm / grey: missed",
@@ -368,25 +390,25 @@ gl::Picture slice_picture(const Stage& d, const Spot& sp, const std::vector<Shot
   return p;
 }
 
-void sequel(gl::Lab& lab) {
+void q2(gl::Lab& lab) {
   std::string error, name;
-  const std::shared_ptr<const br::Map> map = sequel_map(lab, name, error);
+  const std::shared_ptr<const br::Map> map = q2_map(lab, name, error);
   if (map == nullptr) {
-    lab.fail("se-midair: the sequel's map: " + error,
-             "Pass --sequel-basedir=<the folder holding the sequel's game folder> and "
-             "--sequel-map=<a map in it>, or leave both out for the hall. Skill: brush.");
+    lab.fail("se-midair: Quake II's map: " + error,
+             "Pass --q2-basedir=<the folder holding Quake II's game folder> and "
+             "--q2-map=<a map in it>, or leave both out for the hall. Skill: brush.");
     return;
   }
   const int level = static_cast<int>(lab.arg_num("minheight"));
   std::unique_ptr<Stage> d = stage(map, name, level, error);
   if (d == nullptr) {
-    lab.fail("se-midair: the sequel's runner did not start: " + error,
+    lab.fail("se-midair: Quake II's runner did not start: " + error,
              "Read the reason above. Skill: shooter.");
     return;
   }
   const Spot sp = find_spot(*d);
   gl::LabTable table{
-      "the sequel (" + name +
+      "Quake II (" + name +
           "): one rocket from the floor at a target held "
           "still above the floor " +
           to_fixed(kDist, 0) + " ahead, k_midair_minheight " + std::to_string(level),
@@ -404,7 +426,7 @@ void sequel(gl::Lab& lab) {
     table.rows.push_back({to_fixed(h, 0), s.killed ? "yes" : (s.landed ? "no" : "missed"),
                           to_fixed(s.frags, 0), to_fixed(s.up_speed, 0),
                           s.line.empty() ? "-" : s.line});
-    lab.metric("sequel.h" + to_fixed(h, 0) + ".frags", s.frags, "count");
+    lab.metric("q2.h" + to_fixed(h, 0) + ".frags", s.frags, "count");
   }
   const Shot feet = fire_at(*d, sp, 0, true);
   table.rows.push_back({"0, at his feet", feet.killed ? "yes" : (feet.landed ? "no" : "missed"),
@@ -415,14 +437,14 @@ void sequel(gl::Lab& lab) {
     const Shot off = fire_at(*plain, sp, 0, true);
     table.rows.push_back({"0, at his feet, midair off", "-", to_fixed(off.frags, 0),
                           to_fixed(off.up_speed, 0), off.line.empty() ? "-" : off.line});
-    lab.metric("sequel.feet-lift-off", off.up_speed, "units-per-s");
+    lab.metric("q2.feet-lift-off", off.up_speed, "units-per-s");
   }
   lab.table(table);
-  lab.metric("sequel.counted", counted, "count");
-  lab.metric("sequel.frags", frag_sum, "count");
-  lab.metric("sequel.feet-lift", feet.up_speed, "units-per-s");
-  lab.metric("sequel.room", sp.ceiling, "units");
-  lab.shot({"sequel-shots",
+  lab.metric("q2.counted", counted, "count");
+  lab.metric("q2.frags", frag_sum, "count");
+  lab.metric("q2.feet-lift", feet.up_speed, "units-per-s");
+  lab.metric("q2.room", sp.ceiling, "units");
+  lab.shot({"q2-shots",
             "MIDAIR ON " + name + ": ROCKETS BY HEIGHT",
             "A slice of the map through the shooter's spot along the way he fires: each target "
             "held at its height above the floor, the rocket's line to it, and what the hit did.",
@@ -434,24 +456,24 @@ void sequel(gl::Lab& lab) {
 
 void run(gl::Lab& lab) {
   rules(lab);
-  sequel(lab);
+  q2(lab);
 }
 
 const gl::LabSpec kSpec{
     "se-midair",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "midair on the shared rules (plugins/shooter/midair.hpp), played by the sequel's runner "
-    "(server/sequel_fight.cpp)",
+    "midair on the shared rules (plugins/shooter/midair.hpp), played by Quake II's runner "
+    "(server/q2_fight.cpp)",
     "shooter",
     "Does a rocket count only on a player in the air, score by the rise, and throw as the rules "
     "say?",
     {
-        {"heights", "0,100,130,300,600,1100", "the sequel: the target's heights above the floor"},
+        {"heights", "0,100,130,300,600,1100", "Quake II: the target's heights above the floor"},
         {"minheight", "1", "k_midair_minheight: the least height, 0..4 (64..1024 units)"},
-        {"sequel-basedir", "", "a folder holding the sequel's game folder (empty: a hall)"},
-        {"sequel-game", "baseq2", "the sequel's game folder under --sequel-basedir"},
-        {"sequel-map", "q2dm1", "with --sequel-basedir: the sequel's map"},
+        {"q2-basedir", "", "a folder holding Quake II's game folder (empty: a hall)"},
+        {"q2-game", "baseq2", "Quake II's game folder under --q2-basedir"},
+        {"q2-map", "q2dm1", "with --q2-basedir: Quake II's map"},
     },
     "",
     run,

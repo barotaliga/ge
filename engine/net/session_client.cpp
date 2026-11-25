@@ -155,6 +155,24 @@ void on_message(SessionClient& c, const uint8_t* data, size_t size) {
       c.event_bytes.push_back(0);
       return;
     }
+    case kServerInfo:
+    case kStuff: {
+      size_t n = 0;
+      const uint8_t* text = read_text(r, kMaxMessage, n);
+      if (r.bad) break;
+      if (kind == kServerInfo) {
+        std::string info(reinterpret_cast<const char*>(text), n);
+        if (info == c.server_info) return;
+        c.server_info = std::move(info);
+      }
+      SessionEvent& e = push(
+          c, kind == kServerInfo ? SessionEventType::server_info : SessionEventType::stuffed, c.me);
+      e.offset = static_cast<uint32_t>(c.event_bytes.size());
+      e.size = static_cast<uint32_t>(n);
+      c.event_bytes.insert(c.event_bytes.end(), text, text + n);
+      c.event_bytes.push_back(0);
+      return;
+    }
     case kSettingsOut: {
       size_t n = 0;
       const uint8_t* bytes = read_text(r, kMaxMessage, n);
@@ -327,6 +345,15 @@ bool session_client_command(SessionClient& c, const char* text, size_t size) {
   return !w.overflow && ask(c, buf, w.size);
 }
 
+bool session_client_user_info(SessionClient& c, const char* info, size_t size) {
+  if (size > kMaxMessage - 16) return false;
+  std::vector<uint8_t> buf(size + 16);
+  Writer w = make_writer(buf.data(), buf.size());
+  write_u8(w, kUserInfo);
+  write_text(w, info, size);
+  return !w.overflow && ask(c, buf.data(), w.size);
+}
+
 void session_client_leave(SessionClient& c, int64_t now_us) {
   if (c.peer >= 0) node_disconnect(*c.node, c.peer, now_us);
   c.peer = -1;
@@ -446,6 +473,12 @@ const char* session_event_name(SessionEventType t) {
       return "command";
     case SessionEventType::print:
       return "print";
+    case SessionEventType::server_info:
+      return "server_info";
+    case SessionEventType::stuffed:
+      return "stuffed";
+    case SessionEventType::user_info:
+      return "user_info";
   }
   return "?";
 }

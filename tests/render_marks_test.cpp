@@ -154,6 +154,18 @@ TEST(blood_is_painted_red_in_the_light_it_lies_in_and_a_scorch_is_not) {
     CHECK(v.light[0] > 10 * v.light[1] && v.light[0] < 0.5f);  // red, in the light given
     CHECK(v.soot > 0.5f);                                      // fresh: nearly opaque
   }
+  // A pool on the floor: painted as far as it has spread, glossy while wet, facing up.
+  pool = gd::make_pool(4);
+  d.kind = gd::DecalKind::blood_pool;
+  CHECK(gd::place_decal(pool, rec, d) >= 0);
+  r::mark_burns(pool, 2.0, light, out);
+  CHECK(!out.empty());
+  for (const r::BurnVertex& v : out) {
+    CHECK(v.paint == 1.0f && v.spread > 0 && v.spread < 1 && v.gloss > 0.8f);
+    CHECK(v.normal[1] > 0.99f);
+  }
+  r::mark_burns(pool, 200.0, light, out);
+  for (const r::BurnVertex& v : out) CHECK(v.spread == 1 && v.gloss < 0.2f);
   // A scorch keeps its darkening alone.
   const double up[3] = {0, 1, 0};
   pool = gd::make_pool(4);

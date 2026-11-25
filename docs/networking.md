@@ -267,7 +267,7 @@ its server by the address it came from; its round trip is the server's ping. The
 players, name, map, mode), ties by name then address. `resolve_ipv4` (`udp_socket.hpp`) turns a
 master's or a server's host name into an address when the player opens the page.
 
-Shooter's Edge's reader is `games/shooters_edge/net/classic_browse.hpp`; its page is
+Shooter's Edge's reader is `games/shooters_edge/net/qw_browse.hpp`; its page is
 MULTIPLAYER ▸ JOIN A GAME (`menu/servers_page.hpp`); the `se-browser` lab runs seven of the game's
 dedicated servers, a master and a silent address on the simulated network and walks the page.
 
@@ -370,7 +370,8 @@ Which of them a kind of game uses: a shooter all four; a racer its own vehicle p
 M17o), rivals extrapolated a little so they are drawn where they are, contacts on the server
 (M17p); a fighting game rollback (M17g) with M17n's sync; a strategy game lockstep; a persistent
 world M17n and M17o for its own movement only. Character movement (M28d) reconciles an
-`engine/move` body on top of them.
+`engine/move` body on top of them: the body as a row and the command as bytes
+(`engine/move/wire.hpp`), the `move-predict` lab (`docs/movement.md` § Prediction).
 
 ## Rates and live tools (M17f2)
 
@@ -416,6 +417,34 @@ takes effect on the next one. Finding the right numbers is an experiment, and th
   connection's packets, kbps, round trip and loss every second, then saves what it saw and
   measures it as `ge net stats` does. Nothing in the game stops or changes: the tap costs a
   loopback send a datagram.
+
+## Configs over the session (M21c)
+
+A server's settings are its clients' too, and a client's own are the server's to read, so the
+session carries both (`engine/net/session.hpp` § CONFIGS, tied to a console by
+`engine/net/session_config.hpp`):
+
+- **The server info.** Each frame the host compares the info string of its `kServerInfo` cvars
+  with the last it sent (`session_host_follow_cvars`) and sends it on the session's reliable
+  channel when it moved; each player gets it in the welcome too. The client applies it from
+  `Source::server` (`session_client_follow_cvars`): the server's cvars take its values and a
+  client's own `set` of one is still refused; names the client does not know are created; and
+  `sv_cheats` among them decides whether the client's cheats may move. A change reaches every
+  client within its round trip: the `net-config` lab measures it at half a round trip on every
+  preset (10 ms on `lan`, 130 on `bad`), against the slowest client's smoothed round trip.
+- **The user info.** The client sends the info string of its `kUserInfo` cvars (`rate`,
+  `cl_updaterate`, the name) when it moved; the host keeps each seat's (`SessionHost::user_info`)
+  and reads a key with `session_user_value`.
+- **Stuffed text.** `session_host_stuff` sends console text to one player or to all; the client's
+  console runs it from `Source::server`, so only commands registered `kStuffable` run and only the
+  server's cvars are set (`docs/console.md` § Tiers). A stuffed `quit` and a stuffed `rate 1` are
+  refused and counted (`ClientConfig::refused`), the console's problem naming each.
+- **The fake link.** `net_fakeloss` (%), `net_fakelag` (ms) and `net_fakejitter` (ms) are cheats
+  (`add_fake_link_cvars`): refused while the server's `sv_cheats` is 0, put on this end's sends by
+  `fake_link_follow` (the transport's `FakeLink`) when it is 1, and back to 0 (and off the
+  transport) the moment the server turns cheats off. In `net-config` 30% fake loss lifts the
+  host's measure of one client's stream from the preset's own (0 to 3%) to 30 to 33%, and it falls
+  back at once.
 
 ## Lockstep and rollback (M17g)
 
@@ -663,7 +692,7 @@ master keeps them (`docs/accounts.md` § Bans).
 **Built (M17l, sixth part): the classic server's speed check in the report.** Shooter's Edge's
 classic move already cuts a command that claims more time than passed (`speed_check`, a bank of
 500 ms for a stall's burst); the cut is now counted per player (`ClientSlot::speed_cut_ms`). The
-cheat watch (`games/shooters_edge/net/classic_cheats.hpp`) reads it once a second and raises a
+cheat watch (`games/shooters_edge/net/qw_cheats.hpp`) reads it once a second and raises a
 `flood` flag on the engine's guard (`guard_flag`, a game's own check scored like the guard's) for
 more than 50 ms cut; five such seconds put the player out, and the match report's `flagged` names
 it. The `se-cheats` lab: clocks 10% and 50% fast are out six seconds in; an honest player, a clock

@@ -20,7 +20,7 @@
 namespace ce = ge::classicenhance;
 
 TEST(the_first_row_is_the_default_and_found_by_id) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   CHECK(&p == &ce::kProfiles[0]);
   CHECK(ce::find_profile(p.id) == &p);
   CHECK(ce::find_profile("no-such-game") == nullptr);
@@ -29,21 +29,21 @@ TEST(the_first_row_is_the_default_and_found_by_id) {
 }
 
 TEST(packs_are_numbered_and_the_first_sits_in_the_base_folder) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   CHECK(ce::pack_name(p, 0) == "pak0.pak");
   CHECK(ce::pack_name(p, 12) == "pak12.pak");
   CHECK(ce::first_pack_path(p) == std::string(p.base_dir) + "/pak0.pak");
 }
 
 TEST(an_asset_kind_names_its_files_both_ways) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   CHECK(ce::asset_name(p.maps, "maps/e1m1.bsp") == "e1m1");
   CHECK(ce::asset_path(p.maps, "e1m1") == "maps/e1m1.bsp");
   CHECK(ce::asset_name(p.sounds, "sound/doors/drclos4.wav") == "doors/drclos4");
   CHECK(ce::asset_name(p.maps, "maps/e1m1.lit").empty());  // another extension
   CHECK(ce::asset_name(p.maps, "gfx/e1m1.bsp").empty());   // another folder
   CHECK(ce::asset_name(p.maps, "maps/.bsp").empty());      // no name
-  // A name in capitals (the sequel's packs hold some): the same kind, its own spelling kept.
+  // A name in capitals (Quake II's packs hold some): the same kind, its own spelling kept.
   CHECK(ce::asset_name(p.sounds, "sound/weapons/RAILGF1A.WAV") == "weapons/RAILGF1A");
   CHECK(ce::asset_name(p.sounds, "Sound/doors/Drclos4.Wav") == "doors/Drclos4");
   CHECK(ce::asset_name(p.models, "progs/s_light.spr").empty());
@@ -51,7 +51,7 @@ TEST(an_asset_kind_names_its_files_both_ways) {
 }
 
 TEST(a_packs_assets_of_a_kind_are_found_sorted) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
       {"maps/b.bsp", {1}}, {"sound/x.wav", {2}}, {"maps/a.bsp", {3}}, {"maps/a.lit", {4}}};
   std::vector<uint8_t> bytes;
@@ -70,7 +70,7 @@ TEST(a_packs_assets_of_a_kind_are_found_sorted) {
 }
 
 TEST(the_palette_comes_from_the_profiles_path) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   std::vector<uint8_t> rgb(768);
   for (size_t i = 0; i < rgb.size(); i++) rgb[i] = uint8_t(i * 7);
   std::vector<uint8_t> bytes;
@@ -90,9 +90,9 @@ TEST(the_palette_comes_from_the_profiles_path) {
   CHECK(error.find(std::string(p.id)) != std::string::npos);
 }
 
-TEST(the_sequel_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
-  const ce::Profile* q = ce::find_profile("sequel");
-  CHECK(q != nullptr && q != &ce::classic_profile());
+TEST(q2_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
+  const ce::Profile* q = ce::find_profile("q2");
+  CHECK(q != nullptr && q != &ce::q1_profile());
   ge::assets::IndexedImage pic;
   pic.width = 16;
   pic.height = 4;
@@ -102,9 +102,9 @@ TEST(the_sequel_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
   const std::vector<uint8_t> pcx = ge::assets::encode_pcx(pic);
   const std::span<const uint8_t> rgb = ce::palette_of(*q, pcx);
   CHECK(rgb.size() == 768 && rgb[1] == 5 && rgb[767] == pic.palette[767]);
-  // A file that is no PCX picture holds none; the first game's palette file is the bytes.
+  // A file that is no PCX picture holds none; Quake's palette file is the bytes.
   CHECK(ce::palette_of(*q, std::vector<uint8_t>(900, 1)).empty());
-  CHECK(ce::palette_of(ce::classic_profile(), pcx).size() == 768);
+  CHECK(ce::palette_of(ce::q1_profile(), pcx).size() == 768);
   std::vector<uint8_t> bytes;
   std::string error;
   CHECK_MSG(ge::vfs::write_pak({{std::string(q->palette), pcx}}, &bytes, &error), error);
@@ -113,4 +113,19 @@ TEST(the_sequel_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
   ce::Palette palette;
   CHECK_MSG(ce::read_palette(*q, pak, bytes, &palette, &error), error);
   CHECK(palette.rgb[2] == 10);
+}
+
+TEST(each_game_knows_its_mission_packs_by_folder_and_by_digest) {
+  const auto* q2 = ce::find_profile("q2");
+  CHECK(q2 != nullptr);
+  const ce::MissionPack* xat = ce::find_pack(*q2, "XATRIX");
+  CHECK(xat != nullptr && xat->name == "The Reckoning");
+  CHECK(ce::find_pack(ce::q1_profile(), "xatrix") == nullptr);
+  CHECK(ce::find_pack(ce::q1_profile(), "Rogue")->name == "Dissolution of Eternity");
+  CHECK(ce::find_pack(*q2, "rogue")->name == "Ground Zero");
+  const ce::Profile* game = nullptr;
+  const ce::MissionPack* gz = ce::known_pack(
+      109117652, "9de07d2722c7667c681319163edfd8dcd58e0640f8a4aa0c5917a9b19d8be02e", &game);
+  CHECK(gz != nullptr && gz->folder == "rogue" && game == q2);
+  CHECK(ce::known_pack(109117652, std::string(64, '0'), &game) == nullptr);
 }

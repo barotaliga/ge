@@ -1,5 +1,5 @@
 // LAB `hub-viewer`: A DEMO PLAYED IN THE BROWSER (docs/hub.md § Watching in a browser). A team
-// match of bots on the fixture halls (net/classic_team.hpp) is recorded, packed into a replay file
+// match of bots on the fixture halls (net/qw_team.hpp) is recorded, packed into a replay file
 // version 2 and taken by the hub's archive; the halls go in a content pack beside the web viewer
 // (`--viewer=<dir>`, the web build's `shooters_edge_viewer/`). The hub serves its Demo page, the
 // viewer's files, the pack and the demo over loopback HTTP, and a headless Chromium with WebGPU
@@ -51,8 +51,8 @@
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/play_content.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 #include "tv/node.hpp"
 #include "tv/websocket.hpp"
 #include "vfs/pak.hpp"

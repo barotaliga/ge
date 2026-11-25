@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_place_names_test.cpp
 #include "shooters_edge/client/place_names.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <system_error>
@@ -79,12 +80,38 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
   p.locs = {};
   if (map.empty() || (p.load != nullptr && !p.load->on())) return;
   std::string text;
-  if (read_file(p, files, map + ".loc", text) && ge::classic::parse_locs(text, p.locs) > 0) {
-    p.locs.from = "locs/" + map + ".loc";
-    return;
+  // The map's own file, else its map group's (mapgroup: classic/content/map_groups.hpp).
+  const std::string group =
+      files.groups ? ge::classic::content::group_of(files.groups->maps, map, false) : "";
+  for (const std::string& stem : {map, group}) {
+    if (stem.empty()) continue;
+    if (read_file(p, files, stem + ".loc", text) && ge::classic::parse_locs(text, p.locs) > 0) {
+      p.locs.from = "locs/" + stem + ".loc";
+      return;
+    }
+    p.locs = {};
+    if (adapter.open_locations != nullptr) adapter.open_locations(adapter, files, stem, p.locs);
+    if (!p.locs.points.empty()) return;
   }
-  p.locs = {};
-  if (adapter.open_locations != nullptr) adapter.open_locations(adapter, files, map, p.locs);
+}
+
+bool place_markers(const PlaceNames& p, double t, std::vector<PlaceMarker>& out) {
+  out.clear();
+  sh::Vec3f me;
+  if (p.draw == nullptr || !p.draw->on() || !p.where || !p.where(me)) return false;
+  const float range = range_of(p);
+  const ge::classic::Loc* near = ge::classic::nearest_loc(p.locs, me, range, sight_of(p));
+  if (near == nullptr) return false;
+  for (const ge::classic::Loc& c : p.locs.points) {
+    const float dx = c.at.x - me.x, dy = c.at.y - me.y, dz = c.at.z - me.z;
+    if (range > 0 &&
+        static_cast<float>(static_cast<int>(std::sqrt(dx * dx + dy * dy + dz * dz))) > range)
+      continue;
+    PlaceMarker m{.at = c.at, .light = c.at, .nearest = &c == near};
+    if (m.nearest) m.at.z += static_cast<float>(10 * std::sin(t * 10));
+    out.push_back(m);
+  }
+  return true;
 }
 
 std::string place_at(const PlaceNames& p, sh::Vec3f at) {
@@ -141,21 +168,34 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                     .flags = con::kArchive,
                     .help = "1: a place's point behind a wall is not where you are",
                     .kind = con::CvarKind::boolean});
-  // The sequel's place macros: where the player is and where the view looks, `unknown` when no
-  // place is within reach or no game is playing.
-  if (adapter.game != nullptr && adapter.game->place_macros) {
-    con.add_macro("loc_here", [&p, where] {
-      sh::Vec3f at;
-      if (!where || !where(at)) return std::string("unknown");
-      const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
-      return name.empty() ? std::string("unknown") : name;
-    });
-    con.add_macro("loc_there", [&p] {
-      sh::Vec3f at;
-      if (!p.looked_at || !p.looked_at(at)) return std::string("unknown");
-      const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
-      return name.empty() ? std::string("unknown") : name;
-    });
+  p.draw = &v.add({.name = "loc_draw",
+                   .fallback = "0",
+                   .flags = con::kArchive,
+                   .help = "1: a marker stands at every place point within reach, the nearest "
+                           "bobbing in a white light",
+                   .kind = con::CvarKind::boolean});
+  // The place macros, in every game (Quake II's client brought them): where the player is and
+  // where the view looks, `unknown` when no place is within reach or no game is playing. Team
+  // macros (console.hpp): a strict ruleset keeps scripts from acting on them.
+  {
+    con.add_macro(
+        "loc_here",
+        [&p, where] {
+          sh::Vec3f at;
+          if (!where || !where(at)) return std::string("unknown");
+          const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+          return name.empty() ? std::string("unknown") : name;
+        },
+        con::MacroKind::team);
+    con.add_macro(
+        "loc_there",
+        [&p] {
+          sh::Vec3f at;
+          if (!p.looked_at || !p.looked_at(at)) return std::string("unknown");
+          const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+          return name.empty() ? std::string("unknown") : name;
+        },
+        con::MacroKind::team);
   }
   // Each command under its name and its older short name, the same command either way.
   const auto both = [&con](const char* name, const char* old_name, const std::string& help,
@@ -195,6 +235,21 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          p.locs.points.clear();
          c.print("Cleared " + std::to_string(n) + " places.");
        });
+  // The points no spot needs: each one whose going leaves every spot in the map named the same.
+  const auto prune = [&p](con::Console& c, const CArgs&) {
+    const std::vector<sh::Vec3f> spots = p.spots ? p.spots() : std::vector<sh::Vec3f>{};
+    if (spots.empty()) {
+      c.print("You need to be in a game to tidy the places.");
+      return;
+    }
+    const size_t was = p.locs.points.size();
+    const int gone = ge::shooter::prune_locs(p.locs, spots, range_of(p), sight_of(p));
+    c.print("Took out " + std::to_string(gone) + " of " + std::to_string(was) +
+            " places that named nowhere new; " + std::to_string(p.locs.points.size()) +
+            " left. Save them with saveloc.");
+  };
+  both("locations_prune", "pruneloc",
+       "locations_prune: take out every place whose going changes no spot's name", prune);
   const auto save = [&p](con::Console& c, const CArgs& a) {
     if (a.size() != 2) {
       c.print("Usage: saveloc <name>");
@@ -242,7 +297,21 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          c.print(n == 0 ? "locs/" + file + " has no places."
                         : "Loaded locs/" + file + " (" + std::to_string(n) + " places).");
        });
-  // `loc` alone says where you are; `loc add|del|set|list|save` edits the places as the sequel's
+  // mapgroup and skygroup (classic/content/map_groups.hpp): the groups the path's lookups use.
+  for (const bool sky : {false, true})
+    con.add_command(sky ? "skygroup" : "mapgroup",
+                    sky ? "skygroup [<group> [+|-]<map> ...|clear]: maps that draw the group's sky"
+                        : "mapgroup [<group> [+|-]<map> ...|clear]: maps that share files",
+                    [&files, sky](con::Console& c, const CArgs& a) {
+                      if (!files.groups) return;
+                      std::vector<std::string> words;
+                      for (size_t i = 1; i < a.size(); ++i) words.push_back(a[i]);
+                      auto& groups = sky ? files.groups->skies : files.groups->maps;
+                      for (const std::string& line :
+                           ge::classic::content::apply_group(groups, words, sky ? "sky" : "map"))
+                        c.print(line);
+                    });
+  // `loc` alone says where you are; `loc add|del|set|list|save` edits the places as Quake II's
   // client spells it.
   const auto in_game = [where](con::Console& c, sh::Vec3f& at) {
     if (where && where(at)) return true;
@@ -250,8 +319,8 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     return false;
   };
   con.add_command(
-      "loc", "loc: the place you are in; loc add|del|set|list|save edits the places",
-      [&p, in_game, add, remove, save](con::Console& c, const CArgs& a) {
+      "loc", "loc: the place you are in; loc add|del|set|list|save|prune edits the places",
+      [&p, in_game, add, remove, save, prune](con::Console& c, const CArgs& a) {
         const std::string sub = a.size() > 1 ? lower(a[1]) : "";
         const auto shifted = [&a](const char* name, bool joined) {
           CArgs b = a;
@@ -293,12 +362,14 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
             c.print((l.raw.empty() ? l.name : l.raw) + " at " + at_text(l.at));
           c.print(p.locs.points.empty() ? "There are no places on this map."
                                         : std::to_string(p.locs.points.size()) + " places.");
+        } else if (sub == "prune") {
+          prune(c, a);
         } else if (sub == "save") {
           CArgs b = shifted("saveloc", false);
           if (b.size() < 2) b.words.push_back(p.map);
           save(c, b);
         } else {
-          c.print("Usage: loc, or loc add|del|set|list|save");
+          c.print("Usage: loc, or loc add|del|set|list|save|prune");
         }
       });
 }

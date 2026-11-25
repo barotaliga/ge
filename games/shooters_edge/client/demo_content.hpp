@@ -5,7 +5,7 @@
 // what any picture of this game needs whatever the demo holds: the palette and colour map, the
 // player's head and gibs, the thrown and fired models the effects draw, and the particle effects.
 //
-// THE SEQUEL'S (demo.hpp § SEQUEL): its maps, the folder of each model it names (the model, its
+// QUAKE II'S (demo.hpp § QUAKE II): its maps, the folder of each model it names (the model, its
 // skins), each player's model folder (`players/<model>/`: the model, skins and own sounds), the
 // sounds it names (a player's own, `*name`, are in that folder), its pictures (`pics/<name>.pcx`)
 // and the palette (`pics/colormap.pcx`). Its maps keep their textures in files of their own, so
@@ -14,7 +14,7 @@
 //
 // ge:summary The content paths a demo needs: its maps, precached models and sounds, the basics
 // ge:keywords demo content files precache models sounds map hub content-pack demo_files
-// ge:keywords sequel dm2 wal textures content_needs file_needs
+// ge:keywords q2 dm2 wal textures content_needs file_needs
 // ge:skill shooter net
 // ge:test tests/shooters_edge_demo_content_test.cpp
 #pragma once
@@ -33,8 +33,8 @@ bool demo_files(std::span<const uint8_t> demo, std::vector<std::string>& names, 
 
 // What any picture of the game needs whatever is shown (the palette and colour map, the player's
 // head and gibs, the thrown and fired models the effects draw, the particle effects), or of the
-// sequel (`sequel`), appended to `out`.
-void game_basics(bool sequel, std::vector<std::string>& out);
+// Quake II (`q2`), appended to `out`.
+void game_basics(bool q2, std::vector<std::string>& out);
 
 // The files `name` (its `bytes`) draws from in turn, appended to `more` (`HubSpec::file_needs`): a
 // map that keeps its textures outside names each one's file, and a map with a sky box its faces.

@@ -21,19 +21,19 @@ companions, and saves.
 | Shell | `games/shooters_edge/server/qc_server.hpp`, `catalogue.hpp`, `builtins.hpp`, `rules_world.hpp` | The QC runner: the full builtin catalogue, `checkextension`, the rules' world filled |
 | Shell | `games/shooters_edge/server/qvm_server.hpp` | The compiled-module runner |
 | Shell | `games/shooters_edge/rules/` (`arena.hpp`, `campaign.hpp`, `calls.hpp`) | OUR OWN RULES in C++ as native programs: the arena's deathmatch and the campaign, over the classic server's calls typed for C++ |
-| Shell | `games/shooters_edge/server/campaign.hpp`, `campaign_episodes.hpp`, `campaign_save.hpp`, `classic_save.hpp` | The campaign host: maps in a chain, episodes, saves on `engine/save`, the classic text save |
+| Shell | `games/shooters_edge/server/campaign.hpp`, `campaign_episodes.hpp`, `campaign_save.hpp`, `q1_save.hpp` | The campaign host: maps in a chain, episodes, saves on `engine/save`, the classic text save |
 | Shell | `games/shooters_edge/sim/mod_api.hpp`, `mod_host.hpp` | A C++ mod's hooks and services over the program seam |
 | Shell | `games/shooters_edge/profiles/arsenal.hpp`, `items.hpp`, `words.hpp` | A game's weapons and armour, items and server words as data rows |
-| Shell | `games/shooters_edge/bots/companion.hpp`, `client/coop_mode.hpp`, `client/coop_party.hpp` | Co-op: companions, the mode, the party carried map to map |
+| Shell | `plugins/shooterbots/companion.hpp`, `client/coop_mode.hpp`, `client/coop_party.hpp` | Co-op: companions, the mode, the party carried map to map |
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
-| Our rules | `rules/arena.hpp`, `rules/campaign.hpp` (C++ native programs) | `server/sequel_server.hpp` and its `sequel_*` files (items, combat, fight, map, targets, monsters, poses, campaign, screens, gibs, save) | its arena rules in C++ on a runner | its rules in C++ |
-| Community mods | QC bytecode on the VM (`qc_server.hpp`); compiled modules (`qvm_server.hpp`) | its native game library hosted unchanged (`server/sequel_native.hpp`) | its compiled modules on the module VM; native libraries | none (its mods are data) |
-| C++ mods | the program seam (`sim/mod_host.hpp`) | laid over its own entities (`server/sequel_mods.hpp`) | the seam | the seam |
-| Saves | `campaign_save.hpp`, the classic text save | `server/sequel_save.hpp` | | |
+| Our rules | `rules/arena.hpp`, `rules/campaign.hpp` (C++ native programs) | `server/q2_server.hpp` and its `q2_*` files (items, combat, fight, map, targets, monsters, poses, campaign, screens, gibs, save) | its arena rules in C++ on a runner | its rules in C++ |
+| Community mods | QC bytecode on the VM (`qc_server.hpp`); compiled modules (`qvm_server.hpp`) | its native game library hosted unchanged (`server/q2_native.hpp`) | its compiled modules on the module VM; native libraries | none (its mods are data) |
+| C++ mods | the program seam (`sim/mod_host.hpp`) | laid over its own entities (`server/q2_mods.hpp`) | the seam | the seam |
+| Saves | `campaign_save.hpp`, the classic text save | `server/q2_save.hpp`; a game library's own by its files (`server/q2_native_save.cpp`) | | |
 
 ## Adding a game
 
@@ -41,24 +41,24 @@ companions, and saves.
    and timing, damage, movers, monsters, the campaign. Numbers come from the game's own program and
    files, never typed from memory.
 2. The rules in C++ on a runner: a new `RunnerCalls` table over `RulesCommon` when the game keeps
-   its own entities (the sequel's), else the program seam. NEVER QC of our own.
+   its own entities (Quake II's), else the program seam. NEVER QC of our own.
 3. Data a rule needs from another game's rules is header-only data (a roster, a pose table) so
    either rules library reads it without linking the other's code.
 4. Its items as roles (`item_roles.hpp`), its arsenal and words as rows (`profiles/`).
 5. The community's mod form: a runner for it if the VM exists (the module VM does), else named
    and passed over (`runs_form`), never read as another form.
 6. C++ mods laid over its rules at the same hook points.
-7. Played by bots with a golden digest; labs as `se-sequel-fight` and `se-sequel-coop`.
+7. Played by bots with a golden digest; labs as `se-q2-fight` and `se-q2-coop`.
 
 ## Brought and left behind
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Co-op with companions who follow, defend and press buttons | ours, over both campaigns | `bots/companion.hpp` |
+| Co-op with companions who follow, defend and press buttons | ours, over both campaigns | `shooterbots/companion.hpp` |
 | Saves of the whole running game, bit for bit | ours | `engine/save` |
-| The sequel's monsters in the first game's campaign and back | ours | `rules/campaign_sequel.hpp`, header-only rosters |
+| Quake II's monsters in Quake's campaign and back | ours | `rules/campaign_q2.hpp`, header-only rosters |
 | C++ mods stacking on any game's rules | ours | `engine/mod`, the seam |
-| Mod extensions checked by name | the first game's later engines | `plugins/progs/extensions.hpp` |
+| Mod extensions checked by name | Quake's later engines | `plugins/progs/extensions.hpp` |
 
 | Drawback left behind | How |
 | --- | --- |
@@ -68,13 +68,55 @@ companions, and saves.
 
 ## Gaps
 
-The sequel's single-player playthrough stuck at breakable glass; the third game's module VM
-server for its mods' client half and menus.
+A game library's single player (a mission pack's) keeps its levels in the unit and saves by the
+library's own files packed into the engine's save; its rotating brush models' hulls and a frame
+cut to what a client sees are open. Quake II's single-player playthrough stuck at breakable glass; the third game's module VM
+server for its mods' client half and menus. Quake's single player against the original: the
+ranked list in `porting/shooters-edge/q1-sp-gaps.md`, every row landed but the two kept by
+choice (the fixed 1/72 s step and co-op switched on during a map). Co-op on every campaign map
+(joins, a death, a leave and rejoin, the keys, the exit, the ending) is held by `se-coop-sweep`.
+The liquids (lava and slime's ticks and clock, the sounds going in and out, the burns' cries, the
+gasp, drowning that grows, the liquid slowing a swimmer) are held to Quake's own program by
+`se-dive`; the ticks are the harm rows of `plugins/shooter/liquid_harm.hpp`. Quake II's second gap
+list (`porting/shooters-edge/q2-gaps2-rules.md`) has its rank-1 rows landed: the obituaries, the
+death, join, leave and limit lines word for word, the next map, the spawn discs, co-op's spots and
+its carried state over the network.
+
+Quake and QuakeWorld as a whole: `porting/shooters-edge/q1-qw-ledger.md` lists every command,
+setting, builtin, message, menu page, entity, item, weapon and deathmatch rule of the stock
+releases, marked done, missing or not taken, and is THE gap list (its missing count only goes
+down). Quake's deathmatch without a mod of its own plays the arena's rules in C++ with Quake's
+own on top (`rules/common_quake.cpp`), switched on by the local info `rules q1` that the game's
+profile writes (`GameProfile::arena_rules`): the body's pain, firing and death frames, the cries,
+gibs and the four corpses kept, the spawn drawn at random with its flash, the kill command, the
+damage order and the teamplay modes, each mode's respawn times and weapon stay, the weapons'
+numbers and sounds, the liquids' sounds and drowning, the keys and key doors, the secrets,
+relays and counters, the exits, the intermission and the next map, and the kit carried to it.
+The third fill adds the rest of the rules a deathmatch player meets: a door's crush credited to
+whoever opened it, the pentagram against a telefrag ("Satan's power"), the quad and ring dropped
+by the info keys `dq` and `dr` with everyone told who lost and who recovered them, the switch to
+the best weapon after ammunition, the OctaPower's own warning, a spectator's impulse 1 through the
+spots, named lights that switch and the fluorescent ones that hum, triggers with an angle or with
+health, and a body that slows on the ground (`tests/shooters_edge_arena_quake_test.cpp`).
+The arena's own rules, its digests and its pins are unchanged without the switch; `se-quake-dm`
+plays both from one seed.
+
+Quake II's mission packs play their rules in C++ beside the base game's, behind the pack switch
+(`server/q2_pack.hpp`: the game folder picks it). A pack's items, weapons, shots, monsters and
+map things are rows that carry their pack, and only that pack registers their models and sounds,
+so the base game's lists, goldens and digests do not move. What two games share is one table:
+the timed powers (`server/q2_powers.hpp`: the quad, The Reckoning's dual fire, invulnerability,
+the suit and the rebreather, each with its tint, warning, shell and drop rule) feed the timer, the
+view's tint, the shell, the drops and `use` alike. The Reckoning's rules are in
+`server/q2_reckoning.hpp` (its map things, its thinking shots, the trap) and `server/q2_choose.cpp`
+(its weapon cycle and the hyperblaster and railgun toggles); the item and ammunition tables are
+saved length first, so a pack's rows never break an older save.
 
 ## Labs and tests
 
-`se-baseline`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-sequel-fight`, `se-sequel-coop`,
-`se-sequel-save`, `se-sequel-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`.
+`se-baseline`, `se-quake-dm`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-coop-sweep`, `se-dive`, `se-q2-fight`, `se-q2-coop`,
+`se-q2-save`, `se-q2-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`,
+`tests/shooters_edge_quake_rules_test.cpp`.
 
 ## Lessons
 
@@ -83,3 +125,5 @@ server for its mods' client half and menus.
   silently zero.
 - The window asks the rules' world or a runner's trait, never which runner it is.
 - A monster swapped whole is the other game's numbers as data in the played rules' own shape.
+- A game's own rules on shared rules go behind one switch the game's profile writes, read once a
+  frame; every branch tests it, so the shared rules' digests stay put without it.

@@ -6,6 +6,9 @@
 // ge:test tests/classic_protocol_test.cpp
 #include "classic/protocol/info.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+
 namespace ge::classic::protocol {
 
 namespace {
@@ -88,6 +91,34 @@ void info_remove(std::string& info, const std::string& key) {
   info = join(kept);
 }
 
+bool info_strict(const std::string& info) {
+  if (info.size() >= 512) return false;
+  size_t i = !info.empty() && info[0] == '\\' ? 1 : 0;
+  if (i >= info.size()) return i == 0;  // "" passes the shape (an empty one is refused apart)
+  for (;;) {
+    size_t key = 0;
+    while (i < info.size() && info[i] != '\\') {
+      const auto c = static_cast<unsigned char>(info[i]);
+      if (c < 32 || c > 126 || c == '"' || c == ';') return false;
+      i++;
+      key++;
+    }
+    if (key >= 64 || i >= info.size()) return false;  // a key with no value
+    i++;
+    size_t value = 0;
+    while (i < info.size() && info[i] != '\\') {
+      const auto c = static_cast<unsigned char>(info[i]);
+      if (c < 32 || c > 126 || c == '"' || c == ';') return false;
+      i++;
+      value++;
+    }
+    if (value == 0 || value >= 64) return false;
+    if (i >= info.size()) return true;
+    i++;
+    if (i >= info.size()) return false;  // a trailing `\`
+  }
+}
+
 bool info_valid(const std::string& info, size_t limit) {
   std::vector<std::pair<std::string, std::string>> pairs;
   return info.size() <= limit && info_pairs(info, pairs) &&
@@ -130,6 +161,11 @@ std::string unique_name(const std::string& name, const std::vector<std::string>&
     if (!held(c)) return c;
   }
   return name;
+}
+
+int msg_level_of(const std::string& value) {
+  if (value.empty()) return 0;
+  return std::clamp(std::atoi(value.c_str()), 0, 256);
 }
 
 }  // namespace ge::classic::protocol

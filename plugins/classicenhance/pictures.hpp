@@ -6,10 +6,10 @@
 // `gfx.wad`, named by their lump names in lower case (`sbar`, `num_0`, `face1`, `conchars`), and
 // every picture file under `gfx/` in the pack (`gfx/ranking.lmp` is `gfx/ranking`). A file under
 // `gfx/` that is not a picture (the palette, the colour map) is left out. A row with no wad (the
-// sequel) has only its picture files, PCX pictures under `pics/` drawn in the game's palette. Each
-// picture's colours are the pack's palette's; index 255 is see-through in a picture, and index 0 in
-// the font sheet, as the classic renderer drew them. `picture_rgba` scales and filters nothing: a
-// HUD draws such a picture at a whole number of screen pixels a pixel, sampled nearest.
+// Quake II) has only its picture files, PCX pictures under `pics/` drawn in the game's palette.
+// Each picture's colours are the pack's palette's; index 255 is see-through in a picture, and index
+// 0 in the font sheet, as the classic renderer drew them. `picture_rgba` scales and filters
+// nothing: a HUD draws such a picture at a whole number of screen pixels a pixel, sampled nearest.
 //
 // ENHANCED (`enhance_picture`), a picture is upscaled the way a texture's albedo is (texture.hpp's
 // `upscale_albedo`: the trained network, else the edge-aware kernel), with its see-through texels
@@ -55,7 +55,7 @@ struct PackPicture {
 // palette; false with the reason when the pack has no palette, or the row names a wad the pack
 // lacks or that is damaged. A wad lump that is neither a picture nor the font sheet is skipped.
 bool pack_pictures(std::span<const uint8_t> pack, Palette* palette, std::vector<PackPicture>* out,
-                   std::string* error, const Profile& profile = classic_profile());
+                   std::string* error, const Profile& profile = q1_profile());
 
 // The picture in the palette's colours, `transparent` drawn with alpha 0.
 assets::Image picture_rgba(const vfs::IndexedPicture& picture, const Palette& palette,

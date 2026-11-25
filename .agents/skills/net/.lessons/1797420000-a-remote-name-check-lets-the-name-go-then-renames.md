@@ -1,7 +1,7 @@
 ---
 title: A name checked by a master elsewhere is let go, then taken back by an order
 date: 2026-11-13
-scope: engine/server/login.cpp, games/shooters_edge/net/classic_login.cpp
+scope: engine/server/login.cpp, games/shooters_edge/net/qw_login.cpp
 concepts: [reserved-names, name-check, unname, login-seam, account-master]
 ---
 

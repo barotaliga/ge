@@ -12,11 +12,13 @@
 
 #include <cstring>
 
-#include "shooter/nav.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -87,13 +89,13 @@ FightReport run_fight(const FightOptions& opt) {
 
   // The nav graph off the world, the door and the plat its movers.
   sh::MoveWorld world;
-  sh::map_world(map.models[0], world);
+  sb::map_world(map.models[0], world);
   const int door = entity_on(s, "*1"), plat = entity_on(s, "*2");
   if (door < 0 || plat < 0) {
     r.error = "run_fight: the arena's door or plat is missing; next: read kBaselineArenaEntities";
     return r;
   }
-  sh::NavMover movers[2];
+  sb::NavMover movers[2];
   movers[0].ent = door;
   movers[0].absmin = s.world.entities[static_cast<size_t>(door)].absmin;
   movers[0].absmax = s.world.entities[static_cast<size_t>(door)].absmax;
@@ -103,8 +105,8 @@ FightReport run_fight(const FightOptions& opt) {
   movers[1].model = &map.models[2];
   movers[1].travel = {0, 0, kPlatRise};
   movers[1].ride_s = 1 + kPlatRise / kPlatSpeed;
-  sh::NavGraph graph;
-  sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, graph);
+  sb::NavGraph graph;
+  sb::build_nav(world, movers, sh::MoveSettings{}, sb::NavSettings{}, graph);
   r.lo = graph.lo;
   r.hi = graph.hi;
 
@@ -115,9 +117,9 @@ FightReport run_fight(const FightOptions& opt) {
     p.name = "bot" + std::to_string(k + 1);
     p.skill = opt.skills[static_cast<size_t>(k)];
     if (static_cast<size_t>(k) < opt.tempers.size()) p.temper = opt.tempers[static_cast<size_t>(k)];
-    p.traits = sh::traits_of(p.skill, p.temper);
+    p.traits = sb::traits_of(p.skill, p.temper);
     if (static_cast<size_t>(k) < opt.traits.size() &&
-        !sh::apply_traits(opt.traits[static_cast<size_t>(k)], p.traits, r.error)) {
+        !sb::apply_traits(opt.traits[static_cast<size_t>(k)], p.traits, r.error)) {
       r.error = p.name + ": " + r.error;
       return r;
     }
@@ -125,11 +127,11 @@ FightReport run_fight(const FightOptions& opt) {
   }
   for (int k = 0; k < n; k++) {
     Fighter& f = fighters[static_cast<size_t>(k)];
-    f.features = sh::features_of(opt.skills[static_cast<size_t>(k)]);
-    if (!sh::apply_features(opt.features, f.features, r.error)) return r;
+    f.features = sb::features_of(opt.skills[static_cast<size_t>(k)]);
+    if (!sb::apply_features(opt.features, f.features, r.error)) return r;
     fighter_init(f, graph, s, k, server::kBaselineArenaEntities, opt.skills[static_cast<size_t>(k)],
                  r.players[static_cast<size_t>(k)].traits, kHz,
-                 opt.seed + 31u * static_cast<uint32_t>(k));
+                 opt.seed + 31u * static_cast<uint32_t>(k), first_arsenal());
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &world;  // the hop looks ahead through the map
     if (k == 0) f.bot.pilot.why = opt.why;

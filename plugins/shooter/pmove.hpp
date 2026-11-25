@@ -96,18 +96,22 @@ struct MoveSettings {
   bool program_jumps = false;
   // THE AIR (a game whose move steers in the air another way): the acceleration in the air (0:
   // `accelerate`'s) and the wish speed the air's gain is measured against (0: the whole wish).
-  // The defaults are this move's own; the sequel's move with no air acceleration set steers
-  // with 1 and the whole wish (sequel_move.hpp).
+  // The defaults are this move's own; Quake II's move with no air acceleration set steers
+  // with 1 and the whole wish (q2_move.hpp).
   float air_accel = 0;
   float air_wish_cap = 30;
   // pm_landpause: a landing faster than 200 down holds the next jump 0.144 s (0.2 s past 400
   // down), as a move that does not let a hop chain on the landing does.
   bool landpause = false;
   // THE WATER (a game whose swimmers move another way): pm_swimscale, the share of the wish speed
-  // a swimmer takes (0.7, the sequel's 0.5), and pm_waterjump, the speed up a water jump out
-  // onto a bank gives (310, the sequel's 350).
+  // a swimmer takes (0.7, Quake II's 0.5), and pm_waterjump, the speed up a water jump out
+  // onto a bank gives (310, Quake II's 350).
   double swimscale = 0.7;  // a double: the wish times it in double, then to float
   float waterjump = 310;
+  // The bank a water jump climbs (at water level 2, view level, forward): solid this far ahead
+  // of the origin at `waterjump_lip` up and open at `waterjump_open` up (24, 8, 32; Quake II's
+  // 30, 4, 20: a lip more than 20 over a chest-deep swimmer's origin is no way out there).
+  float waterjump_reach = 24, waterjump_lip = 8, waterjump_open = 32;
 };
 
 inline constexpr float kLandPauseSpeed = 200;

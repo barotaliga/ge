@@ -19,7 +19,7 @@
 //   %2 its lead, `clock_lead_one` a lead of 1), `clock_tie`; `match_over`; `team_scores_head`,
 //   `team_scores_row` (%1 the team, %2 its frags, %3 its share), `team_scores_tail`.
 // - powers wearing off, 3 s before the end: `power_quad_off`, `power_pent_off`,
-//   `power_ring_off`, `power_suit_off`.
+//   `power_ring_off`, `power_suit_off`; `power_octa_off` the quad's under Quake's deathmatch 4.
 // - the lobby (server/announce.hpp): `ready` (%1 the name), `ready_team` (%1 the name, %2 the
 //   team), `unready`, `stops`, `all_ready`, `timer`, `aborting`, `begun`, `ready_again` (to a
 //   ready player saying ready), `get_ready` (to one not ready in the last 5 s); the countdown's
@@ -48,7 +48,7 @@ struct WordRow {
   std::string_view text;  // a template (server/words.hpp)
 };
 
-inline constexpr WordRow kClassicServerWords[] = {
+inline constexpr WordRow kQ1ServerWords[] = {
     // --- killed by another player ---
     {"obit_axe", "%1 was ax-murdered by %2%n"},
     {"obit_sg", "%1 chewed on %2's boomstick%n"},
@@ -93,6 +93,7 @@ inline constexpr WordRow kClassicServerWords[] = {
     {"self_squish", "%1 was squished%n"},
     {"self_kill", "%1 suicides%n"},
     {"self_other", "%1 somehow becomes bored with life%n"},
+    {"self_electrocute", "%1 electrocutes himself.%n "},  // the stray space is the game's
     // --- killed by the world ---
     {"world_fall_1", "%1 cratered%n"},
     {"world_fall_2", "%1 fell to %3 death%n"},
@@ -104,6 +105,11 @@ inline constexpr WordRow kClassicServerWords[] = {
     {"world_lava_2", "%1 visits the Volcano God%n"},
     {"world_lava_gib", "%1 burst into flames%n"},
     {"world_squish", "%1 was squished%n"},
+    {"world_blew_up", "%1 blew up%n"},
+    {"world_spiked", "%1 was spiked%n"},
+    {"world_zapped", "%1 was zapped%n"},
+    {"world_lavaball", "%1 ate a lavaball%n"},
+    {"world_left", "%1 tried to leave%n"},
     {"world_died", "%1 died%n"},
     // --- telefrags against the shield ---
     {"pent_deflect", "Satan's power deflects %1's telefrag%n"},
@@ -125,6 +131,7 @@ inline constexpr WordRow kClassicServerWords[] = {
     {"team_scores_tail", "%l%n"},
     // --- powers wearing off ---
     {"power_quad_off", "Quad Damage is wearing off%n"},
+    {"power_octa_off", "OctaPower is wearing off%n"},
     {"power_pent_off", "Protection is almost burned out%n"},
     {"power_ring_off", "Ring of Shadows magic is fading%n"},
     {"power_suit_off", "Air supply in Biosuit expiring%n"},

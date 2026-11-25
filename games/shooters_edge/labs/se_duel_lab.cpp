@@ -27,13 +27,14 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_bot_team.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_bot_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cl = shooters_edge::client;
 namespace cn = shooters_edge::net;
 using ge::core::num::to_fixed;
@@ -95,7 +96,7 @@ void run(gl::Lab& lab) {
              "next: run tests/shooters_edge_baseline_mod_test.cpp");
     return;
   }
-  sh::AimSkill skill[2];
+  sb::AimSkill skill[2];
   for (int k = 0; k < 2; k++) {
     const std::string& s = lab.arg(k == 0 ? "red" : "blue");
     if (!cn::aim_skill_named(s, skill[k])) {
@@ -151,8 +152,8 @@ void run(gl::Lab& lab) {
         s.hits[static_cast<size_t>(w)].hit += p.hits[static_cast<size_t>(w)].hit;
       }
     }
-    per.rows.push_back({std::to_string(seed), sh::aim_skill_name(skill[0]),
-                        sh::aim_skill_name(skill[1]), to_fixed(frags[0], 0),
+    per.rows.push_back({std::to_string(seed), sb::aim_skill_name(skill[0]),
+                        sb::aim_skill_name(skill[1]), to_fixed(frags[0], 0),
                         to_fixed(frags[1], 0)});
     if (o.record && !gl::write_file(lab.arg("save"), {r.mvd.data(), r.mvd.size()}))
       lab.fail("se-duel: --save " + lab.arg("save") + " was not written",
@@ -219,7 +220,7 @@ const gl::LabSpec kSpec{
         {"blue", "expert", "blue's skill"},
         {"red-traits", "", "red's traits over its preset (aim_rl=9/timing=3)"},
         {"blue-traits", "", "blue's traits over its preset"},
-        {"features", "", "both bots' features over their presets (shooter/features.hpp)"},
+        {"features", "", "both bots' features over their presets (shooterbots/features.hpp)"},
         {"features-red", "", "red's over --features (an A/B in one duel)"},
         {"features-blue", "", "blue's over --features"},
         {"deathmatch", "4", "the mode: 4 armed with everything, 1 the items on the map"},

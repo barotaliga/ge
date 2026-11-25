@@ -97,10 +97,10 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Pass --basedir=<the folder that holds the game folder>. Skill: shooter.");
     return;
   }
-  // The sequel's recordings (.dm2, .mvd2) read and drawn by its own adapter.
+  // Quake II's recordings (.dm2, .mvd2) read and drawn by its own adapter.
   const std::string& demo_name = lab.arg("demo");
-  const bool sequel = demo_name.ends_with(".dm2") || demo_name.ends_with(".mvd2");
-  const cl::GameAdapter& game = sequel ? cl::sequel_adapter() : cl::classic_adapter();
+  const bool q2 = demo_name.ends_with(".dm2") || demo_name.ends_with(".mvd2");
+  const cl::GameAdapter& game = q2 ? cl::q2_adapter() : cl::qw_adapter();
   cl::Timedemo bench;
   if (!cl::timedemo_start(files, demo_name, bench, error, game)) {
     lab.fail(error, "Name a demo the packs hold, or its path (--demo=demo1). Skill: replay.");
@@ -289,7 +289,9 @@ void run(gl::Lab& lab) {
     lab.fail("the demo stands " + std::to_string(behind_after) +
                  " s off where it would be after the catch-up",
              "Check fly_demo_rate's catch-up against the time the dive held. Skill: map-design.");
-  if (!gif.empty()) lab.attach("fly.gif", gl::encode_gif_frames(gif, int(std::lround(200 / fps))));
+  if (!gif.empty())
+    lab.attach("fly.gif", gl::encode_gif_frames(gif, int(std::lround(200 / fps))),
+               gl::Det::measured);
   const auto curve = [&](const char* id, const char* title, const char* y_label,
                          const std::vector<double>& ys, const char* caption) {
     gl::LineChart c;

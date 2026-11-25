@@ -13,7 +13,7 @@
 #include "progs/vm.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooters_edge/client/remix_bar.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -61,8 +61,8 @@ double engine_heading(float yaw_deg) { return kPi / 2 - static_cast<double>(yaw_
 double engine_pitch(float pitch_deg) { return -static_cast<double>(pitch_deg) * kDeg; }
 
 hud::Status status_of(const Listen& l, double t) {
-  if (const server::SequelServer* sq = l.rules ? server::sequel_of(*l.rules) : nullptr)
-    return worn_status(*sq, t);  // the sequel's own player, its weapon keys too
+  if (const server::Q2Server* sq = l.rules ? server::q2_of(*l.rules) : nullptr)
+    return worn_status(*sq, t);  // Quake II's own player, its weapon keys too
   hud::Status s;
   s.t = t;
   const PlayerState p = player_state(l);
@@ -100,6 +100,14 @@ hud::Status status_of(const Listen& l, double t) {
   // The runes: the first four bits of the program's `serverflags`, carried from map to map.
   s.runes = static_cast<uint8_t>(bits(l.server->world.serverflags) & 15);
   s.frags = static_cast<int>(field_named(l, 1, "frags"));
+  // The items word as a client is sent it: `items2` from bit 23 up when the program has one (a
+  // mission pack's status bar reads its own weapons and items there), else the runes from 28.
+  const bool items2 = l.progs != nullptr && ge::progs::find_field(*l.progs, "items2") != nullptr;
+  const auto word = [](float f) { return static_cast<uint32_t>(static_cast<int32_t>(f)); };
+  s.items = word(field_named(l, 1, "items")) |
+            (items2 ? word(field_named(l, 1, "items2")) << 23 : uint32_t{s.runes} << 28);
+  s.in_hand = word(field_named(l, 1, "weapon"));
+  s.current_ammo = static_cast<int>(field_named(l, 1, "currentammo"));
   return s;
 }
 
@@ -116,8 +124,10 @@ ge::camera::Subject subject_of(const Listen& l, ge::camera::FirstPersonRow& row)
   s.look_yaw = engine_heading(l.view.y + l.jump_aid.shown);  // the easy jump's swing as shown
   s.look_pitch = engine_pitch(l.view.x);
   s.heading = s.look_yaw;
-  // The eye over the feet: the mod's view offset, 16 units under the origin dead (lying down).
-  const double over = p.dead && !p.rules_view ? kDeadEyeUnits : static_cast<double>(p.view_ofs.z);
+  // The eye over the feet: the mod's view offset, 16 units under the origin dead (lying down). A
+  // single-player program sets the dead eye itself (lowered on the floor, raised for a head).
+  const bool own_eye = p.rules_view || l.campaign_host != nullptr;
+  const double over = p.dead && !own_eye ? kDeadEyeUnits : static_cast<double>(p.view_ofs.z);
   row.eye_stand_m = row.eye_crouch_m = (over - ge::shooter::kPlayerMins.z) * ge::brush::kUnitM;
   return s;
 }

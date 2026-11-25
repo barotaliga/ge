@@ -50,6 +50,8 @@ constexpr std::array<const char*, 19> kNames = {
 
 // Surface flags a face's texinfo carries: sky and warped (liquid) faces have no lightmap.
 constexpr int32_t kSky = 0x4, kWarp = 0x8, kNoDraw = 0x80;
+// A light's panel (its texinfo's value how strongly it lights) and a sliding picture.
+constexpr int32_t kLight = 0x1, kFlowing = 0x40;
 // The see-through flags: a third opaque, two thirds opaque.
 constexpr int32_t kThird = 0x10, kTwoThirds = 0x20;
 
@@ -126,6 +128,8 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       // The marks: any texinfo of the name that is sky or warped marks its texture so.
       Texture& tex = m.textures[t.texture];
       tex.sky = tex.sky || (t.flags & kSky) != 0;
+      tex.flowing = tex.flowing || (t.flags & kFlowing) != 0;
+      if ((t.flags & kLight) != 0 && (t.flags & kSky) == 0) tex.lamp = std::max(tex.lamp, t.value);
       if ((t.flags & kWarp) && tex.liquid == Liquid::none) tex.liquid = Liquid::other;
       const float alpha = (t.flags & kThird) ? 1.0f / 3 : (t.flags & kTwoThirds) ? 2.0f / 3 : 1.0f;
       tex.alpha = tex.alpha < 0 ? alpha : std::min(tex.alpha, alpha);
@@ -341,7 +345,7 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       Leaf& lf = m.leaves[i];
       lf.contents = c.i32();
       lf.cluster = c.i16();
-      c.skip(2);
+      lf.area = c.i16();
       for (float& x : lf.mins) x = float(c.i16());
       for (float& x : lf.maxs) x = float(c.i16());
       lf.first_mark = c.u16();
@@ -367,6 +371,32 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
     for (const Leaf& lf : m.leaves) m.clusters = std::max(m.clusters, lf.cluster + 1);
     m.row_bytes = uint32_t((m.clusters + 7) / 8);
     m.pvs.assign(size_t(m.clusters) * m.row_bytes, 0xff);
+  }
+  // The areas and the portals between them (areas.hpp); an area's run past the portals is refused.
+  if (!detail::count_of(L[kAreas], 8, f, &n, err)) return false;
+  {
+    Cursor c = lump(kAreas);
+    m.areas.resize(n);
+    for (Area& a : m.areas) {
+      a.portals = c.i32();
+      a.first = c.i32();
+    }
+  }
+  if (!detail::count_of(L[kAreaportals], 8, f, &n, err)) return false;
+  {
+    Cursor c = lump(kAreaportals);
+    m.area_portals.resize(n);
+    for (AreaPortal& p : m.area_portals) {
+      p.portal = c.i32();
+      p.other = c.i32();
+    }
+  }
+  for (size_t i = 0; i < m.areas.size(); ++i) {
+    const Area& a = m.areas[i];
+    if (a.portals < 0 || a.first < 0 || uint64_t(a.first) + uint64_t(a.portals) > n)
+      return detail::refuse(
+          err, f, "area " + std::to_string(i) + "'s portals run past the area portal lump",
+          "the file is damaged: rebuild the map");
   }
   return true;
 }

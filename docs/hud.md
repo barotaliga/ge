@@ -143,8 +143,16 @@ game's palette, or "R G B"), `crosshairsize` and `crosshairalpha`. A game regist
 its `CrosshairSettings` (`add_crosshair_cvars`), and the values the settings hold at that call are
 the cvars' defaults, so each game keeps its own. `crosshair_picture` turns the settings, the game's
 own mark and its palette into a `Picture` any screen draws: Shooter's Edge's HUD element
-(`hud/crosshair.hpp` in the game) and its sequel's status screen (`client/sequel_bar.hpp`) both go
-through it.
+(`hud/crosshair.hpp` in the game) and Quake II's status screen (`client/q2_bar.hpp`) both go
+through it. `cl_crossx` and `cl_crossy` move it from the middle, right and down, in the HUD's art
+pixels (a picture element's `Content::shift_x` and `shift_y`, which any element may take); a game
+may shade it by its own shares of red, green and blue or colour it by the player's health
+(`crosshair_health`: Quake II's `ch_red`, `ch_green`, `ch_blue` and `ch_health`).
+`crosshairimage <name>` draws a picture of the player's own in place of every mark, at its own
+pixels (one art pixel each) times `crosshairsize`, tinted and faded alike, even under `crosshair 0`.
+The game reads it by name (`CrosshairSettings::read_image`; Shooter's Edge's
+`client/picture_files.hpp`: `crosshairs/<name>` as a TGA, PNG, JPEG or PCX), once each time the
+name changes; a name that does not read leaves the mark, with one line on the console.
 
 ### The corner readouts
 
@@ -163,6 +171,12 @@ before any round trip was measured (while signing on). Above the bars are the pi
 measured round trip) and the loss (the share that never came) over the same packets. A game's
 client records each packet into a `NetHistory` as it reads it (`net_arrived`, `net_lost`); the
 `se-net` lab draws one for each condition preset (`net-graph`).
+
+Along the bottom of the screen, `hud/bottom_graph.hpp` draws a **development graph**: one column a
+sample in its own colour across the whole width, newest at the right, a column `value x scale +
+shift` units of the game's 2D screen tall, held to the graph's height. A game feeds it and owns
+its settings: Quake II's `timegraph` feeds each frame's time (a unit a millisecond), `debuggraph`
+draws it whatever feeds it, and `graphheight`, `graphscale` and `graphshift` size it.
 
 ## Skins: the player's and the game's own textures
 

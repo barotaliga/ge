@@ -15,7 +15,7 @@
 // ge:keywords nav-course nav map brushes stairs crate pit gap ramp steep-ramp ledge island
 // ge:keywords build_nav_course ramp_brush
 // ge:skill shooter bots
-// ge:test tests/shooter_nav_test.cpp
+// ge:test tests/shooterbots_nav_test.cpp
 #pragma once
 
 #include <vector>

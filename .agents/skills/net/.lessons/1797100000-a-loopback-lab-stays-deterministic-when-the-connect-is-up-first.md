@@ -1,7 +1,7 @@
 ---
 title: A lab over loopback TCP keeps one digest when each client's connect is up before the server looks
 date: 2026-11-12
-scope: games/shooters_edge/labs/se_tv_lab.cpp, games/shooters_edge/net/classic_qtv.cpp
+scope: games/shooters_edge/labs/se_tv_lab.cpp, games/shooters_edge/net/qw_qtv.cpp
 concepts: [loopback, tcp, determinism, digest, lab, accept, stream-port, relay]
 ---
 

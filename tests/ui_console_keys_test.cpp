@@ -113,6 +113,32 @@ TEST(enter_runs_the_line) {
   CHECK(v.input().empty());
 }
 
+TEST(command_v_pastes_the_clipboard_as_one_line_and_presses_no_bind) {
+  console::Console c;
+  console::ConsoleView v(c);
+  c.cvars().add({.name = "sv_deathmatch", .fallback = "0"});
+  c.cvars().add({.name = "fraglimit", .fallback = "0"});
+  c.binds().set(console::BindMode::game, "v", "+voice");
+  ui::ConsoleKeys keys;
+  keys.paste = [] { return std::string("/sv_deathmatch 3\r\nfraglimit 20\n"); };
+  constexpr uint16_t kV = 25, kCommand = 227;
+  input::Queue q;
+  key(q, kGrave, true);
+  key(q, kCommand, true);
+  key(q, kV, true);
+  key(q, kV, false);
+  key(q, kCommand, false);
+  ui::feed_console(c, v, q, keys);
+  CHECK(v.input() == "/sv_deathmatch 3; fraglimit 20");
+  input::Queue run;
+  key(run, kEnter, true);
+  ui::feed_console(c, v, run, keys);
+  CHECK(c.cvars().find("sv_deathmatch")->value == "3");
+  CHECK(c.cvars().find("fraglimit")->value == "20");
+  CHECK(ui::paste_line("a\tb\x01"
+                       "c") == "a bc");
+}
+
 TEST(a_modifier_is_spelled_before_its_key_and_a_held_bind_lets_go) {
   console::Console c;
   console::ConsoleView v(c);
@@ -171,4 +197,35 @@ TEST(the_chat_line_takes_the_keys_while_open) {
   key(q, kEscape, true);
   ui::feed_console(c, v, q, keys);
   CHECK(!v.chatting() && said == "we go");
+}
+
+// A menu up has the keys: W presses nothing, F1 still runs its bind, and a key held when the menu
+// opened is let go under it.
+TEST(a_menu_up_lets_only_the_function_keys_press_their_binds) {
+  constexpr uint16_t kF1 = 58;
+  console::Console c;
+  console::ConsoleView v(c);
+  c.binds().set(console::BindMode::game, "w", "+forward");
+  c.binds().set(console::BindMode::game, "f1", "+help");
+  console::Button& forward = c.add_button("forward", "move forward");
+  console::Button& help = c.add_button("help", "the help");
+  ui::ConsoleKeys keys;
+  input::Queue q;
+  key(q, kW, true);
+  ui::feed_console(c, v, q, keys);
+  CHECK(forward.down());
+  keys.menu = true;
+  q.clear();
+  key(q, kW, false);  // let go under the menu: released
+  ui::feed_console(c, v, q, keys);
+  CHECK(!forward.down());
+  q.clear();
+  key(q, kW, true);  // pressed under the menu: the menu's alone
+  key(q, kF1, true);
+  ui::feed_console(c, v, q, keys);
+  CHECK(!forward.down() && help.down());
+  q.clear();
+  key(q, kF1, false);
+  ui::feed_console(c, v, q, keys);
+  CHECK(!help.down());
 }

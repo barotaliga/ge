@@ -1,6 +1,6 @@
 // A POINT TREE'S CELLS AS BRUSHES: a map that stores no brushes (version 29 and BSP2) given them,
 // so the brush trace (trace.hpp) sweeps a box through it as through a version 38 map. Classic
-// remix plays the classic game's maps on the sequel's rules this way (docs/shooters-edge.md §
+// remix plays Quake's maps on Quake II's rules this way (docs/shooters-edge.md §
 // Classic remix).
 //
 // - **A cell** is the region a path from a model's head node reaches a leaf through: the planes

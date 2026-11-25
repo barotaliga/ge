@@ -16,7 +16,7 @@
 //
 // ge:summary A map loaded behind the window: read and decoded on a thread, compiled while drawing
 // ge:keywords map-load background-load async loading spinner load_map load_world step_load
-// ge:keywords cancel_load take_load freeze hitch title warm-up
+// ge:keywords cancel_load take_load freeze hitch title warm-up no-visibility no_visibility
 // ge:skill render shooter
 #pragma once
 
@@ -27,17 +27,22 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "gpu/device.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/load_line.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/world_draw.hpp"
+#include "shooters_edge/menu/classic_art.hpp"
+#include "ui/draw.hpp"
 #include "viewmodel/held.hpp"
 
 namespace shooters_edge::client {
@@ -66,7 +71,12 @@ struct MapLoad {
   // world drawn with its own files; null or off: the played game's alone. The window's, outliving
   // the load.
   const RemixFiles* remix = nullptr;
+  bool plaque_gone = false;  // the loading plaque gave up on this load (kPlaqueMostS)
 };
+
+// The most seconds the loading plaque stays over a load: then "Loading plaque timed out." and the
+// spinner in its place, the load going on.
+inline constexpr double kPlaqueMostS = 120;
 
 // Whether `f` holds a result now; with `wait`, waited for (false only when it holds none).
 template <class T>
@@ -82,6 +92,19 @@ bool busy(const MapLoad& load);
 // "" when nothing is in flight.
 std::string load_caption(const MapLoad& load);
 
+// A classic game's map loading in its console (load_line.hpp): while `load` is busy at `now_s`,
+// its line printed or rewritten and the console held. False when nothing loads.
+bool console_load_line(const MapLoad& load, LoadLine& line, ge::console::Console& con,
+                       ge::console::ConsoleView& view, double now_s);
+// Once `load` is done, or at once while the world shown is another's (`elsewhere`): the console it
+// held let go, unless `keep` (a game's start or a demo's first frames still hold it).
+void release_load_line(const MapLoad& load, LoadLine& line, ge::console::ConsoleView& view,
+                       bool keep, bool elsewhere = false);
+// What a load in flight shows over the frame: a single-player game in its pack's pictures the
+// loading plaque (gfx/loading) for up to kPlaqueMostS; anything else the spinner and its caption.
+void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
+                  const shooters_edge::menu::ClassicArt& art, int w, int h, double now_s);
+
 // Step 1: `name` read from `files` on a thread.
 void load_map(MapLoad& load, const SearchPath& files, const std::string& name, double now_s);
 // Step 2: `map`'s world (in `picture`'s look, with the server's `models` standing in it) read on
@@ -90,6 +113,10 @@ void load_map(MapLoad& load, const SearchPath& files, const std::string& name, d
 void load_world(MapLoad& load, const SearchPath& files, const LoadedMap& map,
                 const look::Picture& picture, std::span<const std::string> models,
                 const GameAdapter& game, double now_s, std::span<const std::string> vweps = {});
+
+// What a Quake II map read with no visibility says (the map still plays, everything drawn).
+inline constexpr std::string_view kNoVisibility =
+    "Map has no Visibility, expect bugs and bad performance!";
 
 // What a frame's step gave: a map read (start it on the server, then `load_world`), a world made
 // (draw it from now on), or a step that failed (which, and its reason).

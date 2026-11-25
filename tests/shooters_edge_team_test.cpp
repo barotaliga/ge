@@ -1,4 +1,4 @@
-// A TEAM GAME OF BOTS (games/shooters_edge/bots/team.hpp, net/classic_team.hpp): two teams of
+// A TEAM GAME OF BOTS (plugins/shooterbots/team.hpp, net/qw_team.hpp): two teams of
 // four fighters, each at the controls of a classic client of our server, play the baseline mod
 // with `teamplay 1` on the fixture halls furnished for it (kTeamHallsEntities) for a minute. Both
 // teams score; no player is ever fragged by a teammate; each team has a holder and rushes the quad;
@@ -25,7 +25,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/bumps_read.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
@@ -94,7 +94,7 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   CHECK_MSG(r.faults == 0, "the baseline mod faulted under the team game");
   CHECK_MSG(r.players.size() == 8, "eight players");
   for (const cn::TeamPlayer& p : r.players) CHECK_MSG(p.slot >= 0, p.name + " never got a slot");
-  // Shots and hits by weapon (net/classic_hits.hpp): a frag takes hits, and no weapon hits more
+  // Shots and hits by weapon (net/qw_hits.hpp): a frag takes hits, and no weapon hits more
   // than it fired.
   int64_t hits = 0;
   for (const cn::TeamPlayer& p : r.players)
@@ -134,17 +134,17 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   }
   // Each reads his mates' lines by his own skill: an expert all of them, a novice few.
   for (const cn::TeamPlayer& p : r.players) {
-    if (p.skill == ge::shooter::AimSkill::expert)
+    if (p.skill == ge::shooterbots::AimSkill::expert)
       CHECK_MSG(p.read > 0 && p.missed == 0, p.name + " (an expert) missed a team line");
-    if (p.skill == ge::shooter::AimSkill::novice)
+    if (p.skill == ge::shooterbots::AimSkill::novice)
       CHECK_MSG(p.missed > p.read, p.name + " (a novice) read most of the team's lines");
   }
   // A novice starts the match knowing none of the items, an expert all of them.
   for (const cn::TeamPlayer& p : r.players) {
     if (p.known.empty()) continue;
-    if (p.skill == ge::shooter::AimSkill::novice)
+    if (p.skill == ge::shooterbots::AimSkill::novice)
       CHECK_MSG(p.known.front() == 0, p.name + " (a novice) knew the map at the start");
-    if (p.skill == ge::shooter::AimSkill::expert)
+    if (p.skill == ge::shooterbots::AimSkill::expert)
       CHECK_MSG(p.known.front() == static_cast<int16_t>(r.item_at.size()),
                 p.name + " (an expert) did not know every item at the start");
   }
@@ -250,7 +250,7 @@ TEST(a_team_game_replays_to_the_bit_and_matches_its_golden) {
   CHECK_MSG(a == b, "two team games on one seed differ (one recorded, one not)");
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# games/shooters_edge/net/classic_team.hpp: 4on4 of fighters on the fixture halls, "
+    out << "# games/shooters_edge/net/qw_team.hpp: 4on4 of fighters on the fixture halls, "
            "teamplay 1, seed 3, 1500 frames: the match's digest "
            "(tests/shooters_edge_team_test.cpp)\n";
     char line[32];

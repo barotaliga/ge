@@ -5,6 +5,7 @@
 // ge:summary Test: the brush tool's info, ents and check answers, a refusal named, usage errors
 // ge:keywords test brush tool info ents check search-path json usage near liquids slice
 // ge:skill brush testing
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -112,6 +113,19 @@ TEST(ents_near_a_point_liquids_and_a_slice_answer) {
   CHECK(run({"slice", map, "--z=64", "--step=32"}, &out) == 0);
   CHECK(has(out, "\"plane\":\"z=64\"") && has(out, "\"grid\":[") && has(out, "#") &&
         has(out, "..."));
+  // A window round a point: a fine step fits, the grid starts at the window's corner.
+  CHECK(run({"slice", map, "--z=64", "--step=8", "--near=256,192,64", "--radius=64"}, &out) == 0);
+  CHECK(has(out, "\"first_column\":196") && has(out, "\"hull\":0"));
+  CHECK(run({"slice", map, "--z=64", "--step=1"}, &out) == 1 && has(out, "--step"));
+  // The player's clip hull: the walls grown by the box, so more of the plane is solid.
+  const auto solid = [](const std::string& o) {
+    return std::count(o.begin() + static_cast<std::ptrdiff_t>(o.find("\"grid\"")), o.end(), '#');
+  };
+  std::string hull;
+  CHECK(run({"slice", map, "--z=64", "--step=8"}, &out) == 0);
+  CHECK(run({"slice", map, "--z=64", "--step=8", "--hull=1"}, &hull) == 0);
+  CHECK(has(hull, "\"hull\":1") && solid(hull) > solid(out));
+  CHECK(run({"slice", map, "--z=64", "--hull=5"}, &out) == 2 && has(out, "--hull"));
   CHECK(run({"slice", map}, &out) == 2 && has(out, "--x="));
   CHECK(run({"slice", map, "--z=99999"}, &out) == 1 && has(out, "outside"));
   CHECK(run({"slice", map, "--x=1", "--y=2"}, &out) == 2);

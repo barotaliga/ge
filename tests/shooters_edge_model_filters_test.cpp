@@ -20,8 +20,8 @@ TEST(a_death_rests_on_its_last_frame) {
   CHECK(r.size() == 5 && !r[0] && !r[1] && r[2] && r[3] && !r[4]);
 }
 
-// The sequel's figure: three deaths standing, numbered by variant, and one crouched.
-TEST(the_sequels_figure_rests_after_each_death_crouched_too) {
+// Quake II's figure: three deaths standing, numbered by variant, and one crouched.
+TEST(q2_figure_rests_after_each_death_crouched_too) {
   const std::vector<std::string> names = {"stand01",  "death101", "death102", "death201",
                                           "death202", "crdeath1", "crdeath2", "crstnd01"};
   const std::vector<bool> r = shooters_edge::models::resting_frames(names);

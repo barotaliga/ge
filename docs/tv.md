@@ -4,7 +4,7 @@ How a match leaves the machines that play it: watched live by many through **TV*
 better path by **Forward**, held and shaped on the player's side by **Proxy**, and kept as a
 **replay file** that is the same bytes on disk and on the wire. Every game gets all four; a game
 adds a face only where its wire is foreign or its fields need a model. The rows are M57a–M57f
-(`docs/goals.md`). The classic game's programs these replace are described in the working area
+(`docs/goals.md`). Quake's programs these replace are described in the working area
 (`porting/shooters-edge/television.md`, `forward.md`, `proxy.md`), never here.
 
 ## The four pieces
@@ -32,7 +32,7 @@ engine/replay     replay file v2: header, tracks, blocks, keyframes, index; code
 engine/net        sockets, connections, security, the simulated network, the server list
 ```
 
-Each layer uses only those below it. What stays out of every layer: the classic game's teamplay
+Each layer uses only those below it. What stays out of every layer: Quake's teamplay
 helpers (say-team macros, locations, pointing) are Shooter's Edge's client's own console features,
 and no command is smuggled through chat.
 
@@ -219,7 +219,7 @@ raw, 25 as today's packed demo and 13 as `.ged`.
 ## The classic face
 
 Shooter's Edge's server offers the classic broadcaster's stream port
-(`games/shooters_edge/net/classic_qtv.hpp`, M57c). A classic relay connects over TCP, asks in a few
+(`games/shooters_edge/net/qw_qtv.hpp`, M57c). A classic relay connects over TCP, asks in a few
 lines of text (`QTV`, `VERSION: 1`, `RECEIVE`, its user info, its auth offers) and is answered
 `QTVSV 1` and `BEGIN`, a challenge, or an error with the classic words; then the match follows as
 a multiview recording written as it is played. Each relay has its own recorder hung on the server's
@@ -246,12 +246,12 @@ catch-up on the test arena is under 1 KB and the match about 4.5 KB a second, an
 plays to its end in the demo reader with the viewer's chat and join in it. A stream's signon is
 cut into records under 8000 bytes, which is what a relay takes.
 
-Our TV node's classic face (`games/shooters_edge/net/classic_tv.hpp`) is a relay of its own: it
+Our TV node's classic face (`games/shooters_edge/net/qw_tv.hpp`) is a relay of its own: it
 dials a stream port (ours or any server's), answers its challenge, reads the records after `BEGIN`
 and holds each for the delay (7 s by default) before it goes to the viewers, who ask the node as a
 relay asks a server, with the node's own password. A connection that falls is dialled again after
 2 s, doubling to an hour. A viewer who joins mid-match is caught up from the match as the node keeps
-it (`classic_mv_state.hpp`): the level's signon as it came, the state messages since (light styles,
+it (`qw_mv_state.hpp`): the level's signon as it came, the state messages since (light styles,
 server info, user info, frags, pings, statics), every player in the recorder's form with all his
 fields, each one's stats and a full entity list from the baselines, so the next record forwarded
 reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to the server, and
@@ -264,7 +264,7 @@ viewer's stream plays to the same end (every player, his frags and name, every e
 chat in it.
 
 Our client watches a broadcast with `watch <host>:<port> [password]` in the console
-(`games/shooters_edge/net/classic_watch.hpp`): it asks as a relay asks, answers a challenge, and
+(`games/shooters_edge/net/qw_watch.hpp`): it asks as a relay asks, answers a challenge, and
 hands the records to the demo reader a whole frame at a time, so the window draws the match as it
 draws a game it joined (the same view, sounds and lines). Still to come in M57c: the node writing
 its own name into the server info.
@@ -275,7 +275,7 @@ Three executables (`games/shooters_edge/net/hops_main.cpp`, one source) each run
 process of its own, on the wall clock, so any classic client goes through it: `sefwd` (the classic
 face, the route in the connect's `prx`), `seproxy` (the near and far proxies in one process,
 `--link-loss` for a test; `seproxy near` and `seproxy far` for one end each), and `setv` (the node
-on a server's stream port; `setv -game 2` for the sequel's). `--help` lists the
+on a server's stream port; `setv -classic q2` for Quake II's). `--help` lists the
 flags; a status line every `--status` seconds counts the clients, the link's bytes and, for the
 proxies, the server's packets lost on the link.
 
@@ -328,7 +328,7 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 
 A stranger's asks of every kind draw answers of at most a third of their size.
 
-**The classic face** (`games/shooters_edge/net/classic_forward.hpp`) plugs into the forward's face
+**The classic face** (`games/shooters_edge/net/qw_forward.hpp`) plugs into the forward's face
 seam (`ForwardFace`: the datagrams the forward does not take, a client admitted with
 `forward_admit` and connected when the face's handshake upstream is done) so classic clients and
 forwarders chain through ours. The route is the connect's `prx` user info key, the rest of the route
@@ -340,7 +340,7 @@ chain of classic hops connects end to end or says why not. It answers `ping`, `s
 server it knows with its ping, for a client's route finder) itself, once a second a host; it makes
 challenges from the client's address and a secret, so it keeps nothing before a good connect; and it
 follows a client whose NAT gives it a new port by its qport on the same host.
-`tests/shooters_edge_classic_forward_test.cpp`: our classic client plays through one hop and through
+`tests/shooters_edge_qw_forward_test.cpp`: our classic client plays through one hop and through
 a chain of two to our classic server.
 
 **The route finder** (`engine/forward/routes.hpp`) picks the path with the lowest summed round trip
@@ -351,15 +351,15 @@ so a forwarder beside a server is that host, and ties go to the fewer hops. `<ga
 <address>` answers the route and the chain to give the game.
 
 **A fixed route** (`engine/forward/fixed.hpp`) is for a client that cannot name a route at all (an
-unmodified client of the sequel knows only a server's address). The forward's port sends every
+unmodified client of Quake II knows only a server's address). The forward's port sends every
 client to one destination: the player connects to the forward as if it were the server, and the
 forward gives the client its own socket upstream and copies both ways. A dialled route still works
 beside it on the same port. Since the forward cannot read the game's handshake, it takes nothing on
 trust: until a client has sent 3 datagrams, at most 4 bytes go back for each byte it sent (a
 challenge for a challenge ask fits; a level's signon does not), so a spoofed address gets no more
 from the forward than it gets by asking the server directly. `sefwd
---server=<host:port>` runs one. An unmodified client of the sequel, black-box on the full game's
-q2dm1, plays through it to our `sesv -game 2` and to an unmodified server alike,
+--server=<host:port>` runs one. An unmodified client of Quake II, black-box on the full game's
+q2dm1, plays through it to our `sesv -classic q2` and to an unmodified server alike,
 proven on its third datagram, with no answer held back.
 
 ## Proxy
@@ -400,7 +400,7 @@ newest it has (the classic protocol does) would otherwise lose a datagram whose 
 lost even though its copy arrived. A proxy's loop should run faster than the game sends (every
 millisecond or so) so a copy leaves at its gap.
 
-**The classic game through it**: nothing classic is in the proxy; a classic client connects to the
+**Quake through it**: nothing classic is in the proxy; a classic client connects to the
 near proxy as to a server. Checked live (`se-interop --proxy=<port> --link-loss=0.1 --copies=3`)
 against an open-source classic server and match mod built beside the checkout, 20 s each:
 
@@ -413,7 +413,7 @@ against an open-source classic server and match mod built beside the checkout, 2
 
 The loss the game sees doubles on a lossy link with one copy because the server leaves a gap in its
 own sequence for each command of the client's that does not arrive, as well as the replies the link
-loses; three copies take both away. Packing does not shrink the classic game's datagrams (they are
+loses; three copies take both away. Packing does not shrink Quake's datagrams (they are
 already deltas, and short), so its link costs the frame's header on each.
 
 The coder does (`se-interop --proxy=<port> --code=1`, against our own server with four bots on
@@ -457,20 +457,20 @@ between them:
 Three copies cut the loss at 10% about eighty times; packing sends 29% of the plain bytes down and
 coding 12%, so three copies coded cost about a third of one plain.
 
-## The sequel's hops
+## Quake II's hops
 
-The sequel has no forwarder or proxy protocol of its own, so nothing about the hops goes in its
-connect: our sequel client (`games/shooters_edge/net/sequel_client.hpp`, `via` in its config) dials
+Quake II has no forwarder or proxy protocol of its own, so nothing about the hops goes in its
+connect: our Quake II client (`games/shooters_edge/net/q2_client.hpp`, `via` in its config) dials
 the forward route with `engine/forward`'s dial before it asks for a challenge, then runs the
-sequel's handshake end to end to the first hop as if it were the server. The proxies need nothing
-from the client at all: the near proxy is the server's address to it, so a stock sequel client
+Quake II's handshake end to end to the first hop as if it were the server. The proxies need nothing
+from the client at all: the near proxy is the server's address to it, so a stock Quake II client
 reaches the proxies by address alone. The server sees the last hop's address and plays as usual.
 
-The `se-sequel-forward` lab, smoke on the simulated network with our sequel server, 6 s and 10%
+The `se-q2-forward` lab, smoke on the simulated network with our Quake II server, 6 s and 10%
 loss each way on the lossy paths: the client through two forwarders dialled its route and played
 with no bad move checksum; the client through the proxies (three copies, packed) lost none of the
 server's packets, while a client straight over a path as lossy lost 12%. Against an unmodified
-sequel server built beside the checkout (15 s each, loopback):
+Quake II server built beside the checkout (15 s each, loopback):
 
 | Path | What the client got |
 | --- | --- |
@@ -480,9 +480,9 @@ sequel server built beside the checkout (15 s each, loopback):
 | The proxies, 10% link loss, one copy | 13.6% of the server's packets lost; the signon did not finish |
 | The proxies, 10% link loss, three copies | 38 frames, no loss |
 
-An unmodified client of the sequel through `seproxy` (near and far in one
+An unmodified client of Quake II through `seproxy` (near and far in one
 process, the link between them losing 10% of its frames each way), 30 s on the full game's q2dm1,
-to our `sesv -game 2` and to an unmodified server alike:
+to our `sesv -classic q2` and to an unmodified server alike:
 
 | Path | Server packets lost on the link | What the player saw |
 | --- | --- | --- |
@@ -490,23 +490,23 @@ to our `sesv -game 2` and to an unmodified server alike:
 | Three copies, to ours | 0.2% (1 of 464) | in game, as on a clean line |
 | Three copies, to an unmodified server | 0% (0 of 63) | in game, as on a clean line |
 
-## The sequel's TV
+## Quake II's TV
 
-The sequel has no stream port and no TV of its own, and an unmodified client of the sequel knows
+Quake II has no stream port and no TV of its own, and an unmodified client of Quake II knows
 only how to join a server. So our TV for it is a server to its viewers
-(`games/shooters_edge/net/sequel_tv_relay.hpp`):
+(`games/shooters_edge/net/q2_tv_relay.hpp`):
 
 ```
-watcher (34) -> broadcast (replay v2) -> TV node (delay) -> sequel face (34) -> viewers
+watcher (34) -> broadcast (replay v2) -> TV node (delay) -> Quake II face (34) -> viewers
 ```
 
-- **The watcher** is our sequel client joined to the server as a spectator. It works on ours and
+- **The watcher** is our Quake II client joined to the server as a spectator. It works on ours and
   on an unmodified server alike. It is a camera: it flies after one player at a time, from behind
   and above, for 20 s each. Every 2 s it acknowledges no frame for 150 ms, so the server sends its
   next frame whole.
-- **The broadcast and the node** are the same as for any recording (`client/sequel_tv.hpp`,
+- **The broadcast and the node** are the same as for any recording (`client/q2_tv.hpp`,
   `engine/tv`). The node holds the match back by the delay.
-- **The face** (`net/sequel_tv_face.hpp`) answers a viewer's challenge and connect as a server
+- **The face** (`net/q2_tv_face.hpp`) answers a viewer's challenge and connect as a server
   would. It keeps the server data, every configstring as it stands, the baselines, and the blocks
   since the newest whole frame. Each viewer gets:
   - the signon, about 1 KB at a time. Each unit ends with a prompt the client echoes, since a
@@ -518,15 +518,15 @@ lost packet is sent again, rather than leaving the viewer with a frame it cannot
 data is marked as a recording played (attract loop 1), so the viewer's client does not predict.
 Stuffed lines are taken out, because they were the server's to the watcher.
 
-`setv -game 2 --server=<host:port> --port=27911 --delay=7` runs the relay. An
-unmodified client of the sequel was measured black-box on the full game's q2dm1:
+`setv -classic q2 --server=<host:port> --port=27911 --delay=7` runs the relay. An
+unmodified client of Quake II was measured black-box on the full game's q2dm1:
 
 | Source | What the viewer saw |
 | --- | --- |
-| Our `sesv -game 2` with a player walking | The match 3 s behind, the camera following the player |
+| Our `sesv -classic q2` with a player walking | The match 3 s behind, the camera following the player |
 | An unmodified server | The match 3 s behind, from where the server puts a spectator |
 
-`tests/shooters_edge_sequel_tv_face_test.cpp` checks four cases:
+`tests/shooters_edge_q2_tv_face_test.cpp` checks four cases:
 - a viewer from the start;
 - a late viewer, who starts at a whole frame;
 - a viewer over a lossy line, which still reads every frame;
@@ -537,8 +537,8 @@ delay.
 
 ### A recording as the source
 
-`setv -game 2 --demo=<file.dm2> --port=27911` serves a recording to viewers in place
-of a live server (`net/sequel_tv_demo.hpp`). It feeds the recording's blocks to the same face at
+`setv -classic q2 --demo=<file.dm2> --port=27911` serves a recording to viewers in place
+of a live server (`net/q2_tv_demo.hpp`). It feeds the recording's blocks to the same face at
 the game's pace: a block that holds a frame is 100 ms. At the end the recording starts again. Each
 time round, the server data's count goes up by one, and the face tells every viewer the level
 changed (`changing`, then `reconnect`, as a server does). A client keeps its loading picture up
@@ -555,8 +555,8 @@ frames a second.
 
 ### Classic clients at the TV
 
-Any multiplayer client of the classic game, the oldest one too, can watch through our TV. It
-connects to the TV the way it connects to a server (`net/classic_tv_udp.hpp`). What it gets is one
+Any multiplayer client of Quake, the oldest one too, can watch through our TV. It
+connects to the TV the way it connects to a server (`net/qw_tv_udp.hpp`). What it gets is one
 player's view in plain protocol 28, with no extensions, so it is never sent a message it may not
 know. Clients that speak the stream protocol still get the multiview stream unchanged from the
 classic face above, with free look; this face is for the clients that do not.
@@ -586,7 +586,7 @@ classic face above, with free look; this face is for the clients that do not.
   (`changing`, `reconnect`), because the viewer's own slot changes with it.
 
 `setv --demo=<client recording> --port=27900` plays a client recording into the face,
-round and round (`net/classic_tv_recording.hpp`). The recording is played at its own pace from its
+round and round (`net/qw_tv_recording.hpp`). The recording is played at its own pace from its
 first packet, and a silence longer than a second is cut to one. Each command record's angles are
 the view. Each time round, the spawn count goes up by one, so every viewer signs on again.
 
@@ -627,7 +627,7 @@ the lowest slot instead.
 
 Measured black-box: an existing client asked for no extensions, joined the TV playing a bot's dm4
 recording from our server, and watched it with the HUD, the prints and the team chat. Moving the
-mouse did not turn the view. The test (`tests/shooters_edge_classic_tv_udp_test.cpp`) records a
+mouse did not turn the view. The test (`tests/shooters_edge_qw_tv_udp_test.cpp`) records a
 match on our server and has a viewer with no extensions walk the signon, seated in the recorder's
 slot. That viewer sees the players move and stays on through the loop. A second test viewer joins
 late, and a third is refused for a wrong password.
@@ -646,7 +646,7 @@ view, and that view is let go once it is back on the followed one.
 address names none; 0 turns it off), so an unmodified single-player client watches it with
 `connect <host>`. A single-player recording is played as it is; a client or multiview recording is
 converted to one when it is opened (`client/demo_convert.hpp`; a multiview recording rides the
-lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face.
+lowest slot playing). `games/shooters_edge/net/q1_tv_netgame.hpp` is the face.
 
 **Who a viewer follows.** Each viewer of a multiview recording picks the player it watches: fire
 follows the next player, jump the one before, a weapon key (impulse 1 to 8) that player, and
@@ -662,7 +662,7 @@ binds 26000 itself, so it starts with another port (`-port 26100`) and connects 
 `connect "127.0.0.1:26000"` (quoted: its console splits a line at a colon). Checked by hand with
 the original single-player client of the time, built outside the tree and run as a black box,
 watching a 4on4 multiview recording for minutes. The `se-tv-netgame` lab measures the sign-on and the
-frames that arrive over each link, with the scripted client of `net/classic_netgame_watcher.hpp`.
+frames that arrive over each link, with the scripted client of `net/q1_netgame_watcher.hpp`.
 
 **The transport.** Every datagram but a control one is an 8-byte header, big-endian (the flags
 over the whole length, then a sequence), and its payload. The client asks to connect with a
@@ -692,15 +692,15 @@ loading is turned round when it next asks.
 Measured black-box: an unmodified current single-player client watched the shareware pack's first
 demo through `setv` for 90 s, through the loop, with no error, and then a real 4on4 on dm2
 converted from its multiview recording, with the frag messages, the team chat and the scoreboard.
-The test (`tests/shooters_edge_classic_tv_netgame_test.cpp`) has a client written from the
+The test (`tests/shooters_edge_q1_tv_netgame_test.cpp`) has a client written from the
 transport's facts sign on, read every frame with the game's own reader, take the loop's
 `reconnect`, and sign on over an awful link by resends.
 
-## The sequel's recordings
+## Quake II's recordings
 
-The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
+Quake II's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
 ended by a length of -1) goes on the replay file through Shooter's Edge's face
-(`games/shooters_edge/client/sequel_demo.hpp`, M57f), on a `sequel` track of field-coded chunks, ten
+(`games/shooters_edge/client/q2_demo.hpp`, M57f), on a `q2` track of field-coded chunks, ten
 blocks (a second of its 10 Hz frames) a chunk and a keyframe every 30. Every message is walked and
 every field coded as the residual from its prediction: origins from the line through their last two,
 angles, frames and stats from their last, the entity number from the one before it in the list, the
@@ -708,46 +708,46 @@ frame number from the last plus one, a sound's point from its entity's origin. A
 are coded after its number, under that entity's own last flags, so they are learned per entity while
 the bytes still come out in the file's order. A block that does not walk whole is kept as its bytes.
 
-The `se-sequel-pack` lab: the demo pack's own recording (640 blocks, 138 511 bytes) walks whole and
+The `se-q2-pack` lab: the demo pack's own recording (640 blocks, 138 511 bytes) walks whole and
 comes back byte for byte at 40 418 bytes, 29% of the recording and 77% of zstd at level 19; a
 made-up one of a minute packs to 39% of zstd. The format's facts are in the working area
-(`porting/shooters-edge/sequel-demo.md`).
+(`porting/shooters-edge/q2-demo.md`).
 
-The sequel's TV is built here on the native format, since the sequel has no broadcaster of its own
-(`games/shooters_edge/client/sequel_tv.hpp`): a broadcast takes the recording's blocks as they are
+Quake II's TV is built here on the native format, since Quake II has no broadcaster of its own
+(`games/shooters_edge/client/q2_tv.hpp`): a broadcast takes the recording's blocks as they are
 played and writes the replay file as it goes, the same bytes `pack_demo` writes for the finished
-recording (it is built on the broadcast). A TV node takes it as any game's stream. The sequel's
+recording (it is built on the broadcast). A TV node takes it as any game's stream. Quake II's
 frames are deltas against the frames before them and its level starts once, so a broadcast
 keyframes only its first block and a late viewer is sent the match from its start; at a few hundred
-bytes a second that is small. The `se-sequel-tv` lab plays the demo pack's recording as if live
+bytes a second that is small. The `se-q2-tv` lab plays the demo pack's recording as if live
 through a node with a 2 s delay: it is broadcast at 617 bytes a second against the recording's
 2164, and a viewer who joins at 30 s gets the whole recording back byte for byte, as the first does.
 
-Games played on the sequel's rules record in the same form (`games/shooters_edge/server/sequel_wire.hpp`):
+Games played on Quake II's rules record in the same form (`games/shooters_edge/server/q2_wire.hpp`):
 the server side writes protocol 34's messages from the runner's rows for one viewpoint (the signon
 as the game's recorder writes it, then a frame each 100 ms whose player state and entity list are
 deltas against the frame before), and `record <name>` in the window writes them as `<name>.ged`.
 The map's checksum (configstring 31) is the MD4 of the whole map file with its four words XORed,
-measured against the demo pack's map. The same encoder is what the sequel's own server will send
+measured against the demo pack's map. The same encoder is what Quake II's own server will send
 real clients (M18v9), so a hosted match broadcasts through TV from it. A match on our server is broadcast
 as it is recorded: each new block of the recording goes to the broadcast, and the TV node's viewers
-get the whole match, a late one from its start (`tests/shooters_edge_sequel_wire_test.cpp`; the
-`se-sequel-record` lab: 60 s on the demo pack's demo1, 13.5 KB broadcast, a viewer joining half way
+get the whole match, a late one from its start (`tests/shooters_edge_q2_wire_test.cpp`; the
+`se-q2-record` lab: 60 s on the demo pack's demo1, 13.5 KB broadcast, a viewer joining half way
 sent 28 blocks to catch up, both viewers back byte for byte).
 
 ## The watcher
 
 A server with no broadcaster (a classic server with its stream port off, or one that never had one)
-is watched by way of a WATCHER (`games/shooters_edge/net/classic_watcher.hpp`, M57h): our classic
+is watched by way of a WATCHER (`games/shooters_edge/net/qw_watcher.hpp`, M57h): our classic
 client joined as a spectator, recording as a player's client recording does, its recording handed
 to a broadcast as it grows (`games/shooters_edge/client/recording_tv.hpp`: the recording's bytes in
 one-second zstd blocks on the `recording` track, the track `pack_demo` keeps a client recording on,
 so `unpack_demo` gives the recording back byte for byte). A TV node takes it as any stream. The
-first block is the only keyframe, so a late viewer is sent the match from its start, as the sequel's
+first block is the only keyframe, so a late viewer is sent the match from its start, as Quake II's
 broadcast does. What a viewer gets is what one spectator was sent: the watcher follows the play as a
 spectator does and does not see the whole map, as a multiview recording would.
 
-FOLLOWING THE PLAY (`classic_follow.hpp`, M56q): the watcher rides a player's view. It picks the
+FOLLOWING THE PLAY (`qw_follow.hpp`, M56q): the watcher rides a player's view. It picks the
 top fragger in the game (a tie to the lowest slot), keeps him at least 4 s and while he leads, and
 moves on once he has been dead 2 s, left or turned spectator. It tells the server `ptrack <slot>`,
 so the server sends it his stats, his weapon frame and his record wherever he is, and every move it
@@ -757,11 +757,11 @@ out of range, not in the game or a spectator's is refused with "Invalid client t
 bare `ptrack` stops it. The recording does not name whom it tracked, so playback finds him: a
 spectator's client recording rides the player whose command's view is within 2 degrees of the
 recorded view (and near the recorder, when its own record came), and falls back to the recorder's
-own view after 0.3 s with none (`client/demo.hpp`, `Demo::recorder`). `tests/shooters_edge_classic_follow_test.cpp`
+own view after 0.3 s with none (`client/demo.hpp`, `Demo::recorder`). `tests/shooters_edge_qw_follow_test.cpp`
 holds it: the server tracks the watcher's pick, it stands where he does, it gets his stats, and its
 recording plays as his view; a player's `ptrack` is ignored and a bad slot refused.
 
-`tests/shooters_edge_classic_watcher_test.cpp`: on the simulated network, a watcher on our classic
+`tests/shooters_edge_qw_watcher_test.cpp`: on the simulated network, a watcher on our classic
 server while a player runs, a viewer there from the start and one who joins half way, both given
 the watcher's whole recording, which reads to its end. The `se-watcher` lab does the same, and with
 `--server` joins a live classic server: against an open-source classic server with its stream port
@@ -770,13 +770,13 @@ sent 7 blocks to catch up, both viewers whole. That server refuses a second conn
 address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
 a player on one machine join one after the other.
 
-AS A PROCESS: `setv --watch=<server host:port>` (`classic_watch_tv.hpp`) runs a watcher into a
+AS A PROCESS: `setv --watch=<server host:port>` (`qw_watch_tv.hpp`) runs a watcher into a
 native TV node (`TvHost`) with WebSocket viewers (`--web=<tcp port>`), listed on `--master` as a TV
 node under the game's protocol and naming its server under the `source` key, which a hub reads to
 put Watch on that server's card (docs/hub.md § Watching in a browser). A dropped watcher ends the
 broadcast; after five seconds a new one starts and the node's viewers join it anew.
 
-The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
+Quake II's half (a watcher on an unmodified Quake II server) waits on Quake II's network protocol
 (M18v9).
 
 ## The live map
@@ -825,13 +825,13 @@ recording playing on at 1x; M while it flies turns it back. The engine holds the
 share and the rate as functions of the fly's progress, so any game's spectator view gets it; the
 `se-fly` lab films it on a recording.
 
-**The sequel's recordings.** A `.dm2` or an `.mvd2` gets the same map: its version 38 level read
+**Quake II's recordings.** A `.dm2` or an `.mvd2` gets the same map: its version 38 level read
 by the brush plugin with its wall textures from their own files (the map does not carry them), in
-the sequel's palette (`recording_palette`: its pictures' palette for any of its recordings, whatever its protocol version), its items' own
+Quake II's palette (`recording_palette`: its pictures' palette for any of its recordings, whatever its protocol version), its items' own
 `.md2` models, and each player in the look the recording names for his slot (`male/grunt`: the
 figure `players/male/tris.md2` in the picture `players/male/grunt.pcx`; the model number 255 the
-sequel sends means "the player's own"). An item under a walkway is dimmed with a dotted edge as in
-the first game, which the sequel's maps of floors over floors show more often. The fly works the
+Quake II sends means "the player's own"). An item under a walkway is dimmed with a dotted edge as in
+Quake, which Quake II's maps of floors over floors show more often. The fly works the
 same over it.
 
 ## Decisions
@@ -847,6 +847,6 @@ same over it.
 | A relay's auth | NONE, PLAIN and SHA3-512 | The older 16-bit check and MD4: weaker, and every current relay offers SHA3-512 |
 | Forward's route | Set up by the forward's own datagrams before the game's handshake, so any game on any wire goes through unchanged | Carried in the game's connect (the classic way): every game's handshake would have to carry it; the classic face reads it there |
 | The proxy's packing | XOR against the newest datagram the other end confirmed, zero runs counted: generic, a lost frame costs only itself | A stream compressor across frames (the classic "quality line"): smaller, but one loss damages what follows; the field codec on the link: needs the game's schema, a later face |
-| The sequel's late viewer | The match from its start (the broadcast keyframes once): small, and its frames need what came before | A keyframe that repeats the level's start: the frames after it are deltas against frames the viewer never had |
+| Quake II's late viewer | The match from its start (the broadcast keyframes once): small, and its frames need what came before | A keyframe that repeats the level's start: the frames after it are deltas against frames the viewer never had |
 | The browser viewer | The WebSocket downstream lands with TV (M57b), for the hub's web viewer (M56) | Later: the hub needs it first |
-| The sequel's route | Our sequel client dials the forward route before its challenge; nothing goes in the sequel's connect | A route in the sequel's userinfo or connect line: the sequel has no such field, and an unmodified server would have to ignore it |
+| Quake II's route | Our Quake II client dials the forward route before its challenge; nothing goes in Quake II's connect | A route in Quake II's userinfo or connect line: Quake II has no such field, and an unmodified server would have to ignore it |

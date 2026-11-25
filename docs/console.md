@@ -39,7 +39,12 @@ A setting other software already knows by another name (a classic game's `maxcli
 synonym reach the target. `add_synonym(name, target, part)` names one word of a setting that
 holds several, space-separated (`flood_persecond` for the second word of `sv_floodprot`'s
 `"N S T"`): setting it replaces that word and sets the whole, and querying it shows the word and
-the setting it is part of. A synonym is refused when its name is a cvar of its own, the target
+the setting it is part of. `add_mapped_synonym(name, target, values)` names a setting whose values a
+game writes its own way: each of the game's values stands for one of ours (Quake II's `cl_predict`
+1 is our `cl_nopred` 0). Setting it writes the mapped value and prints both, `cl_predict 0
+(cl_nopred: 1)`, so the player sees the setting it reached; querying it reads ours back in the
+game's words and lists the map; a value the map lacks is refused with the values it takes. A
+config's line sets it silently. the setting it is part of. A synonym is refused when its name is a cvar of its own, the target
 does not exist, or the name already stands for another setting. A server game lists its names
 in `ServerGame::names` (`docs/servers.md`).
 
@@ -144,9 +149,27 @@ The other flags:
 - `kReadOnly`: only code sets it.
 - `kUserInfo`: rides in the user info a client sends the server (`name`).
 
+LOCKS AND RULESETS (`engine/console/ruleset.hpp`). A competition's rules are data: a RULESET holds
+some settings at one value, keeps others inside a range and refuses some commands (always, or only
+while a match is played). The player picks one by name (`ruleset smackdown`; `rulesets` lists the
+game's book, `rulesets <name>` says what one holds), and it changes only while not connected. A
+held setting refuses every set with the ruleset's words ("cl_hud is locked by the smackdown
+ruleset."), a set into a range is clamped into it, and the value asked for is kept as the
+player's: `cfg_save` writes it and leaving the ruleset gives it back. A server's stuffed text is
+never refused by a ruleset. The classic games' books are `plugins/classic/rulesets.hpp`.
+A ruleset may also keep scripts off TEAM MACROS (`add_macro(..., MacroKind::team)`: the `$` words
+for what a player holds and where they are): a line that expanded one runs only the ruleset's
+team commands (`say_team`, `if`, the canned reports), and what an allowed command runs (`if`'s
+branch) is held the same way, so `if $health < 50 then impulse 7` does nothing; any other command
+or setting answers "impulse cannot be used with team macros under the smackdown ruleset." It may
+keep TRIGGERS QUIET while a match is played (`msg_trigger`, `re_trigger` and a game's event
+triggers ask `Console::triggers_quiet`; sound triggers keep quiet at all times), and cap the
+`wait`s in a row a script may spread over frames (`Console::limit_waits`).
+
 A server's stuffed text may run only the commands marked as safe to stuff (`echo`, `set`,
 `wait`, `say`, `say_team`, `say_near`) and set only the server's cvars. It never touches a player's files,
-binds or archived cvars.
+binds or archived cvars. Over a network the session carries the server info, the user info and
+the stuffed text (`docs/networking.md` § Configs over the session).
 
 `cvarlist` prints the flags as letters: `A` archive, `U` user info, `S` server info, `V` server,
 `C` cheat, `L` latch, `R` read only, `*` created by a cfg (no code reads it).
@@ -178,7 +201,10 @@ yet starts from the defaults and is made by the first save.
 - **Lookup.** The first word is looked up as a command, then an alias, then a cvar. A cvar's
   name alone prints it; with a value it sets it (`r_bloom 0.1`).
 - **Expansion.** `$name` and `${name}` become a macro's or a cvar's value (a macro wins); `$$`
-  is a `$`. An alias's body gets its arguments as `$1`…`$9` and `$*`.
+  is a `$`. An alias's body gets its arguments as `$1`…`$9`, `$*` (each quoted as needed), `$@`
+  (joined by blanks), `${N-M}` and `${N-}` (a run of them) and `$0` (its own name); a body with a
+  `%` in it also takes `%1`…`%9`, `%0` (all of them) and `%%` (a `%`), the form older teamplay
+  configs write. `$qt` is a double quote and `$sc` a semicolon.
 - **The buffer.** Commands are queued and run once a frame. `exec` and an alias put theirs at
   the front, so they run before what followed them. `wait` leaves the rest for the next frame.
   An alias or a trigger that calls itself is stopped after 64 nested calls in one frame, with a
@@ -232,6 +258,9 @@ by default.
 | `reset <name>` | Puts a cvar back to its default. |
 | `cvarlist [<prefix>]` | Every cvar, its value, flags and help; `[meta]` marks a meta-cvar, `[by <meta>]` a value one set. |
 | `meta <name> <level> "<name> <value>; ..." ...` | Declares a META-CVAR: each level of `<name>` sets the cvars in its quotes, unless a cfg, the console or the command line set them first or later (explicit beats implied); a level that leaves one out puts it back to what it was under the meta. A level may include another meta's level by naming it (`comp 1`); a loop of includes is refused, named. `meta <name>` alone shows it. Code declares one with `Cvars::add_meta` (docs/servers.md § Meta-cvars). |
+| `setu <name> <value>` / `sets <name> <value>` | Sets a cvar (every word after the name its value), created when nothing reads it, and makes it part of the user info (`setu`) or the server info (`sets`), the other mark taken away. |
+| `resetall` | Every cvar back to its default, but the read-only ones and `game`. |
+| `userinfo` | "User info settings:" and each user-info cvar with a value, its name padded to 20. |
 | `setinfo [<key> <value>]` | Shows or sets a key of this player's user info. |
 | `serverinfo [<key> <value>]` | Shows or sets a key of the server's info. |
 | `help <name>` | What a cvar, command or alias is: its value, default, range and help; a meta-cvar's levels, and the meta behind a value it set. |
@@ -246,19 +275,25 @@ by default.
 | `aliaslist` | Every alias and its body. |
 | `exec <file>` | Runs a cfg file's commands (`.cfg` is added when there is no extension). |
 | `cfg_save [<file>]` | Writes every bind, alias and archived cvar (default `config.cfg`); a named file under a loaded game also writes `<file>.<game>.cfg` (§ Scopes). |
+| `writeconfig [-a] [-b] [-c] [-m] <file>` | A cfg of the player's own: binds (`-b`) and archived cvars (`-c`) by default, aliases with `-a`, every changed cvar with `-m` in place of the archived; `// generated by writeconfig` on top, `.cfg` added. |
 | `cfg_load [<file>]` | Runs a saved config (default `config.cfg`), and its `<file>.<game>.cfg` when there is one. |
 | `unset <name>` | Takes away a setting `set` made (a setting the game registered stays: `reset` sets it back). |
 | `unset <game>:<name>` | Takes a game's own value of a setting away (§ Scopes). |
 | `cmdlist [<prefix>]` | Every command and what it does. |
 | `cvarlist_re`, `cmdlist_re`, `cvar_reset_re`, `toggle_re`, `unset_re`, `unalias_re` `<pattern>` | The list, reset, flip, removal or alias removal over every name a regular expression matches (anywhere in the name, without case: `^cl_` for a prefix). `unset_re` takes plain names only, never a game's own value. A pattern the console cannot read changes nothing. |
 | `echo <words>` | Prints the words with one blank between each. |
+| `_echo [-e] [-n] [-c <colour>] [-l <level>] <text>` | Prints the text as written, its spacing kept; `-e` reads backslash escapes (`\n` splits the line), `-h` the options. |
+| `text <words>` | Runs the words as the next command, before the rest of the buffer. |
+| `complete <name>` | A command the game knows (sent to the server when typed, completed with Tab); refused for a cvar's name. Typed with no server, "Can't "<name>", not connected". |
+| `writemanual <file>` | Every setting, command and launch flag of the program written for the reference manual (§ The reference manual). |
+| `lasterror` | The last refusal printed again. |
 | `wait` | Leaves the rest of the buffer for the next frame. |
 
 ### Scripting
 
 | Command | What it does |
 | --- | --- |
-| `if <a> [<op> <b>] [then] <commands> [else <commands>]` | Runs one branch. The ops are `==` `=` `!=` `<>` `<` `<=` `>` `>=`, `isin` `!isin` (a substring of b) and `=~` `!~` (b a regular expression found in a). With no op, `a` is tested as true (not empty, not 0). `then` may be left out after `a op b`, as old configs write it. |
+| `if <a> [<op> <b>] [then] <commands> [else <commands>]` | Runs one branch. The ops are `==` `=` `!=` `<>` `<` `<=` `>` `>=`, `isin` `!isin` (a substring of b), `isini` `!isini` (the same in any case), `eq` `ne` (text, any case) and `=~` `!~` (b a regular expression found in a). With no op, `a` is tested as true (not empty, not 0). `then` may be left out after `a op b`, as old configs write it. |
 | `if (<expression>) then <commands> [else <commands>]` | Runs one branch on an expression (below). |
 | `if_exists <cvar\|alias\|trigger\|command> <name> <commands> [<else>]` | Runs the first commands when the name exists, else the second. |
 | `eval <expression>` | Prints the expression's value and its kind: `Result: 3.5 (number)`. |
@@ -266,10 +301,32 @@ by default.
 | `set_calc <name> <a> <op> <b>` | A calculation into a cvar. The ops are `+` `-` `*` `/` `%`, `div` (whole numbers), `and` `or` `xor` (bits) and the comparisons; a division by zero stores 999, which old configs test for. Also `set_calc <name> strlen <s>`, `substr <s> <from> [<count>]`, `strstr <s> <find>` (or `pos`), `int <a>`, `tobrown <s>` and `towhite <s>` (the font's coloured and plain halves). |
 | `inc <name> [<by>]` / `dec <name> [<by>]` | Adds to or takes from a cvar (by 1). |
 | `mul <name> [<by>]` / `div <name> [<by>]` | Multiplies or divides a cvar (by 1); dividing by 0 keeps it. |
-| `toggle <name>` | Flips a cvar between 0 and 1. |
+| `toggle <name> [<v1> <v2> ...]` | Flips a cvar between 0 and 1; with values, sets the one after its own (matched without case, wrapping); a value not in the list is refused, "can't cycle". |
 | `cycle <name> <v1> <v2> ...` | Sets a cvar to the value after its own in the list. |
-| `msg_trigger <alias> <match>` | A chat, server or event line holding `match` runs the alias. |
+| `msg_trigger <alias> <match> [-l <level>]` | A game line of that print level (0 low, 1 medium, 2 high, the default; 3 chat; `t` the team's chat) holding `match` runs the alias; `$triggermatch` is the line (a chat line's words after its speaker), until the next map. Alone, the list. A line that asks or answers a version query fires none. |
+| `alias_in <alias> <cvar> [<options>]` / `cvar_in <cvar1> <cvar2> [<options>]` | A cvar's value put at the start of an alias's text or another cvar's value; options, a sum: 1 at the end, 2 not when it is there already, 4 say so, 8 make the alias or cvar. |
+| `alias_out <alias> <cvar> [<options>]` / `cvar_out <cvar1> <cvar2> [<options>]` | The first place the value is found taken out; options 1 only test, 2 quietly. |
+| `set_alias_str <cvar> <alias>` / `set_bind_str <cvar> <key>` | A cvar set to an alias's text or a key's bind. |
+| `hash <text>` | The text's hash, a whole number (letters in either case alike). |
 | `msg_trigger_remove <alias>` | Stops a trigger. |
+| `re_trigger <name> <pattern>` | A game line a regular expression finds runs the alias `<name>` at once; `re_trigger_options`, `_delete`, `_enable`, `_disable`, `_match` and `re_trigger_match_0..9` (`console/re_triggers.hpp`). |
+
+**Clock macros** (`engine/console/clock_macros.hpp`, a game adds them with its clock):
+`$com_date` and `$com_time` by `com_date_format` (`%Y-%m-%d`) and `com_time_format` (`%H:%M`),
+the date letters of the C library; `$com_uptime` (`MM.SS`, `H:MM.SS`, `D+H:MM.SS`),
+`$com_uptime_long` ("1 day, 2 hours, 5 secs") and `$random` (a digit from the console's seed);
+the older clients' fixed forms `$time` (14:05), `$date` (22.11.26), `$timestamp` (20261122-1405),
+`$dateiso` (2026-11-22_14-05) and `$rand` (0 to 1, six decimals);
+`level_clock` (`$cl_timer`, "4:05", "1:4:05") and `tenths_clock` (`$cl_demopos`, "3:07.4") are the
+forms a game's own clocks print in. A joined server's macros (Shooter's Edge,
+`net/qw_remote_macros.hpp`): `$cl_ping` (also `$ping` and `$latency`), `$cl_lag` ("1.25%"),
+`$serverip`, `$connectiontype` (disconnected, spectator or player), and the last whole second's
+`$cl_pps`, `$cl_mps`, `$net_uprate`, `$net_dnrate` (`engine/net/rates.hpp` over the transport's
+counts). **The files and the network** (`engine/vfs/search_commands.hpp`, `engine/net/net_commands.hpp`):
+`path`, `dir <folder> [ext]`, `fdir <pattern>`, `whereis <file> [all]`, `dns <name>` and `net_stats`.
+**Draw strings** (`engine/hud/draw_strings.hpp`): `draw <name> <x> <y> [colour]` keeps a cvar's or a
+macro's value on the screen (a negative place counts from the right or bottom), `draw` alone
+lists them, `undraw <name>|all` takes them off.
 
 **Expressions** (`engine/console/expr.hpp`): numbers (an integer stays one through `+ - *`; `/`
 gives a fraction), text in `"..."` or `'...'` or a bare word, `%name` for a cvar's value (`$name`
@@ -349,20 +406,46 @@ classic games start); let go, it slides up at `con_speed` to where it was.
 The input line edits in place (left, right, home, end, backspace, delete). Page Up and Page
 Down scroll the lines. Up and Down walk the history while no list of suggestions is showing.
 
-**Autocomplete.** While the first word is typed (after a `/`, or bare while `con_chat` is 0),
+**Autocomplete.** While the first word is typed (after a `/` or `\`, or bare while `con_chat` is not 1),
 every command, alias and cvar it starts is listed under the input line: the one submitted most
 often from this console first, then the shortest, then by name, at most `con_suggest` of them.
 Each row shows a cvar's value after `=`, an alias's body after `:` or a command's help. The rest
 of the top name is drawn dim after the cursor, and Tab takes it: `/sv_dea` and Tab gives
 `/sv_deathmatch `, ready for `1`. Up and Down move through the list (the hint follows the
 selected row), Tab takes the selected one, and Enter on it fills in a cvar's name for its value
-or runs a command or an alias. A blank after the word ends the list.
+or runs a command or an alias. A blank after the word ends the list, unless the word is a setting
+of a few values.
+
+**A setting's few values.** A cvar that takes at most eight values (literal words in its values
+text, a whole-number range of an integer cvar spelled out, a boolean's 0 and 1; `value_choices` in
+`console/words.hpp`) lists them in its row, `r_look = modern  (classic, modern)`. Typed with a blank
+after it, `/r_look `, the list becomes its values in their own order, each with what it does and the
+one it has now marked `(now)`; the typed text narrows them, Tab takes one and Enter runs the line.
+
+**A game's spellings.** A game's own name for one of ours (a cvar synonym or a command synonym, §
+Layers) is listed too, with the setting's value and its few values, and says whose it is: `gl_look
+= modern  (classic, modern)  alias of r_look`. Our name says the game's: `r_look = modern  alias
+gl_look`.
 
 Enter submits the line:
 
-- a line starting with `/` is a command, with the `/` dropped: `/r_bloom 0`, `/say hi`;
+- a line starting with `/` or `\` is a command, with that character dropped: `/r_bloom 0`,
+  `/say hi`;
+- a line starting with `//` is a note: shown in the scrollback, never run or said;
 - any other line is a chat message to everyone while `con_chat` is 1 (a multiplayer game sets
-  it), and a command while it is 0 (single player has nobody to chat to).
+  it), a command while it is 0 (single player has nobody to chat to), with 2 a command when
+  its first word names a command, alias or cvar (in any case), else a chat message, and with 3
+  a message to the team. A game with its own setting for this (`ConsoleView::game_chat`, in its
+  order: 0 command, 1 everyone, 2 the team; Quake II's `con_auto_chat`) rules over `con_chat`.
+
+`clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends every line
+typed without a slash to the game's `rcon` command (setting `rcon_address` and `rcon_password`
+when given and the game has them), the prompt `#` in place of `]`; `remotemode` again ends it. A
+game joining a server shows what is coming on the console's FOOT (`set_foot`): a bar and the file's
+share and size, or "Loading <map>...".
+
+`condump [name]` writes the scrollback to `<folder>/<name>.txt` (`condump.txt` with no name), the
+folder being the game's (`set_dump_folder`); a name with a folder in it is refused.
 
 Its cvars:
 
@@ -371,9 +454,13 @@ Its cvars:
 | `con_height` | 0.5 | the share of the screen it covers when down |
 | `con_speed` | 3 | how fast it slides, screens a second (0: at once) |
 | `con_lines` | 1024 | the lines of scrollback kept |
+| `con_notify` | 1 | 0: no notify lines at all |
+| `con_clearnotify` | 1 | 1: opening or closing the console lets the notify lines so far go (the scrollback keeps them) |
 | `con_notifylines` | 4 | the newest lines shown at the top while it is closed (0: none) |
 | `con_notifytime` | 4 | how long a notify line stays, s |
-| `con_chat` | 0 | 1: a line typed without a `/` is said to everyone |
+| `con_chat` | 0 | a line typed without a `/`: 0 a command, 1 said to everyone, 2 a command when its first word is known, else said, 3 said to the team |
+| `con_clock` | 0 | 1: the local time in the panel's lower right corner |
+| `con_scale` | 0 | the text's size against the console's own (0: 1) |
 | `con_suggest` | 8 | the suggestions listed under the input line (0: none) |
 | `con_bgtop` | 10141c | the panel's colour at its top, `rrggbb` |
 | `con_bgbottom` | 10141c | the panel's colour at its bottom (the same as the top: a flat fill) |
@@ -396,6 +483,28 @@ console over the run, the skier coasts on with no hands while it is down, Escape
 (rather than quitting), and the 2D pass draws it after post. The `world` lab's `console` still
 (`--console=1`, the default) photographs it over the game's own frame.
 
+## Recipes
+
+A RECIPE is a cfg an agent writes to drive a game's window with no one at the keyboard: join a
+server, open a page, press keys, read the page back, take a picture, quit. It is the console
+language run with `+exec`; the `window-recipes` skill is the procedure and keeps recipes to start
+from. Its commands exist only in a window started with `-recipes` (`se -recipes ... +exec r.cfg`):
+a player's console has none of them, so no cfg, bind or server can press the menu or sleep past a
+ruleset's wait limit (`add_recipe_commands`, `GameMenu::add_cvars(con, true)`).
+
+| Command | Home | What it does |
+| --- | --- | --- |
+| `sleep <seconds>` | engine (`console_builtins.cpp`) | The rest of the buffer runs once that many seconds of the host's clock have passed. A host with a clock hands it in with `Console::set_time` each frame (a window's wall time); with none, `sleep` is a `wait`. A host's own line (`execute`) runs past a sleep and leaves the held commands where they were |
+| `menu_press <key>...` | Shooter's Edge's menu (`engine/ui` `menu_key` names the keys) | Keys pressed on the menu, one a frame: `up` `down` `left` `right` `enter` `escape` `del` `refresh` or a letter. `escape` on a closed menu opens it, as the key does |
+| `menu_select <item>` | Shooter's Edge's menu | The item with that id on the page up focused and pressed |
+| `menu_list` | Shooter's Edge's menu (`engine/ui` `describe_page`) | The page up printed: its id and title, then a line an item: `>` the focus, `-` disabled, the id, the words, `= value`, `-> page` it opens |
+| `entlist [radius]`, `enthide <number\|model>...`, `entshow [...]` | Shooter's Edge's window (`client/entity_debug.hpp`) | The entities in view listed nearest first (model, origin, effects, alpha, scale); those named left out of the picture, or drawn again |
+| `screenshot <name>`, `condump <name>` | engine | The next frame as a picture; the console's lines as a text file |
+
+A recipe takes its arguments as cvars set before it (`+set recipe_server 127.0.0.1:27500 +exec
+my.cfg`, read as `$recipe_server`). `sleep` is wall time, so a recipe never feeds a digest: a lab
+is the deterministic tool, a recipe the window's.
+
 ## Tooling
 
 ```sh
@@ -407,3 +516,42 @@ ge cfg dump [--out=my.cfg]       # every player setting, commented: a cfg to sta
 ```
 
 `--server` checks a cfg as a dedicated server's, where the server's cvars may be set.
+
+## The reference manual
+
+The player's manual of every setting, console command and launch flag is generated from the
+programs' own registrations, never kept by hand, so it cannot fall behind the code
+(`engine/console/manual.hpp`, `manual_page.hpp`; row M21f):
+
+1. **Each program describes its live console** (`describe`): every setting with its layer, kind,
+   default, range, flags, help and values; every setting synonym and command synonym (a game's
+   own spelling of ours); every command with the layer it was added in; and the flags the program
+   documented (`Console::set_manual`'s `FlagDoc`s, the same table its parser refuses unknown
+   flags by). A program with games writes one PASS per game: Shooter's Edge's window loads each
+   game's own layer in turn as a game switch does (`se -manual <file>`, client/manual.hpp; the
+   Quake pass is QuakeWorld's too), the dedicated server writes the game it serves
+   (`sesv [-classic q2] --manual=<file>`); any console writes its one pass with `writemanual`.
+   A dedicated server's GAME words (its rules' `map`, its admin's `kick`, the relay's and the
+   lists' words), which the game takes through `ServerGame::console`, are declared as
+   `ServerGame::words` (`GameWord`, Shooter's Edge's `net/server_words.hpp`) and registered on the
+   server's console in the game's own layer (`add_game_words`), so Tab, `cmdlist` and the manual
+   know them; a word the game takes but does not declare still runs, unlisted. The RULES' own
+   settings (`deathmatch`, `coop`, `skill`: the game's rules' cvars, made with each map and set
+   through the same hook) join a pass through `ManualInfo::more`: Shooter's Edge makes each
+   game's rules with no map (`server/rules_manual.hpp`) and describes them in the game's layer.
+2. **`ge manual <source>...`** merges the passes into rows: a name's COMMON definition (the layer
+   under the games'), each game's own where its layer met the name (`same`: the game's default and
+   words; `own`: the game's own meaning under the same name), its spellings per game, the games it
+   is in (none named: all) and the programs that have it.
+3. **The page** (`user-manual.html`, one file with no outside script, and `manual.json` beside
+   it) searches names, spellings and help, filters by game, kind, layer and program, shows the
+   picked game's own default and meaning in place, and links every row (`#setting-gamma`).
+
+`make manual` runs all three into `build/manual/` (`tools/manual.sh`). The window needs one game to
+start: Quake's shareware release, fetched once and checked by the classicenhance tool
+(`GE_MANUAL_GAME` names another source); every other game's own layer is loaded without its
+files. Each release carries the page as one of its files
+(`shooters-edge-<version>-user-manual.html`, the `release` workflow's `manual` job). A new setting, command or flag needs nothing
+more than its registration, its help and, for a flag, its row in the program's flag table; a
+dedicated server's game word, its row in the game's words.
+

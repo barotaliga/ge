@@ -1,7 +1,7 @@
 ---
 title: A classic held weapon's firing frames can be several animations; follow the mod's weapon frame
 date: 2026-11-09
-scope: games/shooters_edge/view/hand.cpp, games/shooters_edge/client/classic_adapter.cpp, plugins/classicenhance/weapons.cpp
+scope: games/shooters_edge/view/hand.cpp, games/shooters_edge/client/qw_adapter.cpp, plugins/classicenhance/weapons.cpp
 concepts: [axe, swing, weaponframe, held-clip, takes, viewmodel, fire-clip, classic-weapons]
 ---
 

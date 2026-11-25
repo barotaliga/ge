@@ -692,7 +692,7 @@ TEST(a_demo_stopped_keeps_its_recordings_until_their_voices_have_faded) {
 }
 
 TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
-  // The sequel's `*` names: the model's folder under players/ first, then the base voice under
+  // Quake II's `*` names: the model's folder under players/ first, then the base voice under
   // sound/player/male/; a name in neither plays nothing, and none counts as missing at the level.
   std::vector<float> tone(4410);
   for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
@@ -724,8 +724,76 @@ TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
   CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
 }
 
+TEST(soundlist_lists_each_sound_read_with_its_length_and_the_missing_ones) {
+  std::vector<float> tone(11025);
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"sound/world/land.wav", ge::audio::wav_bytes(tone, 1, 22050)}}, &pak,
+                           &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  cl::DemoState s;
+  s.sounds = {"", "world/land.wav", "world/gone.wav"};
+  sounds.level(s, nullptr);
+  const std::vector<std::string> lines = sounds.list_lines();
+  std::string all;
+  for (const std::string& l : lines) all += l + "\n";
+  CHECK_MSG(lines.size() == 3, all);
+  CHECK_MSG(all.find("  0.50 s 22050 Hz") != std::string::npos, all);
+  CHECK_MSG(all.find("land.wav") != std::string::npos, all);
+  CHECK_MSG(all.find("not found") != std::string::npos && all.find("gone.wav") != std::string::npos,
+            all);
+  CHECK_MSG(lines.back().find("1 sounds, 0.0 MB") == 0, all);
+}
+
+TEST(cl_footsteps_0_starts_no_footstep_and_every_other_sound) {
+  // Quake II's cl_footsteps: at 0 a player/step sound never starts; the rest play as before.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"sound/player/step1.wav", ge::audio::wav_bytes(tone, 1, 22050)},
+                            {"sound/world/land.wav", ge::audio::wav_bytes(tone, 1, 22050)},
+                            {"sound/weapons/marker.wav", ge::audio::wav_bytes(tone, 1, 22050)}},
+                           &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  ge::classic::Q2FxSwitches q2;
+  q2.footsteps = 0;
+  sounds.switches_from(&q2);
+  cl::DemoState s;
+  s.sounds = {"", "player/step1.wav", "world/land.wav"};
+  s.entities.resize(4);
+  sounds.level(s, nullptr);
+  std::vector<cl::DemoSound> started(2);
+  for (int i = 0; i < 2; i++) {
+    started[size_t(i)].entity = 1;
+    started[size_t(i)].channel = i + 1;
+    started[size_t(i)].sound = i + 1;
+  }
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 1, std::to_string(sounds.stats().started));
+  q2.footsteps = 1;
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
+  // The hit's sound (temporary entity 128) only with cl_hit_markers 2, the default.
+  cl::DemoSound hit;
+  hit.name = "weapons/marker.wav";
+  hit.attenuation = 0;
+  q2.hit_markers = 1;
+  sounds.frame(s, std::span<const cl::DemoSound>(&hit, 1), {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
+  q2.hit_markers = 2;
+  sounds.frame(s, std::span<const cl::DemoSound>(&hit, 1), {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 4, std::to_string(sounds.stats().started));
+}
+
 TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
-  // The sequel's entity loops: a rocket's roar starts with the entity, holds one slot frame after
+  // Quake II's entity loops: a rocket's roar starts with the entity, holds one slot frame after
   // frame, changes with the field, and stops when the field clears or the entity goes; a loop far
   // away keeps its slot, quiet, and is heard as it comes near. The file has no loop point: an
   // entity's loop goes round the whole of it.
@@ -781,6 +849,82 @@ TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
   sounds.frame(s, {}, {}, 1, 0.01f);
   for (int i = 0; i < 30; i++) playing();  // its fade out (150 ms)
   CHECK(playing() == 0);
+  // Quake II's s_ambient: 0 none, 2 only an entity with a model, 3 only the listener's own.
+  ge::classic::Q2FxSwitches q2;
+  sounds.switches_from(&q2);
+  e.present = true;
+  q2.ambient = 2;  // a speaker with no model: silent
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 3);
+  e.model = 4;
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 4);
+  q2.ambient = 3;  // the listener is entity 1, the loop entity 5's: stopped
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  for (int i = 0; i < 30; i++) playing();
+  CHECK(playing() == 0);
+  sounds.frame(s, {}, {}, 5, 0.01f);  // heard as entity 5: its own
+  CHECK(sounds.stats().entity_loops == 5);
+  q2.ambient = 0;
+  sounds.frame(s, {}, {}, 5, 0.01f);
+  for (int i = 0; i < 30; i++) playing();
+  CHECK(playing() == 0);
+}
+
+TEST(a_level_s_loop_that_lost_its_slot_starts_again_when_one_frees) {
+  // A static loop (a torch, a hum) holds a slot for the level; a burst of louder sounds can take
+  // it, and it starts again once one of theirs ends, counted once. A one-shot static plays once.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  std::vector<uint8_t> hum = ge::audio::wav_bytes(tone, 1, 22050);
+  const uint8_t cue[] = {'c', 'u', 'e', ' ', 28,  0,   0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                         0,   0,   'd', 'a', 't', 'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  hum.insert(hum.end(), std::begin(cue), std::end(cue));  // looped from its first frame
+  const uint32_t riff = static_cast<uint32_t>(hum.size() - 8);
+  for (size_t b = 0; b < 4; b++) hum[4 + b] = static_cast<uint8_t>(riff >> (8 * b));
+  std::vector<float> click(441, 0.5f);
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak(
+      {{"sound/hum.wav", hum}, {"sound/click.wav", ge::audio::wav_bytes(click, 1, 22050)}}, &pak,
+      &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  cl::DemoState s;
+  s.sounds = {"", "hum.wav", "click.wav"};
+  s.entities.resize(4);
+  s.static_sounds.resize(2);
+  s.static_sounds[0].sound = 1;
+  s.static_sounds[0].origin = {2000, 0, 0};  // far off: quieter than any click
+  s.static_sounds[1].sound = 2;              // a one-shot
+  sounds.level(s, nullptr);
+  const auto render = [&synth](int n) {
+    std::vector<float> out(size_t{2} * 480);
+    for (int i = 0; i < n; i++) synth.render(out.data(), 480);
+    return synth.stats().samples;
+  };
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().loops == 2);
+  CHECK(render(1) == 2);
+  render(10);  // the one-shot ends (20 ms)
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK_MSG(render(1) == 1, "the one-shot static is not played again");
+  std::vector<cl::DemoSound> burst(size_t{cl::kDemoChannels});  // every slot, the hum's too
+  for (size_t i = 0; i < burst.size(); i++) {
+    burst[i].entity = 1;
+    burst[i].sound = 2;
+    burst[i].attenuation = 0;
+  }
+  sounds.frame(s, burst, {}, 1, 0.01f);
+  CHECK(render(1) >= cl::kDemoChannels);  // the clicks (and the hum fading out)
+  render(10);                             // the clicks end
+  sounds.frame(s, {}, {}, 1, 0.01f);      // their slots freed
+  CHECK(render(1) == 0);
+  sounds.frame(s, {}, {}, 1, 0.01f);  // a slot free: the hum again
+  CHECK_MSG(render(1) == 1, std::to_string(synth.stats().samples));
+  CHECK(sounds.stats().loops == 2);  // counted once
 }
 
 TEST(ce_sounds_plays_the_enhanced_cache_s_copy_and_the_pack_s_without_it) {
@@ -859,4 +1003,77 @@ TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
   // A canned team message: its short name drawn over the `(name): `.
   const std::vector<std::string> canned = cl::print_lines("(Sailor): \rSai: {&c0b0safe&cfff}\n");
   CHECK_MSG(canned.size() == 1 && canned[0] == "Sai: safe", canned.empty() ? "" : canned[0]);
+}
+
+// Quake's own effects in a recorded demo: explosion2 (12) keeps its colours and is drawn with the
+// other effects, a program's burst keeps any colour (a count of 255 is an explosion), the
+// grappling beam (13) is a beam.
+TEST(a_demo_keeps_explosion2_s_colours_bursts_of_any_colour_and_the_grappling_beam) {
+  std::vector<uint8_t> msg;
+  const auto coord = [&](float v) {
+    const auto q = static_cast<int16_t>(v * 8);
+    msg.push_back(static_cast<uint8_t>(q & 255));
+    msg.push_back(static_cast<uint8_t>((q >> 8) & 255));
+  };
+  msg.push_back(23);  // temporary entity: explosion2 at (8, 16, 24), colours 224 .. 231
+  msg.push_back(12);
+  coord(8), coord(16), coord(24);
+  msg.push_back(224);
+  msg.push_back(8);
+  msg.push_back(23);  // the grappling beam of entity 3 from (0, 0, 0) to (64, 0, 0)
+  msg.push_back(13);
+  msg.push_back(3), msg.push_back(0);
+  coord(0), coord(0), coord(0), coord(64), coord(0), coord(0);
+  for (const int count : {20, 255}) {  // a burst of colour 100, then a count of 255
+    msg.push_back(18);
+    coord(32), coord(0), coord(0);
+    msg.push_back(16), msg.push_back(0), msg.push_back(0);
+    msg.push_back(static_cast<uint8_t>(count));
+    msg.push_back(100);
+  }
+  std::vector<uint8_t> bytes = {'-', '1', '\n'};
+  const auto put32 = [&](uint32_t x) {
+    for (int k = 0; k < 4; k++) bytes.push_back(static_cast<uint8_t>(x >> (8 * k)));
+  };
+  put32(static_cast<uint32_t>(msg.size()));
+  for (int k = 0; k < 3; k++) put32(0);  // the view angles
+  bytes.insert(bytes.end(), msg.begin(), msg.end());
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(std::move(bytes), d, error), error);
+  CHECK(d.state.format == cl::DemoFormat::single);
+  CHECK_MSG(cl::next_frame(d, error) == cl::DemoRead::frame, error);
+  const std::vector<cl::DemoEffect>& got = d.state.effects;
+  CHECK(got.size() == 4);
+  if (got.size() != 4) return;
+  CHECK(got[0].kind == cl::DemoEffectKind::explosion && got[0].code == 12);
+  CHECK(got[0].colour == 224 && got[0].count == 8 && got[0].at.y == 16);
+  CHECK(got[1].kind == cl::DemoEffectKind::beam && got[1].code == 13 && got[1].entity == 3);
+  CHECK(got[1].end.x == 64);
+  CHECK(got[2].kind == cl::DemoEffectKind::burst && got[2].colour == 100 && got[2].count == 20);
+  CHECK(got[2].way.x == 1);
+  CHECK(got[3].kind == cl::DemoEffectKind::explosion && got[3].code == 3);
+  d.state.levels = 1;
+  cl::DemoFx fx;
+  cl::demo_fx_frame(d.state, fx);
+  CHECK(fx.explosions.size() == 1);  // the burst of 255; explosion2 is drawn with the effects
+  CHECK(fx.effects.size() == 3);
+  if (fx.effects.size() == 3) {
+    CHECK(fx.effects[0].kind == cl::EffectKind::explosion && fx.effects[0].colour == 224);
+    CHECK(fx.effects[2].kind == cl::EffectKind::burst && fx.effects[2].colour == 100);
+  }
+}
+
+TEST(a_multiview_recording_counts_its_match_starts) {
+  cl::DemoScript s = script();
+  s.stuffed = {{1, "//ktx matchstart\n"}, {2, "//other line\n"}};
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(cl::write_multiview_demo(s), d, error), error);
+  CHECK(d.state.match_starts == 0);
+  cl::DemoRead end;
+  while ((end = cl::next_frame(d, error)) == cl::DemoRead::frame) {
+  }
+  CHECK_MSG(end == cl::DemoRead::end, error);
+  CHECK_MSG(d.state.match_starts == 1, "one start marker read, the other line not one");
 }

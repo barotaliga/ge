@@ -9,6 +9,7 @@
 #include "render/sky.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <string>
 
@@ -34,6 +35,10 @@ struct LookBlock {
   float d[4];
   float e[4];
   float f[4];
+  float g[4];
+  float h[4];  // the view's rectangle: its corner and 1 - its size, shares (0, 0, 0, 0: all)
+  float i[4];  // the edge blend: an sRGB-encoded colour, its share at the edge
+  float j[4];  // the edge blend's depth (a share of the shorter side; 0 flat), -, -, -
 };
 
 }  // namespace
@@ -92,8 +97,8 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
   const PostLook& look = settings.look;
   // One pipeline for a bloom share `bloom` (0: compiled out); the rest of the switches the same.
   const auto build = [&](double bloom, const char* label) {
-    wgpu::ConstantEntry constants[10] = {};
-    const std::pair<const char*, double> values[10] = {
+    wgpu::ConstantEntry constants[12] = {};
+    const std::pair<const char*, double> values[12] = {
         {"kEncodeSrgb", srgb_target ? 0.0 : 1.0},
         {"kBloom", bloom},
         {"kSharpen", look.sharpen > 0 ? 1.0 : 0.0},
@@ -104,6 +109,8 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
         {"kLens", settings.lens ? 1.0 : 0.0},
         {"kMotionBlur", look.motion_blur > 0 ? 1.0 : 0.0},
         {"kDof", settings.dof ? 1.0 : 0.0},
+        {"kDisplay", settings.display},
+        {"kToe", settings.toe ? 1.0 : 0.0},
     };
     for (size_t k = 0; k < std::size(values); ++k) {
       constants[k].key = values[k].first;
@@ -154,6 +161,10 @@ void set_post_look(gpu::Device& device, const Post& post, const PostLook& look) 
                         {20, 0.15f, 0, 0},
                         {0, 0, 0, 0},
                         {0, 0, 0, 0},
+                        {0, 0, 0, 0},
+                        {0, 0, 0, 0},
+                        {0, 0, 0, 0},
+                        {0, 0, 0, 0},
                         {0, 0, 0, 0}};
   // The lens's and the film's strengths and the focus; the blend is the game's (set_post_blend).
   device.queue.WriteBuffer(post.look, 0, &block, offsetof(LookBlock, d));
@@ -165,6 +176,22 @@ void set_post_blend(gpu::Device& device, const Post& post, const double rgba[4])
   device.queue.WriteBuffer(post.look, offsetof(LookBlock, d), d, sizeof d);
 }
 
+void set_post_edge_blend(gpu::Device& device, const Post& post, const double rgba[4], double frac) {
+  const auto f = [](double v, double hi) { return static_cast<float>(std::clamp(v, 0.0, hi)); };
+  const float ij[8] = {
+      f(rgba[0], 1), f(rgba[1], 1), f(rgba[2], 1), f(rgba[3], 1), f(frac, 0.5), 0, 0, 0};
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, i), ij, sizeof ij);
+}
+
+double edge_blend_share(double u, double v, double w, double h, double alpha, double frac) {
+  alpha = std::clamp(alpha, 0.0, 1.0);
+  frac = std::clamp(frac, 0.0, 0.5);
+  if (frac <= 0 || !(w > 0) || !(h > 0)) return alpha;
+  const double across = std::min(u, 1 - u) * w, down = std::min(v, 1 - v) * h;
+  const double in = std::max(std::min(across, down), 0.0) / (frac * std::min(w, h));
+  return in >= 1 ? 0 : alpha * (1 - in);
+}
+
 PostWarp arrival_warp(double age_s, double strength, const double tint[3]) {
   PostWarp w;
   strength = std::clamp(strength, 0.0, 1.0);
@@ -172,12 +199,8 @@ PostWarp arrival_warp(double age_s, double strength, const double tint[3]) {
   const double fade = 1 - age_s / kArrivalS;
   const double open = std::min(age_s / kArrivalOpenS, 1.0);
   const double shut = 1 - open;
-  const double flash =
-      age_s < kArrivalFlashS ? 1 : std::max(1 - (age_s - kArrivalFlashS) / 0.3, 0.0);
-  w.share = strength * fade * fade;
-  w.reveal = 1.3 * (1 - shut * shut * shut);
-  w.zoom = strength * shut * shut;
-  w.flash = strength * 0.85 * flash * flash;
+  w.share = 0.45 * strength * fade * fade;
+  w.reveal = kArrivalClear + (1.3 - kArrivalClear) * (1 - shut * shut);
   for (int k = 0; k < 3; ++k) w.tint[k] = std::clamp(tint[k], 0.0, 1.0);
   return w;
 }
@@ -187,6 +210,26 @@ void set_post_warp(gpu::Device& device, const Post& post, const PostWarp& warp) 
   const float ef[8] = {f(warp.share, 1),   f(warp.reveal, 2),  f(warp.zoom, 1),    f(warp.flash, 1),
                        f(warp.tint[0], 1), f(warp.tint[1], 1), f(warp.tint[2], 1), 0};
   device.queue.WriteBuffer(post.look, offsetof(LookBlock, e), ef, sizeof ef);
+}
+
+void set_post_ripple(gpu::Device& device, const Post& post, const PostRipple& ripple) {
+  const float g[4] = {static_cast<float>(std::clamp(ripple.share, 0.0, 0.05)),
+                      static_cast<float>(std::max(ripple.waves, 0.0)),
+                      static_cast<float>(std::fmod(ripple.phase, 6.283185307179586)), 0};
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, g), g, sizeof g);
+}
+
+void set_post_view(gpu::Device& device, const Post& post, const ViewRect& rect, int width,
+                   int height) {
+  float h[4] = {0, 0, 0, 0};
+  if (width > 0 && height > 0 && rect.w > 0 && rect.h > 0 && (rect.w < width || rect.h < height)) {
+    const auto fw = static_cast<float>(width), fh = static_cast<float>(height);
+    h[0] = static_cast<float>(rect.x) / fw;
+    h[1] = static_cast<float>(rect.y) / fh;
+    h[2] = 1.0f - static_cast<float>(rect.w) / fw;
+    h[3] = 1.0f - static_cast<float>(rect.h) / fh;
+  }
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, h), h, sizeof h);
 }
 
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof) {

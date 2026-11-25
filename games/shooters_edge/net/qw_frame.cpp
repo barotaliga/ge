@@ -1,0 +1,599 @@
+// The QuakeWorld server's frame out (qw_server.hpp): what the mod wrote, routed to each client's
+// reliable stream or this frame's datagram, and every client's packet: the choke count, the
+// players it sees, the entities against its acknowledged frame, the stats that changed.
+//
+// WHO SEES WHAT: a player is sent when he is spawned, not a spectator, and in the client's
+// visible set (every point is in every set until maps carry them); the client's own entry has no
+// msec and no command (he predicts himself); a dead player's command has pitch 0. Entities: every
+// entity past the clients with a model, sorted by number, at most 64 (256 under the extension),
+// the nearest kept when there are more; numbers above 511 only under entity-double.
+//
+// ge:summary The QuakeWorld server's frame out: events routed, players, entities, stats, the send
+// ge:keywords route_events send_frames playerinfo packetentities delta-frame stats updatestat
+// ge:keywords temp-entity sound multicast chokecount datagram visible-entities weapon-prediction
+// ge:skill net shooter
+// ge:test tests/shooters_edge_qw_server_test.cpp
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+
+#include "progs/layout.hpp"
+#include "progs/vm.hpp"
+#include "shooter/client.hpp"
+#include "shooters_edge/net/qw_record.hpp"
+#include "shooters_edge/net/qw_server.hpp"
+
+namespace shooters_edge::net {
+
+namespace pg = ge::progs;
+
+namespace {
+
+WireCtx ctx_of(const QwClient& c) {
+  WireCtx ctx;
+  ctx.ext = c.ext;
+  ctx.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
+  return ctx;
+}
+
+bool wants(const sv::NetEvent& ev, int slot) { return (ev.to >> slot) & 1u; }
+
+// True when a mod's raw bytes read as whole svc messages for this client. A mod that writes a
+// malformed message (a temporary entity without its svc byte, a field cut short) would leave the
+// client unable to read the rest of its packet, so such bytes are dropped and counted instead.
+bool well_formed(const QwClient& c, const uint8_t* data, size_t size) {
+  gn::Reader r = gn::make_reader(data, size);
+  const WireCtx ctx = ctx_of(c);
+  std::string error;
+  while (remaining(r) > 0) {
+    SvcMsg m;
+    if (!read_svc(r, m, ctx, error)) return false;
+  }
+  return true;
+}
+
+// Appends a mod's raw bytes to the client's reliable stream or this frame's datagram when they are
+// well formed and fit; otherwise counts them dropped.
+// A single-player program's stream in the protocol's form: its two messages whose bodies
+// differ, the intermission (no body: here the player's place and view) and the track (two bytes:
+// here the track's alone), rewritten; every other message read as the protocol's and kept. False
+// when the stream does not read.
+bool single_player_bytes(const QwServer& s, const QwClient& c, int slot, const uint8_t* data,
+                         size_t size, std::vector<uint8_t>& out) {
+  const WireCtx ctx = ctx_of(c);
+  out.clear();
+  size_t at = 0;
+  while (at < size) {
+    if (data[at] == svc::intermission) {
+      const sh::Edict& me = s.game->sv.edicts[static_cast<size_t>(slot) + 1];
+      SvcMsg m;
+      m.id = svc::intermission;
+      m.floats = {me.origin.x, me.origin.y, me.origin.z, me.v_angle.x, me.v_angle.y, me.v_angle.z};
+      uint8_t buf[64];
+      gn::Writer w = gn::make_writer(buf, sizeof buf);
+      write_svc(w, m, ctx);
+      out.insert(out.end(), buf, buf + w.size);
+      at += 1;
+      continue;
+    }
+    if (data[at] == svc::cdtrack) {
+      if (at + 3 > size) return false;
+      out.push_back(svc::cdtrack);
+      out.push_back(data[at + 1]);
+      at += 3;
+      continue;
+    }
+    gn::Reader r = gn::make_reader(data + at, size - at);
+    SvcMsg m;
+    std::string error;
+    if (!read_svc(r, m, ctx, error)) return false;
+    const size_t used = size - at - remaining(r);
+    out.insert(out.end(), data + at, data + at + used);
+    at += used;
+  }
+  return true;
+}
+
+void mod_bytes(QwServer& s, int slot, const uint8_t* data, size_t size, bool reliable) {
+  QwClient& c = s.clients[slot];
+  if (size == 0 || c.local) return;
+  if (s.game != nullptr && s.game->sv.set.single_player_clock) {
+    thread_local std::vector<uint8_t> sp;
+    if (single_player_bytes(s, c, slot, data, size, sp)) {
+      data = sp.data();
+      size = sp.size();
+    }
+  }
+  if (!well_formed(c, data, size)) {
+    s.counts.mod_bytes_dropped += static_cast<int64_t>(size);
+    return;
+  }
+  if (reliable)
+    reliable_bytes(s, slot, data, size);
+  else if (c.datagram.size() + size <= kMaxMsgLen / 2)
+    c.datagram.insert(c.datagram.end(), data, data + size);
+  else
+    s.counts.effects_dropped++;
+}
+
+void unreliable_svc(QwServer& s, int slot, const SvcMsg& m) {
+  QwClient& c = s.clients[slot];
+  if (c.local) return;
+  uint8_t buf[kMaxMsgLen];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  write_svc(w, m, ctx_of(c));
+  if (w.overflow || c.datagram.size() + w.size > kMaxMsgLen / 2) {
+    s.counts.effects_dropped++;
+    return;
+  }
+  c.datagram.insert(c.datagram.end(), buf, buf + w.size);
+}
+
+int sound_index(const QwServer& s, const std::string& name) {
+  for (size_t i = 1; i < s.game->sounds.size(); i++)
+    if (s.game->sounds[i] == name) return static_cast<int>(i);
+  return 0;
+}
+
+void route_event(QwServer& s, const sv::NetEvent& ev) {
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    QwClient& c = s.clients[j];
+    if (c.state != ConnState::spawned || !wants(ev, j)) continue;
+    SvcMsg m;
+    switch (ev.kind) {
+      case sv::EventKind::print:
+        client_print(s, j, ev.level, ev.text);
+        break;
+      case sv::EventKind::centerprint:
+        m.id = svc::centerprint;
+        m.strings = {ev.text};
+        reliable_svc(s, j, m);
+        break;
+      case sv::EventKind::stuffcmd:
+        stuff(s, j, ev.text);
+        break;
+      case sv::EventKind::lightstyle:
+        m.id = svc::lightstyle;
+        m.ints = {ev.level};
+        m.strings = {ev.text};
+        reliable_svc(s, j, m);
+        break;
+      case sv::EventKind::sound: {
+        const int snd = sound_index(s, ev.text);
+        const bool ext = snd > 255 || ev.ent > 1023;
+        if (ext && !c.ext.has(ExtFamily::x, kXSoundDbl)) {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.id = ext ? svc::soundextended : svc::sound;
+        m.ints = {ev.ent, ev.level, static_cast<int>(ev.values[0]),
+                  static_cast<int>(ev.values[1] * 64), snd};
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        if (ev.reliable)
+          reliable_svc(s, j, m);
+        else
+          unreliable_svc(s, j, m);
+        break;
+      }
+      case sv::EventKind::particle:
+        m.id = svc::temp_entity;
+        if (ev.text == "explosion") {
+          m.ints = {te::explosion};
+        } else if (ev.text == "blood") {
+          m.ints = {te::blood, static_cast<int>(ev.values[1]) / 2};
+        } else if (ev.text == "lightning blood") {
+          m.ints = {te::lightningblood};
+        } else {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        unreliable_svc(s, j, m);
+        break;
+      case sv::EventKind::point_effect: {
+        // A named effect: by its name to a client of the game's own that agreed it (the ge set);
+        // to a QuakeWorld client only as the temporary entity of its name.
+        uint8_t kind = 0;
+        if (c.ext.has(ExtFamily::ge, kGeNamedEffects) && !ev.text.empty() && ev.text.size() < 64) {
+          m.id = svc::ge_point;
+          m.strings = {ev.text};
+          m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+          const auto way = [](float v) {  // a unit way's part as a char of 1/127
+            const float q = v * 127;
+            return !(q > -127) ? -127 : q > 127 ? 127 : static_cast<int>(q);
+          };
+          const float n = ev.values[3];
+          m.ints = {way(ev.values[0]), way(ev.values[1]), way(ev.values[2]),
+                    !(n >= 1) ? 1
+                    : n > 255 ? 255
+                              : static_cast<int>(n)};
+          unreliable_svc(s, j, m);
+          break;
+        }
+        if (!sv::qw_temp_entity(ev.text, kind)) {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.id = svc::temp_entity;
+        m.ints = {kind};
+        if (kind == te::gunshot || kind == te::blood) {
+          const float n = ev.values[3];  // NaN: once
+          m.ints.push_back(!(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n));
+        }
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        unreliable_svc(s, j, m);
+        break;
+      }
+      case sv::EventKind::trail_effect:  // a QuakeWorld client has no message for a named trail
+        if (!c.ext.has(ExtFamily::ge, kGeNamedEffects) || ev.text.empty() || ev.text.size() >= 64) {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.id = svc::ge_trail;
+        m.strings = {ev.text};
+        m.floats = {ev.origin.x,  ev.origin.y,  ev.origin.z,
+                    ev.values[0], ev.values[1], ev.values[2]};
+        unreliable_svc(s, j, m);
+        break;
+      case sv::EventKind::aim_bend:  // to the game's own client only: a QuakeWorld one has no use
+        if (!c.ext.has(ExtFamily::ge, kGeAimBend)) break;
+        m.id = svc::ge_aim;
+        m.ints = {ev.ent};
+        unreliable_svc(s, j, m);
+        break;
+      case sv::EventKind::ambient:
+        m.id = svc::spawnstaticsound;
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        m.ints = {sound_index(s, ev.text), static_cast<int>(ev.values[0]),
+                  static_cast<int>(ev.values[1])};
+        reliable_svc(s, j, m);
+        break;
+      case sv::EventKind::multicast:
+        mod_bytes(s, j, ev.bytes.data(), ev.bytes.size(), ev.reliable);
+        break;
+      case sv::EventKind::pause:
+        m.id = svc::setpause;
+        m.ints = {s.game->paused ? 1 : 0};
+        reliable_svc(s, j, m);
+        break;
+      default:
+        break;  // static entities are routed from the list; drops by qw_frame
+    }
+  }
+}
+
+PmType pm_of(const QwServer& s, int slot) {
+  const sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(slot) + 1];
+  switch (sh::move_type_of(e, false)) {
+    case sh::MoveType::spectator:
+      return PmType::spectator;
+    case sh::MoveType::old_spectator:
+      return PmType::old_spectator;
+    case sh::MoveType::fly:
+      return PmType::fly;
+    case sh::MoveType::none:
+      return PmType::none;
+    case sh::MoveType::lock:
+      return PmType::lock;
+    default:
+      return s.game->sv.clients[static_cast<size_t>(slot)].jump_held ? PmType::normal_jump_held
+                                                                     : PmType::normal;
+  }
+}
+
+// A player's weapon as weapon prediction sends it: the clock the server's, the step from the frame.
+ge::classic::WeaponState weapon_state(const sv::RulesWorld& w, int slot, int frame) {
+  const sv::PlayerNumbers& n = w.clients[slot].numbers;
+  ge::classic::WeaponState ws;
+  ws.known = true;
+  ws.impulse = n.impulse;
+  ws.weapon = static_cast<int>(n.weapon);
+  ws.clock = static_cast<float>(w.time);
+  ws.attack_finished = n.attack_finished;
+  ws.next_think = n.next_think;
+  ws.step = ge::classic::weapon_step_of(ws.weapon, frame, ge::classic::weapon_rules_of(w.models));
+  ws.ping_ms = w.clients[slot].ping_ms;
+  for (int i = 0; i < 4; i++) ws.ammo[i] = static_cast<int>(n.ammo[i]);
+  ws.frame = frame;
+  return ws;
+}
+
+PlayerState player_state(const QwServer& s, int about, int to) {
+  const sh::Server& sv = s.game->sv;
+  const sh::Edict& e = sv.edicts[static_cast<size_t>(about) + 1];
+  const sh::ClientSlot& cs = sv.clients[static_cast<size_t>(about)];
+  const sv::RulesWorld& w = s.game->world;
+  const sv::WorldEntity& row = w.entities[static_cast<size_t>(about) + 1];
+  PlayerState p;
+  p.slot = about;
+  p.origin = e.origin;
+  p.frame = row.frame;
+  if (about != to) {
+    p.has_msec = true;
+    const double ms = 1000 * (sv.time - cs.last_cmd_time);
+    p.msec = ms > 255 ? 255 : ms < 0 ? 0 : static_cast<int>(ms);
+    p.has_command = true;
+    p.command = cs.last_cmd;
+    p.command.buttons = 0;
+    if (e.health <= 0) {
+      p.command.angles = {0, e.angles.y, 0};
+    }
+  }
+  p.velocity = {static_cast<float>(static_cast<int>(e.velocity.x)),
+                static_cast<float>(static_cast<int>(e.velocity.y)),
+                static_cast<float>(static_cast<int>(e.velocity.z))};
+  p.modelindex = row.modelindex == s.player_model ? 0 : row.modelindex;
+  p.skin = row.skin;
+  p.effects = row.effects;
+  // The weapon frame goes to the player himself and to a spectator tracking him.
+  if ((about == to || s.clients[static_cast<size_t>(to)].track == about) && w.weapon_frames) {
+    p.has_weaponframe = true;
+    p.weaponframe = static_cast<int>(w.clients[about].numbers.weapon_frame);
+    // Weapon prediction: the player's own weapon state on the server's clock (a spectator
+    // tracking him gets the empty byte).
+    if (about == to && !s.clients[static_cast<size_t>(to)].spectator &&
+        s.clients[static_cast<size_t>(to)].ext.has(ExtFamily::mvd, kMvdWeaponPred))
+      p.weapon = weapon_state(w, about, p.weaponframe);
+  }
+  p.dead = e.health <= 0;
+  p.gib = e.mins.z != -24;
+  p.pm = pm_of(s, about);
+  p.onground = (e.flags & sh::kFlagOnGround) != 0;
+  p.solid = e.solid != sh::kSolidNot;
+  // A player's own size and see-through share are not sent back to that player.
+  if (about != to) {
+    if (row.alpha < 1) p.alpha = row.alpha <= 0 ? 0 : static_cast<int>(row.alpha * 255);
+    const float size = row.scale * 50;
+    if (row.scale != 1) p.scale = size < 1 ? 1 : size > 255 ? 255 : static_cast<int>(size);
+  }
+  return p;
+}
+
+}  // namespace
+
+int32_t items_word(const sv::RulesWorld& w, const sv::PlayerNumbers& n) {
+  const auto bits = [](float f) { return static_cast<uint32_t>(static_cast<int32_t>(f)); };
+  const uint32_t high = w.items2 ? bits(n.items2) << 23 : bits(w.serverflags) << 28;
+  return static_cast<int32_t>(bits(n.items) | high);
+}
+
+void player_stats(const QwServer& s, int slot, int32_t st[kStats], bool view_height) {
+  const sv::RulesWorld& w = s.game->world;
+  const sv::PlayerNumbers& n = w.clients[slot].numbers;
+  st[0] = static_cast<int32_t>(n.health);
+  st[2] = n.weapon_model;
+  st[3] = static_cast<int32_t>(n.current_ammo);
+  st[4] = static_cast<int32_t>(n.armour);
+  for (int i = 0; i < 4; i++) st[6 + i] = static_cast<int32_t>(n.ammo[i]);
+  st[10] = static_cast<int32_t>(n.weapon);
+  st[15] = items_word(w, n);
+  if (view_height) st[16] = static_cast<int32_t>(n.view_z);
+}
+
+namespace {
+
+void update_stats(QwServer& s, int slot) {
+  QwClient& c = s.clients[slot];
+  int32_t st[kStats] = {};
+  // A spectator tracking a player is sent his stats: his health, weapon and ammunition on its bar.
+  const int from = c.spectator && c.track >= 0 ? c.track : slot;
+  player_stats(s, from, st, c.ext.has(ExtFamily::z, kZViewHeight));
+  for (int i = 0; i < kStats; i++) {
+    if (c.stats_known[i] && c.stats[i] == st[i]) continue;
+    if (i == 16 && !c.ext.has(ExtFamily::z, kZViewHeight)) continue;
+    SvcMsg m;
+    m.id = st[i] >= 0 && st[i] <= 255 ? svc::updatestat : svc::updatestatlong;
+    m.ints = {i, st[i]};
+    reliable_svc(s, slot, m);
+    c.stats[i] = st[i];
+    c.stats_known[i] = true;
+  }
+}
+
+// Whether the client at `me` may see entity `ed`: its origin in the visibility set, or, for a brush
+// entity (a door, a plat, a button: its origin is its model's own, often the map's 0 0 0), its
+// box's middle or any of its corners, so a door is sent wherever its model stands.
+bool entity_seen(const QwServer& s, sh::Vec3f me, const sh::Edict& ed) {
+  const auto in = [&](sh::Vec3f p) { return s.game->vis(s.game->vis_ctx, me, p, true); };
+  if (ed.solid != sh::kSolidBsp) return in(ed.origin);
+  const sh::Vec3f lo = ed.absmin, hi = ed.absmax;
+  if (in({(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f})) return true;
+  for (int k = 0; k < 8; k++)
+    if (in({(k & 1) ? hi.x : lo.x, (k & 2) ? hi.y : lo.y, (k & 4) ? hi.z : lo.z})) return true;
+  return false;
+}
+
+// The visible entities for a client, sorted by number, on its grid.
+void visible_entities(const QwServer& s, int slot, std::vector<EntityState>& out) {
+  const QwClient& c = s.clients[slot];
+  out.clear();
+  const sh::Server& sv = s.game->sv;
+  const int limit = c.ext.has(ExtFamily::x, kX256Entities) ? 256 : 64;
+  const int top = c.ext.has(ExtFamily::x, kXEntityDbl2)  ? 2048
+                  : c.ext.has(ExtFamily::x, kXEntityDbl) ? 1024
+                                                         : 512;
+  const sh::Vec3f me = sv.edicts[static_cast<size_t>(slot) + 1].origin;
+  for (int e = sv.set.maxclients + 1; e < sv.num_edicts && e < top; e++) {
+    const sh::Edict& ed = sv.edicts[static_cast<size_t>(e)];
+    if (ed.free) continue;
+    const EntityState st = entity_state(s, e);
+    if (st.modelindex == 0) continue;
+    if (s.game->vis && !entity_seen(s, me, ed)) continue;
+    out.push_back(grid_entity(st, c.coords));
+  }
+  if (static_cast<int>(out.size()) > limit) {
+    std::stable_sort(out.begin(), out.end(), [&](const EntityState& a, const EntityState& b) {
+      const sh::Vec3f da = a.origin - me, db = b.origin - me;
+      return sh::dot(da, da) < sh::dot(db, db);
+    });
+    out.resize(static_cast<size_t>(limit));
+    std::sort(out.begin(), out.end(),
+              [](const EntityState& a, const EntityState& b) { return a.number < b.number; });
+  }
+}
+
+void send_static_updates(QwServer& s) {
+  const int n = static_cast<int>(s.game->statics.size());
+  for (; s.statics_known < n; s.statics_known++) {
+    const sv::StaticEntity& st = s.game->statics[static_cast<size_t>(s.statics_known)];
+    for (int j = 0; j < sh::kMaxClients; j++) {
+      QwClient& c = s.clients[j];
+      if (c.state != ConnState::spawned) continue;
+      SvcMsg m;
+      m.id = svc::spawnstatic;
+      m.ints = {st.modelindex, static_cast<int>(st.frame), static_cast<int>(st.colormap),
+                static_cast<int>(st.skin)};
+      m.floats = {st.origin.x, st.angles.x, st.origin.y, st.angles.y, st.origin.z, st.angles.z};
+      reliable_svc(s, j, m);
+    }
+  }
+}
+
+// Every item taken and coming back (the rules' world's `back_in`) told to each spawned client of
+// ours that agreed `item-back`: once when it is taken and again whenever its time moves, so it can
+// draw the item coming back ahead of time. A client back in the signon is told afresh.
+void send_items_back(QwServer& s) {
+  const sv::RulesWorld& w = s.game->world;
+  const int n = std::min(w.entity_count, static_cast<int>(w.entities.size()));
+  const double now = s.game->sv.time;
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    QwClient& c = s.clients[j];
+    if (c.state != ConnState::spawned || !c.ext.has(ExtFamily::ge, kGeItemBack)) {
+      c.back_told.clear();
+      continue;
+    }
+    if (c.back_told.size() < static_cast<size_t>(n)) c.back_told.resize(static_cast<size_t>(n), -1);
+    for (int e = sh::kMaxClients + 1; e < n; e++) {
+      const sv::WorldEntity& r = w.entities[static_cast<size_t>(e)];
+      double& told = c.back_told[static_cast<size_t>(e)];
+      if (!(r.back_in > 0) || r.back_model <= 0) {
+        told = -1;
+        continue;
+      }
+      const double due = now + static_cast<double>(r.back_in);
+      if (told >= 0 && std::abs(told - due) < 0.05) continue;
+      told = due;
+      SvcMsg m;
+      m.id = svc::ge_back;
+      const double ms = static_cast<double>(r.back_in) * 1000 + 0.5;
+      m.ints = {e, r.back_model, r.skin, ms > 2.0e9 ? 2000000000 : static_cast<int>(ms)};
+      m.floats = {r.origin.x, r.origin.y, r.origin.z, r.angles.y};
+      reliable_svc(s, j, m);
+    }
+  }
+}
+
+}  // namespace
+
+void route_events(QwServer& s) {
+  sv::MessageSink& out = s.game->out;
+  if (s.mvd) mvd_events(s, *s.mvd);
+  for (MultiviewRecorder* r : s.streams) mvd_events(s, *r);
+  for (const sv::NetEvent& ev : out.events) route_event(s, ev);
+  s.counts.events += static_cast<int64_t>(out.events.size());
+  send_static_updates(s);
+  send_items_back(s);
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    QwClient& c = s.clients[j];
+    if (c.state != ConnState::spawned) continue;
+    mod_bytes(s, j, out.all.data(), out.all.size(), true);
+    mod_bytes(s, j, out.one[j].data(), out.one[j].size(), true);
+    mod_bytes(s, j, out.unreliable.data(), out.unreliable.size(), false);
+  }
+  out.all.clear();
+  for (std::vector<uint8_t>& one : out.one) one.clear();
+  sv::clear_frame(out);
+  for (int j = 0; j < sh::kMaxClients; j++)
+    if (s.clients[j].state == ConnState::spawned) update_stats(s, j);
+}
+
+void send_frames(QwServer& s) {
+  uint8_t payload[kMaxMsgLen];
+  uint8_t packet[kMaxPacket];
+  std::vector<EntityState> ents;
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    QwClient& c = s.clients[j];
+    if (c.state == ConnState::free || !c.heard) continue;
+    if (!channel_can_packet(c.ch, s.now)) {
+      c.chokecount++;
+      c.ch.choked++;
+      s.counts.choked++;
+      continue;
+    }
+    const size_t room =
+        kMaxPacket - kServerHeader - c.ch.reliable.size -
+        (c.ch.reliable.size == 0 && c.ch.pending_count > 0 ? c.ch.pending[0].size : 0);
+    gn::Writer w = gn::make_writer(payload, std::min(room, sizeof payload));
+    const uint32_t seq = c.ch.outgoing_sequence;
+    ServerFrame& f = c.frames[seq & 63];
+    f.sequence = seq;
+    f.sent = s.now;
+    f.server_time = s.game->sv.time;
+    f.entities = false;
+    if (c.state == ConnState::spawned) {
+      if (c.chokecount) {
+        write_byte(w, svc::chokecount);
+        write_byte(w, c.chokecount > 255 ? 255 : c.chokecount);
+        c.chokecount = 0;
+      }
+      // The server's turn of him, unreliable as every classic server sends it; under the high-lag
+      // teleport with its kind, and his moves in flight turned until this packet is acknowledged.
+      if (c.turn_pending) {
+        c.turn_pending = false;
+        SvcMsg turn;
+        turn.id = svc::setangle;
+        const cp::TurnKind kind = c.turn_teleport ? cp::TurnKind::teleport : cp::TurnKind::respawn;
+        turn.ints = {static_cast<int>(kind)};
+        turn.floats = {c.turn_to.x, c.turn_to.y, c.turn_to.z};
+        write_svc(w, turn, ctx_of(c));
+        if (c.ext.has(ExtFamily::mvd, kMvdTeleport))
+          cp::lag_turn_sent(c.lag, kind, seq, c.ch.incoming_sequence, c.last_yaw, c.turn_to.y,
+                            nullptr);
+      }
+      for (int k = 0; k < sh::kMaxClients; k++) {
+        if (!s.clients[k].rules_active || s.clients[k].spectator) continue;
+        if (!s.game->sv.clients[static_cast<size_t>(k)].active) continue;
+        const sh::Vec3f me = s.game->sv.edicts[static_cast<size_t>(j) + 1].origin;
+        const sh::Vec3f it = s.game->sv.edicts[static_cast<size_t>(k) + 1].origin;
+        // The player a spectator tracks is sent wherever he is, so its camera never loses him.
+        if (k != j && k != c.track && s.game->vis && !s.game->vis(s.game->vis_ctx, me, it, true))
+          continue;
+        write_byte(w, svc::playerinfo);
+        write_playerinfo(w, player_state(s, k, j), c.ext);
+      }
+      visible_entities(s, j, ents);
+      const std::vector<EntityState>* from = nullptr;
+      if (c.delta_byte >= 0) {
+        const uint32_t full = seq - ((seq - static_cast<uint32_t>(c.delta_byte)) & 0xffu);
+        const ServerFrame& df = c.frames[full & 63];
+        if (seq - full < 64 && full != seq && df.sequence == full && df.entities) {
+          from = &df.ents;
+          write_byte(w, svc::deltapacketentities);
+          write_byte(w, static_cast<int>(full & 0xff));
+        }
+      }
+      if (from == nullptr) write_byte(w, svc::packetentities);
+      write_packet_entities(w, from, ents, s.baselines, c.ext);
+      f.ents = ents;
+      f.entities = !w.overflow;
+      if (!w.overflow && w.size + c.datagram.size() <= w.capacity)
+        gn::write_bytes(w, c.datagram.data(), c.datagram.size());
+    }
+    // Downloads run during the signon too (the skins step comes before `begin`).
+    if (!w.overflow) send_download_chunks(s, j, w);
+    c.datagram.clear();
+    if (w.overflow) {
+      w.overflow = false;
+      w.size = 0;  // nothing but the reliable part fits this time
+      f.entities = false;
+    }
+    const size_t n = channel_transmit(c.ch, payload, w.size, s.now, packet);
+    for (int k = 0; k < c.ch.copies; k++)
+      gn::transport_send(*s.transport, c.address, packet, n, static_cast<int64_t>(s.now * 1e6));
+    s.counts.datagrams_out += c.ch.copies;
+    s.counts.bytes_out += static_cast<int64_t>(n) * c.ch.copies;
+    c.heard = false;
+  }
+}
+
+}  // namespace shooters_edge::net

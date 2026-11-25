@@ -6,9 +6,11 @@
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/installs.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include "shooters_edge/client/files.hpp"
@@ -67,16 +69,82 @@ Edition edition_of(const std::string& basedir, const ge::classicenhance::Profile
 }
 
 std::string_view edition_words(Edition e, const ge::classicenhance::Profile& content) {
-  const bool sequel = content.id != ge::classicenhance::classic_profile().id;
+  const bool q2 = content.id != ge::classicenhance::q1_profile().id;
   switch (e) {
     case Edition::shareware:
-      return sequel ? "Demo" : "Shareware";
+      return q2 ? "Demo" : "Shareware";
     case Edition::full:
-      return sequel ? "Full game" : "Registered";
+      return q2 ? "Full game" : "Registered";
     case Edition::unknown:
       break;
   }
   return "";
+}
+
+std::string folder_over(const std::string& basedir, const ge::classicenhance::Profile& content,
+                        std::string* pack) {
+  const std::string asked = std::exchange(*pack, std::string());
+  return !asked.empty() && ge::classicenhance::find_pack(content, asked) != nullptr
+             ? asked
+             : game_of(basedir, content);
+}
+
+std::vector<const ge::classicenhance::MissionPack*> packs_of(
+    const std::string& basedir, const ge::classicenhance::Profile& content) {
+  std::vector<const ge::classicenhance::MissionPack*> out;
+  std::error_code ec;
+  for (const ge::classicenhance::MissionPack& m : content.packs) {
+    const std::filesystem::path dir = std::filesystem::path(basedir) / std::string(m.folder);
+    if (std::filesystem::is_regular_file(dir / ge::classicenhance::pack_name(content, 0), ec) ||
+        std::filesystem::is_regular_file(dir / ge::classicenhance::zip_name(content, 0), ec))
+      out.push_back(&m);
+  }
+  return out;
+}
+
+std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
+                                                    std::string_view playing,
+                                                    const std::string& playing_install,
+                                                    std::string_view remixed,
+                                                    std::string_view playing_folder) {
+  std::vector<shooters_edge::menu::GameRow> rows;
+  const auto kept = remembered_installs(prefs);
+  for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles) {
+    shooters_edge::menu::GameRow g;
+    g.id = std::string(p.id);
+    if (const auto it = kept.find(p.id); it != kept.end()) g.install = it->second;
+    if (playing == p.id && !playing_install.empty()) {
+      g.playing = true;
+      g.install = playing_install;
+    }
+    // Only a game added here (ADD GAME, -basedir, a folder loaded) whose folder still holds it.
+    if (g.install.empty()) continue;
+    std::string basedir, why;
+    const bool there = check_game_folder(g.install, &basedir, &why, p);
+    if (there)
+      g.edition = std::string(edition_words(edition_of(basedir, p), p));
+    else if (!g.playing)
+      continue;
+    g.remixed = !g.playing && remixed == p.id;
+    const bool on = g.playing;
+    const auto packs = there ? packs_of(basedir, p) : decltype(packs_of(basedir, p)){};
+    const auto pack_playing = [&](const ge::classicenhance::MissionPack* m) {
+      return on && ge::classicenhance::find_pack(p, playing_folder) == m;
+    };
+    g.playing = on && std::none_of(packs.begin(), packs.end(), pack_playing);
+    const std::string install = g.install;
+    rows.push_back(std::move(g));
+    for (const ge::classicenhance::MissionPack* m : packs) {
+      shooters_edge::menu::GameRow r;
+      r.id = std::string(p.id);
+      r.install = install;
+      r.pack = std::string(m->folder);
+      r.pack_name = std::string(m->name);
+      r.playing = pack_playing(m);
+      rows.push_back(std::move(r));
+    }
+  }
+  return rows;
 }
 
 }  // namespace shooters_edge::client

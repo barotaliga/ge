@@ -1,5 +1,5 @@
 // LAB `replay-codec`: THE REPLAY FILE VERSION 2 AND THE FIELD CODEC ON CLASSIC RECORDINGS. A team
-// match of bots on the fixture halls (net/classic_team.hpp), recorded as a multiview recording,
+// match of bots on the fixture halls (net/qw_team.hpp), recorded as a multiview recording,
 // and every recording `--corpus` and `--file` name (any wrapper, unpacked first) are each packed by
 // this game's face into a version 2 file (`.ged`, client/demo_v2.hpp) and unpacked again: each must
 // come back byte for byte. Beside it the same recording packed as today's packed demo (zstd 19,
@@ -33,7 +33,7 @@
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 #include "vfs/lzma.hpp"
 #include "vfs/unpack.hpp"
 #include "vfs/zstd.hpp"

@@ -1,6 +1,6 @@
 // THE WINDOW'S CLASSIC PICTURES: the classic menu's pictures (menu/classic_art.hpp) and the classic
 // status bar's (hud/classic_art.hpp), read by the game's adapter (game_adapter.hpp's `pictures`:
-// the first game's from the packs on the search path, a PNG or TGA of a picture's name standing
+// Quake's from the packs on the search path, a PNG or TGA of a picture's name standing
 // in for it) and, when
 // `ce_pictures` is on, swapped for classic-enhance's upscaled copies in the packs' cache
 // (`cached_picture`, its pictures stage), so the menus, the status bar and the glyph sheet's text
@@ -38,7 +38,7 @@ struct ClassicPictures {
 
 struct GameAdapter;
 
-// The pictures of `files` as `game` (null: the first game's adapter) reads them, enhanced from the
+// The pictures of `files` as `game` (null: Quake's adapter) reads them, enhanced from the
 // packs' cache when `enhance` is set and the cache has them (an empty `cache_root` is
 // classic-enhance's own folder).
 ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
@@ -48,6 +48,10 @@ ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
 // The HUD's pictures the window draws: with a classic game's folder open (`files.folder` set)
 // that game's own (`game`, from its adapter), even when they are missing, never Shooter's Edge's
 // own set in their place; Shooter's Edge's own (`own`) only for its own content.
+// The status line for the HUD's pictures as loaded: the packs' own (enhanced or not), or why a
+// classic game's folder has none (`why`); nothing for Shooter's Edge's own content.
+void say_hud_pictures(const hud::HudArt& art, const SearchPath& files, const std::string& why);
+
 const hud::HudArt& hud_art_of(const SearchPath& files, const hud::HudArt& game,
                               const hud::HudArt& own);
 

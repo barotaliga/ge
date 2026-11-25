@@ -1,9 +1,9 @@
 // LAB `se-rj`: THE ROCKET JUMPS PEOPLE MAKE, read off a folder of recorded games, to be copied by
 // the bots. Every demo in `--dir` (or `--file`; by default a few short matches written in code on
 // the fixture halls, three players each jumping their own way) is scanned with every player's
-// track (client/demo_scan.hpp), each track read as hops on its map's hulls (shooter/hops.hpp) and
-// then as rocket jumps by the rockets he fired (shooter/rocket_jumps.hpp: the kind by the view
-// against the flight, the pitch, the run, the keys read off the move, the flight and landing).
+// track (client/demo_scan.hpp), each track read as hops on its map's hulls (shooterbots/hops.hpp)
+// and then as rocket jumps by the rockets he fired (shooterbots/rocket_jumps.hpp: the kind by the
+// view against the flight, the pitch, the run, the keys read off the move, the flight and landing).
 //
 // THE LEVELS: each player of a demo with `--least` seconds of track or more is graded by how fast
 // he moves (his track's median speed across, hops.hpp), the slowest third AMATEUR, the middle
@@ -19,7 +19,7 @@
 // more: a bot of that level learns it), and written to tricks.tsv for the nav (a rocket link
 // to prove), beside jumps.tsv with every jump.
 //
-// THE GAP TRICKS: each track's plain jumps over a pit, a chasm or lava (shooter/gap_jumps.hpp:
+// THE GAP TRICKS: each track's plain jumps over a pit, a chasm or lava (shooterbots/gap_jumps.hpp:
 // the floor under the flight traced through the world and the solid brush entities resting where
 // the map builds them), gathered the same way into the spots people jump again and again, with
 // the takeoff's speed (its quarter: the speed a bot must bring), whether a run's jump would fall
@@ -35,7 +35,7 @@
 // ge:keywords intermediate expert movement-skill copy-movement best-movements analytics
 // ge:keywords gap-tricks gap-jump speed-jump strafe-jump-over lava-jump
 // ge:skill bots labs
-// ge:test tests/shooter_rocket_jumps_test.cpp
+// ge:test tests/shooterbots_rocket_jumps_test.cpp
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -54,9 +54,9 @@
 #include "core/parallel.hpp"
 #include "core/prng.hpp"
 #include "lab/lab.hpp"
-#include "shooter/gap_jumps.hpp"
-#include "shooter/hops.hpp"
-#include "shooter/rocket_jumps.hpp"
+#include "shooterbots/gap_jumps.hpp"
+#include "shooterbots/hops.hpp"
+#include "shooterbots/rocket_jumps.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/demo_write.hpp"
@@ -67,6 +67,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cl = shooters_edge::client;
 namespace la = shooters_edge::labs;
 using ge::core::num::to_fixed;
@@ -83,14 +84,14 @@ constexpr gl::Rgba kKindColour[3] = {{230, 120, 30, 255}, {200, 170, 20, 255}, {
 struct Jump {
   int demo = 0, slot = 0, player = 0;  // the player: an index into the players read
   std::string map;
-  sh::RocketJump j;
+  sb::RocketJump j;
 };
 
-// A gap jump (shooter/gap_jumps.hpp) and whose it was.
+// A gap jump (shooterbots/gap_jumps.hpp) and whose it was.
 struct Gap {
   int demo = 0, slot = 0, player = 0;
   std::string map;
-  sh::GapJump j;
+  sb::GapJump j;
 };
 
 float quantile(std::vector<float> v, float q) {
@@ -326,14 +327,14 @@ void run(gl::Lab& lab) {
     }
     read++;
     // The rockets each player fired.
-    std::array<std::vector<sh::RocketShot>, 32> shots;
+    std::array<std::vector<sb::RocketShot>, 32> shots;
     // A rocket gone near another player alive then was a shot at him.
     const auto at_another = [&](const cl::DemoFlight& f) {
       for (size_t k = 0; k < 32; k++) {
         if (static_cast<int>(k) == f.shooter || scan.tracks[k].empty()) continue;
-        const std::vector<sh::TrackPoint>& tr = scan.tracks[k];
+        const std::vector<sb::TrackPoint>& tr = scan.tracks[k];
         const auto it = std::lower_bound(tr.begin(), tr.end(), f.t1,
-                                         [](const sh::TrackPoint& p, double t) { return p.t < t; });
+                                         [](const sb::TrackPoint& p, double t) { return p.t < t; });
         if (it == tr.end() || it->dead || it->t - f.t1 > 0.05) continue;
         const sh::Vec3f d = it->origin - f.to;
         if (d.x * d.x + d.y * d.y + d.z * d.z < kNearAnother * kNearAnother) return true;
@@ -343,27 +344,27 @@ void run(gl::Lab& lab) {
     for (const cl::DemoFlight& f : scan.flights)
       if (!f.grenade && f.shooter >= 0 && f.shooter < 32)
         shots[static_cast<size_t>(f.shooter)].push_back({f.t0, f.t1, f.from, f.to, at_another(f)});
-    std::vector<std::vector<sh::RocketJump>> found(32);
-    std::vector<sh::HopReading> hops(32);
-    std::vector<std::vector<sh::GapJump>> gap_found(32);
+    std::vector<std::vector<sb::RocketJump>> found(32);
+    std::vector<sb::HopReading> hops(32);
+    std::vector<std::vector<sb::GapJump>> gap_found(32);
     const std::vector<sh::BrushModel>& models = maps.solids[scan.map];
     ge::core::parallel_bands(32, 32, [&](size_t b, size_t e) {
       for (size_t k = b; k < e; k++) {
-        const std::vector<sh::TrackPoint>& tr = scan.tracks[k];
+        const std::vector<sb::TrackPoint>& tr = scan.tracks[k];
         if (tr.size() < 8) continue;
-        sh::read_hops(tr, *m->world, sh::HopSettings{}, hops[k]);
-        sh::read_rocket_jumps(tr, hops[k], shots[k], sh::RocketJumpReadSettings{}, found[k]);
+        sb::read_hops(tr, *m->world, sb::HopSettings{}, hops[k]);
+        sb::read_rocket_jumps(tr, hops[k], shots[k], sb::RocketJumpReadSettings{}, found[k]);
         // The gap jumps: his plain jumps over a pit, a rocket jump's frames left out (and any
         // frame a rocket of his burst by him: an unseen point-blank one leaves no rocket jump).
         std::vector<std::pair<int32_t, int32_t>> blasts;
-        for (const sh::RocketJump& j : found[k])
+        for (const sb::RocketJump& j : found[k])
           blasts.push_back({j.shot, j.land >= 0 ? j.land : j.burst});
-        sh::read_gap_jumps(tr, hops[k], *m->world, models, blasts, sh::GapJumpReadSettings{},
+        sb::read_gap_jumps(tr, hops[k], *m->world, models, blasts, sb::GapJumpReadSettings{},
                            gap_found[k]);
       }
     });
     for (size_t k = 0; k < 32; k++) {
-      const std::vector<sh::TrackPoint>& tr = scan.tracks[k];
+      const std::vector<sb::TrackPoint>& tr = scan.tracks[k];
       if (tr.size() < 8) continue;
       Player p;
       p.demo = static_cast<int>(i);
@@ -375,17 +376,17 @@ void run(gl::Lab& lab) {
       p.jumps = static_cast<int>(found[k].size());
       const int at = static_cast<int>(players.size());
       players.push_back(p);
-      for (const sh::RocketJump& j : found[k])
+      for (const sb::RocketJump& j : found[k])
         jumps.push_back({static_cast<int>(i), static_cast<int>(k), at, scan.map, j});
-      for (const sh::GapJump& j : gap_found[k])
+      for (const sb::GapJump& j : gap_found[k])
         gaps.push_back({static_cast<int>(i), static_cast<int>(k), at, scan.map, j});
     }
     if (asked)
       for (size_t k = 0; k < 32; k++) {
-        const std::vector<sh::TrackPoint>& tr = scan.tracks[k];
+        const std::vector<sb::TrackPoint>& tr = scan.tracks[k];
         double last_in = -1e9;
         for (size_t f = 0; f < tr.size(); f++) {
-          const sh::TrackPoint& p = tr[f];
+          const sb::TrackPoint& p = tr[f];
           const sh::Vec3f d = p.origin - spot;
           const bool in =
               !p.dead && d.x * d.x + d.y * d.y <= spot_r * spot_r && d.z <= 48 && d.z >= -48;
@@ -419,7 +420,7 @@ void run(gl::Lab& lab) {
           // ground that much lower (none in the window: not one).
           bool below = rise_least <= 0;
           for (size_t g = f; g-- > first;)
-            if (g < hops[k].frames.size() && hops[k].frames[g].phase == sh::HopPhase::ground &&
+            if (g < hops[k].frames.size() && hops[k].frames[g].phase == sb::HopPhase::ground &&
                 (rise_least <= 0 || tr[g].origin.z <= spot.z - rise_least)) {
               a.from = tr[g].origin;
               below = true;
@@ -437,7 +438,7 @@ void run(gl::Lab& lab) {
             if (fl.shooter != static_cast<int>(k) || fl.t1 < tr[first].t || fl.t1 > p.t) continue;
             const auto it =
                 std::lower_bound(tr.begin(), tr.end(), fl.t1,
-                                 [](const sh::TrackPoint& q, double t) { return q.t < t; });
+                                 [](const sb::TrackPoint& q, double t) { return q.t < t; });
             if (it == tr.end()) continue;
             const sh::Vec3f e = it->origin - fl.to;
             if (e.x * e.x + e.y * e.y + e.z * e.z > 160 * 160) continue;
@@ -499,7 +500,7 @@ void run(gl::Lab& lab) {
       }
       if (pitch.empty()) continue;
       kinds.rows.push_back(
-          {std::string(sh::rocket_jump_kind_name(static_cast<sh::RocketJumpKind>(kind))) +
+          {std::string(sb::rocket_jump_kind_name(static_cast<sb::RocketJumpKind>(kind))) +
                (standing ? " standing" : " run at"),
            std::to_string(pitch.size()),
            to_fixed(100.0 * static_cast<double>(pitch.size()) /
@@ -529,11 +530,11 @@ void run(gl::Lab& lab) {
       nj++;
       kind[static_cast<int>(j.j.kind)]++;
       standing += j.j.standing;
-      (j.j.kind == sh::RocketJumpKind::flip ? flip_pitch : feet_pitch).push_back(j.j.pitch);
+      (j.j.kind == sb::RocketJumpKind::flip ? flip_pitch : feet_pitch).push_back(j.j.pitch);
       if (!j.j.standing) run.push_back(j.j.run_speed);
-      at_shot[sh::keys_name(j.j.keys_shot)]++;
-      run_keys[sh::sequence_name(j.j.keys_run)]++;
-      air_keys[sh::sequence_name(j.j.keys_air)]++;
+      at_shot[sb::keys_name(j.j.keys_shot)]++;
+      run_keys[sb::sequence_name(j.j.keys_run)]++;
+      air_keys[sb::sequence_name(j.j.keys_air)]++;
     }
     const auto share = [&](int n) { return to_fixed(100.0 * n / std::max(1, nj), 0) + "%"; };
     levels.rows.push_back({kLevelName[lv], std::to_string(np), to_fixed(seconds / 60, 1),
@@ -635,7 +636,7 @@ void run(gl::Lab& lab) {
     to = to * inv;
     trick_ends.push_back({from, to});
     const int top = kind[2] >= kind[0] && kind[2] >= kind[1] ? 2 : kind[1] > kind[0] ? 1 : 0;
-    const std::string kname = sh::rocket_jump_kind_name(static_cast<sh::RocketJumpKind>(top));
+    const std::string kname = sb::rocket_jump_kind_name(static_cast<sb::RocketJumpKind>(top));
     const std::string st =
         to_fixed(100.0 * standing / static_cast<double>(t.jumps.size()), 0) + "%";
     if (static_cast<int>(n) < rows)
@@ -750,7 +751,7 @@ void run(gl::Lab& lab) {
   for (size_t k = 0; k < jumps.size(); k++)
     if (jumps[k].j.land >= 0 && jumps[k].j.air_s > 0.2f) best.push_back(static_cast<int>(k));
   const auto pace = [&](int k) {
-    const sh::RocketJump& j = jumps[static_cast<size_t>(k)].j;
+    const sb::RocketJump& j = jumps[static_cast<size_t>(k)].j;
     return j.across / j.air_s;
   };
   std::sort(best.begin(), best.end(),
@@ -764,9 +765,9 @@ void run(gl::Lab& lab) {
     const Player& p = players[static_cast<size_t>(j.player)];
     bt.rows.push_back(
         {j.map, p.name, p.level >= 0 ? kLevelName[p.level] : "-",
-         std::string(sh::rocket_jump_kind_name(j.j.kind)) + (j.j.standing ? " standing" : ""),
-         to_fixed(j.j.pitch, 0), to_fixed(j.j.run_speed, 0), sh::sequence_name(j.j.keys_run),
-         sh::keys_name(j.j.keys_shot), sh::sequence_name(j.j.keys_air), to_fixed(j.j.height, 0),
+         std::string(sb::rocket_jump_kind_name(j.j.kind)) + (j.j.standing ? " standing" : ""),
+         to_fixed(j.j.pitch, 0), to_fixed(j.j.run_speed, 0), sb::sequence_name(j.j.keys_run),
+         sb::keys_name(j.j.keys_shot), sb::sequence_name(j.j.keys_air), to_fixed(j.j.height, 0),
          to_fixed(j.j.across, 0), to_fixed(j.j.air_s, 2),
          to_fixed(pace(best[static_cast<size_t>(r)]), 0)});
   }
@@ -780,10 +781,10 @@ void run(gl::Lab& lab) {
     for (char& c : name)
       if (c == ' ' || c == '\t') c = '_';
     jtsv += j.map + "\t" + name + "\t" + (p.level >= 0 ? kLevelName[p.level] : "-") + "\t" +
-            sh::rocket_jump_kind_name(j.j.kind) + "\t" + (j.j.standing ? "1" : "0") + "\t" +
+            sb::rocket_jump_kind_name(j.j.kind) + "\t" + (j.j.standing ? "1" : "0") + "\t" +
             to_fixed(j.j.pitch, 0) + "\t" + to_fixed(j.j.run_speed, 0) + "\t" +
-            sh::sequence_name(j.j.keys_run) + "\t" + sh::keys_name(j.j.keys_shot) + "\t" +
-            sh::sequence_name(j.j.keys_air) + "\t" + v3(j.j.from) + "\t" + v3(j.j.to) + "\t" +
+            sb::sequence_name(j.j.keys_run) + "\t" + sb::keys_name(j.j.keys_shot) + "\t" +
+            sb::sequence_name(j.j.keys_air) + "\t" + v3(j.j.from) + "\t" + v3(j.j.to) + "\t" +
             to_fixed(j.j.height, 0) + "\t" + to_fixed(j.j.across, 0) + "\t" +
             to_fixed(j.j.air_s, 2) + "\n";
   }
@@ -829,7 +830,7 @@ void run(gl::Lab& lab) {
       }
       int x = 10;
       for (int k = 0; k < 3; k++) {
-        const std::string s = sh::rocket_jump_kind_name(static_cast<sh::RocketJumpKind>(k));
+        const std::string s = sb::rocket_jump_kind_name(static_cast<sb::RocketJumpKind>(k));
         gl::fill_rect(p, x, 8, 10, 10, kKindColour[k]);
         gl::draw_text(p, x + 14, 9, s, {40, 40, 40, 255});
         x += 14 + gl::text_width(s) + 14;
@@ -850,7 +851,7 @@ void run(gl::Lab& lab) {
   }
 
   int flips = 0;
-  for (const Jump& j : jumps) flips += j.j.kind == sh::RocketJumpKind::flip;
+  for (const Jump& j : jumps) flips += j.j.kind == sb::RocketJumpKind::flip;
   lab.metric("rj.demos", read, "count");
   lab.metric("rj.players", static_cast<double>(players.size()), "count");
   lab.metric("rj.jumps", static_cast<double>(jumps.size()), "count");
@@ -899,7 +900,7 @@ const gl::LabSpec kSpec{
     "se-rj",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "plugins/shooter/rocket_jumps.hpp over many demos (games/shooters_edge/labs/se_rj_lab.cpp, "
+    "plugins/shooterbots/rocket_jumps.hpp over many demos (games/shooters_edge/labs/se_rj_lab.cpp, "
     "client/demo_scan.hpp, wire_view.hpp)",
     "bots",
     "How do people rocket jump, read off their recorded games: which kinds, at which pitch, run "

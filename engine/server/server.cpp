@@ -7,8 +7,10 @@
 // ge:test tests/server_core_test.cpp
 #include "server/server.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <limits>
+#include <vector>
 
 #include "core/num.hpp"
 #include "core/num_text.hpp"
@@ -99,6 +101,62 @@ bool start_beat(Server& s, const ServerGame& game, const ServerConfig& config, s
 
 Server::~Server() { server_close(*this); }
 
+namespace {
+
+// The game's meta-cvars (GameMeta rows), each a text cvar of its own kept in `c.metas`, then its
+// levels declared over the settings above.
+void add_game_metas(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game) {
+  std::vector<std::string> names;
+  for (int i = 0; i < game.meta_count; i++)
+    if (std::find(names.begin(), names.end(), game.metas[i].name) == names.end())
+      names.emplace_back(game.metas[i].name);
+  for (const std::string& name : names) {
+    std::vector<cn::MetaLevel> levels;
+    const GameMeta* first = nullptr;
+    for (int i = 0; i < game.meta_count; i++) {
+      const GameMeta& m = game.metas[i];
+      if (name != m.name) continue;
+      if (first == nullptr) first = &m;
+      cn::MetaLevel level;
+      level.value = m.value;
+      const std::string sets = m.sets;
+      for (size_t at = 0; at < sets.size();) {
+        size_t end = sets.find(';', at);
+        if (end == std::string::npos) end = sets.size();
+        std::string pair = sets.substr(at, end - at);
+        at = end + 1;
+        const size_t a = pair.find_first_not_of(' ');
+        if (a == std::string::npos) continue;
+        pair = pair.substr(a);
+        const size_t sp = pair.find(' ');
+        cn::MetaSet set;
+        set.name = pair.substr(0, sp);
+        set.value = sp == std::string::npos ? std::string() : pair.substr(sp + 1);
+        while (!set.value.empty() && set.value.back() == ' ') set.value.pop_back();
+        level.sets.push_back(std::move(set));
+      }
+      levels.push_back(std::move(level));
+    }
+    std::string& field = c.metas[name];  // a map's node: its address outlives the inserts
+    if (field.empty()) field = "0";
+    cvars.bind({.name = name,
+                .fallback = "0",
+                .flags = static_cast<uint32_t>(cn::kServer),
+                .help = first->help != nullptr ? first->help : "",
+                .kind = cn::CvarKind::text,
+                .values = first->values != nullptr ? first->values : ""},
+               &field);
+    std::string error;
+    if (!cvars.add_meta(name, std::move(levels), error))
+      std::fprintf(stderr,
+                   "error: the game's meta-cvar %s is refused: %s. Fix its rows in the "
+                   "game's ServerGame::metas.\n",
+                   name.c_str(), error.c_str());
+  }
+}
+
+}  // namespace
+
 void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game) {
   using cn::CvarKind;
   const uint32_t info = cn::kServer | cn::kServerInfo;
@@ -109,11 +167,12 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   if (c.port == 0) c.port = game.default_port;
   // The fallbacks copied first: binding writes each into the field it is read from.
   const std::string port = std::to_string(c.port), clients = std::to_string(c.maxclients);
+  const std::string ip6 = c.ip6, ipv6 = std::to_string(c.ipv6);
   const std::string bots = std::to_string(c.bots), seed = std::to_string(c.seed);
   const std::string lobby = std::to_string(c.lobby);
   const std::string name = c.hostname, about = c.description, ip = c.ip, map = c.map;
   const std::string password = c.password, visibility = c.visibility;
-  const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
+  const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation, mapcmd = c.mapcmd;
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
   const std::string masters = c.masters;
@@ -122,6 +181,8 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   auto bind = [&](std::string_view id, std::string_view fallback, uint32_t flags,
                   std::string_view help, CvarKind kind, double min, double max,
                   std::string_view values, auto* target) {
+    for (int i = 0; i < game.name_count; i++)  // the game's own meaning of this name sets it aside
+      if (game.names[i].own && id == game.names[i].name) return;
     cvars.bind({.name = id,
                 .fallback = fallback,
                 .flags = flags,
@@ -144,6 +205,15 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        kAny, "\"\": every interface (the default); TEXT: that address only", &c.ip);
   bind("net_port", port, latched, "The UDP port the game listens on.", CvarKind::integer, 1, 65535,
        "1..65535: that port", &c.port);
+  // A hosting window's name for its port (listen_console.cpp), so one cfg line serves both.
+  cvars.add_synonym("sv_port", "net_port");
+  bind("net_ip6", ip6, latched, "The local IPv6 address the server listens on as well.",
+       CvarKind::text, -kAny, kAny, "\"\": every interface (the default); TEXT: that address only",
+       &c.ip6);
+  bind("net_enable_ipv6", ipv6, latched, "Whether the server listens on IPv6 as well as IPv4.",
+       CvarKind::integer, 0, 2,
+       "0: IPv4 only; 1: IPv4 only (the default); 2: an IPv6 socket too, on net_ip6 and net_port",
+       &c.ipv6);
   bind("sv_maxclients", clients, latched_info, "The most players the server seats at once.",
        CvarKind::integer, 1, static_cast<double>(most), slots_values, &c.maxclients);
   bind("sv_map", map, info, "The map the server starts on.", CvarKind::text, -kAny, kAny,
@@ -181,6 +251,69 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_maprotation", rotation, info, "The maps played after the first, in turn.",
        CvarKind::text, -kAny, kAny,
        "\"\": the first map again; TEXT: map names with spaces between", &c.maprotation);
+  bind("sv_mapcmd", mapcmd, cn::kServer, "A console line the server runs after each map loads.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": none (the default); TEXT: the line, as typed at the server's console", &c.mapcmd);
+  bind("console_prefix", "", cn::kServer,
+       "The text put before each line the server's terminal prints.", CvarKind::text, -kAny, kAny,
+       "\"\": none (the default); TEXT: that text, <?> first the syslog level, @ the level's "
+       "letter, %H:%M and the rest the local time",
+       &c.console_prefix);
+  bind("con_history", "128", cn::kServer,
+       "How many lines typed at the server's terminal are kept, and saved for the next start.",
+       CvarKind::integer, 0, 4096,
+       "0: none saved; 1..4096: that many, the oldest dropped first (128 the default)",
+       &c.con_history);
+  bind("con_completion_mode", "1", cn::kServer,
+       "How Tab at the server's terminal lists the commands and settings a word could be.",
+       CvarKind::integer, 0, 2,
+       "0: one a line; 1: in columns (the default); 2: in columns, commands, settings and "
+       "aliases apart",
+       &c.con_tab_mode);
+  bind("con_completion_threshold", "50", cn::kServer,
+       "How many matches Tab at the server's terminal lists before it asks first.",
+       CvarKind::integer, 0, kAny, "50: fifty (the default); a number: that many",
+       &c.con_tab_threshold);
+  bind("con_logfile", "0", cn::kServer,
+       "Whether every line the server's terminal prints is kept in logs/<name>.log too.",
+       CvarKind::integer, 0, kAny,
+       "0: no log (the default); 1: a new file each time it opens; 2: added to the file's end",
+       &c.con_logfile);
+  bind("con_logfile_flush", "0", cn::kServer, "How soon each line reaches the log file.",
+       CvarKind::integer, 0, kAny,
+       "0: now and then (the default); 1: at the end of each line; 2: nothing held at all",
+       &c.con_logfile_flush);
+  bind("con_logfile_name", "console", cn::kServer,
+       "The console log's name, in the logs folder of the game's folder.", CvarKind::text, -kAny,
+       kAny, "TEXT: the name, .log added (console the default)", &c.con_logfile_name);
+  bind("con_logfile_prefix", "[%Y-%m-%d %H:%M] ", cn::kServer,
+       "The text put before each line of the console log.", CvarKind::text, -kAny, kAny,
+       "TEXT: as console_prefix: <?> the syslog level, @ its letter, %H:%M and the rest the "
+       "local time ([%Y-%m-%d %H:%M] the default); \"\": none",
+       &c.con_logfile_prefix);
+  bind("fs_autoexec", "1", cn::kServer,
+       "Whether switching the mods runs the server's configs again from the new folders.",
+       CvarKind::boolean, 0, 1,
+       "0: only the folders change; 1: every layer's server.cfg read again (the default)",
+       &c.fs_autoexec);
+  bind("com_fatal_error", "0", cn::kServer,
+       "Whether an error the game could recover from ends the server instead.", CvarKind::boolean,
+       0, 1,
+       "0: the players are dropped and the server waits for the next map (the default); 1: the "
+       "server ends with a failure, for whatever supervises it to start it again",
+       &c.fatal_errors);
+  bind("net_log", "0", cn::kServer,
+       "Whether every packet the server sends and takes in is written to logs/<name>.log.",
+       CvarKind::integer, 0, kAny,
+       "0: no log (the default); 1: a new file each time it opens; 2: added to the file's end",
+       &c.net_log);
+  bind("net_log_flush", "0", cn::kServer, "How soon each packet reaches the packet log.",
+       CvarKind::integer, 0, kAny,
+       "0: now and then (the default); 1: at the end of each packet; 2: nothing held at all",
+       &c.net_log_flush);
+  bind("net_log_name", "network", cn::kServer,
+       "The packet log's name, in the logs folder of the game's folder.", CvarKind::text, -kAny,
+       kAny, "TEXT: the name, .log added (network the default)", &c.net_log_name);
   bind("sv_maxspectators", spectators, latched_info,
        "How many spectator slots the server has beside the players'.", CvarKind::integer, 0,
        static_cast<double>(kMaxClients),
@@ -386,6 +519,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
                    "there is no such setting. Fix its row in the game's ServerGame::names.\n",
                    n.name, n.setting);
   }
+  add_game_metas(cvars, c, game);
 }
 
 VoteSettings vote_settings(const ServerConfig& c) {
@@ -601,6 +735,14 @@ gn::Status server_public_status(const Server& s) {
   if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
   if (s.features) features_server_info(*s.features, st);
   return st;
+}
+
+bool server_map_loaded(const Server& s, std::string& seen) {
+  if (!s.state) return false;
+  std::string map = server_public_status(s).map;
+  if (map.empty() || map == seen) return false;
+  seen = std::move(map);
+  return true;
 }
 
 uint64_t server_digest(const Server& s) { return s.state && s.game ? s.game->hash(s.state) : 0; }

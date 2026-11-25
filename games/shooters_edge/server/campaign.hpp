@@ -1,4 +1,4 @@
-// THE CAMPAIGN HOST: a single-player program (the classic game's own, or a campaign mod) played
+// THE CAMPAIGN HOST: a single-player program (Quake's own, or a campaign mod) played
 // as a chain of maps, the players' state carried from map to map (porting/shooters-edge/
 // campaign.md is the specification; docs/shooters-edge.md § Profiles says where it sits).
 //
@@ -58,6 +58,10 @@ struct CampaignOptions {
   bool registered = false;            // the content is the full game (the packs carry gfx/pop.lmp)
   std::vector<std::string> settings;  // console lines run before the first map (skill 2, coop 1)
   EpisodeOrder episodes;  // the episodes in order (campaign_episodes.hpp); empty: none kept
+  // Every brush model's bounds a unit wider on each side, as a pack's program sizes its movers by
+  // (a door's travel, a plat's drop, a train's place, a trigger's reach). The window sets it for
+  // a game's own content; the fixture campaigns keep the bounds as built.
+  bool wide_models = false;
 };
 
 // A player the campaign carries across maps (slot k is entity k + 1).

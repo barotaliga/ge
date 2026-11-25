@@ -203,8 +203,8 @@ void draw_live_map(LiveMap& lm, const client::DemoState& s, const LiveView& v,
 // The map's rectangle in `area` (the plate fitted, centred), px.
 ge::ui::Rect live_map_rect(const Plate& p, ge::ui::Rect area);
 
-// The palette of the game `s` was recorded in (the sequel's, from its pictures, for its formats;
-// else the classic game's), viewing `store` or a pack; empty when the files hold none.
+// The palette of the game `s` was recorded in (Quake II's, from its pictures, for its formats;
+// else Quake's), viewing `store` or a pack; empty when the files hold none.
 std::span<const uint8_t> recording_palette(const client::SearchPath& files,
                                            const client::DemoState& s, std::vector<uint8_t>& store);
 

@@ -1,4 +1,4 @@
-// LAB `se-demo-eyes`: DOES A PLAYED DEMO BOB, ROLL AND KICK AS THE FIRST GAME'S VIEW DOES? A
+// LAB `se-demo-eyes`: DOES A PLAYED DEMO BOB, ROLL AND KICK AS QUAKE'S VIEW DOES? A
 // recording keeps the player's place and look, never the view he saw, so the window rebuilds the
 // classic view on the recorded eye (client/demo_eyes.hpp over engine/camera's
 // `classic_first_person`, the camera cvars at the classic defaults). The demo is played the
@@ -290,7 +290,7 @@ const gl::LabSpec kSpec{
     "the classic first-person view rebuilt on a played demo's and a joined server's eye "
     "(client/demo_eyes.hpp over engine/camera classic_first_person)",
     "camera",
-    "Does a played demo bob, roll and kick as the first game's view does, and by how much does "
+    "Does a played demo bob, roll and kick as Quake's view does, and by how much does "
     "it differ from the eye as recorded?",
     {
         {"file", "", "a demo's path; empty: a run written in code"},

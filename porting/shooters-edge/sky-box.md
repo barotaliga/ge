@@ -1,7 +1,7 @@
 # A map's own sky box (M18i12)
 
 From a clean-room reader (the `clean-room` skill) over two community clients of the first game
-and two of the sequel, 2026-11-12. Each fact is marked **read** (the source states it),
+and two of Quake II, 2026-11-12. Each fact is marked **read** (the source states it),
 **derived** (worked out from what the source does) or **open**. Nothing was measured.
 
 Coordinates here are the map's: x forward at yaw 0, y left, z up. The engine's axes are x, z, y
@@ -49,7 +49,7 @@ No picture is mirrored: in every row, right = look × top, the viewer's true rig
 the eye, so it is at infinity (it turns with the view, never moves with the eye). No cloud layer
 and no rotation over a loaded box. Fog, when on, tints it by a share (`skyfog`).
 
-## The sequel
+## Quake II
 
 - The worldspawn key `sky` (default `unit1_`, the underscore part of the name), `skyrotate` in
   degrees a second about `skyaxis` (default 0 0 0), the box turned by the right-hand rule (read).
@@ -65,6 +65,6 @@ and no rotation over a loaded box. Fog, when on, tints it by a share (`skyfog`).
 `plugins/brush/app/sky_box.hpp` (the orientation table in engine axes, the atlas),
 `plugins/brush/app/bsp.wgsl`'s `sky_box_at` (the box on the sky faces, at infinity) and
 `games/shooters_edge/client/files.hpp`'s `sky_box_files` (the paths and formats). The console override
-is `r_skyname` (the map's own when empty). The sequel's box is the one its server sends (the world's
+is `r_skyname` (the map's own when empty). Quake II's box is the one its server sends (the world's
 `sky`, else `unit1_`), drawn in the classic look (the modern draws ours, as on every map), and turned by `skyrotate` about `skyaxis` on
-the level's clock (`sky_box_turn`; facts in `sequel-light.md`). Not yet: `loadsky`, fog's tint.
+the level's clock (`sky_box_turn`; facts in `q2-light.md`). Not yet: `loadsky`, fog's tint.

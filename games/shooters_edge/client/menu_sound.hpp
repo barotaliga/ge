@@ -17,7 +17,7 @@
 //
 // ge:summary The main menu's clicks: move, enter, change and back from the game's recordings
 // ge:keywords menu-sound menu-cue menu1 menu2 menu3 click navigate enter back close main-menu
-// ge:keywords menu-sounds local-sound centred
+// ge:keywords menu-sounds local-sound centred play playvol stopsound
 // ge:skill audio ui shooter
 // ge:test tests/shooters_edge_menu_sound_test.cpp
 #pragma once
@@ -30,6 +30,7 @@
 
 #include "audio/pcm.hpp"
 #include "audio/synth.hpp"
+#include "console/console.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "ui/menu.hpp"
@@ -54,6 +55,10 @@ class MenuSounds {
   // time. False when it did not play (none, or the packs lack it).
   bool play(ge::ui::MenuCue cue, const GameAdapter& game, const SearchPath& files,
             float volume = 1);
+  // A recording by its name in the game's sound folder (`misc/menu1.wav`), read once and kept;
+  // `cut` stops the last one this cut, as a click does. False when the packs lack it.
+  bool play_named(std::string_view name, const GameAdapter& game, const SearchPath& files,
+                  float volume = 1, bool cut = false);
   // Another game folder opened: the recordings read again on the next click.
   void forget();
   // Whether the synth still reads one of its recordings.
@@ -71,5 +76,19 @@ class MenuSounds {
   std::vector<std::unique_ptr<ge::audio::Pcm>> retired_;  // let go, maybe still sounding
   MenuSoundStats stats_;
 };
+
+// The console's local sounds: `play <sound> [...]` and `playvol <sound> <volume> [...]` (`.wav`
+// added to a name without an extension; "Couldn't load sound/<name>" for one the packs lack) heard
+// through `sounds`, and `stopsound`, every sampled sound on `synth` stopped but the music's bus.
+void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds,
+                              const GameAdapter& game, const SearchPath& files,
+                              ge::audio::Synth& synth, int music_bus);
+
+// The sound device said at start (its driver, or none), and the sound system's own words:
+// `soundinfo` (the device's driver, the rate and the sounds playing on `synth`, or "Sound system
+// not started." with no device: `driver` null) and `snd_restart` (typed, it says why no restart is
+// needed: sound settings apply as they change).
+void add_sound_status_commands(ge::console::Console& con, const char* driver,
+                               const ge::audio::Synth& synth);
 
 }  // namespace shooters_edge::client

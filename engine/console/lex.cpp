@@ -141,14 +141,82 @@ std::string expand(std::string_view s,
   return out;
 }
 
+std::string fit_width(std::string_view s, int width, char align) {
+  const auto hex = [](char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+  };
+  // Each letter's place and the room it takes: a code or brace none.
+  std::string out;
+  int letters = 0;
+  for (size_t i = 0; i < s.size(); ++i) {
+    if (s[i] == '&' && i + 4 < s.size() && s[i + 1] == 'c' && hex(s[i + 2]) && hex(s[i + 3]) &&
+        hex(s[i + 4])) {
+      out.append(s.substr(i, 5));
+      i += 4;
+      continue;
+    }
+    if (s[i] == '&' && i + 1 < s.size() && s[i + 1] == 'r') {
+      out.append("&r");
+      ++i;
+      continue;
+    }
+    if (s[i] == '{' || s[i] == '}') {
+      out += s[i];
+      continue;
+    }
+    if (letters == width) continue;  // cut: the codes after still kept
+    out += s[i];
+    ++letters;
+  }
+  const int pad = width - letters;
+  if (pad <= 0) return out;
+  const int before = align == 'r' ? pad : align == 'c' ? pad / 2 : 0;
+  return std::string(static_cast<size_t>(before), ' ') + out +
+         std::string(static_cast<size_t>(pad - before), ' ');
+}
+
 std::string substitute_args(std::string_view body, const std::vector<std::string>& args) {
+  // Arguments `from`..`to` (inclusive, held to those given) joined by single blanks.
+  const auto joined = [&args](size_t from, size_t to) {
+    std::string s;
+    for (size_t k = from; k <= to && k < args.size(); ++k) {
+      if (k > from) s += ' ';
+      s += args[k];
+    }
+    return s;
+  };
+  const auto digits = [&body](size_t& i, size_t& n) {
+    const size_t from = i;
+    n = 0;
+    while (i < body.size() && body[i] >= '0' && body[i] <= '9' && i - from < 3)
+      n = n * 10 + static_cast<size_t>(body[i++] - '0');
+    return i > from;
+  };
+  // A body with a `%` in it takes `%0`..`%9` too, and `%%` is a `%` (an old config's form).
+  const bool percents = body.find('%') != std::string_view::npos;
   std::string out;
   out.reserve(body.size());
   for (size_t i = 0; i < body.size(); ++i) {
+    if (percents && body[i] == '%' && i + 1 < body.size()) {
+      const char n = body[i + 1];
+      if (n >= '0' && n <= '9') {
+        out += n == '0' ? joined(1, args.size())
+                        : (static_cast<size_t>(n - '0') < args.size()
+                               ? args[static_cast<size_t>(n - '0')]
+                               : std::string());
+        ++i;
+        continue;
+      }
+      if (n == '%') {
+        out += '%';
+        ++i;
+        continue;
+      }
+    }
     if (body[i] == '$' && i + 1 < body.size()) {
       const char n = body[i + 1];
-      if (n >= '1' && n <= '9') {
-        const size_t k = static_cast<size_t>(n - '0');
+      if (n >= '0' && n <= '9') {
+        const auto k = static_cast<size_t>(n - '0');
         if (k < args.size()) out += args[k];
         ++i;
         continue;
@@ -160,6 +228,23 @@ std::string substitute_args(std::string_view body, const std::vector<std::string
         }
         ++i;
         continue;
+      }
+      if (n == '@') {
+        out += joined(1, args.size());
+        ++i;
+        continue;
+      }
+      if (n == '{') {  // `${N-M}` and `${N-}`: a run of the arguments
+        size_t at = i + 2, from = 0, to = 0;
+        if (digits(at, from) && at < body.size() && body[at] == '-') {
+          ++at;
+          const bool upper = digits(at, to);
+          if (at < body.size() && body[at] == '}') {
+            out += joined(from, upper ? to : args.size());
+            i = at;
+            continue;
+          }
+        }
       }
       if (n == '$') {  // kept for expansion at run time
         out += "$$";

@@ -37,6 +37,7 @@
 #include "brush/write.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
+#include "console/lex.hpp"
 #include "console/view.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
@@ -44,6 +45,8 @@
 #include "lab/labs/liquid_scene.hpp"
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
+#include "server/server.hpp"
+#include "server/sheet.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
@@ -54,9 +57,11 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/game_start.hpp"
+#include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -65,6 +70,8 @@
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/plate_letters.hpp"
+#include "shooters_edge/menu/server_page.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
@@ -125,8 +132,8 @@ void run(gl::Lab& lab) {
   const bool real = !basedir.empty();
   std::string error;
   cl::SearchPath files;
-  const ge::classicenhance::Profile* content = &ge::classicenhance::classic_profile();
-  std::string install;
+  const ge::classicenhance::Profile* content = &ge::classicenhance::q1_profile();
+  std::string install, game;
   if (!real) {
     std::vector<uint8_t> pak;
     if (!fixture_pack(pak, error) || !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
@@ -135,15 +142,16 @@ void run(gl::Lab& lab) {
     }
   } else {
     content = cl::install_of(basedir, &install, &error);
-    if (content == nullptr ||
-        !cl::open_game_dir(install, cl::game_of(install, *content), files, error, *content)) {
+    if (content != nullptr)
+      game = lab.arg("game").empty() ? cl::game_of(install, *content) : lab.arg("game");
+    if (content == nullptr || !cl::open_game_dir(install, game, files, error, *content)) {
       lab.fail(error, "Pass --basedir=<the folder your game is installed in>. Skill: shooter.");
       return;
     }
   }
   const shooters_edge::profiles::GameProfile* row = shooters_edge::profiles::find_game(content->id);
   const cl::GameAdapter& adapter =
-      cl::adapter_of(row != nullptr ? *row : shooters_edge::profiles::classic_game());
+      cl::adapter_of(row != nullptr ? *row : shooters_edge::profiles::q1_game());
   const gl::Det det = real ? gl::Det::measured : gl::Det::deterministic;
 
   // The window's menu and console, in the game's pictures.
@@ -154,9 +162,15 @@ void run(gl::Lab& lab) {
   ge::console::ConsoleView con_view(con);
   con.set_sink(
       [&con_view](std::string_view line) { con_view.add(ge::console::LineKind::output, line); });
+  cl::RemixSettings remix_rows;  // OPTIONS > CLASSIC REMIX's rows, live on their cr_ settings
+  cl::bind_remix(con.cvars(), &remix_rows);
   sm::GameMenu menu;
   menu.add_cvars(con);
-  cl::ClassicPictures pics = cl::load_classic_pictures(files, false, {}, &adapter);
+  // `--pictures=<cache>`: the pictures enhanced from that classic-enhance cache (ce_pictures 1),
+  // the console's letters among them.
+  const std::string pictures_cache = lab.arg("pictures");
+  cl::ClassicPictures pics =
+      cl::load_classic_pictures(files, !pictures_cache.empty(), pictures_cache, &adapter);
   menu.set_art(std::move(pics.menu));
   se::HudArt hud_art = std::move(pics.hud);
   hud_art.finish();
@@ -169,21 +183,41 @@ void run(gl::Lab& lab) {
   lab.metric("classic-menu", menu.classic() ? 1 : 0, "bool", det);
   lab.metric("classic-console", con_look.on() ? 1 : 0, "bool", det);
   lab.metric("console-background", con_look.back != nullptr ? 1 : 0, "bool", det);
-  sm::Host host{.console = &con, .maps = {"start", "dm4"}};
+  // OPTIONS > SERVER SETTINGS: the sheet of our own QuakeWorld server, started in the lab on its
+  // test arena and read as the window reads its listen server's (ServerGame::sheet).
+  ge::server::SettingsSheet sheet;
+  {
+    ge::server::ServerConfig sc;
+    sc.hostname = "Arena Night";
+    sc.map = "arena";
+    sc.maxclients = 8;
+    sc.seed = 1;
+    ge::server::Server sv;
+    if (!ge::server::server_open(sv, shooters_edge::net::qw_game(), sc, nullptr, nullptr, error) ||
+        sv.game->sheet == nullptr) {
+      lab.fail(error, "Our QuakeWorld server did not start; read the reason above. Skill: net.");
+      return;
+    }
+    sv.game->sheet(sv.state, 0, sheet);
+    ge::server::server_close(sv);
+  }
+  lab.metric("sheet-rows", static_cast<double>(sheet.rows.size()), "count", det);
+  sm::Host host{.console = &con, .maps = {"start", "dm4"}, .sheet = &sheet};
   menu.set_game(real ? install : "/games/classic");
-  const std::string edition =
-      real ? std::string(cl::edition_words(cl::edition_of(install, *content), *content))
-           : "Shareware";
-  menu.games().set_games(
-      {{.id = std::string(content->id),
-        .install = real ? install : "/games/classic",
-        .edition = edition,
-        .playing = true},
-       {.id = content->id == ge::classicenhance::classic_profile().id ? "sequel" : "classic",
-        .install = "",
-        .edition = "",
-        .playing = false,
-        .missing = false}});
+  // The game playing, a row for each mission pack its install holds, then the other game.
+  std::vector<sm::GameRow> rows = {{.id = std::string(content->id),
+                                    .install = real ? install : "/games/classic",
+                                    .playing = true}};
+  if (real)
+    for (const ge::classicenhance::MissionPack* m : cl::packs_of(install, *content))
+      rows.push_back({.id = std::string(content->id),
+                      .install = install,
+                      .pack = std::string(m->folder),
+                      .pack_name = std::string(m->name)});
+  rows.push_back({.id = content->id == ge::classicenhance::q1_profile().id ? "q2" : "q1",
+                  .install = "/games/other",
+                  .playing = false});
+  menu.games().set_games(std::move(rows));
   // DEMOS on the install's own folder; on the fixture an empty folder of the lab's, never the
   // machine's own home (its files would move the picture from one machine to the next).
   std::string game_dir;
@@ -243,12 +277,58 @@ void run(gl::Lab& lab) {
     menu.show(host, "options");
     menu.settle();
     shot("options", "OPTIONS IN THE GAME'S OWN PICTURES",
-         "A page under the root: its title the game's own picture (the sequel's banner over the "
+         "A page under the root: its title the game's own picture (Quake II's banner over the "
          "screen's top), its rows in the game's glyph sheet.",
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    // CLASSIC REMIX: every cr_ setting on one page, the mission packs' among them.
+    menu.show(host, "remix");
+    menu.update(none, false, host, 1 / 60.0);
+    menu.settle();
+    shot("remix", "CLASSIC REMIX",
+         "OPTIONS > CLASSIC REMIX: remix on or off, the mission packs, whose items, monsters, "
+         "figures, movement, sounds, menu and letters, and the balance of a remixed map's "
+         "weapons and pickups, each a setting of the console.",
+         "every row lit (none dimmed), each value beside its words, the sliders' bars",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    // SERVER SETTINGS: the first page, a subpage of the votes, and the question a turned vote asks.
+    menu.show(host, "server");
+    menu.update(none, false, host, 1 / 60.0);
+    menu.settle();
+    shot("server", "SERVER SETTINGS",
+         "OPTIONS > SERVER SETTINGS on a server of ours: the map and the match's rules with their "
+         "values now, a rule a vote decides marked with an asterisk, the settings the player "
+         "cannot change dimmed, and a row for each page of the rest.",
+         "MAP*, the limits with their values; the pages PLAYER HELP, MOVEMENT, RULES; the legend",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    menu.show(host, "server/Player help");
+    menu.update(none, false, host, 1 / 60.0);
+    menu.settle();
+    shot("server-help", "SERVER SETTINGS: PLAYER HELP",
+         "A page of the votes: the rocket jump helpers and the aim help, each with its value now "
+         "and its asterisk.",
+         "the player aids, each starred, each with its value",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    menu.show(host, "server");
+    menu.update(none, false, host, 1 / 60.0);
+    if (menu.main().focus("fraglimit")) {
+      ge::ui::MenuInput right;
+      right.right = true;
+      menu.update(right, false, host, 1 / 60.0);
+      ge::ui::MenuInput down;
+      down.down = true;
+      menu.update(down, false, host, 1 / 60.0);
+      menu.settle();
+      lab.metric("vote-asked", menu.main().top().id == sm::kVotePage ? 1 : 0, "bool", det);
+      shot("server-vote", "CALL A VOTE?",
+           "A rule a vote decides, turned and left: the page asks before it calls the vote, the "
+           "setting's words and its value now and asked for; YES calls it, NO leaves it.",
+           "CALL A VOTE? over FRAG LIMIT's old and new values; YES focused",
+           [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    }
+    menu.hide();
     if (menu.art().plates()) {
-      // A page the sequel's pack has no banner for: its title written on one of its own.
+      // A page Quake II's pack has no banner for: its title written on one of its own.
       menu.show(host, "enhanced");
       menu.settle();
       shot("written-banner", "A TITLE WRITTEN ON A BANNER",
@@ -298,6 +378,13 @@ void run(gl::Lab& lab) {
          "game's console background sliding down with it.",
          "the background picture down to the panel's edge; the lines in the game's letters",
          [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
+    con_view.set_foot("maps/dm4.bsp", 0.4);  // a server joined: the file coming
+    shot("download", "JOINING: THE DOWNLOAD BAR IN THE GAME'S LETTERS",
+         "A server joined sends a file the install lacks: the console's foot shows it coming, its "
+         "bar drawn with the glyph sheet's own bar pieces and knob.",
+         "maps/dm4.bsp, the bar's two ends and the knob two fifths along it, then 40%",
+         [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
+    con_view.set_foot("");
     con_view.set_open(false);
     for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
     menu.show(host, "demos");
@@ -332,7 +419,7 @@ void run(gl::Lab& lab) {
     // small capital's (rows 3 and 15, green), the 20 px row (blue).
     const bool tags = menu.art().plates();
     shot("letters", "EVERY CARVED LETTER ON ITS LINES",
-         tags ? "A to Z and a to z on the sequel's tags, four classic px to a pixel: the capitals "
+         tags ? "A to Z and a to z on Quake II's tags, four classic px to a pixel: the capitals "
                 "the tags hold cut out as see-through ink, B C F H J K W X Z pieced from them, "
                 "every small letter its capital shrunk, each line on a tag of dirty metal as wide "
                 "as it; then two words, the second on the lit tag."
@@ -366,7 +453,7 @@ void run(gl::Lab& lab) {
              dl.box(b);
            };
            if (art.plates()) {
-             // The sequel's tag letters cut out as ink, each line of them on a tag of its own
+             // Quake II's tag letters cut out as ink, each line of them on a tag of its own
              // (the metal as wide as the line); then two words, the second on the lit tag.
              const auto tag = [&](std::string_view text, bool lit, float x, float y) {
                float wide = 0;
@@ -433,7 +520,17 @@ void run(gl::Lab& lab) {
 
   // The recording, played to the frame the pictures are taken on.
   cl::Timedemo bench;
-  if (!cl::timedemo_start(files, lab.arg("demo"), bench, error, adapter)) {
+  // `title`: the first recording the title plays, a mod's own quake.rc list first (the window's
+  // `menu_attract auto`, client/main.cpp).
+  std::string demo = lab.arg("demo");
+  if (demo == "title") {
+    const std::string list =
+        real ? cl::mod_startdemos(install, game, *content, adapter.game->attract)
+             : std::string(adapter.game->attract);
+    const std::vector<std::string> words = ge::console::tokenize(list);
+    demo = words.empty() ? "demo1" : words.front();
+  }
+  if (!cl::timedemo_start(files, demo, bench, error, adapter)) {
     lab.fail(error, "Name a recording the packs hold (--demo=demo1). Skill: shooter.");
     return;
   }
@@ -541,8 +638,14 @@ const gl::LabSpec kSpec{
     "SELECT GAME first?",
     {{"size", "1280,800", "the frame's width and height, px"},
      {"basedir", "", "the folder a player's game is installed in: its own pack and recording"},
-     {"demo", "demo1", "the recording played behind the menu; none: the title's dark, on the CPU"},
-     {"frame", "400", "the recording's frame the pictures are taken on"}},
+     {"game", "", "the game folder played (a mission pack's); empty: the install's own"},
+     {"demo", "title",
+      "the recording played behind the menu; title: the first the title plays (a mod's own "
+      "quake.rc list first); none: the title's dark, on the CPU"},
+     {"frame", "400", "the recording's frame the pictures are taken on"},
+     {"pictures", "",
+      "a classic-enhance cache folder: the menu's, the console's and the bar's pictures "
+      "enhanced from it (ce_pictures); empty: the pack's own"}},
     "--size=640,400 --frame=120",
     run,
 };

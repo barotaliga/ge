@@ -17,16 +17,22 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 | Classic enhance | `plugins/classicenhance/sound.hpp` | The pack's sounds denoised, at 48 kHz, the top band rebuilt (`ce_sounds`) |
 | Shell | `games/shooters_edge/sound/ambience.hpp` | Ambience by leaf: water and sky levels off the map |
 | Shell | `games/shooters_edge/client/listen_sound.hpp`, `demo_sound.hpp`, `demo_heard.hpp`, `menu_sound.hpp`, `own_sounds.hpp` | The window's own game heard, a recording's sounds, the menu's clicks from the game's recordings, the game's own WAVs under the classic names |
-| Shell | `games/shooters_edge/net/classic_talk.hpp`, `client/voice_out.hpp`, `client/demo_voice.hpp` | Who hears a chat line or a voice on our server (all, team, near by earshot and walls, a slot), the voice message, voices in recordings |
+| Shell | `games/shooters_edge/net/qw_talk.hpp`, `client/voice_out.hpp`, `client/demo_voice.hpp` | Who hears a chat line or a voice on our server (all, team, near by earshot and walls, a slot), the voice message, voices in recordings |
 | Shell | `games/shooters_edge/profiles/remix_sounds.hpp` | Remix's sound pairs by role |
+| Classic | `plugins/classic/q2_footsteps.hpp` | Footsteps by surface: a texture's `.mat` material, its step set, the surface under the stepper, never the same step twice running |
+| Classic | `plugins/classic/q2_loop_merge.hpp` | Copies of one looped sound merged into one voice, each ear held to full: Quake II's entity loops (`al_merge_looping`), Quake's level loops (always) |
+| Shell | `games/shooters_edge/client/room_ear.hpp` (`s_mixahead`) | How far ahead the device mixes, one setting for every classic game (Quake's spelling `_snd_mixahead`) |
+| Classic | `plugins/classic/content/soundtrack.hpp` (`music_file`) | A track by its file's name under `music/` (`ogg play <name>`, a server's music by text) |
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Files | WAV under `sound/` | WAV under `sound/`; player sounds by figure | WAV and other formats | sound lumps in the archive (a new reader) |
 | Ambience | by the map's leaves | by the map's entities' loop sounds | entity loops | sector sounds |
-| Footsteps | none (remix carries the sequel's) | its own | its own | none |
+| Footsteps | none (remix carries Quake II's) | its own, by the surface's `.mat` material (`cl_footsteps`) | its own | none |
+| Looped sounds of one kind | the level's loops of one file merged into one, always | entity loops merged into one (`al_merge_looping`) | merged | none |
+| The music switched off | stops (`cd off`) | pauses where it is (`ogg_enable`, the console's `off_pauses`) | | |
 | Voice on our server | `*ge_ext` voice bit, `sv_voip` off by default | the same route, its own message id | the same route | the same route |
 
 ## Adding a game
@@ -34,8 +40,8 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 1. `open_sound` in the adapter; every sound by the game's own names. Loops: a file looped whole
    needs `Loop::whole` (`Loop::file` loops only with a cue point).
 2. Its ambience and entity loop sounds through the shared beds.
-3. Its voice and chat on our server through `classic_talk.hpp`'s route: the game supplies only its
-   protocol ids and what a TEAM is (the first game's `team` user info key; the sequel's skin or
+3. Its voice and chat on our server through `qw_talk.hpp`'s route: the game supplies only its
+   protocol ids and what a TEAM is (Quake's `team` user info key; Quake II's skin or
    model by its deathmatch flags). The voice server setting is off by default where the game never
    had voice.
 4. Classic enhance's sound stage on its packs, counted against them.
@@ -45,16 +51,19 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Voice chat and `say_near` by earshot and walls | ours, offered to both games | `engine/net/voice.hpp`, `classic_talk.hpp` |
-| Entity loop sounds | the sequel | the shared beds |
+| Voice chat and `say_near` by earshot and walls | ours, offered to both games | `engine/net/voice.hpp`, `qw_talk.hpp` |
+| Entity loop sounds | Quake II | the shared beds |
 | The soundtrack kept as FLAC, played with no disc | ours | `engine/audio/music.hpp` |
 | Sounds denoised and band-extended | ours | `ce_sounds` |
+| A material's own footsteps, the music by name | Quake II | `plugins/classic`, `engine/audio/music_console.hpp` |
+| The OpenAL path's extras on the one mixer: device choice, two ears, merged loops | Quake II | `engine/platform`, `engine/audio`, `plugins/classic` |
 
 | Drawback left behind | How |
 | --- | --- |
 | A disc in the drive for music | ripped once to `data/<id>/music/` |
 | Every room sounding the same | room acoustics (`ce_acoustics`) |
 | Telephone-band 11 kHz recordings | the rebuilt top band, by choice |
+| Two sound back-ends (software and OpenAL), a restart to switch | one mixer that does what both do; `s_enable` 2 is 1 |
 
 ## Gaps
 

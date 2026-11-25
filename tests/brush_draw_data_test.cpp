@@ -18,6 +18,7 @@
 
 #include "brush/app/draw_data.hpp"
 #include "brush/pictures.hpp"
+#include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 
@@ -323,6 +324,65 @@ TEST(a_38_maps_windows_are_drawn_see_through_and_unlit) {
     if (v.kind == ba::kGlassThin) CHECK(v.lm[0] < 0 && v.lm[1] < 0);
 }
 
+TEST(a_38_map_s_lamps_glow_in_their_bright_texels_and_a_flowing_face_slides) {
+  // The hall's ceiling a lamp, the side room's floor flowing; every texture 16 x 16, its left half
+  // bright and its right half dim.
+  ge::brush::Fixture f = ge::brush::sample_fixture();
+  f.rooms[0].ceiling = "lamp1";
+  f.rooms[2].floor = "flow1";
+  std::vector<uint8_t> map;
+  std::string error;
+  CHECK_MSG(ge::brush::write_bsp(f, ge::brush::Family::v38, &map, &error), error);
+  ge::brush::Map read;
+  CHECK_MSG(ge::brush::read_bsp(map, &read, &error), error);
+  std::vector<uint8_t> half(size_t{16} * 16);
+  for (size_t i = 0; i < half.size(); ++i) half[i] = i % 16 < 8 ? 250 : 60;
+  std::vector<ge::brush::MapPicture> pics(read.textures.size());
+  for (size_t i = 0; i < pics.size(); ++i) {
+    pics[i].name = read.textures[i].name;
+    pics[i].width = pics[i].height = 16;
+    for (const uint8_t*& l : pics[i].level) l = half.data();
+  }
+  ba::Pack pack;
+  pack.bytes = map;
+  pack.files.push_back({"maps/lamps.bsp", 0, uint32_t(map.size())});
+  // The atlas's alpha at texel (x, y) of the first face of the texture named `name`, and whether
+  // that texture's faces flow.
+  struct Seen {
+    int bright = -1, dim = -1;
+    bool flows = false;
+  };
+  const auto look = [&](const ba::Scene& s, const std::string& name) {
+    Seen out;
+    for (size_t si = 0; si < s.map.surfaces.size(); ++si) {
+      const auto [first, count] = s.face_runs[si];
+      if (count < 3 || s.map.textures[s.map.surfaces[si].texture].name != name) continue;
+      const ba::DrawVertex& v = s.vertices[s.indices[first]];
+      const size_t row = size_t(v.rect[1] + 4) * s.textures.width;
+      out.bright = s.textures.levels[0][(row + size_t(v.rect[0]) + 2) * 4 + 3];
+      out.dim = s.textures.levels[0][(row + size_t(v.rect[0]) + 12) * 4 + 3];
+      out.flows = (v.anim & ba::kAnimFlowing) != 0;
+      break;
+    }
+    return out;
+  };
+  ba::TextureSource source;
+  source.pictures = &pics;
+  ba::Scene plain, lit;
+  CHECK_MSG(ba::load_scene(pack, "maps/lamps.bsp", grey_palette(), &plain, &error, source), error);
+  source.lamps = true;
+  CHECK_MSG(ba::load_scene(pack, "maps/lamps.bsp", grey_palette(), &lit, &error, source), error);
+  // Asked for, the lamp's bright half glows and its dim half does not; never a wall's.
+  const Seen lamp = look(lit, "fixture/lamp1"), wall = look(lit, "fixture/metal");
+  CHECK(lamp.bright == 255 && lamp.dim == 0);
+  CHECK(wall.bright == 0 && wall.dim == 0);
+  // Not asked for: no texel of a 38 map glows.
+  CHECK(look(plain, "fixture/lamp1").bright == 0);
+  // The flowing texture's faces carry the bit; no other's.
+  CHECK(look(plain, "fixture/flow1").flows);
+  CHECK(!lamp.flows && !wall.flows);
+}
+
 TEST(a_glided_light_style_meets_each_letter_and_eases_between) {
   // "az": a at 0, z at 0.1 s; half way the glide is half way, the stepped style still at a.
   CHECK(ba::style_level_glided("az", 0.0) == ba::style_level("az", 0.0));
@@ -333,4 +393,14 @@ TEST(a_glided_light_style_meets_each_letter_and_eases_between) {
   CHECK(ba::style_level("az", 0.05) == 0.0);
   CHECK(ba::style_level_glided("", 3.7) == 1.0);
   CHECK(ba::style_level_glided("m", 3.7) == 1.0);
+}
+
+TEST(a_lerped_light_style_moves_in_a_straight_line_between_letters) {
+  // "az": a quarter of the way from a to z a quarter of the tenth in, where the glide's ease is
+  // still under it; each letter met on its tenth.
+  const double z = ba::style_level("az", 0.1);
+  CHECK(std::fabs(ba::style_level_lerped("az", 0.025) - 0.25 * z) < 1e-9);
+  CHECK(ba::style_level_glided("az", 0.025) < ba::style_level_lerped("az", 0.025));
+  CHECK(std::fabs(ba::style_level_lerped("az", 0.1) - z) < 1e-9);
+  CHECK(ba::style_level_lerped("", 1.3) == 1.0);
 }

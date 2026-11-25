@@ -68,11 +68,21 @@ struct VertexOut {
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> VertexOut {
   let d = draws[k];
   let m = models[d.info.z];
-  let idx = indices[m.at.z + vid];
+  // A mirrored gun (lens.x below 0) takes each triangle's corners the other way round, so the
+  // faces the flip turned keep their front for the culling.
+  let corner = vid % 3u;
+  let turned = select(vid, vid - corner + (3u - corner) % 3u, d.lens.x < 0.0);
+  let idx = indices[m.at.z + turned];
   let va = 2u * (m.at.x + d.info.x * m.at.y + idx);
   let vb = 2u * (m.at.x + d.info.y * m.at.y + idx);
-  let pos = mix(vertices[va].xyz, vertices[vb].xyz, d.mix.x);
-  let nb = mix(vertices[va + 1u].xyz, vertices[vb + 1u].xyz, d.mix.x);
+  // A vertex of the model's own flash (flag 1) behind the eye in one frame and in front in the
+  // other is frame b's, never slid out of the gun (viewmodel/held.hpp's pose_frames, the CPU's same
+  // rule); between two frames that both show it, it blends with the barrel.
+  let tri = flags[m.more.x + vid / 3u];
+  let crosses = (vertices[va].z < 0.0) != (vertices[vb].z < 0.0);
+  let share = select(d.mix.x, 1.0, (tri & 1u) != 0u && crosses && d.mix.x > 0.0);
+  let pos = mix(vertices[va].xyz, vertices[vb].xyz, share);
+  let nb = mix(vertices[va + 1u].xyz, vertices[vb + 1u].xyz, share);
   var out: VertexOut;
   out.view = place(d.now, pos, 1.0);
   out.last_view = place(d.last, pos, 1.0);
@@ -89,7 +99,6 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   out.position = vec4f(p.xy * d.lens.xy + (jitter + lift) * p.z, d.lens.z, p.z);
   // The model's own flash (flag 1) and the hands holding it (flag 2), each clipped away when the
   // draw hides it (info.w 2 and 4).
-  let tri = flags[m.more.x + vid / 3u];
   if (((d.info.w >> 1u) & tri) != 0u) {
     out.position = vec4f(0.0, 0.0, -1.0, 1.0);
   }
@@ -172,14 +181,16 @@ fn held_colour(in: VertexOut) -> vec3f {
   let d = draws[in.draw];
   let m = models[d.info.z];
   var base = in.attr;
+  var shine = 1.0;
   if (m.rect.z > 0u) {
     let at = fract(in.attr.xy) * vec2f(m.rect.zw);
     let t = clamp(vec2u(at), vec2u(0u), m.rect.zw - 1u);
     let c = textureLoad(atlas, vec2i(m.rect.xy + t), 0);
     base = srgb_decode(c.rgb);
-    if (c.a > 0.5) {
+    if (c.a > 0.75) {
       return base;
     }
+    shine = clamp(c.a * (255.0 / 127.0), 0.0, 1.0);  // metal shines, wood only takes the light
   }
   let n = normalize(in.normal);
   let p = in.view;
@@ -221,7 +232,7 @@ fn held_colour(in: VertexOut) -> vec3f {
     }
   }
   s.diffuse = max(s.diffuse, vec3f(d.mix.w));
-  return base * s.diffuse + s.specular;
+  return base * s.diffuse + s.specular * shine;
 }
 
 struct FragmentOut {

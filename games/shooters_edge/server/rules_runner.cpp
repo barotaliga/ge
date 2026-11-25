@@ -87,7 +87,7 @@ bool start_mods(RulesCommon& s, const RunnerCalls& calls, std::string& error) {
   }
   if (!calls.program_seam) {
     error = std::string("This map's rules (") + calls.form +
-            ") can't run C++ mods yet. Take the mod out of sv_mod, or play it on a classic map.";
+            ") can't run C++ mods yet. Take the mod out of sv_mod, or play it on a Quake map.";
     return false;
   }
   for (size_t k = 0; k < m.tables.size(); k++) {
@@ -155,6 +155,19 @@ bool carry_server_state(const RulesCommon& from, const char* from_form, RulesCom
     set_info_value(to.serverinfo, k, v, old);
   }
   return true;
+}
+
+void RulesCommon::take_turns() {
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    sh::Edict& ed = sv.edicts[static_cast<size_t>(i) + 1];
+    const bool living = clients[i].active && ed.health > 0;
+    if (clients[i].active && ed.fixangle) {
+      ed.v_angle = ed.angles;
+      ed.fixangle = false;
+      turns[i] = {true, alive[i] && living, ed.angles};
+    }
+    alive[i] = living;
+  }
 }
 
 }  // namespace shooters_edge::server

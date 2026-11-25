@@ -1,0 +1,135 @@
+// A bot's route on the live map (route.hpp).
+//
+// ge:summary The route picture: the plate copied, the track, kills, secrets and exits painted
+// ge:keywords draw_route route track kills secrets exits plate rocket-jump blast-jump
+// ge:skill map-design bots labs
+// ge:test tests/shooters_edge_live_map_test.cpp
+#include "shooters_edge/livemap/route.hpp"
+
+#include <cmath>
+#include <cstdint>
+
+#include "core/libm/libm.hpp"
+
+namespace shooters_edge::livemap {
+
+namespace {
+
+struct Rgb {
+  uint8_t r, g, b;
+};
+
+void put(ge::ui::Image& img, int x, int y, Rgb c) {
+  if (x < 0 || y < 0 || x >= img.width || y >= img.height) return;
+  uint8_t* p =
+      &img.rgba[(static_cast<size_t>(y) * static_cast<size_t>(img.width) + static_cast<size_t>(x)) *
+                4];
+  p[0] = c.r;
+  p[1] = c.g;
+  p[2] = c.b;
+  p[3] = 255;
+}
+
+void disc(ge::ui::Image& img, float cx, float cy, float r, Rgb c) {
+  const int x0 = static_cast<int>(std::floor(cx - r)), x1 = static_cast<int>(std::ceil(cx + r));
+  const int y0 = static_cast<int>(std::floor(cy - r)), y1 = static_cast<int>(std::ceil(cy + r));
+  for (int y = y0; y <= y1; y++)
+    for (int x = x0; x <= x1; x++) {
+      const float dx = static_cast<float>(x) + 0.5f - cx, dy = static_cast<float>(y) + 0.5f - cy;
+      if (dx * dx + dy * dy <= r * r) put(img, x, y, c);
+    }
+}
+
+void line(ge::ui::Image& img, float ax, float ay, float bx, float by, float r, Rgb c) {
+  const float dx = bx - ax, dy = by - ay;
+  const int steps = 1 + static_cast<int>(std::sqrt(dx * dx + dy * dy));
+  for (int i = 0; i <= steps; i++) {
+    const float t = static_cast<float>(i) / static_cast<float>(steps);
+    disc(img, ax + dx * t, ay + dy * t, r, c);
+  }
+}
+
+// Blue at the run's start, through purple, to red at its end.
+Rgb when(float t) {
+  return {static_cast<uint8_t>(40 + 200 * t), 50, static_cast<uint8_t>(230 - 190 * t)};
+}
+
+}  // namespace
+
+ge::ui::Image draw_route(const Plate& plate, const RouteMarks& m) {
+  ge::ui::Image img = plate.image;
+  const ge::overview::Frame& fr = plate.frame;
+  const float w = std::fmax(2.f, static_cast<float>(img.width) / 500.f);  // the line's half width
+  const auto px = [&](const std::array<float, 3>& p) { return fr.px(p[0]); };
+  const auto py = [&](const std::array<float, 3>& p) { return fr.py(p[1]); };
+  const size_t n = m.track.size();
+  const auto track = [&](const std::vector<std::array<float, 3>>& tr, int bot) {
+    const size_t count = tr.size();
+    for (size_t i = 0; i + 1 < count; i++) {
+      const std::array<float, 3>& a = tr[i];
+      const std::array<float, 3>& b = tr[i + 1];
+      const float dx = b[0] - a[0], dy = b[1] - a[1];
+      if (dx * dx + dy * dy > kRouteJump * kRouteJump) continue;
+      const std::array<uint8_t, 3>& pc =
+          kPartyColours[static_cast<size_t>(bot) % kPartyColours.size()];
+      const Rgb c =
+          bot < 0 ? when(static_cast<float>(i) / static_cast<float>(count > 1 ? count - 1 : 1))
+                  : Rgb{pc[0], pc[1], pc[2]};
+      line(img, px(a), py(a), px(b), py(b), bot < 0 ? w : w * 0.8f, c);
+    }
+  };
+  track(m.track, m.party.empty() ? -1 : 0);
+  for (size_t k = 0; k < m.party.size(); k++) track(m.party[k], static_cast<int>(k) + 1);
+  for (const std::array<float, 3>& e : m.exits) {
+    const int rings = static_cast<int>(1.5f * w / 0.5f);
+    for (int ri = 0; ri <= rings; ri++) {
+      const float r = 4 * w + 0.5f * static_cast<float>(ri);
+      for (int k = 0; k < 96; k++) {
+        const double a = k * (6.283185307179586 / 96);
+        put(img, static_cast<int>(px(e) + r * static_cast<float>(ge::core::libm::cos(a))),
+            static_cast<int>(py(e) + r * static_cast<float>(ge::core::libm::sin(a))),
+            {255, 190, 30});
+      }
+    }
+  }
+  for (const std::array<float, 3>& k : m.kills) {
+    const float x = px(k), y = py(k), s = 2.5f * w;
+    line(img, x - s, y - s, x + s, y + s, w * 0.6f, {20, 20, 20});
+    line(img, x - s, y + s, x + s, y - s, w * 0.6f, {20, 20, 20});
+  }
+  for (const std::array<float, 3>& k : m.secrets) {
+    const float x = px(k), y = py(k), s = 4 * w;
+    const int rows = static_cast<int>(2 * s / 0.5f);
+    for (int di = 0; di <= rows; di++) {
+      const float d = -s + 0.5f * static_cast<float>(di);
+      const float half = s - std::fabs(d);
+      line(img, x - half, y + d, x + half, y + d, 0.6f, {255, 215, 0});
+    }
+  }
+  // Blast jumps over the track: the flight orange, the take-off a dark-ringed orange disc, the
+  // landing a dark-ringed white one; a combo (a grenade and a rocket together) violet.
+  for (size_t b = 0; b < m.blasts.size(); b++) {
+    const std::vector<std::array<float, 3>>& arc = m.blasts[b];
+    if (arc.size() < 2) continue;
+    const bool combo = b < m.combos.size() && m.combos[b];
+    const Rgb hue = combo ? Rgb{190, 70, 255} : Rgb{255, 120, 0};
+    for (size_t i = 0; i + 1 < arc.size(); i++)
+      line(img, px(arc[i]), py(arc[i]), px(arc[i + 1]), py(arc[i + 1]), w * 0.9f, hue);
+    disc(img, px(arc.front()), py(arc.front()), 3.2f * w, {20, 20, 20});
+    disc(img, px(arc.front()), py(arc.front()), 2.4f * w, hue);
+    disc(img, px(arc.back()), py(arc.back()), 2.4f * w, {20, 20, 20});
+    disc(img, px(arc.back()), py(arc.back()), 1.6f * w, {255, 255, 255});
+  }
+  if (n > 0) {
+    const float x = px(m.track[0]), y = py(m.track[0]), s = 3.5f * w;
+    const int rows = static_cast<int>(2 * s);
+    for (int yi = 0; yi <= rows; yi++) {
+      const float yy = y - s + static_cast<float>(yi);
+      line(img, x - s, yy, x + s, yy, 0.6f, {40, 50, 230});
+    }
+  }
+  img.revision++;
+  return img;
+}
+
+}  // namespace shooters_edge::livemap

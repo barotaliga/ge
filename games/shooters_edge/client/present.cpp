@@ -7,6 +7,7 @@
 #include "shooters_edge/client/present.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "core/math.hpp"
 
@@ -19,6 +20,7 @@ namespace shooters_edge::client {
 
 namespace {
 constexpr double kDeg = 3.14159265358979323846 / 180;
+constexpr double kTau = 2 * 3.14159265358979323846;
 }  // namespace
 
 void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) {
@@ -34,13 +36,77 @@ void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) 
   d.idlescale = 0;
   d.landdip = 0;
   ge::camera::add_camera_cvars(c, out, d);
+  c.bind({.name = "v_viewheight",
+          .fallback = "0",
+          .flags = ge::console::kArchive,
+          .help = "Raises or lowers your eye by a few units; any value but 0 also stops the bob.",
+          .min = -7,
+          .max = 4,
+          .values = "0: the game's own eye and bob (the default); -7..4: units up or down"},
+         &out.viewlift);
+  const ge::console::CvarLayer quake(c, "classic");
+  // The idle sway's shape (both Quakes): v_idlescale times the level, in degrees, at the cycle's
+  // rate in radians a second; the intermission sways by it at a scale of 1. Not archived.
+  struct Axis {
+    const char* cycle;
+    const char* level;
+    const char* cycle_fallback;
+    const char* level_fallback;
+    const char* what;
+  };
+  static constexpr Axis kAxes[3] = {
+      {"v_ipitch_cycle", "v_ipitch_level", "1", "0.3", "pitch"},
+      {"v_iyaw_cycle", "v_iyaw_level", "2", "0.3", "yaw"},
+      {"v_iroll_cycle", "v_iroll_level", "0.5", "0.1", "roll"},
+  };
+  for (int k = 0; k < 3; k++) {
+    const Axis& a = kAxes[k];
+    c.bind({.name = a.cycle,
+            .fallback = a.cycle_fallback,
+            .help = std::string("How fast the idle sway turns the view's ") + a.what +
+                    ", in radians a second.",
+            .min = 0,
+            .max = 100,
+            .values = "0: that way still; 0..100: that many radians a second"},
+           &out.idle_cycle[k]);
+    c.bind({.name = a.level,
+            .fallback = a.level_fallback,
+            .help = std::string("How far the idle sway turns the view's ") + a.what +
+                    ", in degrees at a v_idlescale of 1.",
+            .min = 0,
+            .max = 30,
+            .values = "0: that way still; 0..30: that many degrees"},
+           &out.idle_level[k]);
+  }
+  c.bind({.name = "cl_bobhead",
+          .fallback = "0",
+          .flags = ge::console::kArchive,
+          .help = "Whether your head carries the weapon's bob as well as its own.",
+          .kind = ge::console::CvarKind::boolean},
+         &out.bobhead);
 }
 
 void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
   static const ge::camera::FirstPersonRow kClassic =
       ge::camera::classic_first_person(ge::brush::kUnitM);
   ge::camera::apply_first_person_cvars(c, kClassic, v.row);
+  // The sway's shape: the map's pitch and yaw turn the other way from the rig's.
+  for (int k = 0; k < 3; k++) {
+    v.idle_cycle[k] = c.idle_cycle[k];
+    v.idle_level[k] = c.idle_level[k];
+  }
+  auto period = [](double cycle) { return cycle > 0 ? kTau / cycle : 0.0; };
+  v.row.idle_pitch_share = -c.idle_level[0];
+  v.row.idle_yaw_share = -c.idle_level[1];
+  v.row.idle_roll_share = c.idle_level[2];
+  v.row.idle_pitch_period_s = period(c.idle_cycle[0]);
+  v.row.idle_yaw_period_s = period(c.idle_cycle[1]);
+  v.row.idle_roll_period_s = period(c.idle_cycle[2]);
   v.viewheight_m = c.viewheight * c.unit_m;
+  // v_viewheight: the eye raised or dropped by a few units, its own bob given up for it (the
+  // weapon keeps its bob); cl_bobhead: the weapon's bob carried by the eye as well.
+  v.row.eye_lift_m = c.viewlift * c.unit_m;
+  v.row.bob_eye = (c.viewlift != 0 ? 0 : 1) + (c.bobhead ? 1 : 0);
   if (c.fov > 0) v.row.fov_y = v.row.zoom_fov_y = ge::camera::fov_y_of(c.fov * kDeg, 4.0 / 3.0);
 }
 
@@ -55,8 +121,8 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   std::erase_if(v.blasts, [&](const Blast& b) { return t - b.t > kBlastS; });
 
   const PlayerState me = player_state(l);
-  // The rules' own view (the sequel's): the bob, the tilts and the kicks are theirs, so the rig
-  // adds none; it eases a step up as the sequel's client does, 20 units at most over a tenth.
+  // The rules' own view (Quake II's): the bob, the tilts and the kicks are theirs, so the rig
+  // adds none; it eases a step up as Quake II's client does, 20 units at most over a tenth.
   ge::camera::FirstPersonRow row = v.row;
   if (me.rules_view) {
     row.bob = 0;
@@ -66,19 +132,26 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     // Carried by a lift: its rise is eased below, not taken for a step to climb.
     if (me.pushed.z != 0) row.step_max_m = 0;
   }
+  // A single-player program's intermission: the view stands where the program put the player,
+  // with no bob or roll, swaying idly at a scale of 1 by the v_i* settings (pitch and yaw 0.3
+  // degrees, roll 0.1, at 1, 2 and 0.5 radians a second of the game's clock by default).
+  const bool intermission = l.campaign_host != nullptr && l.campaign.end != LevelEnd::none;
+  if (intermission) row.bob = row.roll_angle = row.kick_pitch = row.kick_roll = 0;
   ge::camera::Subject s = subject_of(l, row);
   if (v.viewheight_m > 0 && !me.rules_view) row.eye_stand_m = v.viewheight_m;
   // The eye's place between the last two states, one server frame behind.
   if (l.server != nullptr) {
     const double now = l.server->sv.time;
-    // The sequel's rules' own view changes once a frame of theirs (a tenth): eased across it.
+    // Quake II's rules' own view changes once a frame of theirs (a tenth): eased across it.
     const bool by_rules_frame = me.rules_frame >= 0;
     if (by_rules_frame && me.rules_frame != v.rules_frame) {
       const bool first = v.rules_frame < 0 || me.rules_frame < v.rules_frame;
       v.offset_prev = first ? me.view_ofs : v.offset_now;
       v.kick_prev = first ? me.kick : v.kick_now;
+      v.fov_prev = first ? me.fov : v.fov_now;
       v.offset_now = me.view_ofs;
       v.kick_now = me.kick;
+      v.fov_now = me.fov;
       v.rules_frame = me.rules_frame;
       v.rules_frame_s = now;
     }
@@ -94,8 +167,10 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       if (!by_rules_frame) {
         v.offset_prev = cut ? me.view_ofs : v.offset_now;
         v.kick_prev = cut ? me.kick : v.kick_now;
+        v.fov_prev = cut ? me.fov : v.fov_now;
         v.offset_now = me.view_ofs;
         v.kick_now = me.kick;
+        v.fov_now = me.fov;
       }
     }
     const double gap = v.eye_now_s - v.eye_prev_s;
@@ -104,7 +179,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     const auto f = gap > 0 && gap <= 0.25
                        ? static_cast<float>(std::clamp((drawn - v.eye_prev_s) / gap, 0.0, 1.0))
                        : 1.0f;
-    // The share of the sequel's rules frame gone by: its view and its movers' carry eased over it.
+    // The share of Quake II's rules frame gone by: its view and its movers' carry eased over it.
     const auto fr = by_rules_frame
                         ? static_cast<float>(std::clamp(
                               (me.rules_age + std::min(l.owed, tic)) / kRulesFrameS, 0.0, 1.0))
@@ -114,6 +189,11 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       const auto mix = [fr](sh::Vec3f a, sh::Vec3f b) { return a + (b - a) * fr; };
       v.offset = mix(v.offset_prev, v.offset_now);
       v.kick = mix(v.kick_prev, v.kick_now);
+      if (v.q2 != nullptr && !v.q2->kick_angles) v.kick = {};  // cl_kickangles 0
+      // The rules' field of view (a zoom eased over their frame), across at 4:3 (cl_adjustfov).
+      if (v.fov_prev > 0 && v.fov_now > 0)
+        row.fov_y = row.zoom_fov_y = q2_fov_y(v.fov_prev + (v.fov_now - v.fov_prev) * fr,
+                                              v.q2 == nullptr || v.q2->adjust_fov != 0, v.aspect);
       row.eye_stand_m = row.eye_crouch_m =
           (static_cast<double>(v.offset.z) - ge::shooter::kPlayerMins.z) * ge::brush::kUnitM;
     }
@@ -171,6 +251,12 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     v.pose.roll = me.v_angle.z * kDeg;
   } else if (me.dead) {
     v.pose.roll = kDeadRollDeg * kDeg;  // lying on the floor
+  }
+  if (intermission) {
+    const double clock = l.server != nullptr ? l.server->sv.time : t;
+    v.pose.pitch -= v.idle_level[0] * std::sin(clock * v.idle_cycle[0]) * kDeg;
+    v.pose.yaw -= v.idle_level[1] * std::sin(clock * v.idle_cycle[1]) * kDeg;
+    v.pose.roll += v.idle_level[2] * std::sin(clock * v.idle_cycle[2]) * kDeg;
   }
   ge::camera::to_frame_view(v.pose, view);
   return view;

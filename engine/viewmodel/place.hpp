@@ -45,6 +45,7 @@
 // ge:keywords gun-bob weapon-bob sway weapon-sway lag inertia kick recoil dip landing switch
 // ge:keywords lower raise put-away idle breathing viewmodel-fov frame_viewmodel placement-row
 // ge:keywords breath idle-sway weapon-breathing exertion out-of-breath wander
+// ge:keywords depth-scale stubby-gun viewmodel-size game_turn game_shift_m
 // ge:keywords held_to_world held_dir_to_world muzzle-world lens-match muzzle_to_world muzzle-pose
 // ge:skill render camera
 // ge:test tests/viewmodel_place_test.cpp
@@ -60,9 +61,10 @@ namespace ge::viewmodel {
 struct PlaceRow {
   double offset_m[3] = {0.13, -0.16, 0.2};  // the grip from the eye: right, up, forward
   double fov_y = 0;                         // the gun's own vertical lens, rad (0: the view's)
-  double bob_forward = 0.4;                 // share of the eye's bob, forward
-  double bob_up = 0.0;                      // and up
-  double bob_side = 0.0;                    // m of swing across a m/s of ground speed
+  double depth = 1;  // the gun's own forward axis scaled about its origin (a stubbier gun under 1)
+  double bob_forward = 0.4;  // share of the eye's bob, forward
+  double bob_up = 0.0;       // and up
+  double bob_side = 0.0;     // m of swing across a m/s of ground speed
   camera::Poles sway_poles{5.0, 0.6, 0.0};
   double sway_max = 0.12;   // rad
   double sway_shift = 0.0;  // m across a radian of lag
@@ -104,6 +106,10 @@ struct PlaceInput {
   double shot = 0;     // a shot fired this frame: its size (0: none)
   double landing = 0;  // a landing this frame: its fall speed, m/s (0: none)
   double lowered = 0;  // the target: 0 held up, 1 put away
+  // A game's own sway and offset on top (a server that sends the gun's angles and place): the
+  // turn (yaw right, pitch up, roll right side down, rad) and the shift (right, up, forward, m).
+  double game_turn[3] = {0, 0, 0};
+  double game_shift_m[3] = {0, 0, 0};
 };
 
 struct PlaceState {
@@ -130,6 +136,9 @@ struct PlaceState {
 struct Placement {
   double m[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
   double fov_y = 0;  // rad; 0: the view's
+  // Drawn mirrored across the screen's upright middle (a left-handed player's gun): the whole
+  // right-handed picture flipped, the gun's place in the view unchanged (`mirror_lighting`).
+  bool mirror = false;
   // The pieces it was made of, for a lab's chart: the grip's offset from rest (right, up,
   // forward, m) and the turn (yaw right, pitch up, roll right side down, rad).
   double shift_m[3] = {0, 0, 0};

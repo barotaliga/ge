@@ -1,12 +1,17 @@
 // The console's built-in commands for variables, aliases, files and listing: echo, set, seta,
 // setinfo, serverinfo, reset, cvarlist, cmdlist, aliaslist, alias, tempalias, unalias,
-// unaliasall, exec, cfg_load, cfg_save, wait, help. Each command's syntax is docs/console.md's.
+// unaliasall, exec, cfg_load, cfg_save, wait, help; and a recipe's `sleep` (add_recipe_commands).
+// Each command's syntax is docs/console.md's.
 //
 // ge:summary The console's built-ins: set, seta, setinfo, alias, exec, cfg_save, cvarlist, help
 // ge:keywords console builtins echo set seta setinfo serverinfo reset cvarlist cmdlist aliaslist
-// ge:keywords alias tempalias unalias unaliasall exec cfg_load cfg_save wait help flags_text
+// ge:keywords alias tempalias unalias unaliasall exec cfg_load cfg_save wait sleep recipe help
+// ge:keywords flags_text
 // ge:skill console
 // ge:test tests/console_console_test.cpp
+#include <cmath>
+#include <cstdlib>
+
 #include "console/cfg.hpp"
 #include "console/console.hpp"
 #include "console/lex.hpp"
@@ -32,7 +37,9 @@ void set_cmd(Console& c, const Args& a, uint32_t extra, std::string_view cmd) {
     const Cvar* v = c.cvars().find(a[1]);
     c.print(v->name + " will be \"" + v->latched + "\" after a restart (it is latched)");
   }
-  const std::string why = set_result_text(r, lower(a[1]));
+  const std::string why =
+      (c.cvars().find(a[1]) != nullptr ? set_result_text(r, *c.cvars().find(a[1]))
+                                       : set_result_text(r, lower(a[1])));
   if (!why.empty()) c.error(why, "");
 }
 
@@ -56,7 +63,7 @@ void info_cmd(Console& c, const Args& a, uint32_t flag, uint32_t extra) {
             "use `set " + v->name + "`");
     return;
   }
-  const std::string why = set_result_text(c.cvars().set(*v, a[2], a.source), v->name);
+  const std::string why = set_result_text(c.cvars().set(*v, a[2], a.source), *v);
   if (!why.empty()) c.error(why, "");
 }
 
@@ -308,6 +315,27 @@ void register_builtin_commands(Console& con) {
                   meta_cmd);
   con.add_command("help", "help <name>: what a cvar, command or alias is",
                   [](Console& c, const Args& a) { c.print(describe(c, a[1])); });
+}
+
+void add_recipe_commands(Console& con) {
+  con.add_command(
+      "sleep",
+      "sleep <seconds>: the rest of the buffer runs once that many seconds have passed (a "
+      "recipe's pause; one frame where the host keeps no clock)",
+      [](Console& c, const Args& a) {
+        if (a.size() != 2) {
+          c.error("sleep needs one number of seconds", "usage: sleep <seconds>, such as sleep 2.5");
+          return;
+        }
+        char* end = nullptr;
+        const double s = std::strtod(a[1].c_str(), &end);
+        if (end == a[1].c_str() || *end != '\0' || !std::isfinite(s) || s < 0) {
+          c.error("sleep takes seconds, not '" + a[1] + "'",
+                  "usage: sleep <seconds>, such as sleep 2.5");
+          return;
+        }
+        c.sleep(s);
+      });
 }
 
 }  // namespace ge::console

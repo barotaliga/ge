@@ -3,7 +3,8 @@
 // (the map's light entities, the sun through its sky faces, the open sky), with bounced light
 // coloured by each texture's mean colour and the light's direction a luxel, so a renderer can
 // shade the textures' relief by where the light comes from. Liquids glow into the bake (lava
-// strongly, slime and teleporters faintly) and sky faces let the sky in; neither is charted.
+// strongly, slime and teleporters faintly), a lamp's panel (`Texture::lamp`) lights the room by its
+// strength and colour, and sky faces let the sky in; neither liquids nor the sky are charted.
 //
 // THE RESULT (`Rebaked`) is an atlas of irradiance and direction and, for every vertex of the map,
 // its place in that atlas. A cache keeps it as bytes (`write_rebaked`, `read_rebaked`): the

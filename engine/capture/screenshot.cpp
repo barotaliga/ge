@@ -7,6 +7,10 @@
 // ge:test tests/capture_screenshot_test.cpp
 #include "capture/screenshot.hpp"
 
+#include <cstdlib>
+
+#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <system_error>
 #include <utility>
@@ -15,6 +19,7 @@
 #include "console/cvar.hpp"
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
+#include "lab/raster.hpp"
 
 namespace ge::capture {
 
@@ -80,24 +85,100 @@ void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s) {
               .values = "420: halved each way, about a quarter smaller; 444: full, sharp coloured "
                         "text (the default)"},
              &s.chroma);
+  cvars.bind({.name = "scr_folder",
+              .fallback = "",
+              .flags = console::kArchive,
+              .help = "The folder screenshots are kept in: beside the game's own, or anywhere.",
+              .kind = console::CvarKind::text,
+              .values = "\"\": the game's screenshots folder (the default); NAME: a folder of "
+                        "that name in the game's folder; PATH: a whole path (~/Desktop/quake, "
+                        "/Volumes/shots)"},
+             &s.folder);
+  cvars.bind({.name = "scr_template",
+              .fallback = "",
+              .flags = console::kArchive,
+              .help = "The screenshot's file name, its X's numbered.",
+              .kind = console::CvarKind::text,
+              .values = "\"\": named by the time it was taken (the default); NAME: that name, "
+                        "its last run of X's the first free number (shotXXX: shot000, shot001 "
+                        "...)"},
+             &s.name_template);
+  cvars.bind({.name = "scr_compression",
+              .fallback = "6",
+              .flags = console::kArchive,
+              .help = "How hard a png screenshot is packed.",
+              .kind = console::CvarKind::integer,
+              .min = 0,
+              .max = 9,
+              .values = "0: stored, the largest and the fastest to write; 1..9: packed (6 the "
+                        "default)"},
+             &s.compression);
 }
 
 void add_screenshot_command(console::Console& console, Screenshots& writer,
                             std::string_view where) {
   console.add_command("screenshot",
-                      "screenshot: the next frame shown written to " + std::string(where) +
-                          " in scr_format (bound to F12)",
-                      [&writer](console::Console&, const console::Args&) { writer.request(); });
+                      "screenshot [name]: the next frame shown written to " + std::string(where) +
+                          " in scr_format, named by the time or by the name given (bound to F12)",
+                      [&writer](console::Console& c, const console::Args& a) {
+                        if (a.size() < 2) {
+                          writer.request();
+                          return;
+                        }
+                        std::string why;
+                        if (!writer.request(a[1], &why)) c.print(why);
+                      });
+  add_screenshot_format_commands(console, writer);
+}
+
+void add_screenshot_format_commands(console::Console& console, Screenshots& writer) {
+  // screenshotjpg [name] [quality], screenshotpng [name] [level], screenshottga [name]: the next
+  // frame in that format whatever scr_format says (a TGA is written as a PNG, as scr_format tga).
+  struct Kind {
+    const char* word;
+    const char* format;
+    const char* usage;
+  };
+  static constexpr Kind kKinds[] = {{"screenshotjpg", "jpg", " [name] [quality]"},
+                                    {"screenshotpng", "png", " [name] [compression]"},
+                                    {"screenshottga", "tga", " [name]"}};
+  for (const Kind& k : kKinds) {
+    console.add_command(
+        k.word, std::string(k.word) + k.usage + ": the next frame shown written as " + k.format,
+        [&writer, k](console::Console& c, const console::Args& a) {
+          const size_t most = std::string_view(k.format) == "tga" ? 2 : 3;
+          if (a.size() > most) {
+            c.print(std::string("Usage: ") + k.word + k.usage);
+            return;
+          }
+          int quality = 0;
+          if (a.size() > 2 && std::string_view(k.format) == "jpg")
+            quality = std::atoi(a[2].c_str());
+          if (a.size() < 2) {
+            writer.request();
+          } else {
+            std::string why;
+            if (!writer.request(a[1], &why)) {
+              c.print(why);
+              return;
+            }
+          }
+          writer.request_format(k.format, quality);
+        });
+  }
 }
 
 StillOptions still_options(const ScreenshotSettings& s, std::string& note) {
   StillOptions o;
-  if (!still_format_of(s.format, o.format)) {
-    note = "scr_format `" + s.format + "` is not png, jpg, avif or heic, so it is jpg";
+  if (s.format == "tga" || s.format == "pcx") {
+    o.format = StillFormat::kPng;  // the lossless formats of old, written as the lossless one now
+  } else if (!still_format_of(s.format, o.format)) {
+    note = "the screenshot format " + s.format + " isn't png, jpg, avif or heic, so it is jpg";
     o.format = StillFormat::kJpg;
   }
   o.quality = s.quality;
   o.subsample = s.chroma != 444;
+  o.stored = s.compression <= 0;
   return o;
 }
 
@@ -113,13 +194,109 @@ Screenshots::~Screenshots() {
   if (worker_.joinable()) worker_.join();
 }
 
+bool Screenshots::request(std::string name, std::string* why) {
+  const fs::path p(name);
+  bool bad = name.empty() || p.is_absolute() || name[0] == '/' || name[0] == '\\';
+  for (const fs::path& part : p) bad = bad || part == "..";
+  if (bad) {
+    if (why)
+      *why = name.empty() ? "A screenshot needs a name."
+                          : "A screenshot's name can't leave its folder: " + name + ".";
+    return false;
+  }
+  asked_ = file_asked_ = true;
+  asked_name_ = std::move(name);
+  return true;
+}
+
+std::string Screenshots::folder() const {
+  if (settings_ == nullptr || settings_->folder.empty()) return dir_;
+  const std::string& asked = settings_->folder;
+  // A whole path (`/...`, `~/...`, a drive's) is the player's own folder, taken as it is: only
+  // this machine's console and cfgs set scr_folder (a server's stuffed `set` is refused, cvar.hpp).
+  if (asked == "~" || asked.starts_with("~/")) {
+    const char* home = std::getenv("HOME");
+    if (home == nullptr || *home == 0) home = std::getenv("USERPROFILE");
+    if (home == nullptr || *home == 0) return dir_;  // no home to put it under
+    return (fs::path(home) / asked.substr(std::min<size_t>(asked.size(), 2))).string();
+  }
+  const fs::path f(asked);
+  if (f.is_absolute()) return f.string();
+  bool bad = false;
+  for (const fs::path& part : f) bad = bad || part == "..";
+  if (bad) return dir_;  // a name that climbs out of the game's folder is not taken
+  return (fs::path(dir_).parent_path() / f).string();
+}
+
+bool Screenshots::grab(int width, int height, int quality) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (grab_wanted_ || grab_out_ || width <= 0 || height <= 0) return false;
+  grab_wanted_ = grab_out_ = true;
+  grab_width_ = width;
+  grab_height_ = height;
+  grab_quality_ = std::clamp(quality, 1, 100);
+  asked_ = true;
+  return true;
+}
+
+bool Screenshots::take_grab(std::vector<uint8_t>& out) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!grab_ready_) return false;
+  out = std::move(grabbed_);
+  grabbed_.clear();
+  grab_ready_ = grab_out_ = false;
+  return true;
+}
+
 bool Screenshots::due() {
   const bool now = asked_;
   asked_ = false;
   return now;
 }
 
-std::string Screenshots::next_path(std::string_view ext) {
+bool Screenshots::taken(const std::string& path) const {
+  return std::find(handed_.begin(), handed_.end(), path) != handed_.end();
+}
+
+std::string screenshot_template_name(std::string_view tpl, int n) {
+  const size_t end = tpl.find_last_of('X');
+  if (end == std::string_view::npos) return std::string(tpl);
+  size_t start = end;
+  while (start > 0 && tpl[start - 1] == 'X') --start;
+  std::string digits = std::to_string(n);
+  const size_t width = end + 1 - start;
+  if (n < 0 || digits.size() > width) return {};
+  digits.insert(0, width - digits.size(), '0');
+  return std::string(tpl.substr(0, start)) + digits + std::string(tpl.substr(end + 1));
+}
+
+std::string Screenshots::next_path(std::string_view ext, const std::string& named,
+                                   const std::string& tpl) {
+  std::error_code ec;
+  bool tpl_ok = named.empty() && !tpl.empty() && !fs::path(tpl).is_absolute() && tpl[0] != '/' &&
+                tpl[0] != '\\';
+  for (const fs::path& part : fs::path(tpl)) tpl_ok = tpl_ok && part != "..";
+  // The template's first free number; one with no X is a name, numbered as a named one is.
+  if (tpl_ok && tpl.find('X') != std::string::npos) {
+    for (int n = 0; n < 100000; ++n) {  // a long run of X's searched no further
+      const std::string name = screenshot_template_name(tpl, n);
+      if (name.empty()) break;  // every number taken: the time's name below
+      const fs::path path = fs::path(folder()) / (name + "." + std::string(ext));
+      if (fs::exists(path, ec) || taken(path.string())) continue;
+      handed_.push_back(path.string());
+      return path.string();
+    }
+  }
+  const std::string& as =
+      named.empty() && tpl_ok && tpl.find('X') == std::string::npos ? tpl : named;
+  if (!as.empty()) {
+    const fs::path base = fs::path(folder()) / as;
+    fs::path path = base.string() + "." + std::string(ext);
+    for (int n = 2; fs::exists(path, ec) || taken(path.string()); ++n)
+      path = base.string() + "-" + std::to_string(n) + "." + std::string(ext);
+    handed_.push_back(path.string());
+    return path.string();
+  }
   // Two in one second are told apart by a count: the second's name on disk is checked too, so a
   // session started again within the second does not write over the first one's.
   const std::string stem = screenshot_stem(prefix_, local_now());
@@ -127,13 +304,12 @@ std::string Screenshots::next_path(std::string_view ext) {
     last_stem_ = stem;
     last_count_ = 0;
   }
-  std::error_code ec;
   for (;;) {
     ++last_count_;
     const std::string name = stem +
                              (last_count_ > 1 ? "-" + std::to_string(last_count_) : std::string()) +
                              "." + std::string(ext);
-    const fs::path path = fs::path(dir_) / name;
+    const fs::path path = fs::path(folder()) / name;
     if (!fs::exists(path, ec)) return path.string();
   }
 }
@@ -152,14 +328,41 @@ bool Screenshots::write(uint32_t width, uint32_t height, std::span<const uint8_t
                      " RGBA; this is a bug in the game's copy of its frame");
     return false;
   }
-  std::string note;
-  const StillOptions o = still_options(settings_ ? *settings_ : ScreenshotSettings{}, note);
-  jobs_.push_back({next_path(still_extension(still_writable(o.format))),
-                   width,
-                   height,
-                   {rgba.begin(), rgba.end()},
-                   o,
-                   std::move(note)});
+  const bool grab = grab_wanted_;
+  if (grab) {
+    grab_wanted_ = false;
+    Job g;
+    g.grab_width = grab_width_;
+    g.grab_height = grab_height_;
+    g.width = width;
+    g.height = height;
+    g.rgba.assign(rgba.begin(), rgba.end());
+    g.options = {StillFormat::kJpg, grab_quality_, false};
+    jobs_.push_back(std::move(g));
+  }
+  if (!grab || file_asked_) {
+    std::string note;
+    ScreenshotSettings settings = settings_ ? *settings_ : ScreenshotSettings{};
+    if (!asked_format_.empty()) {  // screenshotpng, screenshotjpg: this picture's own format
+      settings.format = asked_format_;
+      if (asked_quality_ > 0) settings.quality = asked_quality_;
+      asked_format_.clear();
+      asked_quality_ = 0;
+    }
+    const StillOptions o = still_options(settings, note);
+    std::string named;
+    named.swap(asked_name_);
+    jobs_.push_back(
+        {next_path(still_extension(still_writable(o.format)), named, settings.name_template),
+         0,
+         0,
+         width,
+         height,
+         {rgba.begin(), rgba.end()},
+         o,
+         std::move(note)});
+  }
+  file_asked_ = false;
   if (!worker_.joinable()) worker_ = std::thread([this] { work(); });
   wake_.notify_one();
   return true;
@@ -191,6 +394,18 @@ void Screenshots::work() {
     std::vector<uint8_t> bytes;
     StillFormat used = job.options.format;
     std::string why;
+    if (job.path.empty()) {  // a grab: scaled, packed, kept for `take_grab`
+      lab::Picture full{static_cast<int>(job.width), static_cast<int>(job.height),
+                        std::move(job.rgba)};
+      const lab::Picture small = lab::resized(full, job.grab_width, job.grab_height);
+      encode_still(job.options, small.width, small.height, small.rgba, bytes, used, why);
+      std::lock_guard<std::mutex> lock(mutex_);
+      grabbed_ = std::move(bytes);
+      grab_ready_ = true;
+      busy_ = false;
+      idle_.notify_all();
+      continue;
+    }
     encode_still(job.options, static_cast<int>(job.width), static_cast<int>(job.height), job.rgba,
                  bytes, used, why);
     if (!why.empty()) job.note += (job.note.empty() ? "" : "; ") + why;

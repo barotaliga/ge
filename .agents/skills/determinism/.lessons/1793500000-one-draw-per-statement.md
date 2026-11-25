@@ -14,5 +14,5 @@ and safe. A digest that differs between Clang and GCC with contraction off is th
 Labs that hold the whole fixed-step loop, including traffic and capacity sums like a soak's
 held bytes, owe the same check: a buffer's capacity is the library's, so `Det::measured`.
 An overloaded operator is a call too: `a + b * (crandom(s) * h) + c * (crandom(s) * v)` on a vector
-type split the sequel fight lab's digest between Clang (macOS) and GCC (Linux) the same way
+type split Quake II fight lab's digest between Clang (macOS) and GCC (Linux) the same way
 (2026-11-12). Grep a new file for two draws on one line before the push.

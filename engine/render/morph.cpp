@@ -42,11 +42,13 @@ struct GpuDraw {
   float ambient[4];
   float shade[4];
   float shade_dir[4];
-  float warp[16];    // render/wgsl/warp.wgsl's Warp
-  float burn[4];     // charred, embers, etched, seed
-  uint32_t skin[4];  // the model whose skin it wears
+  float warp[16];                 // render/wgsl/warp.wgsl's Warp
+  float burn[4];                  // charred, embers, etched, seed
+  uint32_t skin[4];               // the model whose skin it wears
+  float flat[4];                  // a shadow: the floor's height from the eye, the lean, 1
+  float blood[kMorphWounds * 8];  // a wound two vec4: at, size; run, wet, seed, 0
 };
-static_assert(sizeof(GpuDraw) == 256, "match morph.wgsl's Draw");
+static_assert(sizeof(GpuDraw) == 272 + kMorphWounds * 32, "match morph.wgsl's Draw");
 
 float srgb_to_linear(uint8_t v) {
   const double c = v / 255.0;
@@ -83,12 +85,51 @@ float value_noise(float x, float y, float z) {
 
 float clamp01(float v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
+float smooth01(float lo, float hi, float v) {
+  const float t = clamp01((v - lo) / (hi - lo));
+  return t * t * (3 - 2 * t);
+}
+
 uint32_t clamp_frame(const MorphModel& m, uint32_t f) {
   const uint32_t n = static_cast<uint32_t>(m.positions.size());
   return f < n ? f : n - 1;
 }
 
 }  // namespace
+
+float wound_cover(const MorphWound& w, const float rest[3]) {
+  if (w.size <= 0) return 0;
+  const float d[3] = {rest[0] - w.at[0], rest[1] - w.at[1], rest[2] - w.at[2]};
+  // The soaked patch: round the wound, its edge ragged by noise fixed to the skin.
+  const float n = value_noise(rest[0] * 14 + w.seed * 41, rest[1] * 14, rest[2] * 14);
+  const float r = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) / w.size;
+  float cover = 1 - smooth01(0.7f, 1.0f, r + (n - 0.5f) * 0.5f);
+  // The runs: down from the wound (-y), a main stream and a thinner one beside it, narrowing as
+  // they go, wandering, ending in a round bead at `run`.
+  const float below = -d[1];
+  if (w.run > 0 && below > 0 && below < w.run + w.size * 0.3f) {
+    for (int k = 0; k < 2; ++k) {
+      const float share = k == 0 ? 1.0f : 0.55f;
+      const float reach = w.run * (k == 0 ? 1.0f : 0.7f);
+      const float side = k == 0 ? 0.0f : w.size * 0.55f;
+      const float wx = (value_noise(below * 7, w.seed * 13 + static_cast<float>(k) * 5, 1) - 0.5f) *
+                           w.size * 0.7f +
+                       side * (w.seed - 0.5f > 0 ? 1.0f : -1.0f);
+      const float wz = (value_noise(below * 7, w.seed * 13 + static_cast<float>(k) * 5, 7) - 0.5f) *
+                       w.size * 0.7f;
+      const float lx = d[0] - wx, lz = d[2] - wz;
+      const float lat = std::sqrt(lx * lx + lz * lz);
+      const float width = w.size * 0.5f * share * (1 - 0.5f * clamp01(below / reach)) + 0.004f;
+      float stream = 1 - smooth01(width * 0.6f, width, lat);
+      // The end: a bead a little wider than the stream just above it.
+      const float past = below - reach;
+      const float bead = width * 1.3f;
+      if (past > 0) stream = 1 - smooth01(bead * 0.6f, bead, std::sqrt(lat * lat + past * past));
+      cover = std::max(cover, stream);
+    }
+  }
+  return cover;
+}
 
 uint32_t ramp_from(TintRamps& ramps, const float colour[3]) {
   const uint32_t row = ramps.rows();
@@ -408,16 +449,29 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     g.burn[1] = d.burn.embers;
     g.burn[2] = d.burn.etched;
     g.burn[3] = d.burn.seed;
+    for (uint32_t w = 0; w < kMorphWounds; ++w) {
+      const MorphWound& o = d.blood.wounds[w];
+      float* b = &g.blood[size_t{w} * 8];
+      b[0] = o.at[0], b[1] = o.at[1], b[2] = o.at[2], b[3] = o.size;
+      b[4] = o.run, b[5] = o.wet, b[6] = o.seed;
+    }
     g.skin[0] = d.skin < morph.index_counts.size() ? d.skin : d.model;
     g.skin[1] = d.slot < morph.slot_count ? d.slot + 1 : 0;
-    if (d.shell_push > 0) {  // the shell: its colour in bytes (bit 24 set), its push's bits
+    if (d.shell_push > 0 || d.flat) {  // a shell: its colour in bytes (bit 24 set), its push's bits
       uint32_t rgb = 1u << 24;
       for (int k = 0; k < 3; ++k) {
         const float c = d.shell[k] < 0 ? 0 : d.shell[k] > 1 ? 1 : d.shell[k];
         rgb |= static_cast<uint32_t>(std::lround(c * 255.0f)) << (8 * k);
       }
       g.skin[2] = rgb;
-      std::memcpy(&g.skin[3], &d.shell_push, sizeof(float));
+      const float push = d.shell_push > 0 ? d.shell_push : 0.0f;
+      std::memcpy(&g.skin[3], &push, sizeof(float));
+    }
+    if (d.flat) {  // a shadow: squashed onto the floor, which is relative to this frame's eye
+      g.flat[0] = static_cast<float>(double(d.flat_y) - view.eye[1]);
+      g.flat[1] = d.flat_lean[0];
+      g.flat[2] = d.flat_lean[1];
+      g.flat[3] = 1;
     }
     std::memcpy(&morph.staged[morph.drawn * sizeof(GpuDraw)], &g, sizeof g);
     morph.staged_models[morph.drawn] = d.model;

@@ -15,9 +15,9 @@
 //     follows it; a client's own `set` of it is refused with the reason;
 //   - everything else a game reads stays code (a constant), never a cvar.
 // `kCheat` cvars change only while the server's `sv_cheats` is 1 (turning it off puts each back to
-// its default); `kLatch` holds a new value until the game calls `apply_latched` (a new map, a
-// restart); `kReadOnly` only code sets; `kUserInfo` cvars ride in the user info a client sends the
-// server.
+// its default) and no joined game holds them off (`hold_cheats`); `kLatch` holds a new value until
+// the game calls `apply_latched` (a new map, a restart); `kReadOnly` only code sets; `kUserInfo`
+// cvars ride in the user info a client sends the server.
 //
 // BINDING: a cvar either owns its value or is BOUND to a field of a subsystem's settings struct
 // (`bind`): a set parses, clamps and writes straight into the field, so the subsystem reads its
@@ -33,8 +33,8 @@
 // such as a classic mod's `maxclients` for the server's `sv_maxclients`. A WHOLE synonym is the
 // cvar under a second name: `find` answers the target, so a cfg line, the console and a program's
 // reads and writes all reach it. A PART synonym is one word of a target that holds several ("N S
-// T"): `set` by its name replaces that word and `synonym_value` reads it. Synonyms are not listed
-// by `sorted`, so a saved cfg writes each setting once, under its own name.
+// T"): `set` by its name replaces that word and `synonym_value` reads it. A MAPPED synonym is a
+// game's spelling with its own values (`add_mapped_synonym`). Synonyms are not listed by `sorted`.
 //
 // META-CVARS (`add_meta`, docs/servers.md § Meta-cvars): a cvar whose value names a LEVEL that
 // sets a group of others, declared as data beside the feature that owns it (`sv_modern 1`: the
@@ -50,11 +50,12 @@
 //
 // ge:summary Console variables: named, typed, flagged settings, owned or bound to a struct field
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
-// ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info
-// ge:keywords revision clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
-// ge:keywords meta-cvar meta add_meta level implied explicit restore include cycle meta_members
-// ge:keywords cvar-layer layer drop_layer overlap clash same-name one-name-one-meaning own same
-// ge:keywords game-scope per-game-cvar shadow set-aside retired
+// ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info revision
+// ge:keywords clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
+// ge:keywords add_mapped_synonym mapped-synonym value-map meta-cvar meta add_meta level implied
+// ge:keywords explicit restore include cycle meta_members cvar-layer layer drop_layer overlap clash
+// ge:keywords same-name one-name-one-meaning own same game-scope per-game-cvar shadow set-aside
+// ge:keywords retired lock unlock locked held-value clamp-range ruleset competition-lock
 // ge:skill console
 // ge:test tests/console_cvar_test.cpp
 #pragma once
@@ -95,7 +96,7 @@ enum class Source : uint8_t {
 
 // LAYERS AND ONE NAME, ONE MEANING (docs/console.md § Layers): a program registers its cvars in
 // LAYERS, the engine's first, then a genre plugin's, then the game's (`CvarLayer`, a name such as
-// "engine", "shooter" or "game:sequel"); each cvar keeps the layer that registered it. A name
+// "engine", "shooter" or "game:q2"); each cvar keeps the layer that registered it. A name
 // meeting one an earlier layer registered says what it is (`CvarSpec::overlap`):
 //   - `same`: the same setting (same effect, units and direction): the later layer's default,
 //     help, values and range replace the earlier's, its field is written too, and a value the
@@ -130,6 +131,24 @@ struct CvarSpec {
 // The field a bound cvar writes, or none (the cvar owns its value).
 using CvarTarget =
     std::variant<std::monostate, double*, float*, int32_t*, uint32_t*, bool*, std::string*>;
+
+// LOCKS (`lock`, `unlock`; console/ruleset.hpp builds rulesets on them): an owner (a competition
+// ruleset, a game in progress) HOLDS a cvar at one value or KEEPS it inside a range while the lock
+// lasts. A set from any source while it holds is refused (`SetResult::locked`, the lock's own
+// words say why), and a set into a range is clamped into it; either way the value asked for is
+// remembered as the player's, so `unlock` gives it back and `cfg_save` writes it, never the
+// locked one. Locking a name no layer registers yet does nothing (the owner locks again when the
+// game's settings arrive).
+// A LOCK on a cvar (LOCKS above): held at `value` when `fixed`, else kept inside [min, max].
+struct CvarLock {
+  std::string owner;  // who holds it ("ruleset smackdown"): `unlock` takes an owner's locks away
+  std::string why;    // the refusal a player reads ("cl_hud is locked by the smackdown ruleset.")
+  bool fixed = true;
+  std::string value;  // the held value, when fixed
+  double min = -std::numeric_limits<double>::infinity();
+  double max = std::numeric_limits<double>::infinity();
+  std::string wanted;  // the player's own value, given back by `unlock` and saved by cfg_save
+};
 
 struct Cvar;
 // A definition a later layer replaced (`same`) or set aside (`own`), kept to come back with it.
@@ -168,6 +187,8 @@ struct Cvar {
   // common value while the loaded scope overrides it.
   std::map<std::string, std::string> scoped;
   std::string common;
+  // LOCKS (above): the lock holding it, or null.
+  std::shared_ptr<CvarLock> lock;
 
   bool on() const { return number != 0; }
   int32_t integer() const;
@@ -175,11 +196,20 @@ struct Cvar {
 };
 
 // Another name for a cvar (SYNONYMS above).
+// One of a mapped synonym's values and the target's value it stands for.
+struct SynonymValue {
+  std::string theirs;  // the synonym's value, as its game writes it
+  std::string ours;    // the target's value it sets
+};
+
 struct Synonym {
   std::string name;  // lower case
   Cvar* target = nullptr;
   int part = -1;      // -1: the whole value; else the index of the word it names
   std::string layer;  // the layer that named it: `drop_layer` takes it away (LAYERS above)
+  std::vector<SynonymValue> values;  // a mapped synonym's values (SYNONYMS above); empty: none
+  // The target under another name, its values its own: what `find` answers.
+  bool whole() const { return part < 0 && values.empty(); }
 };
 
 // One member of a meta-cvar's level: a cvar and the value the level gives it, or another meta's
@@ -221,11 +251,15 @@ enum class SetResult : uint8_t {
   cheat,      // kCheat while sv_cheats is 0
   refused,    // the server may not set a player's own cvar
   bad_name,   // a name with a character outside [a-z0-9_+.-]
+  locked,     // held by a lock, or kept inside its range (LOCKS above): its `why` says by whom
+  unmapped,   // a mapped synonym's value its map lacks (SYNONYMS above)
 };
 
 // One line saying why `r` refused `name`, with the next action; empty for changed, same and
 // latched.
 std::string set_result_text(SetResult r, std::string_view name);
+// The same for a cvar in hand: a locked one answers its lock's own words.
+std::string set_result_text(SetResult r, const Cvar& cvar);
 
 // The registry. Addresses are stable: a `Cvar&` held at startup stays valid.
 class Cvars {
@@ -261,6 +295,14 @@ class Cvars {
   // registered it.
   bool remove_created(std::string_view name);
 
+  // LOCKS (above): `name` held or kept by `lock` (its `wanted` is filled from the value now). A
+  // second lock replaces the first, keeping the player's value. False when no live cvar has the
+  // name.
+  bool lock(std::string_view name, CvarLock lock);
+  // Every lock `owner` holds taken away, each cvar back to the player's own value; returns how
+  // many.
+  int unlock(std::string_view owner);
+
   // Every latched value takes effect; returns how many moved.
   int apply_latched();
 
@@ -277,12 +319,27 @@ class Cvars {
   void set_watch(Watch watch) { watch_ = std::move(watch); }
 
   bool is_server() const { return is_server_; }
-  bool cheats() const;  // sv_cheats is on
+  bool cheats() const;  // sv_cheats is on, and no game holds cheats off (`hold_cheats`)
+  // A game the client joined whose rules allow no cheats (Quake II's with more than one player
+  // slot): `held` true puts every cheat back to its default and refuses each set of one, whatever
+  // the local sv_cheats says, until it is let go (false: the game left).
+  void hold_cheats(bool held);
+  bool cheats_held() const { return cheats_held_; }
 
   // `name` as another name for the cvar `target` (`part` -1: its whole value; k: its word k).
   // False when `name` is not a valid name or is a cvar of its own, when `target` is unknown, or
   // when `name` already names something else; true again for the same synonym.
   bool add_synonym(std::string_view name, std::string_view target, int part = -1);
+  // A game's spelling whose values differ from the target's: each of `values` one of its values
+  // and the target's it names (QuakeWorld's `r_drawhud 1` is `scr_draw2d 2`). `set` by its name
+  // writes the mapped value, refusing one the map lacks (`SetResult::unmapped`); `synonym_value`
+  // maps the target's back; `find` does not answer it. False as add_synonym, or for no values.
+  bool add_mapped_synonym(std::string_view name, std::string_view target,
+                          std::vector<SynonymValue> values);
+  // A mapped synonym's value as the target's ("" when its map lacks it).
+  std::string mapped_value(const Synonym& s, std::string_view theirs) const;
+  // The words a mapped synonym's help shows: "1 (scr_draw2d 2); 0 (scr_draw2d 0)".
+  static std::string mapped_words(const Synonym& s);
   // The synonym `name` (whole or part), or null.
   const Synonym* synonym(std::string_view name) const;
   // A synonym's value: the target's, or its word `part` ("" past its last word).
@@ -346,6 +403,7 @@ class Cvars {
   std::string scope_;
   bool config_ = false;
   bool applying_ = false;  // a scope's value going live: not the player's common value
+  bool locking_ = false;   // a lock putting its value in place (LOCKS)
   void store(Cvar& cvar, std::string_view text);
   void put(Cvar& cvar, std::string_view text);  // a meta's value: latched when the cvar is
   void apply_meta(const Meta& meta);
@@ -355,6 +413,7 @@ class Cvars {
   std::vector<Synonym> synonyms_;
   bool is_server_;
   Cvar* sv_cheats_ = nullptr;
+  bool cheats_held_ = false;
   Watch watch_;
 };
 

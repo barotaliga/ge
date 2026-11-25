@@ -3,11 +3,11 @@
 // trigger that sends the player back to the section's own start (a FAIL), and the section's exit
 // is a trigger that sends him on to the next one. The course is read off the map's entities alone:
 // it starts at the map's spawn, and each section's exit is the teleporter (to a start not yet
-// visited) whose route on the bots' nav (bots/map_nav.hpp) from the section's start is the
+// visited) whose route on the bots' nav (shooterbots/map_nav.hpp) from the section's start is the
 // quickest with no teleporter on the way; a section no route reaches is run anyway at the trigger
 // nearest its start, and tabled as "no route": the nav proves no way through it.
 //
-// ONE BOT, an expert's pilot through an expert's keyboard as in a match (bots/fighter.hpp
+// ONE BOT, an expert's pilot through an expert's keyboard as in a match (shooterbots/fighter.hpp
 // `fighter_pilot`, `--features` over the expert's preset), runs each section from its start to its
 // exit (bots/pilot_run.hpp `run_route`, no server: the lab watches the triggers itself), up to
 // `--tries` times, each try a new seed, until one gets through. Every command's box is checked
@@ -26,7 +26,7 @@
 // ge:keywords lab se-trick trick-map course sections teleporter fail takeoff jump-course ztrain
 // ge:keywords zjumps ztricks hoppa2 time-trial
 // ge:skill bots labs
-// ge:test tests/shooter_pilot_test.cpp
+// ge:test tests/shooterbots_pilot_test.cpp
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -48,13 +48,15 @@
 #include "lab/plot.hpp"
 #include "lab/raster.hpp"
 #include "progs/entity_text.hpp"
-#include "shooter/features.hpp"
-#include "shooter/nav.hpp"
-#include "shooter/nav_gaps.hpp"
-#include "shooter/traits.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooterbots/nav.hpp"
+#include "shooterbots/nav_gaps.hpp"
+#include "shooterbots/traits.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/nav_top.hpp"
@@ -65,6 +67,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace pg = ge::progs;
 namespace cl = shooters_edge::client;
 namespace sv = shooters_edge::server;
@@ -138,10 +141,10 @@ bool touches(const Trigger& t, sh::Vec3f o) {
          o.y - kHullHalf <= t.hi.y && o.z + kHullUp >= t.lo.z && o.z - kHullDown <= t.hi.z;
 }
 
-const sh::NavLink* link_between(const sh::NavGraph& g, int32_t a, int32_t b) {
-  const sh::NavNode& n = g.nodes[static_cast<size_t>(a)];
+const sb::NavLink* link_between(const sb::NavGraph& g, int32_t a, int32_t b) {
+  const sb::NavNode& n = g.nodes[static_cast<size_t>(a)];
   for (int32_t x = 0; x < n.links; x++) {
-    const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
+    const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
     if (l.to == b) return &l;
   }
   return nullptr;
@@ -153,7 +156,7 @@ bool takes_off(const bt::RunResult& r, size_t i) {
 }
 
 // The node nearest `p` (any distance: a course's start may stand far from the grid's nodes).
-int32_t nearest_node(const sh::NavGraph& g, sh::Vec3f p) {
+int32_t nearest_node(const sb::NavGraph& g, sh::Vec3f p) {
   int32_t best = -1;
   float best_d = 1e30f;
   for (size_t k = 0; k < g.nodes.size(); k++) {
@@ -166,11 +169,11 @@ int32_t nearest_node(const sh::NavGraph& g, sh::Vec3f p) {
 }
 
 // The quickest route from `from` into trigger `t` with no teleporter on it; empty with none.
-sh::NavRoute route_into(const sh::NavGraph& g, int32_t from, const Trigger& t, ge::ai::Search& s,
-                        const sh::NavJumper& jumper) {
+sb::NavRoute route_into(const sb::NavGraph& g, int32_t from, const Trigger& t, ge::ai::Search& s,
+                        const sb::NavJumper& jumper) {
   // The nodes in the trigger first; only when none has a route, those a step short of a thin one
   // (its slab between two rows of the grid).
-  sh::NavRoute best;
+  sb::NavRoute best;
   for (int pass = 0; pass < 2 && best.nodes.empty(); pass++)
     for (size_t k = 0; k < g.nodes.size(); k++) {
       const sh::Vec3f o = g.nodes[k].origin;
@@ -182,13 +185,13 @@ sh::NavRoute route_into(const sh::NavGraph& g, int32_t from, const Trigger& t, g
             o.z + kHullUp < t.lo.z || o.z - kHullDown > t.hi.z)
           continue;
       }
-      sh::NavRoute r = sh::nav_route(g, from, static_cast<int32_t>(k), s, 1, {}, {}, jumper);
+      sb::NavRoute r = sb::nav_route(g, from, static_cast<int32_t>(k), s, 1, {}, {}, jumper);
       if (r.nodes.empty() || r.time_s >= kClosed_s ||
           (!best.nodes.empty() && r.time_s >= best.time_s))
         continue;
       bool teleported = false;
       for (size_t i = 0; i + 1 < r.nodes.size() && !teleported; i++) {
-        const sh::NavLink* l = link_between(g, r.nodes[i], r.nodes[i + 1]);
+        const sb::NavLink* l = link_between(g, r.nodes[i], r.nodes[i + 1]);
         teleported = l != nullptr && l->teleport;
       }
       if (!teleported) best = std::move(r);
@@ -237,7 +240,7 @@ bool pit_on_line(const sh::MoveWorld& w, sh::Vec3f from, sh::Vec3f to, sh::Vec3f
 // trigger's top) is never stood on: a player falling there is sent away on the way down (zjumps'
 // triggers hang 100 units over the pits' floors). Every link into one costs `kClosed_s`, so no
 // route runs through a pit's floor; `dead` marks them. Counts the links closed.
-int close_pits(sh::NavGraph& g, const std::vector<Trigger>& triggers, std::vector<uint8_t>& dead) {
+int close_pits(sb::NavGraph& g, const std::vector<Trigger>& triggers, std::vector<uint8_t>& dead) {
   dead.assign(g.nodes.size(), 0);
   for (size_t k = 0; k < g.nodes.size(); k++) {
     const sh::Vec3f o = g.nodes[k].origin;
@@ -247,7 +250,7 @@ int close_pits(sh::NavGraph& g, const std::vector<Trigger>& triggers, std::vecto
         dead[k] = 1;
   }
   int closed = 0;
-  for (sh::NavLink& l : g.links)
+  for (sb::NavLink& l : g.links)
     if (dead[static_cast<size_t>(l.to)] != 0 && !l.teleport) {
       l.time_s = kClosed_s;
       closed++;
@@ -266,8 +269,8 @@ constexpr float kSpot = 96;         // landings this near one taken are the same
 constexpr float kHopLand = 48;      // a hop comes down within this across of its landing node
 constexpr float kHopCost_s = 0.2f;  // and costs its flight and this (a miss is a fall)
 constexpr int kPilotMsec = 13;      // the pilot's command (bots/pilot_run.hpp)
-void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<Trigger>& triggers,
-                const sh::NavJumper& jumper, int& tried, int& kept, bool strafed, float fastest) {
+void prove_pits(const sh::MoveWorld& world, sb::NavGraph& g, const std::vector<Trigger>& triggers,
+                const sb::NavJumper& jumper, int& tried, int& kept, bool strafed, float fastest) {
   ge::ai::Search search;
   std::vector<std::pair<int32_t, int32_t>> pairs;
   // The rim: nodes over a pit's trigger (64 round its box), above it, with the floor 32 units off
@@ -318,7 +321,7 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
       for (const sh::Vec3f& o : spots)
         seen = seen || static_cast<float>(ge::core::hypot(o.x - B.x, o.y - B.y)) < kSpot;
       if (seen) continue;
-      const sh::NavRoute r = sh::nav_route(g, a, b, search, 1, {}, {}, jumper);
+      const sb::NavRoute r = sb::nav_route(g, a, b, search, 1, {}, {}, jumper);
       if (!r.nodes.empty() && r.time_s < 2 * d / 320) continue;  // walked round as quickly
       pairs.emplace_back(a, b);
       spots.push_back(B);
@@ -326,7 +329,7 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
     }
   }
   sh::MoveSettings move;
-  std::vector<sh::NavExtraLink> hops;
+  std::vector<sb::NavExtraLink> hops;
   for (const auto& [a, b] : pairs) {
     tried++;
     const sh::Vec3f A = g.nodes[static_cast<size_t>(a)].origin;
@@ -338,13 +341,13 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
       // gap's jump, pilot_gaps.hpp `gap_lands`), not standing on it: a block too small to stop on
       // at this speed is jumped from again on its landing (the pilot's hop does that).
       const sh::Vec3f vel{(B.x - A.x) / d * v, (B.y - A.y) / d * v, 0};
-      const sh::JumpFlight f = sh::fly_jump(world, move, A, vel, B, kPilotMsec, 1.5f, strafed);
+      const sb::JumpFlight f = sb::fly_jump(world, move, A, vel, B, kPilotMsec, 1.5f, strafed);
       const float dz = f.end.z - B.z;
       if (!f.landed ||
           static_cast<float>(ge::core::hypot(f.end.x - B.x, f.end.y - B.y)) > kHopLand || dz > 32 ||
           dz < -32)
         continue;
-      sh::NavExtraLink l{a, b, sh::NavKind::jump, f.time_s + kHopCost_s};
+      sb::NavExtraLink l{a, b, sb::NavKind::jump, f.time_s + kHopCost_s};
       l.speed = v;
       l.gap = true;
       hops.push_back(l);
@@ -352,18 +355,18 @@ void prove_pits(const sh::MoveWorld& world, sh::NavGraph& g, const std::vector<T
       break;
     }
   }
-  sh::nav_add_links(g, hops);
+  sb::nav_add_links(g, hops);
 }
 
 // THE NAV'S REACH, the first section no route crosses: the whole map from above (the floor shaded
 // by height), the nodes the start reaches in green and the rest grey, the fail triggers in red, the
 // pits' proven jumps in blue, the start ringed and the exit's trigger in black.
 void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& world,
-                const sh::NavGraph& g, const ge::ai::Search& reach,
+                const sb::NavGraph& g, const ge::ai::Search& reach,
                 const std::vector<uint8_t>& dead, const std::vector<Trigger>& triggers,
                 sh::Vec3f start, const Trigger& exit, float clip) {
   sh::Vec3f lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
-  for (const sh::NavNode& n : g.nodes) {
+  for (const sb::NavNode& n : g.nodes) {
     lo = {std::min(lo.x, n.origin.x), std::min(lo.y, n.origin.y), std::min(lo.z, n.origin.z)};
     hi = {std::max(hi.x, n.origin.x), std::max(hi.y, n.origin.y), std::max(hi.z, n.origin.z)};
   }
@@ -395,9 +398,9 @@ void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& worl
     gl::draw_line(p, px(t.lo.x), py(t.hi.y), px(t.lo.x), py(t.lo.y), c);
   }
   for (size_t k = 0; k < g.nodes.size(); k++) {
-    const sh::NavNode& n = g.nodes[k];
+    const sb::NavNode& n = g.nodes[k];
     for (int32_t x = 0; x < n.links; x++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
+      const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
       if (!l.gap) continue;
       const sh::Vec3f b = g.nodes[static_cast<size_t>(l.to)].origin;
       gl::draw_line(p, px(n.origin.x), py(n.origin.y), px(b.x), py(b.y), {40, 80, 210, 255});
@@ -448,10 +451,12 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   if (!rules.start(map->spec, out.error)) return;
   sv::use_map_sets(q, map->bsp);
   bt::MapNav nav;
-  sh::NavSettings nset;
+  sb::NavSettings nset;
   nset.spacing = static_cast<float>(lab.arg_num("spacing"));
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error, nset)) return;
-  sh::NavGraph& g = nav.graph;
+  if (!bt::build_map_nav(q, map->spec, bt::quake_maps(), "info_player_deathmatch", nav, out.error,
+                         nset))
+    return;
+  sb::NavGraph& g = nav.graph;
   // The pictures from above: the map over `--clip-top` cut away, every roof under it stepped
   // through (nav_top.hpp `floor_below`); empty: from the top, the roofs stepped through.
   const float clip =
@@ -506,23 +511,23 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   };
 
   // The expert's pilot through an expert's keyboard, as a fighter's.
-  sh::Features features = sh::features_of(sh::AimSkill::expert);
+  sb::Features features = sb::features_of(sb::AimSkill::expert);
   std::string error;
-  if (!sh::apply_features(lab.arg("features"), features, error)) {
+  if (!sb::apply_features(lab.arg("features"), features, error)) {
     out.error = error;
     return;
   }
-  const sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);
-  sh::PilotHands hands = sh::PilotHands::none;
-  sh::PilotSettings ps = bt::fighter_pilot(features, traits, sh::AimSkill::expert, hands);
+  const sb::Traits traits = sb::traits_of(sb::AimSkill::expert, sb::Temper::balanced);
+  sb::PilotHands hands = sb::PilotHands::none;
+  sb::PilotSettings ps = bt::fighter_pilot(features, traits, sb::AimSkill::expert, hands);
   // People's start off their runs (`--circle-target`, `--circle-s`; zjumps' racers curve ~0.6 s
   // to ~480): the circle jump's target and its longest curve, over the expert's.
   if (!lab.arg("circle-target").empty())
     ps.circle.target = static_cast<float>(lab.arg_num("circle-target"));
   if (!lab.arg("circle-s").empty()) ps.circle.most_s = static_cast<float>(lab.arg_num("circle-s"));
-  ps.jumper.gap_build_s = features[sh::Feature::gapbuild] ? bt::kGapBuild_s : -1;
+  ps.jumper.gap_build_s = features[sb::Feature::gapbuild] ? bt::kGapBuild_s : -1;
   ps.jumper.gaps = true;  // the pits' jumps proven at speed (below) are this course's way on
-  const sh::Features* keys = features[sh::Feature::keys] ? &features : nullptr;
+  const sb::Features* keys = features[sb::Feature::keys] ? &features : nullptr;
   const int tries = std::max(1, static_cast<int>(lab.arg_num("tries")));
   const auto limit = static_cast<float>(lab.arg_num("limit"));
 
@@ -534,7 +539,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
     std::vector<uint8_t> harm = nav.harm;
     harm.resize(g.nodes.size(), 0);
     for (size_t k = 0; k < g.nodes.size(); k++) harm[k] = harm[k] | dead[k];
-    out.brinks = static_cast<int>(sh::nav_mark_harm(g, harm));
+    out.brinks = static_cast<int>(sb::nav_mark_harm(g, harm));
   }
   if (lab.arg("pits") != "line")
     prove_pits(nav.world, g, triggers, ps.jumper, out.pit_pairs, out.pit_jumps, ps.gap_strafe,
@@ -572,7 +577,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
     }
     int pick = -1;
     int best_ways = 0;
-    sh::NavRoute best;
+    sb::NavRoute best;
     float nearest = 1e30f;
     int near_pick = -1;
     for (size_t t = 0; t < triggers.size(); t++) {
@@ -580,7 +585,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       if (tr.target == own || visited.count(tr.target) != 0) continue;
       sh::Vec3f at;
       if (!dest_at(tr.target, at)) continue;
-      const sh::NavRoute r = route_into(g, a, tr, search, ps.jumper);
+      const sb::NavRoute r = route_into(g, a, tr, search, ps.jumper);
       // The course's next: the destination fewest doorways lead to first (a hub's doors lead to
       // every section, a section's end to the next as well: the first section has its door
       // alone), then the quickest.
@@ -600,7 +605,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       // No route to any: the trigger nearest what the start reaches (a section's own end lies
       // past its pits, the hub's doors elsewhere), else the nearest to the start.
       ge::ai::Search reach;
-      sh::nav_reach(g, a, reach, ps.jumper);
+      sb::nav_reach(g, a, reach, ps.jumper);
       float nearest_reach = 1e30f;
       for (size_t t = 0; t < triggers.size(); t++) {
         const Trigger& tr = triggers[t];
@@ -631,12 +636,12 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         sec.pit = static_cast<float>(ge::core::hypot(on.x - off.x, on.y - off.y));
         sec.lip = off;
         sh::MoveSettings move;
-        sh::NavGapSettings gs;
+        sb::NavGapSettings gs;
         gs.faster = 1;  // each speed alone: the ladder is the search
         for (float v = kGapSlowest; v <= kGapFastest && sec.gaps == 0; v += kGapStep) {
-          const sh::NavGapTrick trick{off, on, v, 0};
-          const sh::NavGapCounts made =
-              sh::nav_add_gap_tricks(nav.world, move, g, {&trick, 1}, {}, gs);
+          const sb::NavGapTrick trick{off, on, v, 0};
+          const sb::NavGapCounts made =
+              sb::nav_add_gap_tricks(nav.world, move, g, {&trick, 1}, {}, gs);
           if (made.held > 0) sec.gaps = static_cast<int>(v);
         }
         best = route_into(g, a, exit, search, ps.jumper);
@@ -645,9 +650,9 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
     sec.planned = !best.nodes.empty();
     if (!sec.planned) {
       // How far the nav gets: of what it reaches from the start (no teleporter), nearest the exit.
-      sh::NavJumper walker = ps.jumper;
+      sb::NavJumper walker = ps.jumper;
       ge::ai::Search reach;
-      sec.reach_n = sh::nav_reach(g, a, reach, walker);
+      sec.reach_n = sb::nav_reach(g, a, reach, walker);
       const sh::Vec3f c{(exit.lo.x + exit.hi.x) / 2, (exit.lo.y + exit.hi.y) / 2,
                         (exit.lo.z + exit.hi.z) / 2};
       if (!drew_reach) {
@@ -669,9 +674,9 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       sec.exit = g.nodes[static_cast<size_t>(best.nodes.back())].origin;
       sec.proven_s = best.time_s;
       for (size_t i = 0; i + 1 < best.nodes.size(); i++) {
-        const sh::NavLink* l = link_between(g, best.nodes[i], best.nodes[i + 1]);
+        const sb::NavLink* l = link_between(g, best.nodes[i], best.nodes[i + 1]);
         sec.links++;
-        sec.jumps += l != nullptr && l->kind == sh::NavKind::jump;
+        sec.jumps += l != nullptr && l->kind == sb::NavKind::jump;
       }
     } else {
       sec.exit = {(exit.lo.x + exit.hi.x) / 2, (exit.lo.y + exit.hi.y) / 2, exit.lo.z + kHullDown};
@@ -688,8 +693,8 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         if (dead[k] != 0 || std::fabs(o.z - s0.z) > 8 ||
             static_cast<float>(ge::core::hypot(o.x - s0.x, o.y - s0.y)) > kBackup)
           continue;
-        const sh::NavRoute r =
-            sh::nav_route(g, a, static_cast<int32_t>(k), search, 1, {}, {}, ps.jumper);
+        const sb::NavRoute r =
+            sb::nav_route(g, a, static_cast<int32_t>(k), search, 1, {}, {}, ps.jumper);
         if (r.nodes.empty() || r.time_s > kBackup / 200) continue;
         const float d = static_cast<float>(ge::core::hypot(o.x - sec.exit.x, o.y - sec.exit.y));
         if (d > far) far = d, from = static_cast<int32_t>(k);
@@ -700,7 +705,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
       Try tr;
       tr.run = bt::run_route(nav.world, g, g.nodes[static_cast<size_t>(from)].origin, sec.exit,
                              hands, static_cast<uint32_t>(k + 1), ps, limit,
-                             from == a ? sec.start_v : sh::Vec3f{}, keys, traits[sh::Trait::moves]);
+                             from == a ? sec.start_v : sh::Vec3f{}, keys, traits[sb::Trait::moves]);
       const bt::RunResult& r = tr.run;
       for (size_t i = 0; i < r.trail.size() && tr.end < 0; i++)
         for (const Trigger& t : triggers)
@@ -737,7 +742,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
                  << '\t' << to_fixed(o.y, 0) << '\t' << to_fixed(o.z - kHullDown, 0) << '\t'
                  << to_fixed(static_cast<float>(ge::core::hypot(v.x, v.y)), 0) << '\t'
                  << to_fixed(v.z, 0) << '\t'
-                 << sh::pilot_mode_name(static_cast<sh::PilotMode>(r.modes[i])) << '\t'
+                 << sb::pilot_mode_name(static_cast<sb::PilotMode>(r.modes[i])) << '\t'
                  << r.links[i] << '\t' << to_fixed(r.yaw[i], 1) << '\t' << to_fixed(r.forward[i], 2)
                  << '\t' << to_fixed(r.side[i], 2) << '\t'
                  << (r.because[i] != nullptr ? r.because[i] : "-") << '\n';
@@ -952,7 +957,7 @@ void run(gl::Lab& lab) {
               {name, std::to_string(s + 1), std::to_string(k + 1), to_fixed(t.time_s, 2),
                r.trail.empty() ? "-" : v3(r.trail.back()),
                r.modes.empty() ? "-"
-                               : sh::pilot_mode_name(static_cast<sh::PilotMode>(r.modes.back())),
+                               : sb::pilot_mode_name(static_cast<sb::PilotMode>(r.modes.back())),
                !r.because.empty() && r.because.back() != nullptr ? r.because.back() : "-",
                std::to_string(r.plans.size()), r.arrived ? "yes" : "no"});
           continue;

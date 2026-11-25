@@ -9,7 +9,7 @@
 //   number truncated from the float first: byte u8, char i8, short i16, long i32 (little endian),
 //   coord an i16 of the value times 8 (the protocol's 1/8 grid), angle a u8 of the value times
 //   256 / 360, string its bytes and a NUL, entity an i16 of its number. M18g holds these to the
-//   classic protocol's own bytes and changes them here if a capture says otherwise.
+//   QuakeWorld protocol's own bytes and changes them here if a capture says otherwise.
 // - THE EVENTS: every other effect a builtin has on clients, typed (a sound, a stuffed command, a
 //   print, a centred print, a light style, a particle burst, an ambient sound, a static entity, a
 //   multicast, a pause, a named effect at a point or along a trail), with its recipients as a bit
@@ -88,9 +88,9 @@ void clear_frame(MessageSink& m);
 
 // The classic temporary entity a named effect (a mod's pointparticles) stands for, by the
 // protocol's kind byte: its classic name in any case, with or without "te_" (`gunshot` 2,
-// `te_explosion` 3, `lava` the lava splash 10, ...). False for any other name: a classic client
+// `te_explosion` 3, `lava` the lava splash 10, ...). False for any other name: a QuakeWorld client
 // is sent nothing for it, and the game's own client draws it from its files alone.
-bool classic_temp_entity(std::string_view name, uint8_t& kind);
+bool qw_temp_entity(std::string_view name, uint8_t& kind);
 
 // A short text for an event (the lab's tables, a test's message).
 std::string event_text(const NetEvent& e);

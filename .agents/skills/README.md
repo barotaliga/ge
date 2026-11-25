@@ -24,6 +24,8 @@ router's Skills table and the directories against each other.
 | `determinism` | Bits, not closeness: FP flags, the libm rule, number semantics, golden failures |
 | `port` | WORKING skill (deleted with `porting/`): carrying a module over from its reference, bottom-up, bit-exact |
 | `clean-room` | Source we may not copy: a reader subagent answers questions in a document with no code; the implementer builds from it and never reads the source |
+| `port-from-ledger` | A classic game's piece built from its checklist ledger, rows marked in the same PR; the ledger written first when there is none |
+| `gap-analysis` | The occasional audit of a ported game's ledger: every row re-checked against main, missing rows added, the count reported |
 | `testing` | The header harness, golden tables, CTest |
 | `build` | CMake, presets, pinned dependencies, the CI matrix, workflow hygiene |
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
@@ -57,6 +59,7 @@ router's Skills table and the directories against each other.
 | `vfs` | Content files: the pack archive's checked directory and its files as views, zip archives; later search paths and directories |
 | `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend; Discord's presence |
 | `mod` | Mods in C++: the C ABI each way and how it grows, the manifest and the loader, the state block and determinism, a game's mod seam, `ge mod`, the sample mod and the `mod` lab |
+| `window-recipes` | A game's window driven by a recipe cfg: `sleep`, menu keys and ids, the page read as text, screenshots, the runner |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins
@@ -78,4 +81,5 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `rooms` | `plugins/rooms`: the engine's own level format, rooms of plain geometry grown from their seeds (reliefs, caves), its text form and its lab |
 | `progs` | `plugins/progs`: the QC VM, the progs loader and checker, the builtin table and extensions, the assembler, `ge qc` and the qc lab; the mod server (`games/shooters_edge/server`) and the se-mod lab |
 | `shooter` | `plugins/shooter`: the classic player move in floats, clip hulls and their trace, the recorded scenarios and the pmove lab |
+| `shooterbots` | `plugins/shooterbots`: the bots any shooter links: the pilot, the nav, senses, aim, dodge, team talk's meanings, recipes read off people |
 | `classic` | `plugins/classic`: an imported classic game's content layer and protocol family, kept off the shooter kit |

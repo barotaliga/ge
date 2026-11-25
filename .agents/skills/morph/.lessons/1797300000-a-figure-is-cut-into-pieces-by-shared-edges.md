@@ -5,7 +5,7 @@ scope: plugins/morph/carry.cpp, plugins/classic/vweps.cpp
 concepts: [pieces, cut-out, rigid-fit, carried, vwep, stand-in, player-figure]
 ---
 
-The first game's player figure is four separate meshes in one file: the body, the gun it holds,
+Quake's player figure is four separate meshes in one file: the body, the gun it holds,
 the axe and the muzzle's flash. Grouping vertices by the triangles that share them
 (`morph::pieces`) finds them without names; the largest is the body, and the gun and axe are
 told apart by which frames fold them to a point (the axe in the gun frames, the gun slung on

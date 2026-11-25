@@ -46,6 +46,8 @@ struct BspCull {
   // Each brush model's offset (engine metres) and 1 in w when it is hidden (bsp_draw.hpp's
   // `set_movers`); `moved` until prepare_bsp_cull has moved the chunks' boxes with them.
   std::vector<std::array<float, 4>> moves;
+  // Each brush model's turn about the map's origin (a quaternion x y z w; `set_movers`).
+  std::vector<std::array<float, 4>> turns;
   bool moved = false;
   wgpu::Buffer src, chunk_buf, pvs, dst, words, args, params;  // words: size, state a chunk
   std::vector<uint32_t> args_reset;
@@ -80,8 +82,9 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
 void create_bsp_cull_targets(gpu::Device& device, BspCull& cull,
                              const render::FrameTargets& targets);
 // This frame's set from the eye (engine metres; `pvs` false: every face), the arguments reset.
+// `areas`: the areas shown (brush/map.hpp's `potentially_visible`); empty, every area.
 void prepare_bsp_cull(gpu::Device& device, BspCull& cull, const Scene& scene, const double eye[3],
-                      bool pyramid, bool pvs = true);
+                      bool pyramid, bool pvs = true, std::span<const uint8_t> areas = {});
 // A phase's three dispatches (0 early, 1 late).
 void encode_bsp_cull(const BspCull& cull, const gpu::PipelineSet& pipelines,
                      render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,

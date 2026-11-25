@@ -10,7 +10,7 @@
 // read from its loc file; the game's own held weapons are its first-person models, all or none;
 // its menu, its modes and its HUD's pictures are its own.
 //
-// ge:summary Tests the first game's adapter: mods, programs by form, map info, textures, demos
+// ge:summary Tests Quake's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
 // ge:keywords map_textures list_demos find_demo demo_folder attract
 // ge:keywords qwprogs open_model open_sound replacement-skin
@@ -67,7 +67,7 @@ void write(const fs::path& p, const std::vector<uint8_t>& b) {
 
 std::vector<uint8_t> program(const pg::Layout& form) { return pg::Assembler(form).bytes(); }
 
-std::string base_dir() { return std::string(ge::classicenhance::classic_profile().base_dir); }
+std::string base_dir() { return std::string(ge::classicenhance::q1_profile().base_dir); }
 
 }  // namespace
 
@@ -81,7 +81,7 @@ TEST(the_mods_are_the_folders_beside_the_base_that_hold_a_program_or_an_archive)
   CHECK(ge::vfs::write_pak({{"maps/x.bsp", {1, 2, 3}}}, &pak, &error));
   write(root / "maps_only" / "pak0.pak", pak);
   write(root / "notes" / "readme.txt", {'h', 'i'});  // no archive, no program: not a mod
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const std::vector<cl::ModFolder> mods = a.list_mods(a, root.string());
   CHECK(mods.size() == 2);
   if (mods.size() == 2) {
@@ -97,7 +97,7 @@ TEST(each_mode_finds_its_program_through_the_mod_folder) {
   fs::remove_all(root);
   write(root / base_dir() / "progs.dat", program(pg::kSinglePlayerLayout));  // the campaign
   write(root / "mod" / "qwprogs.dat", program(pg::kMultiplayerLayout));
-  const cl::GameAdapter& a = cl::adapter_of(pf::classic_game());
+  const cl::GameAdapter& a = cl::adapter_of(pf::q1_game());
   cl::SearchPath sp;
   std::string error, why;
   CHECK_MSG(cl::open_game_dir(root.string(), "mod", sp, error), error);
@@ -124,7 +124,7 @@ TEST(each_mode_finds_its_program_through_the_mod_folder) {
   // A game whose multiplayer program is of a form with no runner: named, never read as QC.
   static constexpr pf::ProgramFile kLibrary[] = {
       {.name = "qwprogs.dat", .form = pf::ProgramForm::game_library}};
-  pf::GameProfile other = pf::classic_game();
+  pf::GameProfile other = pf::q1_game();
   other.multiplayer_programs = kLibrary;
   cl::GameAdapter b = a;
   b.game = &other;
@@ -148,7 +148,7 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
   CHECK(ge::vfs::write_pak({{"maps/room.bsp", map}}, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const std::vector<std::string> maps = a.list_maps(a, files);
   CHECK(maps.size() == 1 && maps[0] == "room");
   cl::MapInfo info;
@@ -188,8 +188,8 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
   CHECK(a.map_textures(a, files, "other", map, store)[0].rgba == tga.rgba);
 
   // A family that keeps its pictures in other files: one entry a texture, its pixels from its wall
-  // texture file wherever the open files hold one (a map of that family copied into the first
-  // game's folder draws too), a texture with no file a check (no pixels); the sequel's adapter
+  // texture file wherever the open files hold one (a map of that family copied into
+  // Quake's folder draws too), a texture with no file a check (no pixels); Quake II's adapter
   // reads it the same.
   std::vector<uint8_t> v38;
   CHECK(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v38, &v38, &error));
@@ -204,7 +204,7 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
                              ge::brush::write_wal(head, 16, 8, std::vector<uint8_t>(128, 5))}},
                            &wal_pak, &error));
   CHECK_MSG(cl::add_archive(files, "pak2.pak", std::move(wal_pak), error), error);
-  for (const cl::GameAdapter* g : {&a, &cl::sequel_adapter()}) {
+  for (const cl::GameAdapter* g : {&a, &cl::q2_adapter()}) {
     const std::vector<ge::brush::MapPicture> walls = g->map_textures(*g, files, "room", v38, store);
     CHECK(walls.size() == m38.textures.size());
     CHECK(walls[0].width == 16 && walls[0].height == 8 && walls[0].level[0][0] == 5);
@@ -220,7 +220,7 @@ TEST(the_demos_are_listed_and_found_by_a_bare_name) {
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const std::vector<std::string> demos = a.list_demos(a, files);
   CHECK(demos.size() == 2 && demos[0] == "demo1.dem" && demos[1] == "demos/final.mvd");
   std::vector<uint8_t> bytes;
@@ -228,21 +228,61 @@ TEST(the_demos_are_listed_and_found_by_a_bare_name) {
   CHECK_MSG(a.find_demo(a, files, "demos/final", bytes, found, error), error);
   CHECK(bytes.size() == 1 && bytes[0] == 2);
   CHECK(!a.find_demo(a, files, "nothing", bytes, found, error));
-  CHECK(!a.find_demo(a, files, "final", bytes, found, error));  // the first game: top level only
+  CHECK(!a.find_demo(a, files, "final", bytes, found, error));  // Quake: top level only
 }
 
-TEST(the_sequel_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu) {
+TEST(q2_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu) {
   std::vector<uint8_t> pak;
   std::string error;
   CHECK(ge::vfs::write_pak({{"demos/q2demo1.dm2", {7}}}, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::sequel_adapter();
+  const cl::GameAdapter& a = cl::q2_adapter();
   std::vector<uint8_t> bytes;
   std::string found;
   CHECK_MSG(a.find_demo(a, files, std::string(a.game->attract), bytes, found, error), error);
   CHECK(bytes.size() == 1 && bytes[0] == 7);
   CHECK_MSG(found.starts_with("demos/q2demo1.dm2"), found);
+}
+
+// Quake II's `demo` plays a name from `demos/` (its extension optional) or, after a leading slash,
+// from the top of the files; the words that play a demo complete its name relative to `demos/`.
+TEST(q2_plays_a_demo_by_its_own_word_from_the_top_after_a_slash_and_completes_its_name) {
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"demos/duel.dm2", {7}}, {"top.dm2", {8}}}, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::q2_adapter();
+  std::vector<uint8_t> bytes;
+  std::string found;
+  CHECK_MSG(a.find_demo(a, files, "/top", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 8);
+  CHECK_MSG(a.find_demo(a, files, "/demos/duel.dm2", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 7);
+  CHECK(!a.find_demo(a, files, "/duel", bytes, found, error));  // the slash skips `demos/`
+  ge::console::Console con;
+  cl::add_adapter_commands(con, a, files, ".");
+  const std::vector<std::string> names = con.arg_values("playdemo");
+  CHECK(names.size() == 2 && names[0] == "duel.dm2" && names[1] == "top.dm2");
+  CHECK(con.arg_values("timedemo") == names);
+}
+
+TEST(q2_finds_a_gzipped_demo_by_its_bare_name) {
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(
+      ge::vfs::write_pak({{"demos/duel.dm2.gz", {5}}, {"demos/relay.mvd2.gz", {6}}}, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::q2_adapter();
+  std::vector<uint8_t> bytes;
+  std::string found;
+  CHECK_MSG(a.find_demo(a, files, "duel", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 5);
+  CHECK_MSG(a.find_demo(a, files, "relay", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 6);
+  CHECK(a.list_demos(a, files).size() == 2);  // DEMOS and Tab list them too
 }
 
 TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
@@ -264,7 +304,7 @@ TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
       &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   cl::OpenedModel m;
   CHECK_MSG(a.open_model(a, files, "progs/armor.mdl", m, error), error);
   CHECK(m.form == cl::ModelForm::morph);
@@ -296,7 +336,7 @@ TEST(a_mods_skeletal_model_is_baked_into_frames_with_its_materials_pictures_in_o
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   cl::OpenedModel m;
   CHECK_MSG(a.open_model(a, files, "progs/limb.iqm", m, error), error);
   CHECK(m.form == cl::ModelForm::morph && m.morph.skins.size() == 1 && m.skins.size() == 1);
@@ -320,7 +360,7 @@ TEST(a_sound_is_read_from_the_sound_folder) {
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   ge::audio::Pcm pcm;
   CHECK_MSG(a.open_sound(a, files, "weapons/r_exp3.wav", pcm, error), error);
   CHECK(pcm.rate == 11025 && pcm.samples.size() == tone.size());
@@ -336,7 +376,7 @@ TEST(a_picture_file_of_a_menu_pictures_name_stands_in_for_it) {
   CHECK(ge::vfs::write_pak(listed, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const cl::ClassicPictures own = a.pictures(a, files, false, {});
   CHECK(own.menu.loaded() && own.menu.density == 1);
   const ge::ui::Image* plaque = own.menu.find("qplaque");
@@ -371,8 +411,8 @@ TEST(a_picture_file_of_a_menu_pictures_name_stands_in_for_it) {
   CHECK(kept != nullptr && kept->rgba == ge::ui::scaled_nearest(*title, 2).rgba);
 }
 
-TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
-  // The sequel's glyph sheet and main menu pictures as its own PCX files, the last colour clear.
+TEST(q2_s_menu_pictures_are_read_from_its_pics_folder) {
+  // Quake II's glyph sheet and main menu pictures as its own PCX files, the last colour clear.
   const auto pcx = [](int w, int h) {
     as::IndexedImage img;
     img.width = w;
@@ -395,7 +435,7 @@ TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
     CHECK(ge::vfs::write_pak(all, &pak, &error));
     cl::SearchPath files;
     CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-    const cl::GameAdapter& a = cl::sequel_adapter();
+    const cl::GameAdapter& a = cl::q2_adapter();
     return a.pictures(a, files, false, {}).menu;
   };
   const shooters_edge::menu::ClassicArt art = read(true);
@@ -408,7 +448,7 @@ TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
   CHECK(read(false).strip_print == 0);
 }
 
-TEST(the_sequel_s_menu_pictures_come_enhanced_from_the_packs_cache) {
+TEST(q2_s_menu_pictures_come_enhanced_from_the_packs_cache) {
   // The packs' cache holds the glyph sheet and one plate at 4x (classic-enhance's pictures stage):
   // those come from it, the rest are the pack's own scaled up nearest to the same density.
   const auto pcx = [](int w, int h) {
@@ -425,7 +465,7 @@ TEST(the_sequel_s_menu_pictures_come_enhanced_from_the_packs_cache) {
                             {"pics/m_main_game.pcx", pcx(99, 32)},
                             {"pics/m_main_quit.pcx", pcx(100, 32)}},
                            &pak, &error));
-  const fs::path root = fs::temp_directory_path() / "ge_se_sequel_enhanced_pictures";
+  const fs::path root = fs::temp_directory_path() / "ge_se_q2_enhanced_pictures";
   fs::remove_all(root);
   const fs::path dir = ge::classicenhance::pack_dir(root, ge::assets::sha256_hex(pak));
   CHECK(ge::classicenhance::write_record(dir, "textures", "k"));
@@ -438,7 +478,7 @@ TEST(the_sequel_s_menu_pictures_come_enhanced_from_the_packs_cache) {
   png("pics/m_main_game", 396, 128);
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::sequel_adapter();
+  const cl::GameAdapter& a = cl::q2_adapter();
   const cl::ClassicPictures got = a.pictures(a, files, true, root);
   CHECK(got.cache == dir && got.menu.density == 4);
   CHECK(got.menu.glyphs.width == 512 && got.menu.glyphs.rgba[0] == 200);
@@ -460,7 +500,7 @@ TEST(a_config_file_in_the_games_packs_runs_through_exec_after_the_players_own) {
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   std::string got;
   CHECK(a.find_config(a, files, "mymod.cfg", got) && got == "set se_test_cfg pack\n");
   CHECK(!a.find_config(a, files, "none.cfg", got));
@@ -491,7 +531,7 @@ TEST(a_maps_place_names_are_read_from_its_loc_file) {
       &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   ge::classic::Locs locs;
   CHECK(a.open_locations(a, files, "dm6", locs));
   CHECK(locs.points.size() == 2 && locs.from == "locs/dm6.loc");
@@ -503,7 +543,7 @@ TEST(a_maps_place_names_are_read_from_its_loc_file) {
 }
 
 TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_order) {
-  const pf::GameProfile& g = pf::classic_game();
+  const pf::GameProfile& g = pf::q1_game();
   const std::vector<uint8_t> model = ge::morph::write_model(ge::morph::sample_model());
   std::vector<std::pair<std::string, std::vector<uint8_t>>> listed = {
       {"gfx/palette.lmp", std::vector<uint8_t>(768, 90)}};
@@ -516,7 +556,7 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
   CHECK(ge::vfs::write_pak(short_set, &pak, &error));
   cl::SearchPath part;
   CHECK_MSG(cl::add_archive(part, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   std::vector<ge::viewmodel::HeldModel> held;
   std::string why;
   CHECK(!a.held_weapons(a, part, held, why) && held.empty());
@@ -551,8 +591,8 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
 }
 
 TEST(a_games_menu_modes_and_hud_are_its_own) {
-  const cl::GameAdapter& a = cl::classic_adapter();
-  // The first game: its classic pages, both modes.
+  const cl::GameAdapter& a = cl::qw_adapter();
+  // Quake: its classic pages, both modes.
   CHECK(&a.menu(a) == &shooters_edge::menu::classic_menu());
   const cl::GameModes m = a.modes(a);
   CHECK(m.single && m.multi);
@@ -561,7 +601,7 @@ TEST(a_games_menu_modes_and_hud_are_its_own) {
   static constexpr shooters_edge::menu::Entry kRows[] = {
       {.page = "main", .id = "multi", .text = "MULTIPLAYER", .opens = "multi"},
       {.page = "multi", .id = "back", .text = "BACK", .kind = ge::ui::ItemKind::back}};
-  const shooters_edge::menu::MenuTable table{kPages, kRows};
+  const shooters_edge::menu::MenuTable table{kPages, kRows, {}};
   ge::ui::Menu built = shooters_edge::menu::build_menu(table);
   CHECK(built.page("single") == nullptr && built.page("multi") != nullptr);
   CHECK(shooters_edge::menu::find_entry("main", "multi", table) != nullptr);
@@ -575,12 +615,12 @@ TEST(a_games_menu_modes_and_hud_are_its_own) {
   CHECK(&cl::hud_art_of(open, game, own) == &game);
 }
 
-TEST(the_sequel_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_over) {
-  const pf::GameProfile* q = pf::find_game("sequel");
+TEST(q2_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_over) {
+  const pf::GameProfile* q = pf::find_game("q2");
   CHECK(q != nullptr);
   const cl::GameAdapter& a = cl::adapter_of(*q);
-  CHECK(&a == &cl::sequel_adapter() && a.game == q);
-  CHECK(&cl::adapter_of(pf::classic_game()) == &cl::classic_adapter());
+  CHECK(&a == &cl::q2_adapter() && a.game == q);
+  CHECK(&cl::adapter_of(pf::q1_game()) == &cl::qw_adapter());
   std::vector<uint8_t> pak;
   std::string error;
   CHECK(ge::vfs::write_pak({{"gamex86.dll", {1, 2, 3}}, {"maps/demo1.bsp", {4}}}, &pak, &error));

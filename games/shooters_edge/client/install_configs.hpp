@@ -13,9 +13,9 @@
 //   then the install's main config and the files its client runs after it (below); then the
 //   series' one config and the window's own saved `config.cfg` (client/settings.hpp), so a change
 //   made in this game sticks; then the command line's `+set` pairs, then its other `+` commands.
-//   - the first game: `<client folder>/configs/config.cfg`, with `autoexec.cfg` run just before
+//   - Quake: `<client folder>/configs/config.cfg`, with `autoexec.cfg` run just before
 //     it and again after it, as the bundled client does;
-//   - the sequel: `config.cfg` (`q2config.cfg` on Windows, each tried after the other), the mod
+//   - Quake II: `config.cfg` (`q2config.cfg` on Windows, each tried after the other), the mod
 //     folder's before the base folder's; after it the base folder's `autoexec.cfg`, then the
 //     mod's, then `postexec.cfg`; and `postinit.cfg` last, after the command line.
 // - **Settings this game does not have** (the bundled client's own HUD, its renderer's), met in
@@ -63,14 +63,30 @@ struct SeriesConfig {
 };
 
 // The game's own saved settings (`<game folder>/settings/config.cfg`) run, as another game is
-// loaded; false when there are none.
+// loaded; false when there are none. Where the loaded game has `fs_autoexec` (Quake II) and it is
+// on, each game folder's autoexec.cfg (the base's, then the mod's) and postexec.cfg run after.
 bool run_game_settings(ge::console::Console& con, const std::string& basedir,
-                       const std::string& game);
+                       const std::string& game, const ge::classicenhance::Profile& content);
 
 // The startup over `con` (its search path set to `config_dirs` first by the caller), with the
 // command line's words `plus` (from the first `+` word on).
 ConfigsRun start_configs(ge::console::Console& con, const std::string& basedir,
                          const std::string& game, const ge::classicenhance::Profile& content,
                          const std::vector<std::string>& plus, const SeriesConfig& series = {});
+
+// The recordings a mod folder's own start file (`quake.rc`, in the mod's packs or loose) plays at
+// the title (its `startdemos` words, the last such line's), so a mission pack's title loop plays
+// the pack's own demos; `fallback` when `game` is the base folder or the file names none.
+std::string mod_startdemos(const std::string& basedir, const std::string& game,
+                           const ge::classicenhance::Profile& content,
+                           std::string_view fallback = {});
+
+// The title loop's list: the menu's own (`menu_attract`), or with `auto` the mod's own
+// (`mod_startdemos`), else `fallback`, the game's.
+inline std::string attract_list(const std::string& menu, const std::string& basedir,
+                                const std::string& game, const ge::classicenhance::Profile& content,
+                                std::string_view fallback) {
+  return menu != "auto" ? menu : mod_startdemos(basedir, game, content, fallback);
+}
 
 }  // namespace shooters_edge::client

@@ -19,8 +19,10 @@
 //   sends are paced, one every `gap_us` round the whole list, so a refresh of a master's thousand
 //   servers does not burst.
 // - A VIEW is the rows that pass a filter (full, empty, unanswered, a ping bound, a part of the
-//   name, the map or the mode), sorted by ping, players, name, map or mode, ties broken by name
-//   and then the address, so the same entries always give the same rows.
+//   name, the map or the mode, an INFO FILTER on the server's own keys), sorted by ping, players,
+//   name, map or mode, ties broken by name and then the address, so the same entries always give
+//   the same rows; or sorted by a browser's columns in turn (`ServerSortKey`), each either way.
+// - A LIVE UPDATE asks one answered server again (`server_list_requery`) while its rows stay.
 //
 //   server_list_init(l, config, query, transport)   a socket of the browser's own
 //   server_list_refresh(l, now)                      when the browser opens, or the player asks
@@ -31,7 +33,8 @@
 //
 // ge:summary The server list: status queries to the LAN, the masters and named servers, pinged
 // ge:keywords net server-list server-browser status-query master-server masters lan broadcast
-// ge:keywords own-masters sv-master
+// ge:keywords own-masters sv-master info-filter parse_info_filter info_filter_passes requery
+// ge:keywords server_list_requery sort-keys server-column hide-not-empty live-update
 // ge:keywords ping refresh filter sort full empty mode map players slots skill join favourites
 // ge:skill net
 // ge:test tests/net_server_list_test.cpp
@@ -39,7 +42,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -101,7 +106,10 @@ struct ServerListConfig {
 };
 
 // ServerEntry::from.
-constexpr uint8_t kServerFromLan = 1, kServerFromMaster = 2, kServerFromNamed = 4;
+// kServerFromCache: an address the player's cache remembered (`server_list_read_cache`, a master's
+// list kept from an earlier answer), asked like a named one.
+constexpr uint8_t kServerFromLan = 1, kServerFromMaster = 2, kServerFromNamed = 4,
+                  kServerFromCache = 8;
 
 struct ServerEntry {
   Address address;
@@ -111,6 +119,7 @@ struct ServerEntry {
   int ping_ms = -1;  // -1: no reply yet
   int tries = 0;
   int64_t asked_us = -1;  // the last query's send; -1 never
+  bool again = false;     // answered, and asked again (`server_list_requery`)
 };
 
 struct ServerListStats {
@@ -131,6 +140,7 @@ struct ServerList {
     int tries = 0;
     int64_t asked_us = -1;
     bool answered = false;
+    std::vector<Address> got;  // the servers its answer listed (a cache keeps them)
   };
   std::vector<Master> masters;  // per config.masters
   MasterQuery own;              // config.own_masters' pages
@@ -154,20 +164,85 @@ bool server_list_done(const ServerList& l, int64_t now_us);
 // Servers answered so far, and servers known (answered or not).
 int server_list_answered(const ServerList& l);
 
+// THE CACHE: a list kept as text between sessions. `server_list_cache_text` writes the answered
+// servers one a line (address, ping, players, slots, then name, map, game and mode, tabs
+// between); `server_list_read_cache` reads that back as answered entries (no roster, no keys)
+// and returns how many it read, a line of another shape left out and counted in `bad`. A list
+// of addresses alone (one a line) reads too, as servers not yet answered.
+std::string server_list_cache_text(const ServerList& l);
+int server_list_read_cache(ServerList& l, std::string_view text, int* bad);
+// A master's list as its cache file holds it: one address a line; `parse_address_lines` reads
+// it back, a line that is no address left out.
+std::string address_lines(const std::vector<Address>& addresses);
+std::vector<Address> parse_address_lines(std::string_view text);
+
+struct InfoPattern;  // a compiled pattern (server_list.cpp)
+
+// One word of an INFO FILTER (`parse_info_filter`): a server's info key and a pattern its value
+// must match for the word to decide (shown or hidden).
+struct InfoRule {
+  bool show = true;     // "+key" shows, "-key" hides
+  std::string key;      // compared exactly with ServerInfo::keys' names; "*": every server
+  std::string pattern;  // a regular expression, case folded, matched anywhere; "": not empty
+  std::shared_ptr<const InfoPattern> compiled;  // `pattern` made once (null: not empty)
+};
+
+// `text` read as info-filter words: `+key`, `-key`, `+key=pattern` or `-key=pattern`, spaces
+// between, double quotes round a word with spaces. A pattern that is empty or starts with `*`
+// asks only that the key has a value. A word of another shape, or a pattern that is no regular
+// expression, is left out and said in `problems` as a player reads it.
+std::vector<InfoRule> parse_info_filter(std::string_view text, std::vector<std::string>* problems);
+// Whether `keys` pass `rules`: the first word whose key the server has and whose pattern matches
+// decides (+ shows, - hides); a word whose key it lacks is passed over. When none decides, the
+// opposite of the last word's sign; with no words, shown.
+bool info_filter_passes(const std::vector<InfoRule>& rules,
+                        const std::vector<std::pair<std::string, std::string>>& keys);
+
 struct ServerFilter {
-  bool hide_full = false, hide_empty = false;
-  bool hide_silent = true;  // servers that have not answered
-  int max_ping_ms = 0;      // 0: any
-  std::string name_has;     // a part of the name, the map or the mode (ASCII case folded)
-  std::string mode;         // "": every mode
-  uint8_t from = kServerFromLan | kServerFromMaster | kServerFromNamed;
+  // Full: the players (watchers not counted) at the slots. Empty: nobody on, players and
+  // watchers both.
+  bool hide_full = false, hide_empty = false, hide_not_empty = false;
+  bool hide_silent = true;     // servers that have not answered
+  int max_ping_ms = 0;         // 0: any; else hidden when strictly above
+  std::string name_has;        // a part of the name, the map or the mode (ASCII case folded)
+  std::string mode;            // "": every mode
+  std::vector<InfoRule> info;  // the info filter's words (`parse_info_filter`); none: every one
+  uint8_t from = kServerFromLan | kServerFromMaster | kServerFromNamed | kServerFromCache;
 };
 enum class ServerSort : uint8_t { ping, players, name, map, mode };
 const char* server_sort_name(ServerSort s);
+
+// A browser's sort by columns (`server_list_view`'s second form): the first key that tells two
+// servers apart decides, the next ones break ties.
+enum class ServerColumn : uint8_t {
+  name,
+  address,
+  ping,  // the silent last either way
+  game,
+  map,
+  players,  // the players, watchers not counted
+  mode,
+  skill,
+  key,       // the info key `ServerSortKey::key`'s value, as text
+  activity,  // playing and not full first, then full, then empty; by ping, the full by players
+};
+struct ServerSortKey {
+  ServerColumn column = ServerColumn::ping;
+  bool descending = false;  // text Z to A, numbers high to low
+  std::string key;          // ServerColumn::key's info key
+};
+const char* server_column_name(ServerColumn c);
 
 // The entries (their indices) the filter passes, in the sort's order: ping lowest first and the
 // silent last; players most first; name, map and mode A to Z.
 void server_list_view(const ServerList& l, const ServerFilter& filter, ServerSort sort,
                       std::vector<int>& rows);
+// The same sorted by `keys` (none: by activity), each low to high unless descending (the silent
+// always last), ties by the address.
+void server_list_view(const ServerList& l, const ServerFilter& filter,
+                      const std::vector<ServerSortKey>& keys, std::vector<int>& rows);
+// The server at `index` asked again from the next update (a browser's live update of the one the
+// player has selected); its rows stay meanwhile, its ping is kept.
+void server_list_requery(ServerList& l, int index);
 
 }  // namespace ge::net

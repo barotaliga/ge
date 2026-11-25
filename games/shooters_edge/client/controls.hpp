@@ -18,9 +18,10 @@
 // - `turn_view`: raw mouse counts turn the view (`sensitivity` degrees a count, `m_invert` flips
 //   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
 //   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning.
-// - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
-//   his pitch drift to the program's ideal pitch (`spring_view`: level ground centres it, a slope
-//   tilts it down or up the way he goes, at `kSpringSpeed` degrees a second).
+// - `lookspring`: while it is on, a player who looks by keys (`freelook` off, +mlook not held)
+//   and moves on the ground has his pitch drift to the program's ideal pitch (`spring_view`: level
+//   ground centres it, a slope tilts it down or up the way he goes, at `kSpringSpeed` degrees a
+//   second); a mouse-look player's pitch never drifts.
 // - `aim_turn_view`: a player the server's aim help helps sees his view turn toward the player a
 //   shot was bent onto while he fires, and back to his own aim after (`cl_aimhelp_turn`, on by
 //   default; shooter/aim_turn.hpp), so his recording looks like his own aim.
@@ -51,9 +52,11 @@ namespace shooters_edge::client {
 using ge::shooter::aim_turn_view;
 using ge::shooter::button_moves;
 using ge::shooter::ControlButtons;
+using ge::shooter::drift_pitch;
 using ge::shooter::key_moves;
 using ge::shooter::kSpringSpeed;
 using ge::shooter::Moves;
+using ge::shooter::PitchDrift;
 using ge::shooter::read_controls;
 using ge::shooter::release_buttons;
 using ge::shooter::spring_view;
@@ -84,5 +87,8 @@ bool team_scores_held(const ControlSettings& c);
 void add_cvars(ge::console::Console& con, ControlSettings& c);
 // Every move's default key bound where the key runs nothing yet (call before the configs run).
 void default_binds(ge::console::Console& con);
+// Every bind dropped but the console's own keys, then `default_binds`: the command
+// `bind_defaults`, which OPTIONS ▸ RESET TO DEFAULTS runs too.
+void reset_binds(ge::console::Console& con);
 
 }  // namespace shooters_edge::client

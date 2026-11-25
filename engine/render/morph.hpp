@@ -41,21 +41,21 @@
 // - THE BURN (`MorphBurn`, render/body_burn.hpp's skin): CHARRED blackens it in noise patches fixed
 //   to the model that spread as the char grows; EMBERS glow in the char's cracks while it is hot;
 //   ETCHED bleaches and pits it (an acid). All three 0: the shader skips it.
-// - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
-//   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
-//
-// The CPU twins (`pose_morph`, `morph_texel`, `pack_morph_atlas`, `warp_vertex`, `warp_cut`) are
-// what the shader does, for the tests and the CPU pictures.
-//
+// - THE BLOOD (`MorphBlood`): wounds as soaked patches with blood run down from them, fixed to the
+//   model's rest frame (frame 0), darkening as they dry. No wound: the shader skips it.
+// - THE SHADOW (`MorphDraw::flat`): a copy squashed flat onto the floor, black, see-through.
+// - THE PASS: after the opaque world, depth tested and written, back faces culled, one draw each.
+// - THE CPU TWINS (`pose_morph`, `morph_texel`, `pack_morph_atlas`, `warp_vertex`, `warp_cut`,
+//   `wound_cover`) do what the shader does, for the tests and the CPU pictures.
 // ge:summary Morph meshes drawn: vertex-animated models, frames blended on the GPU, tinted skins
-// ge:keywords burn charred embers etched morph_burn scorch-skin
-// ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas
-// ge:keywords tint team-colours player-colours ramp glow fullbright sharp smooth nearest
-// ge:keywords hole cut-out alpha see-through mark-hole
-// ge:keywords warp morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
-// ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer pinch
-// ge:keywords create_morph prepare_morph encode_morph pose_morph morph_texel pack_morph_atlas
-// ge:keywords skin-slots set_morph_slot slot_texels worn-skin lazy-skin
+// ge:keywords burn charred embers etched morph_burn scorch-skin blood morph_blood morph_wound
+// ge:keywords wound_cover wound-stain blood-run soaked bloodied hole cut-out alpha see-through
+// ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas tint
+// ge:keywords team-colours player-colours ramp glow fullbright sharp smooth nearest mark-hole warp
+// ge:keywords morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
+// ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer
+// ge:keywords pinch create_morph prepare_morph encode_morph pose_morph morph_texel lazy-skin
+// ge:keywords pack_morph_atlas skin-slots set_morph_slot slot_texels worn-skin shadow blob-shadow
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
 #pragma once
@@ -73,7 +73,9 @@ namespace ge::render {
 
 inline constexpr uint32_t kTintSteps = 16;       // a ramp's colours
 inline constexpr uint32_t kMaxMorphDraws = 256;  // drawn a frame
-inline constexpr uint32_t kMorphAtlasSize = 2048;
+// The atlas's width and its tallest height: a mission pack's models over the base game's fill more
+// than 2048 square (only the height used is allocated).
+inline constexpr uint32_t kMorphAtlasSize = 4096;
 // THE SLOTS: skins written while the scene runs (a player's own picture, read the first time it
 // is worn), each kMorphSlotSize square in a layer of their own, stretched over the coordinates of
 // the model that wears it (`MorphDraw::slot`).
@@ -143,6 +145,24 @@ struct MorphBurn {
   float seed = 0;  // the patches' offset, 0..1
 };
 
+// A figure's BLOOD (docs/rendering.md § Morph meshes): up to kMorphWounds wounds, each a soaked
+// patch round where it struck and a run of blood down from it, placed in the model's REST frame
+// (its frame 0) so the stain rides the skin as the figure animates. Down is the rest frame's -y.
+inline constexpr uint32_t kMorphWounds = 6;
+struct MorphWound {
+  float at[3] = {0, 0, 0};  // the wound in the rest frame times the draw's scale, m
+  float size = 0;           // the soaked patch's radius, m (0: no wound)
+  float run = 0;            // how far the blood has run down from it, m
+  float wet = 1;            // 1 fresh, 0 dried (darker, browner)
+  float seed = 0;           // its noise's offset, 0..1
+};
+struct MorphBlood {
+  MorphWound wounds[kMorphWounds];
+};
+// How much of the skin at `rest` (rest frame times scale, m) the wound `w` covers, 0..1: the CPU
+// twin of morph.wgsl's `wound_cover`.
+float wound_cover(const MorphWound& w, const float rest[3]);
+
 inline constexpr uint32_t kOwnSkin = ~0u, kNoSlot = ~0u;
 
 struct MorphDraw {
@@ -168,6 +188,7 @@ struct MorphDraw {
   float alpha = 1;
   MorphWarp warp;
   MorphBurn burn;
+  MorphBlood blood;
   // The skin it wears: another model's (a player's own picture on a shared figure, uploaded as a
   // SKIN-ONLY model: a `MorphModel` with a skin and no frames), laid over its own coordinates;
   // `kOwnSkin` (or any index past the models): its own.
@@ -179,6 +200,13 @@ struct MorphDraw {
   // drawn over a plain copy of the same model, usually see-through (`alpha`).
   float shell_push = 0;
   float shell[3] = {0, 0, 0};
+  // A SHADOW (`flat` set): the model squashed flat onto a level floor at height `flat_y` (world,
+  // m), each point moved across by `flat_lean` (x, z) for each m it stood above the floor, drawn in
+  // the shell's one flat colour `shell` (black for a shadow) and see-through by `alpha`. Its pose,
+  // warp and motion are the plain draw's.
+  bool flat = false;
+  float flat_y = 0;
+  float flat_lean[2] = {0, 0};
 };
 
 // Where each model's skin sits in the atlas, texels.

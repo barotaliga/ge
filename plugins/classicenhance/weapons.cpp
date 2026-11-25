@@ -170,6 +170,10 @@ viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& p
   if (!model.skins.empty()) {
     const morph::Skin& s = model.skins[size_t(std::clamp(skin, 0, int(model.skins.size()) - 1))];
     out.skin.image = to_rgba(s.indices, s.width, s.height, palette);
+    const std::vector<uint8_t>& rgba = out.skin.image.rgba;
+    out.skin.shine.resize(rgba.size() / 4);
+    for (size_t i = 0; i < out.skin.shine.size(); i++)
+      out.skin.shine[i] = skin_shine(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]);
     out.skin.glow.resize(s.indices.size());
     bool any = false;
     for (size_t i = 0; i < s.indices.size(); i++) {
@@ -184,6 +188,18 @@ viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& p
   viewmodel::find_muzzle(out);
   find_barrels(out);
   return out;
+}
+
+uint8_t skin_shine(uint8_t r, uint8_t g, uint8_t b) {
+  // Warm: blue the least and red at least most of green (red, orange, brown, yellow), never a
+  // violet or a steel blue.
+  const int most = std::max({r, g, b}), least = std::min({r, g, b});
+  if (most == 0 || b != least || r * 5 < g * 4) return 255;
+  const double sat = double(most - least) / double(most);
+  // Matte from a saturation of 0.18 (a warm grey still reads as metal) to 0.38 (a stock's brown).
+  const double t = std::clamp((sat - 0.18) / 0.20, 0.0, 1.0);
+  const double matte = t * t * (3 - 2 * t);
+  return static_cast<uint8_t>(std::lround(255.0 * (1 - matte)));
 }
 
 viewmodel::PlaceRow classic_weapon_row() {
@@ -292,7 +308,7 @@ std::span<const ClassicFire> classic_fires() {
   // gone in under half a second, so a stream of them never builds a cloud. The rest leave a short
   // grey puff at the muzzle, a hand or two across and gone in about a second, never a white cloud
   // hanging between the shooter and what he shot (the pack's weapons are drawn at their true size,
-  // so the presets' smoke is turned down to it). The rates are the classic game's.
+  // so the presets' smoke is turned down to it). The rates are Quake's.
   static constexpr std::string_view kPuff =
       "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.02,"
       "smoke.smoke_grow=0.3,smoke.smoke_time=0.35,smoke.smoke_albedo=0.45,smoke_speed=1.2";
@@ -308,7 +324,7 @@ std::span<const ClassicFire> classic_fires() {
       "life=0.036,length=0.54,width=0.12,glow=0.0315,flash=0.22,sparks=3,light_range=5.6,"
       "smoke.smoke=0.3,smoke.radius=0.12,smoke.smoke_grow=0.8,smoke.smoke_time=1.1,"
       "smoke.smoke_albedo=0.35";
-  // The sequel's rapid fire guns: a bullet's flash, smaller and shorter than a shotgun's.
+  // Quake II's rapid fire guns: a bullet's flash, smaller and shorter than a shotgun's.
   static constexpr std::string_view kBullet =
       "life=0.012,length=0.14,width=0.09,glow=0.012,flash=0.12,sparks=1,light_range=2.8,"
       "smoke.smoke=0.08,smoke.radius=0.06,smoke.smoke_grow=0.5,smoke.smoke_time=0.4,"
@@ -322,7 +338,7 @@ std::span<const ClassicFire> classic_fires() {
       {"v_rock", "muzzle.grenade", kGrenade, 0.6},
       {"v_rock2", "muzzle.rocket", kRocket, 0.8},
       {"v_light", "", "", 0.1, 1, true},
-      // The sequel's, by their models' folders: the energy weapons (blaster, hyperblaster,
+      // Quake II's, by their models' folders: the energy weapons (blaster, hyperblaster,
       // railgun, BFG) throw no burning powder, so no flame; their light is the hand's flash.
       {"v_blast", "", "", 0.5},
       {"v_shotg", "muzzle.shotgun", kShotgun, 1.0},

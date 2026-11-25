@@ -1,7 +1,7 @@
 // SHOOTER'S EDGE'S ENHANCED WEAPON EFFECTS (docs/shooters-edge.md § The picture): what the modern
 // look draws for a weapon's work under the classic-enhance switches, on the engine's effects (the
 // fireball and its smoke, render/explosion.hpp; the bolt, render/beam.hpp; a round's hit,
-// render/impact.hpp; the particle pool, render/particles.hpp). The classic game's character is
+// render/impact.hpp; the particle pool, render/particles.hpp). Quake's character is
 // kept: a blast is still a ball of orange embers flung out and falling, the rocket still trails
 // fire into grey smoke, the arc gun's bolt is still a jagged blue-white line struck again many
 // times a second, a pellet still kicks grit off the wall. The engine adds what the classic could
@@ -45,7 +45,7 @@
 // ge:keywords glow-mark slug-mark energy-ball-mark
 // ge:keywords beam arc-gun impact hit
 // ge:keywords pellet nail surface classic-soul blast_light debris chunks dirt no-smoke
-// ge:keywords blood blood_spray ce_blood gore spray mist by-weapon
+// ge:keywords blood blood_spray ce_blood gore spray mist by-weapon exit-wound back-spatter pour
 // ge:skill render shooter
 // ge:test tests/shooters_edge_weapon_fx_test.cpp
 #pragma once
@@ -117,10 +117,12 @@ inline constexpr double kNozzleM = 0.3, kMotorLightM = 6.5, kMotorLevel = 1.7;
 Light motor_light(const double at[3], const double dir[3], uint32_t seed, double now_s);
 // THE GLOWING HIT MARKS (ce_decals; render/marks.hpp's `press_glow`): a slug gun's hit melts a
 // small round mark into the wall that glows white-hot and cools to black in a few seconds; a big
-// energy ball's burst leaves a large one that cools slowly. Both light the room while they glow
-// (`mark_glows`), as the bolt's burnt line and melt do.
+// energy ball's burst leaves a large one that cools slowly; a blaster's bolt a smaller one that
+// cools quickly. All light the room while they glow (`mark_glows`), as the bolt's burnt line and
+// melt do, and burn a little and then smoke as they cool (render/mark_fire.hpp).
 inline constexpr ge::render::GlowMark kSlugMark{0.32, 3.0};
 inline constexpr ge::render::GlowMark kEnergyBallMark{1.9, 7.0};
+inline constexpr ge::render::GlowMark kBoltMark{0.18, 1.8};
 
 // A grenade's painted ends glowing (ce_trails; a classic grenade gives no light): `rgb` the colour
 // its skin's glowing texels paint (world_models' ModelKind::glow_rgb), at kGrenadeGlowLevel,
@@ -165,20 +167,28 @@ void hit(const WallHit& h, uint32_t seed, Particles* births);
 // THE BLOOD (ce_blood): a body struck sprays blood shaped by what struck it. Drops (a few
 // millimetres to three centimetres, falling and lying where they land) and a fine mist that hangs a
 // moment, a dark arterial red that shines in the room's light where it is known.
-// - a PELLET: a puff out of the entry, mostly back toward the shooter, and a spray out the far
-// side;
-//   a shotgun's count of pellets throws each its own.
-// - a NAIL: a narrow jet driven on along the nail's flight, a little back out of the entry.
-// - a BLADE: a sweep flung sideways across the cut.
+// The blood goes as a wound bleeds: out of an ENTRY wound only a fine mist and a few small drops
+// come back toward the shooter, slow and short (under a metre); a round that goes THROUGH throws
+// most of the blood out of the EXIT wound (`exit`), heavier drops driven on along its line for
+// metres; and an entry POURS: drops let go with almost no speed that fall down the body.
+// - a PELLET: back-mist and a few drops out of the entry, a pour; through (point blank) a spray out
+//   of the exit; a shotgun's count of pellets throws each its own.
+// - a NAIL: through the body: a narrow jet out of the exit along the nail's flight, the most blood;
+//   back-mist out of the entry and a pour. Lodged (no exit): back-mist and a heavier pour.
+// - a BLADE: a sweep flung sideways across the cut, and a gash that pours.
 // - the ARC: a sizzle: few, small, dark drops boiled off, and more mist.
 // - a BLAST: a big burst thrown out away from where it went off, with heavy drops.
 // The client only knows the hit's place and count, so the weapon is the one the viewer holds when
 // the hit is his own; `any` (someone else's shot) throws the pellet's look.
-enum class BloodBy : uint8_t { any, pellet, nail, blade, arc, blast };
+// `drip`: one drop let go from a wound that is still bleeding, falling.
+enum class BloodBy : uint8_t { any, pellet, nail, blade, arc, blast, drip };
 struct BloodHit {
   double at[3] = {0, 0, 0};
-  double dir[3] = {0, 0, 1};  // the blow's way through the body (unit): the round's, the blast's
-  int count = 1;              // the message's count (a shotgun's pellets)
+  double dir[3] = {0, 0, 1};   // the blow's way through the body (unit): the round's, the blast's
+  double exit[3] = {0, 0, 0};  // where a round came out of the body (world m), when `through`
+  bool through = false;
+  double amount = 1;  // how much blood (ce_blood_amount): the drops' counts times this, 0 none
+  int count = 1;      // the message's count (a shotgun's pellets)
   BloodBy by = BloodBy::any;
   double floor_y = -1e9;          // world y the drops come down on
   float light[3] = {-1, -1, -1};  // the map's light there (1 as painted); below 0 not known
@@ -203,7 +213,7 @@ inline constexpr double kBoltReachM = 7;  // the classic's bolt reaches about 21
 inline constexpr double kBoltBoost = 8;   // 1.6 / r_fx_lights' default
 int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 
-// THE SEQUEL'S SHOTS, by the kind of shot whoever fired it (a player or a monster):
+// QUAKE II'S SHOTS, by the kind of shot whoever fired it (a player or a monster):
 //
 // - a BLASTER'S BOLT: a hot yellow light riding it (kBoltGlowM) and a short trail of shining
 //   yellow specks behind it (`glow_trail` with kBoltRgb);
@@ -215,7 +225,8 @@ int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 //   and a pale vapour that rises where the slug burnt the air (`ion_trail`);
 // - the BOLTS (blaster, hyperblaster) in the modern look: a streak of two plasma strands wound
 //   round each other riding each bolt (`plasma_look`), shedding sparks (`plasma_sheds`);
-// - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`); the BFG's burst: a green
+// - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`; Ground Zero's green bolt's
+//   in green); the BFG's burst: a green
 //   ball of specks (`bfg_burst`) under the engine's blast.
 inline constexpr float kBoltRgb[3] = {1.0f, 0.75f, 0.25f};
 inline constexpr float kBfgRgb[3] = {0.35f, 1.0f, 0.35f};
@@ -235,6 +246,16 @@ Light shot_glow(const double at[3], const float rgb[3], double radius_m, double 
 void glow_trail(const double from[3], const double to[3], const float rgb[3], double size,
                 double step, uint32_t seed, Particles* out);
 const gr::BeamLook& rail_look();
+// A laser (Quake II's beam entity): a straight, steady line `width_m` across in `rgb`, seen
+// through (the classic's 0.3), no light of its own, no burns.
+gr::BeamLook laser_look(float width_m, const float rgb[3]);
+// Quake II's rail trail as its `cl_railtrail_type` draws it (classic/q2_fx_switches.hpp), in either
+// look: the core, straight and `width_m` across, or (`radius_m` > 0) the line spiralling round it
+// that far off the axis; in `rgb`, fading over `fade_s`, no light of its own.
+gr::BeamLook q2_rail_trail_look(float width_m, float radius_m, const float rgb[3], float fade_s);
+// Quake II's gl_beamstyle 1 on a laser's or a rail trail's look: its core alone, as wide as its
+// width, no glowing sheath round it.
+void round_beam(gr::BeamLook& look);
 // The one glowing line that circles the rail's beam, fading with it.
 const gr::BeamLook& rail_coil_look();
 // The rail's soft lights along its line at `t_s` (up to kRailLights into `out`); the count.
@@ -246,7 +267,7 @@ void ion_trail(const double from[3], const double to[3], uint32_t seed, Particle
 const gr::BeamLook& plasma_look();
 // A few sparks shed off a bolt's stretch `from`..`to` (m) this frame.
 void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Particles* out);
-void blaster_hit(const double at[3], uint32_t seed, Particles* out);
+void blaster_hit(const double at[3], uint32_t seed, Particles* out, bool green = false);
 void bfg_burst(const double at[3], uint32_t seed, Particles* out);
 
 }  // namespace shooters_edge::effects

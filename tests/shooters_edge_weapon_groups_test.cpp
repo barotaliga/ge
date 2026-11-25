@@ -21,7 +21,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/weapon_groups.hpp"
 #include "shooters_edge/hud/layout.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "vfs/pak.hpp"
 
@@ -93,7 +93,7 @@ TEST(the_cvars_take_the_games_groups_until_set) {
   cl::ControlSettings c;
   cl::add_cvars(con, c);
   CHECK(!c.groups.on);
-  c.groups.game = shooters_edge::profiles::classic_game().weapon_groups;
+  c.groups.game = shooters_edge::profiles::q1_game().weapon_groups;
   const sh::WeaponGroups& d = cl::group_settings(c.groups);
   CHECK(d[0] == (std::vector<int>{7, 6}));
   CHECK(d[1] == std::vector<int>{8});
@@ -107,9 +107,9 @@ TEST(the_cvars_take_the_games_groups_until_set) {
   CHECK(s[0] == (std::vector<int>{6, 7}));
   CHECK(s[1].empty());  // "0": key 2 picks its own weapon
   CHECK(s[5] == std::vector<int>{8});
-  // The sequel's own groups are its weapon keys.
-  const auto* sequel = shooters_edge::profiles::find_game("sequel");
-  CHECK(sequel != nullptr && sequel->weapon_groups.size() == 6);
+  // Quake II's own groups are its weapon keys.
+  const auto* q2 = shooters_edge::profiles::find_game("q2");
+  CHECK(q2 != nullptr && q2->weapon_groups.size() == 6);
 }
 
 TEST(the_status_reads_as_carried_and_ready_weapons) {
@@ -127,7 +127,7 @@ TEST(the_status_reads_as_carried_and_ready_weapons) {
 TEST(the_hud_column_opens_folds_and_marks_the_second_weapon) {
   cl::WeaponGroups g;
   g.on = true;
-  g.game = shooters_edge::profiles::classic_game().weapon_groups;
+  g.game = shooters_edge::profiles::q1_game().weapon_groups;
   hud::Hud h = hud::make_hud();
   hud::Status s;
   s.owned = 0x31;  // the shotgun and both launchers (bit k - 1 for gun k)
@@ -167,7 +167,7 @@ TEST(number_keys_pick_from_their_groups_on_the_listen_server) {
   if (!start(l)) return;
   cl::WeaponGroups g;
   g.on = true;
-  g.game = shooters_edge::profiles::classic_game().weapon_groups;
+  g.game = shooters_edge::profiles::q1_game().weapon_groups;
   double t = 0;
   for (int i = 0; i < 80; i++) frame(l, g, t);  // the spawn, the launcher picked up
   frame(l, g, t, 3);                            // the shotguns: the shotgun

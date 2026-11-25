@@ -19,7 +19,7 @@ working note `porting/shooters-edge/accounts.md`.
   reserves names, a guest who takes it is renamed and told how to log in; it is never shown beside
   someone else's frags.
 - **One account across games.** The same account logs in to a Shooter's Edge server whichever
-  classic game it plays (the first classic game, the sequel, a later third), and to Fall Line. The
+  classic game it plays (the first classic game, Quake II, a later third), and to Fall Line. The
   game is part of every stat's key: frags in one game never add to another's.
 - **Logging in from any client.** Our own clients log in once and carry a signed ticket to every
   server. A stock classic client types one line in its console (§ Logging in from a classic
@@ -33,7 +33,7 @@ working note `porting/shooters-edge/accounts.md`.
 Every game names itself to the account service by a GAME ID (the protocol id `packet.hpp` already
 gives each game) and says three things through its `ServerGame`:
 
-| What | Why it is the game's | The first classic game | The sequel | A third, later |
+| What | Why it is the game's | The first classic game | Quake II | A third, later |
 | --- | --- | --- | --- | --- |
 | How a name is folded for the reservation (`fold_name`) | Each game writes names its own way | lower case, the high bit stripped (red text), `0`→`o`, `1`→`l`, look-alikes folded | lower case, look-alikes folded | the same plus its colour codes stripped |
 | The longest name it can show | A name must fit every game's player list | 31 | 15 | to be read |
@@ -126,11 +126,11 @@ guest. The line the server takes, in each game:
   server as a `say`, and `cmd login niclas K7QF-29MD` as a command; both work. The classic servers'
   own two-step answer (the login on one line, `Enter password for <login>:`, the secret on the next)
   works too, so a player's habit carries over. A seat that must log in sends no chat until it has.
-- **The sequel.** Its stock client forwards a word it does not know only once the player is in the
+- **Quake II.** Its stock client forwards a word it does not know only once the player is in the
   game, and its stock game turns an unknown word into public chat. So the seat enters as a guest
   (a spectator where `sv_login` asks it to log in), the server takes `login ...` before the game
   sees it, and while connecting the player types `cmd login ...`. Its prompt lines are at most 38
-  characters, the width its console shows (`games/shooters_edge/net/sequel_login.hpp` cuts each
+  characters, the width its console shows (`games/shooters_edge/net/q2_login.hpp` cuts each
   line the login tells at a space); a logged-in seat is shown by its account's name alone, and a
   guest under a registered name plays as `player`.
 
@@ -168,7 +168,7 @@ accounts the logins ask: with `sv_login` on and no `sv_accountmaster`, the serve
 `accounts.log` and `account.key` in its game folder, on `sv_accountport` (27901), its key printed at
 the start; with a master, a socket of its own to ask it on. With `sv_accountkey` unset, the key the
 master answers with first is believed and printed for the owner to set. A server with `sv_login 0`
-and no master keeps no logins. Shooter's Edge wires it in `games/shooters_edge/net/classic_login.hpp`.
+and no master keeps no logins. Shooter's Edge wires it in `games/shooters_edge/net/qw_login.hpp`.
 A player under a registered name who has not logged in yet plays under the game's default name and
 is told to log in to use it.
 
@@ -270,10 +270,10 @@ The game fills its part when a match ends (`ServerGame::match_report`, asked aft
 true once per match) and `engine/server` adds its own (the id, the game and its version, the
 server's name and address, the start in Unix seconds); the server keeps its last 16 on
 `Server::reports`, newest last. The bytes refuse a report past their limits (64 players, 16 teams,
-64 columns) rather than cut it, since a report that says less than the match is worse than none.
+96 columns) rather than cut it, since a report that says less than the match is worse than none.
 
 Shooter's Edge tallies a deathmatch off the rules' world every frame
-(`games/shooters_edge/net/classic_report.hpp`), since the rules keep only the frags: a player whose
+(`games/shooters_edge/net/qw_report.hpp`), since the rules keep only the frags: a player whose
 health falls to nothing died; one whose frags fall on that frame killed themself; one whose frags
 fall while they live killed a team mate. A player who leaves stays in the report with the seconds
 they played. With a lobby only its match counts (the warmup is not a match), and a restart starts the
@@ -311,10 +311,16 @@ before it checks the signature; it keeps at most 32 reports' pieces at once, eac
 
 ### The weapon stats
 
-Shooter's Edge reads each player's weapon stats off the QC server every frame
-(`games/shooters_edge/net/classic_stats.hpp`, changing nothing there) and sends them as the
-report's columns. They are what a classic match's statistics keep (the facts in
-`porting/shooters-edge/match-stats.md`), plus mid-airs (the maintainer, 2026-11-13):
+The stats are the same for every classic game (the maintainer, 2026-11-23): one module,
+`games/shooters_edge/server/match_stats.hpp`, holds the columns, the counting rules and the lines
+a player reads, and each game only finds its events. QuakeWorld (and Quake) reads them off the QC
+server every frame (`games/shooters_edge/net/qw_stats.hpp`, changing nothing there) and sends them
+as the report's columns; Quake II's rules call them as blows land, and its server reports each match the same way
+(`games/shooters_edge/server/q2_stats.hpp`), with its own eleven weapons (bl, sg, ssg, mg, cg, gl,
+rl, hb, rg, bfg, hg), its armours (`ja`, `ca`, `ba`) and power-ups (`quad`, `invuln`, `power`) in
+the same places. They are what a classic match's statistics keep (the facts in
+`porting/shooters-edge/match-stats.md`), plus mid-airs (the maintainer, 2026-11-13). QuakeWorld's
+columns:
 
 | Columns | What |
 | --- | --- |
@@ -326,7 +332,8 @@ report's columns. They are what a classic match's statistics keep (the facts in
 | `spawn_frags`, `streak_max`, `quad_run_max` | kills within 2 s of the victim's spawn, the longest run of kills between deaths, the most kills of one quad |
 | `aim_spread_min` | the aim spread (`plugins/shooter/aim_spread.hpp`) in thousandths of a half-box, -1 under 30 samples: near 0 when every shot sits on one point of its target (an aim bot), 600 to 800 for a hand; always reported, with or without the weapon stats; the totals keep the tightest |
 
-When the match ends every player reads them in the console: their frags and efficiency, each
+When the match ends every player of either game reads them in the console (Quake II's `stats`
+word shows one player's the same way): their frags and efficiency, each
 weapon's accuracy, the rockets' direct hits, average damage and mid-airs, armour and power-ups,
 damage, the streaks and spawn frags. The `match-report` lab draws them as a match page.
 
@@ -478,7 +485,7 @@ servers that offer their seats; every game it makes is a rated one on the ladder
   `1on1`, `2on2`): every 20 seconds its free player seats go to its master, signed with the key its
   reports are signed with (`server.key`), or in process when it is its own master. A master that
   does not trust the key says so once in the server's log. Both of Shooter's Edge's servers do:
-  the classic game's seats are offered under `id1`, the sequel's under `baseq2`, so the ladders
+  Quake's seats are offered under `id1`, Quake II's under `baseq2`, so the ladders
   stay apart; spectators take no seat.
 - **Our client asks from its console**: `ranked 1on1`, or `ranked 2on2 <your duo's name>`, with the
   ticket `account signin` kept (`engine/account/client_queue.hpp`). It asks every 3 seconds, in
@@ -497,7 +504,7 @@ servers that offer their seats; every game it makes is a rated one on the ladder
 | M59b3 | The hub's Account page (built) | `hub-pages` |
 | M59c | The login seam in `engine/server` (`server/login.hpp`), the settings above, a dedicated server that is its own master; the first classic game's prompt and `login` line (built) | `se-login` |
 | M59c2 | Our client logs itself in by its ticket; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
-| M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
+| M59d | Quake II's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic servers' results | `hub-players`, `se-hub` |
 | M59g | The ranked ladders: Elo for duels and registered duos, league seasons, past champions; the Ladder page | `hub-players` |
@@ -513,7 +520,7 @@ an account comes with M20c.
 | A server with no master | Its own master: the same store and service in the server's process (the maintainer, 2026-11-12) | No accounts without a master: a server alone could not keep names or stats |
 | One account or one per game | One, with the game in every stat's key | One per game: the person asked for one across games |
 | How a server trusts our player | A ticket signed by the master, checked offline | Asking the master at every connect: a server could not log anyone in while the master is down |
-| A classic client's secret | One-time codes only (the maintainer, 2026-11-12) | The password typed in the console: the classic link is plain text, and a server's operator would see it. A reusable game password for a config's `login` line: read once on the path, it logs anyone in until changed. The first game's client's challenge through a token file: its web site's address is fixed in the client |
+| A classic client's secret | One-time codes only (the maintainer, 2026-11-12) | The password typed in the console: the classic link is plain text, and a server's operator would see it. A reusable game password for a config's `login` line: read once on the path, it logs anyone in until changed. Quake's client's challenge through a token file: its web site's address is fixed in the client |
 | Failed logins | A hold that doubles to 15 minutes | Blocked for good after 10, as the classic servers do: anyone could lock anyone out |
 | Whose stats count | Servers the master's owner trusts | Every server: anyone could post a match that never happened |
 | The report's format | One generic record, the game's columns named in its `HubSpec`, the same as the demo's closing summary | The classic mod's stats file: one game's shape |
@@ -524,6 +531,6 @@ an account comes with M20c.
 | Lab | Row | What it shows |
 | --- | --- | --- |
 | `accounts` | M59a, M59b, M17j | Sign-ups, a taken and a look-alike name refused, logins, a wrong password held, codes spent, tickets checked, the store read back after a restart; players befriending, seeing each other's presence, a silent block and invites at 10% loss; on the simulated network |
-| `se-login` | M59c, M59d | A first-game and a sequel server: our client by ticket, a stock client's prompt and `login` line, a guest renamed off a registered name, the timeout; the console as the player sees it |
+| `se-login` | M59c, M59d | A Quake and a Quake II server: our client by ticket, a stock client's prompt and `login` line, a guest renamed off a registered name, the timeout; the console as the player sees it |
 | `match-report` | M59e | Bots' matches on both games reported to a master, the totals, an untrusted server's report kept out of them |
 | `hub-players` | M59f | The Player, Match and Leaders pages drawn in Chromium |

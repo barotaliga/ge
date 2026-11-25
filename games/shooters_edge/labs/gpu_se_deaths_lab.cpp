@@ -1,4 +1,4 @@
-// LAB `se-deaths`: DO MONSTERS DIE AS THE CLASSIC GAME'S DO? A campaign on the listen server
+// LAB `se-deaths`: DO MONSTERS DIE AS QUAKE'S DO? A campaign on the listen server
 // (client/listen.hpp) with a single-player program (our campaign in C++, games/shooters_edge/
 // rules; `--progs=pack` the packs' own progs.dat). For each kind in `--kinds`, on a fresh map,
 // the map's first monster of that kind is found and the player stood `--range` units from it,
@@ -54,7 +54,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "vfs/pak.hpp"
 
@@ -472,7 +472,7 @@ const gl::LabSpec kSpec{
     "the campaign's monsters' deaths (games/shooters_edge/rules/campaign_ai.cpp, monster_die) and "
     "their gibs and blood as the window draws them (client/world_fx.hpp, world_models.hpp)",
     "shooter",
-    "Do monsters die as the classic game's do? Each kind shot dead (its death frames) and gibbed "
+    "Do monsters die as Quake's do? Each kind shot dead (its death frames) and gibbed "
     "by the quad and the double shotgun (its pieces, their blood trails, the blood), on a real "
     "map, filmed from the player's eyes.",
     {

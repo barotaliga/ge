@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
 #include <thread>
 #include <unordered_set>
@@ -20,6 +21,7 @@
 #include "hub/content.hpp"
 #include "hub/http.hpp"
 #include "hub/poller.hpp"
+#include "hub/stills.hpp"
 #include "hub/watch.hpp"
 #include "net/address.hpp"
 #include "net/master.hpp"
@@ -95,6 +97,12 @@ bool hub_options(const std::vector<std::string>& args, HubOptions& out, std::str
     } else if (key == "--viewer") {
       out.viewer = value;
       ok = !value.empty();
+    } else if (key == "--content") {
+      out.content = value;
+      ok = !value.empty();
+    } else if (key == "--stills") {
+      out.stills = value;
+      ok = !value.empty();
     } else if (key == "--keep-gb") {
       ok = number(value, out.keep_gb);
     } else if (key == "--keep-days") {
@@ -163,6 +171,11 @@ std::string hub_help(const HubSpec& spec) {
          "toward players' totals\n"
          "  --viewer=<dir>            serve the game's web viewer from <dir> (the build's "
          "<game>_viewer folder) on the Watch and Demo pages\n"
+         "  --content=<dir>           the game's content (its installed games' folders): each "
+         "live match's card shows its map from the map's own intermission view, under its board "
+         "in the game's charset\n"
+         "  --stills=<dir>            keep the maps' pictures there (default hub-stills); a "
+         "changed map or a new build draws them again\n"
          "  --status=<s>              a status line this often (default 60)\n"
          "  --for=<s>                 stop after this long (default 0: run until killed)\n"
          "Then open http://<ip>:<http>/ in a browser; GET /v1 lists the API's paths.\n";
@@ -343,6 +356,18 @@ int hub_main(int argc, char** argv, const HubSpec& spec) {
   HubSpec site_spec = spec;
   site_spec.stats = accounts.open;  // the pages link the Leaders page
   site_spec.results = browsing;     // ... and the classic servers' Results
+  std::unique_ptr<Stills> stills;
+  if (!o.content.empty() && spec.stills.render) {
+    StillsConfig sc;
+    sc.cache = o.stills;
+    sc.content = o.content;
+    stills = std::make_unique<Stills>(spec.stills, sc);
+    http.stills = stills.get();
+    std::printf("%s_hub: map stills from %s, kept in %s\n", spec.id.c_str(), o.content.c_str(),
+                o.stills.c_str());
+  } else if (!o.content.empty()) {
+    std::printf("%s_hub: this build draws no map stills (--content ignored)\n", spec.id.c_str());
+  }
   if (!o.viewer.empty()) {
     http.viewer_dir = o.viewer;
     std::printf("%s_hub: viewer files from %s\n", spec.id.c_str(), o.viewer.c_str());

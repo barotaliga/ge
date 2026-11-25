@@ -8,10 +8,35 @@
 #include "console/view.hpp"
 
 #include <algorithm>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 
 #include "console/lex.hpp"
+#include "console/tab_list.hpp"
+#include "console/words.hpp"
 
 namespace ge::console {
+
+namespace {
+
+// The local time now in `format` (strftime's words); "" when the format is empty or writes more
+// than a console line's worth.
+std::string local_stamp(const std::string& format) {
+  if (format.empty()) return {};
+  const std::time_t now = std::time(nullptr);
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &now);
+#else
+  localtime_r(&now, &local);
+#endif
+  char out[128];
+  const size_t n = std::strftime(out, sizeof out, format.c_str(), &local);
+  return std::string(out, n);
+}
+
+}  // namespace
 
 std::string_view line_kind_name(LineKind k) {
   switch (k) {
@@ -59,6 +84,19 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .min = 64,
           .max = 65536},
          &keep_);
+  v.bind(
+      {.name = "con_notify",
+       .fallback = "1",
+       .flags = kArchive,
+       .help = "whether the newest lines show at the top of the screen while the console is closed",
+       .kind = CvarKind::boolean},
+      &notify_on_);
+  v.bind({.name = "con_clearnotify",
+          .fallback = "1",
+          .flags = kArchive,
+          .help = "whether opening or closing the console lets the notify lines so far go",
+          .kind = CvarKind::boolean},
+         &clear_notify_);
   v.bind({.name = "con_notifylines",
           .fallback = "4",
           .flags = kArchive,
@@ -76,8 +114,13 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
          &notify_time_);
   v.bind({.name = "con_chat",
           .fallback = "0",
-          .help = "1: a line typed without a / is said to everyone (a multiplayer game sets it)",
-          .kind = CvarKind::boolean},
+          .help = "what a line typed without a / is: a command, or said",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "0: a command (the default); 1: said to everyone (a multiplayer game sets "
+                    "it); 2: a command when its first word is a command, alias or setting, else "
+                    "said; 3: said to the team"},
          &chat_default_);
   v.bind({.name = "con_suggest",
           .fallback = "8",
@@ -119,6 +162,41 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
                   "square, stencil, gothic, rounded or marker (\"\": the UI font)",
           .kind = CvarKind::text},
          &font_);
+  v.bind({.name = "con_scale",
+          .fallback = "0",
+          .flags = kArchive,
+          .help = "how large the console's text is",
+          .min = 0,
+          .max = 4,
+          .values = "0: its own size (the default); 0.5..4: that many times it"},
+         &scale_);
+  v.bind({.name = "con_clock",
+          .fallback = "0",
+          .flags = kArchive,
+          .help = "whether the console shows the time of day in its corner",
+          .kind = CvarKind::boolean,
+          .values = "0: no clock (the default); 1: the local hours and minutes"},
+         &clock_on_);
+  v.bind({.name = "con_history",
+          .fallback = "128",
+          .flags = kArchive,
+          .help = "how many typed lines Up and Down walk back through",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 4096,
+          .values = "0: only the last line, none kept across runs; 1..4096: that many, the "
+                    "oldest dropped first, kept across runs (128 the default)"},
+         &history_max_);
+  v.bind({.name = "con_scroll",
+          .fallback = "0",
+          .flags = kArchive,
+          .help = "what brings the console back to its newest lines once scrolled back",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "0: only Page Down or a line typed and run (the default); 1: a new line; 2: "
+                    "a key typed; 3: both"},
+         &scroll_back_);
   if (v.find("name") == nullptr) {
     v.add({.name = "name",
            .fallback = "player",
@@ -139,6 +217,74 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
                 [this](Console&, const Args&) { toggle(); });
   c.add_command("clear", "clear: empty the console's scrollback",
                 [this](Console&, const Args&) { clear(); });
+  c.add_command("clearnotify", "clearnotify: the lines at the top of the screen taken away",
+                [this](Console&, const Args&) { clear_notify(); });
+  c.add_command(
+      "remotemode",
+      "remotemode [address [password]]: lines typed go to a server's console (rcon); again to "
+      "stop",
+      [this](Console& con, const Args& a) {
+        if (remote_ && a.size() < 2) {
+          remote_ = false;
+          con.print("Remote mode off.");
+          return;
+        }
+        if (!con.has_command("rcon")) {
+          con.print("There is no remote console in this game.");
+          return;
+        }
+        const ge::console::Cvar* to = con.cvars().find("rcon_address");
+        if (a.size() < 2 && (to == nullptr || to->value.empty())) {  // no server to send to
+          con.print("Usage: " + a[0] + " <address> <password>");
+          return;
+        }
+        if (a.size() > 1 && con.cvars().find("rcon_address") != nullptr)
+          con.cvars().set("rcon_address", a[1], Source::local);
+        if (a.size() > 2 && con.cvars().find("rcon_password") != nullptr)
+          con.cvars().set("rcon_password", a[2], Source::local);
+        remote_ = true;
+        con.print("Remote mode on: what you type goes to the server. Type remotemode to stop.");
+      });
+  c.add_command("condump", "condump [name]: the console's lines written to a text file",
+                [this](Console& con, const Args& a) {
+                  const std::string name = a.size() > 1 ? a[1] : "condump";
+                  std::string why;
+                  if (dump(name, why))
+                    con.print("Dumped console text to " + why + ".");
+                  else
+                    con.print(why);
+                });
+}
+
+int ConsoleView::chat_mode() const {
+  if (game_chat < 0) return chat_default_;
+  return game_chat == 2 ? 3 : std::min(game_chat, 1);
+}
+
+bool ConsoleView::dump(std::string_view name, std::string& why) const {
+  if (dump_folder_.empty()) {
+    why = "The console can't be written to a file here.";
+    return false;
+  }
+  if (name.empty() || name.find_first_of("/\\:") != std::string_view::npos ||
+      name.find("..") != std::string_view::npos) {
+    why = "Give the file a plain name, without a folder.";
+    return false;
+  }
+  std::string file(name);
+  if (!file.ends_with(".txt")) file += ".txt";
+  const std::filesystem::path path = std::filesystem::path(dump_folder_) / file;
+  std::error_code ec;
+  std::filesystem::create_directories(path.parent_path(), ec);
+  std::ofstream out(path, std::ios::binary);
+  for (const ViewLine& l : lines_) out << l.stamp << l.text << '\n';
+  out.close();
+  if (!out) {
+    why = "Couldn't write " + path.string() + ".";
+    return false;
+  }
+  why = path.string();
+  return true;
 }
 
 bool parse_rgb(std::string_view text, Rgb& out) {
@@ -190,18 +336,48 @@ void ConsoleView::frame(double dt_s) {
 }
 
 void ConsoleView::add(LineKind kind, std::string_view text) {
-  // A long line arrives as one; a line with newlines as several.
+  // A long line arrives as one; a line with newlines as several. A game's print ends in its
+  // newline ("You got the shells\n"): that newline ends the line, it opens no empty one after it
+  // (so a print of "\n" alone is one empty line).
+  if (!text.empty() && text.back() == '\n') text.remove_suffix(1);
+  const std::string stamp = stamps ? local_stamp(stamp_format) : std::string();
   size_t at = 0;
   while (at <= text.size()) {
     const size_t nl = text.find('\n', at);
     const std::string_view part =
         text.substr(at, nl == std::string_view::npos ? text.npos : nl - at);
-    lines_.push_back({kind, std::string(part), clock_});
+    lines_.push_back({kind, std::string(part), clock_, added_++, stamp});
     if (kind != LineKind::output && kind != LineKind::command) c_.fire_triggers(part);
     if (nl == std::string_view::npos) break;
     at = nl + 1;
   }
   while (static_cast<int32_t>(lines_.size()) > keep_) lines_.pop_front();
+  if ((scroll_back_ & 1) != 0) scroll_ = 0;  // con_scroll 1: a new line brings the newest back
+}
+
+bool ConsoleView::rewrite(uint64_t n, std::string_view text) {
+  if (lines_.empty() || n < lines_.front().n || n > lines_.back().n) return false;
+  lines_[static_cast<size_t>(n - lines_.front().n)].text = std::string(text);
+  return true;
+}
+
+bool ConsoleView::has_selection() const {
+  return selecting_ &&
+         (select_from_.line != select_to_.line || select_from_.column != select_to_.column);
+}
+
+std::string ConsoleView::selected_text() const {
+  std::string out;
+  if (!has_selection() || lines_.empty()) return out;
+  const TextSpot a = selection_first(), b = selection_last();
+  for (const ViewLine& l : lines_) {
+    if (l.n < a.line || l.n > b.line) continue;
+    const size_t from = l.n == a.line ? std::min(a.column, l.text.size()) : 0;
+    const size_t to = l.n == b.line ? std::min(b.column, l.text.size()) : l.text.size();
+    if (l.n != a.line) out += '\n';
+    if (to > from) out.append(l.text, from, to - from);
+  }
+  return out;
 }
 
 std::vector<const ViewLine*> ConsoleView::page(int rows) const {
@@ -213,11 +389,17 @@ std::vector<const ViewLine*> ConsoleView::page(int rows) const {
   return out;
 }
 
+void ConsoleView::set_open(bool open) {
+  if (open != open_ && clear_notify_) notify_from_ = added_;
+  open_ = open;
+}
+
 std::vector<const ViewLine*> ConsoleView::notify() const {
   std::vector<const ViewLine*> out;
+  if (!notify_on_ || host_notify_) return out;
   for (auto it = lines_.rbegin(); it != lines_.rend(); ++it) {
     if (static_cast<int32_t>(out.size()) >= notify_lines_) break;
-    if (clock_ - it->time_s > notify_time_) break;
+    if (clock_ - it->time_s > notify_time_ || it->n < notify_from_) break;
     if (it->kind == LineKind::command) continue;
     out.push_back(&*it);
   }
@@ -233,6 +415,7 @@ void ConsoleView::type(std::string_view text) {
     }
     return;
   }
+  if ((scroll_back_ & 2) != 0 && !text.empty()) scroll_ = 0;  // con_scroll 2: a key typed
   for (char ch : text) {
     if (ch == '\n' || ch == '\r' || ch == '`') continue;  // the toggle key types nothing
     input_.insert(cursor_++, 1, ch);
@@ -245,6 +428,7 @@ void ConsoleView::key(EditKey k) {
     chat_key(k);
     return;
   }
+  if ((scroll_back_ & 2) != 0 && k != EditKey::page_up && k != EditKey::page_down) scroll_ = 0;
   switch (k) {
     case EditKey::enter: {
       // Enter on a selected cvar fills it in for its value; on anything else it runs it.
@@ -279,7 +463,10 @@ void ConsoleView::key(EditKey k) {
       cursor_ = input_.size();
       break;
     case EditKey::tab:
-      accept();
+      if (list_mode >= 0)
+        tab_list();
+      else
+        accept();
       break;
     case EditKey::up:
     case EditKey::down: {
@@ -311,7 +498,16 @@ void ConsoleView::key(EditKey k) {
       scroll_ = std::max(0, scroll_ - 8);
       break;
     case EditKey::escape:
-      open_ = false;
+      // Text typed: Escape clears it first, and closes the console the next time (the console's
+      // own key closes it and keeps the text).
+      if (!input_.empty()) {
+        input_.clear();
+        cursor_ = 0;
+        history_at_ = -1;
+        selected_ = -1;
+      } else {
+        set_open(false);
+      }
       break;
   }
 }
@@ -324,9 +520,19 @@ void ConsoleView::submit() {
   selected_ = -1;
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
-  if (history_.empty() || history_.back() != line) history_.push_back(line);
-  const bool slash = line[0] == '/';
-  if (slash || !chat_default_) {
+  remember(line);
+  if (line.starts_with("//")) {  // a note to oneself: shown, never run or said
+    add(LineKind::command, line);
+    return;
+  }
+  const bool slash = line[0] == '/' || line[0] == '\\';
+  if (remote_ && !slash) {  // remotemode: the server's console
+    add(LineKind::command, "# " + line);
+    c_.append("rcon " + line, Source::local, {"console", 0});
+    return;
+  }
+  const int mode = chat_mode();
+  if (slash || mode == 0 || (mode == 2 && names_something(line))) {
     const std::string cmd = slash ? line.substr(1) : line;
     const std::vector<std::string> words = tokenize(cmd);
     if (!words.empty()) ++uses_[lower(words[0])];
@@ -334,37 +540,161 @@ void ConsoleView::submit() {
     c_.append(cmd, Source::local, {"console", 0});
     return;
   }
-  say(ChatTo::all, "", line);
+  say(mode == 3 ? ChatTo::team : ChatTo::all, "", line);
+}
+
+bool ConsoleView::names_something(std::string_view line) const {
+  const std::vector<std::string> words = tokenize(line);
+  if (words.empty()) return false;
+  const std::string w = lower(words[0]);
+  return c_.has_command(w) || c_.aliases().count(w) != 0 || c_.cvars().find(w) != nullptr;
 }
 
 std::string ConsoleView::head() const {
-  // Suggestions follow the command word: after a `/`, or bare when typed text is a command.
-  const bool slash = !input_.empty() && input_[0] == '/';
-  if (!slash && chat_default_) return "";
+  // Suggestions follow the command word: after a `/` or `\`, or bare when typed text may be a
+  // command.
+  const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
+  if (!slash && (remote_ || chat_mode() == 1 || chat_mode() == 3)) return "";
   std::string h = input_.substr(slash ? 1 : 0);
   if (h.empty() || h.find_first_of(" \t;") != std::string::npos) return "";
   return h;
 }
 
+namespace {
+
+// Whether value `v` starts with the typed `part`, any case, a leading quote on either let be.
+bool value_starts(std::string_view v, std::string_view part) {
+  if (!v.empty() && v[0] == '"') v.remove_prefix(1);
+  if (!part.empty() && part[0] == '"') part.remove_prefix(1);
+  return lower(v).starts_with(lower(part));
+}
+
+std::string joined(const std::vector<std::string>& words, std::string_view between) {
+  std::string out;
+  for (const std::string& w : words) {
+    if (!out.empty()) out += between;
+    out += w;
+  }
+  return out;
+}
+
+// "alias a, b": the game spellings of cvar or command `name` ("" none).
+std::string spellings_of(const Console& c, std::string_view name) {
+  std::vector<std::string> names;
+  for (const Synonym& s : c.cvars().synonyms())
+    if (s.part < 0 && s.target != nullptr && s.target->name == name) names.push_back(s.name);
+  for (const auto& [syn, target] : c.command_synonyms())
+    if (target == name) names.push_back(syn);
+  return names.empty() ? std::string() : "alias " + joined(names, ", ");
+}
+
+}  // namespace
+
+bool ConsoleView::value_typed(const Cvar*& cvar, std::vector<std::string>& choices,
+                              std::string& part, size_t& at) const {
+  const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
+  if (!slash && (remote_ || chat_mode() == 1 || chat_mode() == 3)) return false;
+  const size_t from = slash ? 1 : 0;
+  const size_t space = input_.find(' ', from);
+  if (space == std::string::npos || space == from) return false;
+  const std::string name = input_.substr(from, space - from);
+  const std::string rest = input_.substr(space + 1);
+  if (name.find_first_of("\t;") != std::string::npos || rest.find(';') != std::string::npos)
+    return false;
+  cvar = c_.cvars().find(name);
+  if (cvar != nullptr) {
+    if (rest.find_first_of(" \t") != std::string::npos) return false;
+    choices = value_choices(*cvar);
+  } else {  // a word's own values (an item's name), quoted when it has a space
+    choices = c_.arg_values(name);
+    for (std::string& v : choices)
+      if (v.find(' ') != std::string::npos) v.insert(0, 1, '"').push_back('"');
+  }
+  if (choices.empty()) return false;
+  part = rest;
+  at = space + 1;
+  return true;
+}
+
+size_t ConsoleView::suggest_at() const {
+  const Cvar* cvar = nullptr;
+  std::vector<std::string> choices;
+  std::string part;
+  size_t at = 0;
+  if (value_typed(cvar, choices, part, at)) return at;
+  return !input_.empty() && (input_[0] == '/' || input_[0] == '\\') ? 1 : 0;
+}
+
 std::vector<Suggestion> ConsoleView::suggestions() const {
   std::vector<Suggestion> out;
+  if (suggest_ <= 0) return out;
+  const Cvar* typed = nullptr;
+  std::vector<std::string> choices;
+  std::string part;
+  size_t at = 0;
+  if (value_typed(typed, choices, part, at)) {  // the values, in their own order
+    for (const std::string& v : choices) {
+      if (!value_starts(v, part)) continue;
+      Suggestion s;
+      s.name = v;
+      s.kind = Suggestion::Kind::value;
+      if (typed != nullptr) {
+        s.detail = value_meaning(*typed, v);
+        if (v == typed->value) s.detail = s.detail.empty() ? "now" : s.detail + " (now)";
+      }
+      out.push_back(std::move(s));
+    }
+    if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
+    return out;
+  }
   const std::string h = head();
-  if (h.empty() || suggest_ <= 0) return out;
+  if (h.empty()) return out;
+  const auto described = [&](Suggestion& s, const Cvar& v) {
+    s.kind = Suggestion::Kind::cvar;
+    s.detail = v.value;
+    s.choices = joined(value_choices(v), ", ");
+  };
   for (const std::string& name : c_.complete(h)) {
     Suggestion s;
     s.name = name;
-    const auto u = uses_.find(name);
-    s.uses = u == uses_.end() ? 0 : u->second;
     if (const Cvar* v = c_.cvars().find(name)) {
-      s.kind = Suggestion::Kind::cvar;
-      s.detail = v->value;
+      described(s, *v);
     } else if (const auto a = c_.aliases().find(name); a != c_.aliases().end()) {
       s.kind = Suggestion::Kind::alias;
       s.detail = a->second.body;
     } else if (const auto m = c_.commands().find(name); m != c_.commands().end()) {
       s.detail = m->second.help;
     }
+    if (s.kind != Suggestion::Kind::alias) s.note = spellings_of(c_, name);
     out.push_back(std::move(s));
+  }
+  // A game's spellings: its name for one of ours, said so.
+  const std::string p = lower(h);
+  const auto listed = [&out](const std::string& name) {
+    return std::any_of(out.begin(), out.end(), [&](const Suggestion& s) { return s.name == name; });
+  };
+  for (const Synonym& syn : c_.cvars().synonyms()) {
+    if (syn.part >= 0 || syn.target == nullptr || syn.target->retired ||
+        syn.name.compare(0, p.size(), p) != 0 || listed(syn.name))
+      continue;
+    Suggestion s;
+    s.name = syn.name;
+    described(s, *syn.target);
+    s.note = "alias of " + syn.target->name;
+    out.push_back(std::move(s));
+  }
+  for (const auto& [syn, target] : c_.command_synonyms()) {
+    if (syn.compare(0, p.size(), p) != 0 || listed(syn)) continue;
+    Suggestion s;
+    s.name = syn;
+    if (const auto m = c_.commands().find(target); m != c_.commands().end())
+      s.detail = m->second.help;
+    s.note = "alias of " + target;
+    out.push_back(std::move(s));
+  }
+  for (Suggestion& s : out) {
+    const auto u = uses_.find(s.name);
+    s.uses = u == uses_.end() ? 0 : u->second;
   }
   std::stable_sort(out.begin(), out.end(), [](const Suggestion& a, const Suggestion& b) {
     if (a.uses != b.uses) return a.uses > b.uses;
@@ -379,18 +709,33 @@ std::string ConsoleView::hint() const {
   const std::vector<Suggestion> s = suggestions();
   if (s.empty()) return "";
   const std::string& name = s[static_cast<size_t>(std::max(selected_, 0))].name;
-  const std::string h = lower(head());
-  return name.size() > h.size() ? name.substr(h.size()) : "";
+  const size_t typed = input_.size() - std::min(input_.size(), suggest_at());
+  return name.size() > typed ? name.substr(typed) : "";
 }
 
 bool ConsoleView::accept() {
   const std::vector<Suggestion> s = suggestions();
   if (s.empty()) return false;
-  const bool slash = input_[0] == '/';
-  input_ = (slash ? "/" : "") + s[static_cast<size_t>(std::max(selected_, 0))].name + " ";
+  const Suggestion& pick = s[static_cast<size_t>(std::max(selected_, 0))];
+  if (pick.kind == Suggestion::Kind::value) {
+    input_ = input_.substr(0, suggest_at()) + pick.name;
+  } else {
+    const bool slash = input_[0] == '/';
+    input_ = (slash ? "/" : "") + pick.name + " ";
+  }
   cursor_ = input_.size();
   selected_ = -1;
   return true;
+}
+
+void ConsoleView::tab_list() {
+  cursor_ = input_.size();
+  const TabList t =
+      ge::console::tab_list(c_, input_, head(), list_mode, list_threshold, tab_asked_);
+  input_ = t.input;
+  cursor_ = input_.size();
+  if (!t.echo.empty()) add(LineKind::command, t.echo);
+  for (const std::string& line : t.lines) add(LineKind::output, line);
 }
 
 void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {
@@ -480,6 +825,34 @@ void ConsoleView::chat_key(EditKey k) {
     default:  // Tab, the arrows up and down, the pages: nothing on one line
       break;
   }
+}
+
+void ConsoleView::remember(const std::string& line) {
+  if (line.find_first_not_of(" \t") == std::string::npos) return;
+  if (history_.empty() || history_.back() != line) history_.push_back(line);
+  if (history_.size() > static_cast<size_t>(std::max(1, history_max_)))  // con_history
+    history_.erase(history_.begin(),
+                   history_.end() - static_cast<std::ptrdiff_t>(std::max(1, history_max_)));
+}
+
+void ConsoleView::load_history() {
+  std::string text;
+  if (history_max_ <= 0 || !c_.read_file(kHistoryFile, text)) return;
+  for (size_t at = 0; at < text.size();) {
+    size_t end = text.find('\n', at);
+    if (end == std::string::npos) end = text.size();
+    std::string line = text.substr(at, end - at);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    remember(line);
+    at = end + 1;
+  }
+}
+
+bool ConsoleView::save_history() const {
+  if (history_max_ <= 0) return true;
+  std::string text;
+  for (const std::string& line : history_) text += line + "\n";
+  return c_.write_file(kHistoryFile, text);
 }
 
 }  // namespace ge::console

@@ -216,6 +216,8 @@ std::vector<PointLight> portal_lights(const Scene& scene) {
     l.colour[1] = 0.82;
     l.colour[2] = 1.0;
     l.flicker = Flicker::pulse;
+    // Its source is the panel glowing in plain sight: a figure in its way throws a shadow.
+    l.seen = true;
     l.seed = seed;
     seed = seed * 1664525u + 1013904223u;
     out.push_back(l);
@@ -756,7 +758,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
                          p.l < d.dynamic_points.data() + d.dynamic_points.size();
     // Whether it throws a figure's shadow (Options::fill_shadows): a source he can see.
-    // Over the lightmaps every picked light throws one: a map lit by its lightmaps (the sequel's)
+    // Over the lightmaps every picked light throws one: a map lit by its lightmaps (Quake II's)
     // names few of its lights' sources.
     const bool figure = o.fill_shadows || overlay || dynamic || (l.seen && !l.physical);
     // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp; z 1 when
@@ -980,6 +982,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // w: 1 the figures' shadows over the lightmaps by the picked lights.
   set4(d.staged.detail, std::max(o.picmip, 0), o.fullbright ? 1 : 0, o.from_above ? 1 : 0,
        lightmap_overlay(o) && d.caster_lights > 0 ? 1 : 0);
+  set4(d.staged.classic, o.classic_light, o.classic_lift, std::clamp(o.anisotropy, 1, 16),
+       o.crisp_sky ? 1 : 0);
+  set4(d.staged.paint, std::clamp(o.saturation, 0.0, 1.0), o.invert ? 1 : 0,
+       std::clamp(o.lightmap_saturation, 0.0, 1.0), std::clamp(o.dlight_falloff, 0, 2));
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
@@ -993,16 +999,18 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   if (o.cull) {
     GE_ZONE("bsp.cull");
-    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0,
-                     o.pvs && !see_through_any(o));
+    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs && !see_through_any(o),
+                     d.areas);
     ++d.culled_frames;
   } else {
     d.culled_frames = 0;
   }
   for (int k = 0; k < kLightStyles; ++k)
-    d.staged.styles[k] = float(o.flicker && o.mode == Mode::v2
-                                   ? style_level_glided(d.light_styles[size_t(k)], view.time_s)
-                                   : style_level(d.light_styles[size_t(k)], view.time_s));
+    d.staged.styles[k] =
+        float(o.lerp_styles ? style_level_lerped(d.light_styles[size_t(k)], view.time_s)
+              : o.flicker && o.mode == Mode::v2
+                  ? style_level_glided(d.light_styles[size_t(k)], view.time_s)
+                  : style_level(d.light_styles[size_t(k)], view.time_s));
   const double veil = o.sky_light * o.sky_seen;
   set4(d.staged.veil, veil * o.sky_tint[0], veil * o.sky_tint[1], veil * o.sky_tint[2], 1);
   if (s.sky_texture < s.map.textures.size()) {
@@ -1041,20 +1049,37 @@ void set_movers(BspDraw& d, std::span<const Mover> movers) {
     GpuMover& g = d.mover_rows[m.model];
     const float o[3] = {float(m.offset[0]), float(m.offset[1]), float(m.offset[2])};
     const uint32_t hidden = m.hidden ? 1 : 0;
-    if (g.range[2] == hidden && g.offset[0] == o[0] && g.offset[1] == o[1] && g.offset[2] == o[2])
+    const uint32_t frame = m.frame < 0 ? 0 : uint32_t(m.frame) + 1;
+    const float* q = m.rotation;
+    if (g.range[2] == hidden && g.range[3] == frame && g.offset[0] == o[0] && g.offset[1] == o[1] &&
+        g.offset[2] == o[2] && g.rotation[0] == q[0] && g.rotation[1] == q[1] &&
+        g.rotation[2] == q[2] && g.rotation[3] == q[3])
       continue;
     g.range[2] = hidden;
+    g.range[3] = frame;
     for (int k = 0; k < 3; ++k) g.offset[k] = o[k];
+    for (int k = 0; k < 4; ++k) g.rotation[k] = q[k];
     d.movers_dirty = true;
     if (m.model < d.cull.moves.size()) {
       d.cull.moves[m.model] = {o[0], o[1], o[2], float(hidden)};
+      if (m.model < d.cull.turns.size()) d.cull.turns[m.model] = {q[0], q[1], q[2], q[3]};
       d.cull.moved = true;
     }
   }
 }
 
+void set_texture_rate(BspDraw& d, double frames_per_second) {
+  if (d.mover_rows.empty() || d.mover_rows[0].offset[3] == float(frames_per_second)) return;
+  d.mover_rows[0].offset[3] = float(frames_per_second);
+  d.movers_dirty = true;
+}
+
 void set_dynamic_lights(BspDraw& d, std::span<const DynamicLight> lights) {
   d.dynamic.assign(lights.begin(), lights.end());
+}
+
+void set_areas(BspDraw& d, std::span<const uint8_t> areas) {
+  d.areas.assign(areas.begin(), areas.end());
 }
 
 void set_shadow_casters(BspDraw& d, std::span<const float> triangles,

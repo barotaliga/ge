@@ -29,10 +29,11 @@
 namespace ge::server {
 
 struct RateBounds {
-  int none = 99999;   // a client that names no rate
-  int zero = 2500;    // a rate of 0
-  int low = 500;      // the fewest the game's network sends
-  int high = 300000;  // the most
+  int none = 99999;       // a client that names no rate
+  int zero = 2500;        // a rate of 0
+  int low = 500;          // the fewest the game's network sends
+  int high = 300000;      // the most
+  bool none_held = true;  // false: a client that names no rate gets `none`, not held to the limits
 };
 
 struct RateLimits {

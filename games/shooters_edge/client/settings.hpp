@@ -5,7 +5,7 @@
 //   (`series_settings_file`): the binds and every setting in our names, which every classic game
 //   reads, a game's own spellings being synonyms of them (client/cvar_layers.hpp). Beside each
 //   game, `<game folder>/settings/config.cfg` (`settings_dir`, the console's first search
-//   directory) keeps only that game's own meanings of shared names (the sequel's `crosshair`).
+//   directory) keeps only that game's own meanings of shared names (Quake II's `crosshair`).
 //   Both are written (`save_settings`) when the menu closes, before another game is loaded and
 //   when the game quits, with the catalog of every setting beside the game's (`cvars.txt`,
 //   console/catalog.hpp), which the player's CLI (`secli settings`) describes and checks them by.
@@ -54,6 +54,10 @@ bool save_settings(ge::console::Console& con, const std::filesystem::path& serie
 
 struct UserInfo {
   int top = 0, bottom = 0;                                      // topcolor, bottomcolor
+  int rate = 2500;                                              // rate (the loaded game's)
+  std::string password;                                         // password: a closed server's
+  int msg = 1;                                                  // msg: the lowest print level
+  bool noaim = false;                                           // noaim: no aim help asked
   bool speedjump = false;                                       // cl_speedjump
   float speedjump_view = 0.5f;                                  // cl_speedjump_view
   const shooters_edge::server::RulesCommon* sent_to = nullptr;  // null: send again
@@ -62,11 +66,14 @@ struct UserInfo {
   std::string skin, sent_skin;  // skin: the picture others draw you in
   // model: the figure others draw you as (players/<model>/ in their files; "": the game's own)
   std::string model, sent_model;
+  // fov: the field of view a Quake II server holds the view to (its rules read it); -1 unsent
+  std::string sent_fov = "-";
 };
 // `topcolor`, `bottomcolor`, `skin`, `model` and `cl_speedjump` over `info` (it must outlive
-// `con`).
+// `con`), and the classic layer's `rate` and `password` and the `color` command.
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info);
-// The name and colours sent to the server playing when they changed or it is a new server.
+// The name and colours sent to the server playing when they changed or it is a new server; to
+// Quake II's rules the field of view too (`fov`, our cl_fov), which they send back for the view.
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info);
 
 // This frame's mouse buttons and wheel through the game's binds.

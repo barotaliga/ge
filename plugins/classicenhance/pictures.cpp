@@ -130,7 +130,7 @@ bool pack_pictures(std::span<const uint8_t> pack_bytes, Palette* palette,
              std::string(profile.what) + "'s pack (profile " + std::string(profile.id) + ")";
     return false;
   }
-  // A row with no wad (the sequel) keeps all its pictures as files.
+  // A row with no wad (Quake II) keeps all its pictures as files.
   const std::span<const uint8_t> wad_bytes =
       wad_entry != nullptr ? vfs::pak_file(pack_bytes, *wad_entry) : std::span<const uint8_t>{};
   vfs::Wad wad;

@@ -19,6 +19,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign.hpp"
+#include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace sv = shooters_edge::server;
@@ -178,4 +179,66 @@ TEST(a_death_in_single_player_restarts_the_map) {
   CHECK_MSG(g.c.history.size() == 2 && g.c.history.back().rfind("restart", 0) == 0,
             g.c.history.back() + " " + std::to_string(g.c.history.size()));
   CHECK(g.field(1, g.f().health) == 100);
+}
+
+// The single-player game's cheats as the original's server answers them, without sv_cheats.
+TEST(the_single_player_cheats_answer_as_the_original) {
+  Game g;
+  const auto said = [&g] {
+    std::string out;
+    for (const sv::NetEvent& ev : g.s().out.events)
+      if (ev.kind == sv::EventKind::print) out += ev.text;
+    g.s().out.events.clear();
+    return out;
+  };
+  said();
+  sv::client_command(g.s(), 0, "god");
+  CHECK((static_cast<int>(g.field(1, g.f().flags)) & 64) != 0);
+  CHECK_MSG(said() == "godmode ON\n", "god");
+  sv::client_command(g.s(), 0, "god");
+  CHECK_MSG(said() == "godmode OFF\n", "god off");
+  sv::client_command(g.s(), 0, "notarget");
+  CHECK((static_cast<int>(g.field(1, g.f().flags)) & 128) != 0);
+  CHECK(said() == "notarget ON\n");
+  sv::client_command(g.s(), 0, "noclip");
+  CHECK(g.s().sv.edicts[1].movetype == sh::kMovetypeNoclip);
+  CHECK(said() == "noclip ON\n");
+  sv::client_command(g.s(), 0, "fly");
+  CHECK(g.s().sv.edicts[1].movetype == sh::kMovetypeFly);
+  CHECK(said() == "flymode ON\n");
+  sv::client_command(g.s(), 0, "give 7");  // the rocket launcher's bit (32)
+  CHECK((static_cast<int>(g.field(1, g.f().items)) & 32) != 0);
+  sv::client_command(g.s(), 0, "give r 25");
+  CHECK(g.field(1, g.f().ammo_rockets) == 25);
+  sv::client_command(g.s(), 0, "give h 250");
+  CHECK(g.field(1, g.f().health) == 250);
+  // Dead, kill is refused in the original's words.
+  g.s().sv.edicts[1].health = -5;
+  said();
+  sv::client_command(g.s(), 0, "kill");
+  CHECK(said() == "Can't suicide -- allready dead!\n");
+}
+
+TEST(pause_stops_the_game_and_says_who_paused_it) {
+  Game g;
+  std::string out;
+  const auto said = [&g, &out] {
+    out.clear();
+    for (const sv::NetEvent& ev : g.s().out.events)
+      if (ev.kind == sv::EventKind::print) out += ev.text;
+    g.s().out.events.clear();
+    return out;
+  };
+  said();
+  sv::client_command(g.s(), 0, "pause");
+  CHECK(g.s().paused);
+  CHECK_MSG(said().find(" paused the game\n") != std::string::npos, out);
+  sv::client_command(g.s(), 0, "pause");
+  CHECK(!g.s().paused);
+  CHECK_MSG(said().find(" unpaused the game\n") != std::string::npos, out);
+  // `pausable 0`: refused in the original's words.
+  g.s().cvars.set("pausable", "0", ge::console::Source::code);
+  sv::client_command(g.s(), 0, "pause");
+  CHECK(!g.s().paused);
+  CHECK_MSG(said() == "Pause not allowed.\n", out);
 }

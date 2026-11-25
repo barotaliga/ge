@@ -7,7 +7,7 @@
 // - **Another game's map** (`map <name>` finding the map in the other game's packs): its items
 //   become the played game's own, so the map plays with the items the game's rules know.
 // - **Another game's items on a game's own map** (`cr_items`): the map's items become the other
-//   game's set, so the classic game's maps play with the sequel's weapons, and the other way.
+//   game's set, so Quake's maps play with Quake II's weapons, and the other way.
 //
 // The rules of the table:
 //
@@ -17,7 +17,7 @@
 //   has no spawn for drops the item: nothing in its set plays the part (an armour shard, a
 //   silencer).
 // - **Variant bits** (`kItemBits`, the low eight spawnflags bits) say which variant an item is
-//   (the classic game's small and mega health, its large ammunition boxes); a reading needs them
+//   (Quake's small and mega health, its large ammunition boxes); a reading needs them
 //   all, the readings are tried in order (a variant's before the plain one), and the spawn's bits
 //   replace them. The bits above (which skills and modes the item is left out of) mean the same in
 //   both games and are kept.
@@ -52,16 +52,24 @@ using ge::classic::ItemRole;
 using ge::classic::ItemSpawn;
 using ge::classic::ItemSwap;
 
-// The classic game's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
+// Quake's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
 // its large ammunition boxes bit 1. It lays every shotgun down as its double-barrelled one (the
 // single one is the weapon a player starts with) and every energy weapon as its beam.
-inline constexpr ItemReading kClassicReads[] = {
+inline constexpr ItemReading kQ1Reads[] = {
     {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
     {"weapon_nailgun", 0, ItemRole::rapid},
     {"weapon_supernailgun", 0, ItemRole::rapid_heavy},
     {"weapon_grenadelauncher", 0, ItemRole::lobber},
     {"weapon_rocketlauncher", 0, ItemRole::launcher},
     {"weapon_lightning", 0, ItemRole::beam},
+    // Scourge of Armagon's weapons: the laser cannon's bouncing bolts are the rapid energy weapon,
+    // Mjolnir's lightning across the floor the room-clearing one, the proximity gun's waiting
+    // grenades the lobber. Its empathy shields and horn of conjuring have no part in another set
+    // and drop; its wetsuit is the suit against the water.
+    {"weapon_laser_gun", 0, ItemRole::energy},
+    {"weapon_mjolnir", 0, ItemRole::blast},
+    {"weapon_proximity_gun", 0, ItemRole::lobber},
+    {"item_artifact_wetsuit", 0, ItemRole::protect},
     {"item_shells", 0, ItemRole::ammo_scatter},
     {"item_spikes", 0, ItemRole::ammo_rapid},
     {"item_rockets", 0, ItemRole::ammo_explosive},
@@ -81,7 +89,7 @@ inline constexpr ItemReading kClassicReads[] = {
     {"item_artifact_envirosuit", 0, ItemRole::protect},
     {"item_artifact_invisibility", 0, ItemRole::stealth},
 };
-inline constexpr ItemSpawn kClassicSpawns[] = {
+inline constexpr ItemSpawn kQ1Spawns[] = {
     {ItemRole::scatter, "weapon_supershotgun", 0},
     {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
     {ItemRole::rapid, "weapon_nailgun", 0},
@@ -111,9 +119,9 @@ inline constexpr ItemSpawn kClassicSpawns[] = {
     {ItemRole::stealth, "item_artifact_invisibility", 0},
 };
 
-// The sequel's items. Its stimpack and box of ten both lay down as the other game's small health,
+// Quake II's items. Its stimpack and box of ten both lay down as the other game's small health,
 // its adrenaline and the ancient head as a mega health, its power armours by the armour they match.
-inline constexpr ItemReading kSequelReads[] = {
+inline constexpr ItemReading kQ2Reads[] = {
     {"weapon_shotgun", 0, ItemRole::scatter},
     {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
     {"weapon_machinegun", 0, ItemRole::rapid},
@@ -123,6 +131,20 @@ inline constexpr ItemReading kSequelReads[] = {
     {"weapon_hyperblaster", 0, ItemRole::energy},
     {"weapon_railgun", 0, ItemRole::beam},
     {"weapon_bfg", 0, ItemRole::blast},
+    // Ground Zero's weapons: the ETF rifle's flechettes are the light rapid-fire weapon, the plasma
+    // beam (by either of its names) the beam, the prox launcher's waiting grenades the lobber, the
+    // disruptor's slow tracking bolt the heavy single shot a rocket launcher is. The chainfist
+    // (a fist), the tesla and the A-M bomb (thrown from the inventory) have no part in another set
+    // and drop, as do the spheres, the decoy and the goggles; double damage is the damage powerup.
+    {"weapon_etf_rifle", 0, ItemRole::rapid},
+    {"weapon_heatbeam", 0, ItemRole::beam},
+    {"weapon_plasmabeam", 0, ItemRole::beam},
+    {"weapon_proxlauncher", 0, ItemRole::lobber},
+    {"weapon_disintegrator", 0, ItemRole::launcher},
+    {"ammo_flechettes", 0, ItemRole::ammo_rapid},
+    {"ammo_prox", 0, ItemRole::ammo_lobber},
+    {"ammo_disruptor", 0, ItemRole::ammo_explosive},
+    {"item_double", 0, ItemRole::damage},
     {"ammo_shells", 0, ItemRole::ammo_scatter},
     {"ammo_bullets", 0, ItemRole::ammo_rapid},
     {"ammo_grenades", 0, ItemRole::ammo_lobber},
@@ -149,8 +171,8 @@ inline constexpr ItemReading kSequelReads[] = {
     {"item_breather", 0, ItemRole::protect},
     {"item_silencer", 0, ItemRole::quiet},
 };
-// The classic game's stealth lays down as the sequel's adrenaline: the sequel has none.
-inline constexpr ItemSpawn kSequelSpawns[] = {
+// Quake's stealth lays down as Quake II's adrenaline: Quake II has none.
+inline constexpr ItemSpawn kQ2Spawns[] = {
     {ItemRole::scatter, "weapon_shotgun", 0},
     {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
     {ItemRole::rapid, "weapon_machinegun", 0},
@@ -184,8 +206,8 @@ inline constexpr ItemSpawn kSequelSpawns[] = {
 
 // Every game's items, by its content profile id.
 inline constexpr GameItems kGameItems[] = {
-    {"classic", kClassicReads, kClassicSpawns},
-    {"sequel", kSequelReads, kSequelSpawns},
+    {"q1", kQ1Reads, kQ1Spawns},
+    {"q2", kQ2Reads, kQ2Spawns},
 };
 
 // The items of `game`, or nullptr.
@@ -208,7 +230,7 @@ inline const GameItems* game_items(std::string_view game) {
 //   and the mega health), so the power is spread across the map; with none on the map, the last in
 //   it.
 // - **Pools** (`kPoolItems`, `kPoolOutputs`): where one game scatters small pickups the other
-//   does not have (the sequel's stimpacks and health boxes, its armour shards), the ones lying
+//   does not have (Quake II's stimpacks and health boxes, its armour shards), the ones lying
 //   within `pool_radius` of each other are added up and laid down again as the target's own sizes,
 //   the largest that fits first, on the spots they lay on: four stimpacks and a box of ten make
 //   one fifteen, three boxes of twenty-five make two twenty-fives and a fifteen. A pool too small
@@ -222,21 +244,21 @@ struct WeaponTier {
 };
 
 inline constexpr WeaponTier kWeaponTiers[] = {
-    {"classic", "weapon_supershotgun", 1, "item_shells"},
-    {"classic", "weapon_nailgun", 1, "item_spikes"},
-    {"classic", "weapon_supernailgun", 2, "item_spikes"},
-    {"classic", "weapon_grenadelauncher", 2, "item_rockets"},
-    {"classic", "weapon_rocketlauncher", 3, "item_rockets"},
-    {"classic", "weapon_lightning", 3, "item_cells"},
-    {"sequel", "weapon_shotgun", 1, "ammo_shells"},
-    {"sequel", "weapon_supershotgun", 1, "ammo_shells"},
-    {"sequel", "weapon_machinegun", 1, "ammo_bullets"},
-    {"sequel", "weapon_chaingun", 2, "ammo_bullets"},
-    {"sequel", "weapon_grenadelauncher", 2, "ammo_grenades"},
-    {"sequel", "weapon_hyperblaster", 2, "ammo_cells"},
-    {"sequel", "weapon_rocketlauncher", 3, "ammo_rockets"},
-    {"sequel", "weapon_railgun", 3, "ammo_slugs"},
-    {"sequel", "weapon_bfg", 4, "ammo_cells"},
+    {"q1", "weapon_supershotgun", 1, "item_shells"},
+    {"q1", "weapon_nailgun", 1, "item_spikes"},
+    {"q1", "weapon_supernailgun", 2, "item_spikes"},
+    {"q1", "weapon_grenadelauncher", 2, "item_rockets"},
+    {"q1", "weapon_rocketlauncher", 3, "item_rockets"},
+    {"q1", "weapon_lightning", 3, "item_cells"},
+    {"q2", "weapon_shotgun", 1, "ammo_shells"},
+    {"q2", "weapon_supershotgun", 1, "ammo_shells"},
+    {"q2", "weapon_machinegun", 1, "ammo_bullets"},
+    {"q2", "weapon_chaingun", 2, "ammo_bullets"},
+    {"q2", "weapon_grenadelauncher", 2, "ammo_grenades"},
+    {"q2", "weapon_hyperblaster", 2, "ammo_cells"},
+    {"q2", "weapon_rocketlauncher", 3, "ammo_rockets"},
+    {"q2", "weapon_railgun", 3, "ammo_slugs"},
+    {"q2", "weapon_bfg", 4, "ammo_cells"},
 };
 inline constexpr int32_t kStrongTier = 3;
 
@@ -249,10 +271,10 @@ struct StrongPickup {
 };
 
 inline constexpr StrongPickup kStrongPickups[] = {
-    {"classic", "item_armor2", -1},      {"classic", "item_armorInv", -1},
-    {"classic", "item_health", 2},  // the mega health
-    {"sequel", "item_armor_combat", -1}, {"sequel", "item_armor_body", -1},
-    {"sequel", "item_power_shield", -1}, {"sequel", "item_health_mega", -1},
+    {"q1", "item_armor2", -1},       {"q1", "item_armorInv", -1},
+    {"q1", "item_health", 2},  // the mega health
+    {"q2", "item_armor_combat", -1}, {"q2", "item_armor_body", -1},
+    {"q2", "item_power_shield", -1}, {"q2", "item_health_mega", -1},
 };
 
 struct RemixBalance {
@@ -280,17 +302,17 @@ struct PoolOutput {
 };
 
 inline constexpr PoolItem kPoolItems[] = {
-    {"sequel", "classic", "item_health_small", "health", 2},
-    {"sequel", "classic", "item_health", "health", 10},
-    {"sequel", "classic", "item_health_large", "health", 25},
-    {"sequel", "classic", "item_armor_shard", "armour", 2},
+    {"q2", "q1", "item_health_small", "health", 2},
+    {"q2", "q1", "item_health", "health", 10},
+    {"q2", "q1", "item_health_large", "health", 25},
+    {"q2", "q1", "item_armor_shard", "armour", 2},
 };
-// The classic game's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
+// Quake's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
 // green armour.
 inline constexpr PoolOutput kPoolOutputs[] = {
-    {"classic", "health", "item_health", 0, 25},
-    {"classic", "health", "item_health", 1, 15},
-    {"classic", "armour", "item_armor1", 0, 20},
+    {"q1", "health", "item_health", 0, 25},
+    {"q1", "health", "item_health", 1, 15},
+    {"q1", "armour", "item_armor1", 0, 20},
 };
 
 // The tier of `class_name` in `game` (0: not a ranked weapon).
@@ -311,7 +333,7 @@ inline const PoolItem* pool_item(std::string_view from, std::string_view to,
 // WHERE AN ITEM STANDS: the games measure an item's place from different points of its box. The
 // classic game's ammunition and health boxes stand on their origin as a corner (their box runs 0
 // to 32 across), its weapons and armour on their origin as the middle of their floor, its
-// artifacts 24 above their floor; the sequel's items are boxes 15 each way about their origin. A
+// artifacts 24 above their floor; Quake II's items are boxes 15 each way about their origin. A
 // rewritten item keeps the middle of its floor where it was (`foot`: from the origin to that
 // point), so an item dropped onto its floor does not start inside it. `kFootLift` raises the
 // new place off the floor: a box resting on a plane counts as in it.
@@ -322,15 +344,15 @@ struct ItemFoot {
 };
 
 inline constexpr ItemFoot kItemFeet[] = {
-    {"classic", "item_health", {16, 16, 0}},
-    {"classic", "item_shells", {16, 16, 0}},
-    {"classic", "item_spikes", {16, 16, 0}},
-    {"classic", "item_rockets", {16, 16, 0}},
-    {"classic", "item_cells", {16, 16, 0}},
-    {"classic", "item_weapon", {16, 16, 0}},
-    {"classic", "item_artifact_", {0, 0, -24}},
-    {"classic", "", {0, 0, 0}},
-    {"sequel", "", {0, 0, -15}},
+    {"q1", "item_health", {16, 16, 0}},
+    {"q1", "item_shells", {16, 16, 0}},
+    {"q1", "item_spikes", {16, 16, 0}},
+    {"q1", "item_rockets", {16, 16, 0}},
+    {"q1", "item_cells", {16, 16, 0}},
+    {"q1", "item_weapon", {16, 16, 0}},
+    {"q1", "item_artifact_", {0, 0, -24}},
+    {"q1", "", {0, 0, 0}},
+    {"q2", "", {0, 0, -15}},
 };
 inline constexpr float kFootLift = 1;
 
@@ -350,6 +372,61 @@ inline const float* item_foot(std::string_view game, std::string_view class_name
   return by_prefix != nullptr ? by_prefix : fallback;
 }
 
+// THE MISSION PACKS' PART (`cr_expansions`): the items above that only a mission pack's maps
+// lay down, and the weapons a played pack lays down in its base game's place, by role. With the
+// setting off, a pack's items are not read (dropped, as any unknown item) and the played game's
+// own spawns stand; with it on, a map remixed for a played pack lays the pack's weapon where its
+// role has none of the base game's own (Quake's lightning gun stands in for both the rapid energy
+// weapon and the room-clearer; Scourge of Armagon has its own).
+struct PackItem {
+  std::string_view game, pack, class_name;
+};
+inline constexpr PackItem kPackItems[] = {
+    {"q1", "hipnotic", "weapon_laser_gun"},
+    {"q1", "hipnotic", "weapon_mjolnir"},
+    {"q1", "hipnotic", "weapon_proximity_gun"},
+    {"q1", "hipnotic", "item_artifact_wetsuit"},
+    {"q2", "rogue", "weapon_etf_rifle"},
+    {"q2", "rogue", "weapon_heatbeam"},
+    {"q2", "rogue", "weapon_plasmabeam"},
+    {"q2", "rogue", "weapon_proxlauncher"},
+    {"q2", "rogue", "weapon_disintegrator"},
+    {"q2", "rogue", "ammo_flechettes"},
+    {"q2", "rogue", "ammo_prox"},
+    {"q2", "rogue", "ammo_disruptor"},
+    {"q2", "rogue", "item_double"},
+};
+struct PackSpawn {
+  std::string_view game, pack;
+  ItemRole role;
+  std::string_view class_name;
+  int32_t bits = 0;
+};
+inline constexpr PackSpawn kPackSpawns[] = {
+    {"q1", "hipnotic", ItemRole::energy, "weapon_laser_gun", 0},
+    {"q1", "hipnotic", ItemRole::blast, "weapon_mjolnir", 0},
+};
+
+// What a remix may take from the mission packs: `on` the setting, `to_pack` the played game's
+// pack folder (lower case; "" the base game).
+struct RemixPacks {
+  bool on = true;
+  std::string_view to_pack;
+};
+
+// Whether `class_name` is an item only one of `game`'s mission packs lays down.
+inline bool is_pack_item(std::string_view game, std::string_view class_name) {
+  for (const PackItem& p : kPackItems)
+    if (p.game == game && p.class_name == class_name) return true;
+  return false;
+}
+
+// The weapon the played pack lays down for `class_name` read in `from`, or nullptr: only when the
+// packs are on and the played pack has its own for that item's role.
+inline const PackSpawn* pack_spawn(std::string_view from, std::string_view to,
+                                   std::string_view class_name, int32_t spawnflags,
+                                   const RemixPacks& packs);
+
 // Whether `class_name` is an item in either game (`kItemPrefixes`).
 inline bool is_item_class(std::string_view class_name) {
   for (std::string_view p : kItemPrefixes)
@@ -359,12 +436,27 @@ inline bool is_item_class(std::string_view class_name) {
 
 // `class_name` with `spawnflags` read in `from` and laid down in `to` (`ge::classic::swap_item`);
 // not known when either game has no list or `from` does not read it (an item then is dropped).
+// With the packs off (`packs.on` false), a mission pack's item is not read.
 inline ItemSwap remix_item(std::string_view from, std::string_view to, std::string_view class_name,
-                           int32_t spawnflags) {
+                           int32_t spawnflags, const RemixPacks& packs = {}) {
   const GameItems* f = game_items(from);
   const GameItems* t = game_items(to);
   if (f == nullptr || t == nullptr) return {};
+  if (!packs.on && is_pack_item(from, class_name)) return {};
   return ge::classic::swap_item(*f, *t, class_name, spawnflags);
+}
+
+inline const PackSpawn* pack_spawn(std::string_view from, std::string_view to,
+                                   std::string_view class_name, int32_t spawnflags,
+                                   const RemixPacks& packs) {
+  if (!packs.on || packs.to_pack.empty()) return nullptr;
+  const GameItems* f = game_items(from);
+  if (f == nullptr) return nullptr;
+  const ge::classic::ItemReading* r = ge::classic::read_item(*f, class_name, spawnflags);
+  if (r == nullptr) return nullptr;
+  for (const PackSpawn& p : kPackSpawns)
+    if (p.game == to && p.pack == packs.to_pack && p.role == r->role) return &p;
+  return nullptr;
 }
 
 }  // namespace shooters_edge::profiles

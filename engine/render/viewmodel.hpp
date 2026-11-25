@@ -27,7 +27,9 @@
 //   reversed-z buffer: nearer than anything of the world farther than `guard_m`, so it is never cut
 //   by a wall the player stands against (the world's near plane and a player's own size keep the
 //   world farther than that), and the passes after it (an effect, the fog, the TAA) find it in the
-//   depth. Back faces are culled as the CPU reference culls them.
+//   depth. Back faces are culled as the CPU reference culls them. A MIRRORED placement
+//   (`Placement::mirror`, a left-handed player's gun) flips the lens and the view's right, so the
+//   whole right-handed picture is drawn flipped and the world's light finds it where it is seen.
 // - THE PASS ("viewmodel") draws into the HDR and motion targets with the frame's depth, after
 //   the world and its transparent effects, before the TAA and the post pass; the HUD draws over
 //   the post pass. `encode_viewmodel_resolved` draws the same into an RGBA8 target already

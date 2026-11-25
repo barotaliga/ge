@@ -1,7 +1,7 @@
 ---
 title: The login seam answers with orders, and the game polls its seats
 date: 2026-11-13
-scope: engine/server/login.cpp, games/shooters_edge/net/classic_login.cpp
+scope: engine/server/login.cpp, games/shooters_edge/net/qw_login.cpp
 concepts: [login, sv-login, login-seam, classic-login, name-rule, auth-key, user-id]
 ---
 
@@ -17,8 +17,8 @@ Three traps came up:
   previous player's login, so `name_rule` leaves the seat first when the user id differs.
 - The connecting client reads nothing yet, so the refusal is kept in `LoginSeat::renamed` and told
   at `login_seat`.
-- `classic_set_info(s, slot, "name", ...)` used to set only the user info string, not
-  `ClassicClient::name`, so the endpoint's own lists kept the old name. It now sets both.
+- `qw_set_info(s, slot, "name", ...)` used to set only the user info string, not
+  `QwClient::name`, so the endpoint's own lists kept the old name. It now sets both.
 
 A registered player who joins under their own name plays under the default name until they log in.
 That follows from reserved names; the line tells them to log in to use it.

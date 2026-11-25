@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_scores_test.cpp
 #include "shooters_edge/client/scores.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <string>
@@ -64,12 +65,16 @@ bool teammate_in_game(const menu::Scoreboard& board) {
 menu::LevelStats level_stats_of(const Listen& l) {
   menu::LevelStats st;
   const CampaignView& c = l.campaign;
+  // A single-player program's level time is the server's clock itself (it starts each map at
+  // 1 s, and a load carries the saved clock on), as the original's solo panel and intermission
+  // show it.
+  const double start = l.campaign_host != nullptr ? 0.0 : l.entered_at;
   if (c.end == LevelEnd::none && l.server != nullptr) {
     CampaignView now = c;
     now.ended_at = l.server->sv.time;
-    completed_time(now, l.entered_at, st.minutes, st.seconds);
+    completed_time(now, start, st.minutes, st.seconds);
   } else {
-    completed_time(c, l.entered_at, st.minutes, st.seconds);
+    completed_time(c, start, st.minutes, st.seconds);
   }
   st.secrets = static_cast<int>(c.secrets);
   st.total_secrets = static_cast<int>(c.total_secrets);
@@ -80,11 +85,14 @@ menu::LevelStats level_stats_of(const Listen& l) {
 
 ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held) {
   if (l.server == nullptr) return ScoresScreen::none;
-  // Rules that draw their own screens (the sequel's layout, TAB bound to `inven` by its config).
+  // Rules that draw their own screens (Quake II's layout, TAB bound to `inven` by its config).
   if (listen_own_screens(l)) return ScoresScreen::none;
+  // A single-player program's player: the solo panel while the scores key is held, and in place
+  // of the status bar while he is dead.
   if (l.campaign_host)
-    return (held || teams_held) && l.campaign.end == LevelEnd::none ? ScoresScreen::solo
-                                                                    : ScoresScreen::none;
+    return (held || teams_held || player_state(l).dead) && l.campaign.end == LevelEnd::none
+               ? ScoresScreen::solo
+               : ScoresScreen::none;
   if (teams_held) return ScoresScreen::teams;
   if (held) return ScoresScreen::players;
   const PlayerState p = player_state(l);
@@ -94,14 +102,18 @@ ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held) {
 
 void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::menu::ClassicArt& art,
                  int w, int h, bool held, bool level_stats, shooters_edge::menu::BoardView& board,
-                 bool teams_held) {
+                 bool teams_held, bool show_pause, double print_speed) {
   const CampaignView& c = l.campaign;
+  // The game paused (`pause`): its picture, over whatever else is drawn below.
+  if (show_pause && l.campaign_host && l.server != nullptr && l.server->paused)
+    menu::draw_plaque(dl, art, w, h, "pause");
   if (l.campaign_host && c.end == LevelEnd::intermission) {
     menu::draw_intermission(dl, art, w, h, level_stats_of(l));
     return;
   }
   if (l.campaign_host && c.end != LevelEnd::none) {
-    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time));
+    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time, print_speed),
+                          c.end == LevelEnd::finale);
     return;
   }
   switch (scores_screen(l, held, teams_held)) {
@@ -128,6 +140,26 @@ void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::men
     case ScoresScreen::none:
       break;
   }
+}
+
+bool draw_joined_level_end(ge::ui::DrawList& dl, const DemoState& ds, const menu::ClassicArt& art,
+                           int w, int h, double print_speed) {
+  if (!ds.intermission || ds.ended_at < 0) return false;
+  for (const auto& [key, value] : ds.serverinfo)  // a match's end is its scoreboard's
+    if (key == "deathmatch" && number_of(value) != 0) return false;
+  if (!ds.finale.empty() && ds.finale_at >= 0) {
+    const double typed = std::max(0.0, (ds.time - ds.finale_at) * print_speed);
+    menu::draw_level_text(dl, art, w, h, ds.finale, static_cast<size_t>(typed), true);
+    return true;
+  }
+  menu::LevelStats st;
+  clock_of(ds.ended_at, st.minutes, st.seconds);
+  st.total_secrets = ds.stats[11];
+  st.total_kills = ds.stats[12];
+  st.secrets = ds.stats[13];
+  st.kills = ds.stats[14];
+  menu::draw_intermission(dl, art, w, h, st);
+  return true;
 }
 
 }  // namespace shooters_edge::client

@@ -6,10 +6,12 @@
 //
 // ge:summary Tests: a single-player program on the mod server: the mirror and its builtins
 // ge:keywords test qc single-player campaign form layout mirror bprint sprint aim autoaim sv_aim
-// ge:keywords multicast destination logfrag infokey stof
+// ge:keywords multicast destination logfrag infokey stof tell ping client-ping-times
 // ge:skill progs shooter testing
+#include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "shooters_edge_qc_fixture.hpp"
@@ -87,10 +89,10 @@ TEST(aim_turns_onto_a_target_near_the_line_of_sight) {
   // Nothing to aim at: straight ahead.
   fx.call(44, {ent(shooter), 1000});
   CHECK(fx.rv.x == 1 && fx.rv.y == 0 && fx.rv.z == 0);
-  // A target 200 ahead and 60 up: the pitch is corrected, the heading kept.
+  // A target 200 ahead and 60 up: the pitch is corrected from origin to origin, the heading kept.
   const int target = so.box({-216, -256, 84}, true);
   fx.call(44, {ent(shooter), 1000});
-  const float dx = 200, dz = 60 + 4 - 20;  // the box's centre, from the line's start
+  const float dx = 200, dz = 60;
   const float len = std::sqrt(dx * dx + dz * dz);
   CHECK_MSG(near(fx.rv.x, dx / len) && fx.rv.y == 0 && near(fx.rv.z, dz / len),
             std::to_string(fx.rv.x) + " " + std::to_string(fx.rv.z));
@@ -114,4 +116,88 @@ TEST(no_multicast_and_no_multiplayer_builtins) {
   CHECK(!fx.fault && fx.s->out.all.size() == 1);
   for (int n = 79; n <= 82; n++) CHECK(fx.vm().builtins[static_cast<size_t>(n)].fn == nullptr);
   CHECK(fx.vm().builtins[48].fn != nullptr);  // particle
+}
+
+// The builtins that answer as the original's single-player engine: angles in whole degrees,
+// findradius's chain in entity order (the highest number first), a removed entity keeping its
+// classname and health until its slot is reused.
+TEST(a_single_player_programs_builtins_answer_as_the_original) {
+  SoloFixture so;
+  Fixture& fx = so.fx;
+  fx.s->sv.set.single_player_clock = true;
+  fx.call(13, {sh::Vec3f{2, 1, 0}});  // vectoyaw: 26.57 degrees
+  CHECK(fx.rf == 26);
+  fx.call(51, {sh::Vec3f{2, 0, -1}});  // vectoangles: pitch -26.57, so 334
+  CHECK(fx.rv.x == 334 && fx.rv.y == 0 && fx.rv.z == 0);
+
+  const int a = so.box({-416, -256, 24}, false);
+  const int b = so.box({-316, -256, 24}, false);
+  const int c = so.box({-216, -256, 24}, false);
+  fx.call(22, {sh::Vec3f{-316, -256, 28}, 150});
+  std::vector<int> chain;
+  for (int e = fx.re; e > 0; e = pg::entity_number(fx.vm(), static_cast<int32_t>(*pg::entity_field(
+                                                                fx.vm(), e, kSp.f.chain))))
+    chain.push_back(e);
+  CHECK(chain.size() >= 3);
+  for (size_t i = 1; i < chain.size(); i++) CHECK(chain[i] < chain[i - 1]);
+  CHECK(chain[0] >= c && std::count(chain.begin(), chain.end(), a) == 1 &&
+        std::count(chain.begin(), chain.end(), b) == 1);
+
+  fx.in_call([&] { fx.set_f(c, kSp.f.health, 50); });
+  fx.call(15, {ent(c)});
+  fx.in_call([] {});
+  CHECK(fx.f(c, kSp.f.health) == 50);
+}
+
+TEST(tell_reaches_one_player_by_whole_name_and_ping_lists_everyone) {
+  SoloFixture so;
+  Fixture& fx = so.fx;
+  fx.s->sv.set.single_player_clock = true;
+  fx.join(0, "alice");
+  fx.join(1, "Bob");
+  fx.join(2, "bobby");
+  fx.s->clients[1].ping_ms = 48;
+  fx.s->clients[2].ping_ms = 12345;
+  const auto prints = [&] {  // copies: the events are cleared
+    std::vector<sv::NetEvent> p;
+    for (const sv::NetEvent* e : fx.events(sv::EventKind::print)) p.push_back(*e);
+    fx.s->out.events.clear();
+    return p;
+  };
+  prints();
+  // The whole argument text after the sender's name, the target's name still in it; one reader.
+  sv::client_command(*fx.s, 0, "tell bob hi there");
+  std::vector<sv::NetEvent> p = prints();
+  CHECK(p.size() == 1u);
+  if (p.size() == 1u) {
+    CHECK_MSG(p[0].text == "alice: bob hi there\n", p[0].text);
+    CHECK(p[0].to == 2u);
+    CHECK(p[0].level != 3);  // no chat sound
+  }
+  // Arguments that start with a quote lose their first and last byte; the line is cut to 62.
+  sv::client_command(*fx.s, 0, "tell \"bobby\" " + std::string(80, 'x'));
+  p = prints();
+  CHECK(p.size() == 1u);
+  if (p.size() == 1u) {
+    CHECK_MSG(p[0].text.size() == 63u && p[0].text.rfind("alice: bobby\" xxx", 0) == 0, p[0].text);
+    CHECK(p[0].to == 4u);
+  }
+  // A part of a name, no text, or no one by that name: nothing at all.
+  sv::client_command(*fx.s, 0, "tell bo hi");
+  sv::client_command(*fx.s, 0, "tell bob");
+  sv::client_command(*fx.s, 0, "tell carol hi");
+  CHECK(prints().empty());
+  // `ping`: the asker alone reads everyone's.
+  sv::client_command(*fx.s, 1, "ping");
+  p = prints();
+  CHECK(p.size() == 1u);
+  if (p.size() == 1u) {
+    CHECK_MSG(p[0].text == "Client ping times:\n   0 alice\n  48 Bob\n12345 bobby\n", p[0].text);
+    CHECK(p[0].to == 2u);
+  }
+  // The server's own console is no player.
+  CHECK(sv::server_command(*fx.s, "tell bob hi"));
+  CHECK(!fx.s->console.empty() && fx.s->console.back() == "Can't \"tell\", not connected");
+  CHECK(sv::server_command(*fx.s, "ping"));
+  CHECK(!fx.s->console.empty() && fx.s->console.back() == "Can't \"ping\", not connected");
 }

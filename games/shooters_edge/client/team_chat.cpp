@@ -1,17 +1,24 @@
 // Team chat and the game's events in a player's config (team_chat.hpp).
 //
 // ge:summary Team chat's percent codes, fun characters and f_ event triggers, defined
-// ge:keywords say say_team percent-codes fun-characters f_newmap f_spawn f_death f_respawn
+// ge:keywords cl_timer say say_team percent-codes fun-characters f_newmap f_spawn f_death f_respawn
+// ge:keywords cl_health cl_armor cl_ammo cl_mapname macros
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #include "shooters_edge/client/team_chat.hpp"
+#include "shooters_edge/client/team_macros.hpp"
 
 #include "console/cfg.hpp"
+#include "console/clock_macros.hpp"
+#include "shooters_edge/client/demo.hpp"
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <tuple>
 #include <utility>
 
 namespace shooters_edge::client {
@@ -39,13 +46,13 @@ constexpr Word kWords[] = {
     {"tp_name_gl", "gl", "the grenade launcher in a team message"},
     {"tp_name_rl", "rl", "the rocket launcher in a team message"},
     {"tp_name_lg", "lg", "the beam gun in a team message"},
-    {"tp_name_blaster", "blaster", "the sequel's blaster in a team message"},
-    {"tp_name_mg", "mg", "the sequel's machinegun in a team message"},
-    {"tp_name_cg", "cg", "the sequel's chaingun in a team message"},
-    {"tp_name_hb", "hb", "the sequel's hyperblaster in a team message"},
-    {"tp_name_rg", "rg", "the sequel's railgun in a team message"},
-    {"tp_name_bfg", "bfg", "the sequel's big gun in a team message"},
-    {"tp_name_hg", "hg", "the sequel's hand grenades in a team message"},
+    {"tp_name_blaster", "blaster", "Quake II's blaster in a team message"},
+    {"tp_name_mg", "mg", "Quake II's machinegun in a team message"},
+    {"tp_name_cg", "cg", "Quake II's chaingun in a team message"},
+    {"tp_name_hb", "hb", "Quake II's hyperblaster in a team message"},
+    {"tp_name_rg", "rg", "Quake II's railgun in a team message"},
+    {"tp_name_bfg", "bfg", "Quake II's big gun in a team message"},
+    {"tp_name_hg", "hg", "Quake II's hand grenades in a team message"},
     {"tp_name_armortype_ga", "g", "light armour's letter (%A)"},
     {"tp_name_armortype_ya", "y", "medium armour's letter (%A)"},
     {"tp_name_armortype_ra", "r", "heavy armour's letter (%A)"},
@@ -84,6 +91,7 @@ constexpr Word kWords[] = {
     {"tp_name_pented", "pented", "a player with the shield"},
     {"tp_poweruptextstyle", "0", "1: the powerups you hold as their letters in team messages"},
     {"cl_fakename_suffix", ": ", "after your short name in a team message"},
+    {"cl_fakename", "", "a name of your own before every team line (empty: none)"},
 };
 
 struct Need {
@@ -126,7 +134,7 @@ const char* weapon_name(int digit) {
 
 std::string weapon_word(const con::Console& c, int digit) { return word(c, weapon_name(digit)); }
 
-// A game whose weapons are on its own keys (the sequel's eleven, hud::KeyedWeapons): the word
+// A game whose weapons are on its own keys (Quake II's eleven, hud::KeyedWeapons): the word
 // setting of the weapon on `key`, and its weapons best first by key.
 const char* keyed_name(int key) {
   static constexpr const char* kNames[] = {
@@ -307,7 +315,7 @@ const Pointed& pointing(const con::Console& c, const TeamChat& chat) {
   if (chat.pointed_t != chat.status.t) {
     chat.pointed_t = chat.status.t;
     const ClearLine clear = chat.places != nullptr ? chat.places->clear_line : ClearLine{};
-    chat.pointed = chat.scene ? point_at(c, chat.scene(), clear) : Pointed{};
+    chat.pointed = chat.scene ? point_at(c, chat.scene(), clear, chat.items.point) : Pointed{};
     if (chat.pointed.any) {
       chat.last_point = chat.pointed;
       chat.last_point_t = chat.status.t;
@@ -497,11 +505,45 @@ int fun_glyph(char ch) {
   return -1;
 }
 
+double number_text_of(const std::string& t) {
+  double x = 0;
+  return con::parse_number(t, x) ? x : 0;
+}
+
+std::string server_info(const DemoState& s, std::string_view key) {
+  for (const auto& [k, v] : s.serverinfo)
+    if (k == key) return v;
+  return {};
+}
+
 void run_alias(con::Console& c, std::string_view name) {
   if (c.aliases().count(std::string(name)) != 0) c.append(name);
 }
 
 }  // namespace
+
+int needed_count(const con::Console& c, const hud::Status& s, bool rl) {
+  const Needed n = needed(c, s);
+  return (n.armour ? 1 : 0) + (n.health ? 1 : 0) + (n.weapon ? 1 : 0) + (rl && n.rl ? 1 : 0) +
+         (n.ammo.empty() ? 0 : 1);
+}
+
+std::vector<std::string> held_weapon_words(const con::Console& c, const hud::Status& s) {
+  std::vector<std::string> out;
+  if (s.keyed.set) {
+    for (const int k : kKeyedBest)
+      if ((s.keyed.carried >> k & 1) != 0) out.push_back(word(c, keyed_name(k)));
+    return out;
+  }
+  for (int d = 8; d >= 1; --d)
+    if (owns(s, d)) out.push_back(weapon_word(c, d));
+  return out;
+}
+
+std::string hand_weapon_word(const con::Console& c, const hud::Status& s, int& number) {
+  number = s.keyed.set ? s.keyed.in_hand : weapon_digit(s.weapon);
+  return s.keyed.set ? word(c, keyed_name(number)) : weapon_word(c, number);
+}
 
 std::string fill_team_codes(const con::Console& con, const TeamChat& chat, std::string_view text) {
   std::string out;
@@ -810,9 +852,26 @@ constexpr const char* kCanned[] = {"report",  "lost",  "enemypwr", "quaddead", "
 // The player's short name before a canned message: a `nick` they made, else their name's first
 // three letters; the leading 0x0D draws it over the `(name): ` a teammate's client writes.
 std::string short_name(const con::Console& c) {
+  if (!word(c, "cl_fakename").empty()) return {};  // say_team puts the made-up name in front
   std::string nick = word(c, "nick");
   if (nick.empty()) nick = word(c, "name").substr(0, 3);
   return std::string(1, '\r') + nick + word(c, "cl_fakename_suffix");
+}
+
+// cl_floodprot: false when the line may go, else true (and nothing is kept). At most
+// cl_fp_messages lines (10 at most) in any cl_fp_persecond seconds, a little slack on the window.
+bool flooding(const con::Console& c, TeamChat& chat) {
+  const double now =
+      std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  const int most = std::min(static_cast<int>(number(c, "cl_fp_messages")), 10);
+  const double window = number(c, "cl_fp_persecond");
+  if (number(c, "cl_floodprot") > 0 && most > 0 && window > 0) {
+    const double nth = chat.sent_at[static_cast<size_t>((chat.sent_next + 10 - most) % 10)];
+    if (now - nth < 1.02 * window) return true;
+  }
+  chat.sent_at[static_cast<size_t>(chat.sent_next)] = now;
+  chat.sent_next = (chat.sent_next + 1) % 10;
+  return false;
 }
 
 }  // namespace
@@ -826,7 +885,44 @@ void team_event(con::Console& c, std::string_view alias) {
   if (on(c, "tp_triggers")) run_alias(c, alias);
 }
 
+void spectate_event(con::Console& c, std::string_view alias) { run_alias(c, alias); }
+
+bool carries_flag(const DemoState& s) {
+  constexpr int kQ1Flags = 16 | 32;                // the red and the blue flag's glow
+  constexpr int kQ2Flags = (1 << 18) | (1 << 19);  // Quake II's two (q2_look.hpp kSqFlag*)
+  constexpr int32_t kKeys = 131072 | 262144;       // the two keys among the items
+  const int self = s.player;
+  if (s.game == "fortress" && (s.stats[kStatItems] & kKeys) != 0) return true;
+  if (s.protocol == 34) {  // Quake II: the player is entity slot + 1
+    const auto n = static_cast<size_t>(self) + 1;
+    return self >= 0 && n < s.entities.size() && (s.entities[n].effects & kQ2Flags) != 0;
+  }
+  if (s.format == DemoFormat::single) {
+    const auto n = static_cast<size_t>(s.view_entity);
+    return n < s.entities.size() && (s.entities[n].effects & kQ1Flags) != 0;
+  }
+  const auto n = static_cast<size_t>(self);
+  return self >= 0 && n < s.players.size() && (s.players[n].effects & kQ1Flags) != 0;
+}
+
 void add_team_chat(con::Console& c, TeamChat& chat) {
+  add_team_macros(c, chat);  // $health, $bestweapon, $location and the rest (team_macros.hpp)
+  add_item_commands(c, chat.items);
+  // The player's figures as macros for binds, draw and say: $cl_health, $cl_armor, $cl_ammo (the
+  // weapon in hand's), and $cl_mapname, as the last frame's state had them; the figures are team
+  // macros (console.hpp).
+  c.add_macro(
+      "cl_health", [&chat] { return std::to_string(chat.status.health); }, con::MacroKind::team);
+  c.add_macro(
+      "cl_armor", [&chat] { return std::to_string(chat.status.armour); }, con::MacroKind::team);
+  c.add_macro(
+      "cl_ammo", [&chat] { return std::to_string(chat.status.ammo_for(chat.status.weapon)); },
+      con::MacroKind::team);
+  c.add_macro("cl_mapname", [&chat] { return chat.map; });
+  // $cl_timer: the level's time, "4:05" ("0:00" before a level).
+  c.add_macro("cl_timer", [&chat] {
+    return con::level_clock(chat.map.empty() || !chat.known ? 0 : chat.status.t - chat.level_from);
+  });
   auto& v = c.cvars();
   for (const Word& w : kWords)
     if (v.find(w.name) == nullptr)
@@ -851,6 +947,17 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
                    : std::string_view(b) == "cl_parseFunChars" ? "1: $[ and the other glyphs made"
                                                                : "1: f_ aliases run on events",
            .kind = con::CvarKind::boolean});
+  for (const auto& [name, fallback, help] :
+       {std::tuple<const char*, const char*, const char*>{
+            "cl_floodprot", "0", "1: you are kept from sending more chat than a server allows"},
+        {"cl_fp_messages", "4", "chat lines you may send in cl_fp_persecond seconds (at most 10)"},
+        {"cl_fp_persecond", "4", "the seconds cl_fp_messages counts over"}})
+    v.add({.name = name,
+           .fallback = fallback,
+           .flags = con::kArchive,
+           .help = help,
+           .kind = con::CvarKind::number,
+           .min = 0});
   v.add({.name = "tp_forceTriggers",
          .fallback = "0",
          .flags = con::kArchive,
@@ -868,7 +975,18 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
             text = text.substr(1, text.size() - 2);
           if (text.empty()) return;
           if (on(con, "cl_parseSay")) text = fill_team_codes(con, chat, text);
+          const std::string fake = word(con, "cl_fakename");
+          if (a[0] == "say_team" && !fake.empty() && text.find('\r') == std::string::npos) {
+            std::string head = "\r";  // drawn over the "(name): " the others' clients write
+            head += fake;
+            head += word(con, "cl_fakename_suffix");
+            text.insert(0, head);
+          }
           if (on(con, "cl_parseFunChars")) text = fun_characters(text, true);
+          if (flooding(con, chat)) {
+            con.print("Flood Protection");
+            return;
+          }
           const std::string line = a[0] + " \"" + text + "\"";
           if (!chat.send || !chat.send(line)) con.print("You need to be in a game to talk.");
         });
@@ -944,34 +1062,86 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
   }
 }
 
-void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std::string_view map) {
+void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std::string_view map,
+                int64_t bonuses, const DemoState* state) {
   const bool fire = on(c, "tp_triggers");
+  chat.joined = state != nullptr;
+  // A strict ruleset's match keeps the events that would script a reaction quiet (triggers_quiet).
+  const bool quiet = c.triggers_quiet();
+  if (bonuses > chat.bonuses && fire && !quiet)
+    run_alias(c, "f_bonusflash");  // whether it flashes or not
+  chat.bonuses = bonuses;
   // A team's event: asked only when one happens, since finding a teammate reads the board.
   const auto team = [&] {
-    return fire && (number(c, "tp_forceTriggers") != 0 || (chat.teammates && chat.teammates()));
+    return fire && !quiet &&
+           (number(c, "tp_forceTriggers") != 0 || (chat.teammates && chat.teammates()));
   };
   if (map.empty()) return;
   if (map != chat.map) {  // a new map: what was remembered goes, f_newmap then its first frame
     chat.map = std::string(map);
+    chat.level_from = status.t;
     chat.known = false;
     chat.last_weapon = -1;
     chat.died_at.clear();
     chat.died_t = -1e9;
+    chat.flag = false;
     chat.reported.clear();
     chat.took.clear();
+    chat.intermission = false;
     if (fire) run_alias(c, "f_newmap");
+  }
+  if (state != nullptr) {  // the match's events: the level's end, the countdown begun or broken
+    if (state->intermission && !chat.intermission && fire) run_alias(c, "f_mapend");
+    chat.intermission = state->intermission;
+    std::string now = server_info(*state, "status");
+    for (char& ch : now) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    if (now != chat.match_status) {
+      if (now == "countdown" && fire) run_alias(c, "f_countdownstart");
+      if (now == "standby" && chat.match_status == "countdown" && fire)
+        run_alias(c, "f_countdownbreak");
+      chat.match_status = now;
+    }
+    // $team1 and $team2: the players' distinct teams (their names with teamplay off), in order
+    // whatever their case and colour.
+    const bool teams = number_text_of(server_info(*state, "teamplay")) != 0;
+    std::vector<std::string> sides;
+    for (size_t k = 0; k < state->names.size(); ++k) {
+      if (state->names[k].empty() || state->spectator[k]) continue;
+      const std::string& side = teams ? state->teams[k] : state->names[k];
+      if (!side.empty() && std::find(sides.begin(), sides.end(), side) == sides.end())
+        sides.push_back(side);
+    }
+    const auto key = [](const std::string& t) {
+      std::string k;
+      for (const char ch : t)
+        k += static_cast<char>(std::tolower(static_cast<unsigned char>(ch) & 0x7f));
+      return k;
+    };
+    std::sort(sides.begin(), sides.end(),
+              [&key](const std::string& a, const std::string& b) { return key(a) < key(b); });
+    chat.team1 = sides.size() > 0 ? sides[0] : "team1";
+    chat.team2 = sides.size() > 1 ? sides[1] : "team2";
   }
   const bool first = !chat.known;
   const int was_health = chat.last_health;
+  // A flag carried now or in the last frame: the server may drop it in the frame of the death.
+  const bool flag_now = state != nullptr && carries_flag(*state);
+  const bool had_flag = chat.flag || flag_now;
+  const bool watching = state != nullptr && state->player >= 0 && state->player < 32 &&
+                        state->spectator[static_cast<size_t>(state->player)];
+  chat.flag = flag_now;
   const std::string took = first || was_health <= 0 || status.health <= 0
                                ? std::string()
                                : picked_up(chat.status, status);
   chat.status = status;
-  if (!took.empty()) {
+  // tp_took or tp_pickup: remembered for the codes; tp_took alone runs f_took (team_items.hpp).
+  const int dm = took.empty() || !chat.scene ? 1 : chat.scene().deathmatch;
+  if (!took.empty() &&
+      (item_counts(chat.items.took, took, dm) || item_counts(chat.items.pickup, took, dm))) {
     chat.took = took;
     chat.took_at = here(c, chat);
     chat.took_t = status.t;
-    if (team()) run_alias(c, "f_took");
+    if (item_counts(chat.items.took, took, dm) && team()) run_alias(c, "f_took");
   }
   chat.known = true;
   chat.last_health = status.health;
@@ -981,7 +1151,8 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
     chat.died_at = here(c, chat);
     chat.died_t = status.t;
     chat.reported = chat.died_at;
-    if (team()) run_alias(c, "f_death");
+    // f_flagdeath in f_death's place when a flag went down with the player (never a spectator's).
+    if (team()) run_alias(c, had_flag && !watching ? "f_flagdeath" : "f_death");
   } else if (was_health <= 0 && status.health > 0) {
     if (team()) run_alias(c, "f_respawn");
   }

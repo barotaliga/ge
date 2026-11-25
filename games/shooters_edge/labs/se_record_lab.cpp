@@ -31,7 +31,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/listen_record.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/unpack.hpp"
 

@@ -66,10 +66,6 @@ namespace shooters_edge::server::rules::campaign {
   X(map, kTypeString)          \
   X(count, kTypeFloat)         \
   X(mangle, kTypeVector)       \
-  X(t_length, kTypeFloat)      \
-  X(t_width, kTypeFloat)       \
-  X(dest1, kTypeVector)        \
-  X(dest2, kTypeVector)        \
   X(sq_kind, kTypeFloat)       \
   X(sq_slot, kTypeFloat)       \
   X(sq_next, kTypeFloat)       \
@@ -79,9 +75,9 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_rest, kTypeFloat)       \
   X(coop_taken, kTypeFloat)
 
-// THE SEQUEL'S MONSTERS the campaign runs (classic remix, campaign_sequel.hpp): each kind's
-// spawn by its class name, then the rules they share (campaign_sequel_kinds.cpp).
-#define SE_CAMPAIGN_SEQUEL_FUNCTIONS(X)               \
+// QUAKE II'S MONSTERS the campaign runs (classic remix, campaign_q2.hpp): each kind's
+// spawn by its class name, then the rules they share (campaign_q2_kinds.cpp).
+#define SE_CAMPAIGN_Q2_FUNCTIONS(X)                   \
   X(monster_soldier_light, "monster_soldier_light")   \
   X(monster_soldier, "monster_soldier")               \
   X(monster_soldier_ss, "monster_soldier_ss")         \
@@ -138,11 +134,7 @@ namespace shooters_edge::server::rules::campaign {
   X(trigger_relay, "trigger_relay")                   \
   X(setskill_touch, "setskill_touch")                 \
   X(trigger_setskill, "trigger_setskill")             \
-  X(onlyregistered_touch, "onlyregistered_touch")     \
-  X(trigger_onlyregistered, "trigger_onlyregistered") \
   X(trigger_monsterjump, "trigger_monsterjump")       \
-  X(func_episodegate, "func_episodegate")             \
-  X(func_bossgate, "func_bossgate")                   \
   X(sigil_touch, "sigil_touch")                       \
   X(item_sigil, "item_sigil")                         \
   X(key_touch, "key_touch")                           \
@@ -246,9 +238,6 @@ namespace shooters_edge::server::rules::campaign {
   X(hknight_flinch, "hknight_flinch")                 \
   X(hknight_pain, "hknight_pain")                     \
   X(monster_hell_knight, "monster_hell_knight")       \
-  X(teleporttrain_next, "teleporttrain_next")         \
-  X(teleporttrain_use, "teleporttrain_use")           \
-  X(misc_teleporttrain, "misc_teleporttrain")         \
   X(boss_ball_touch, "boss_ball_touch")               \
   X(boss_think, "boss_think")                         \
   X(boss_use, "boss_use")                             \
@@ -262,46 +251,7 @@ namespace shooters_edge::server::rules::campaign {
   X(oldone_die, "oldone_die")                         \
   X(oldone_sway, "oldone_sway")                       \
   X(monster_oldone, "monster_oldone")                 \
-  X(train_blocked, "train_blocked")                   \
-  X(train_arrived, "train_arrived")                   \
-  X(train_next, "train_next")                         \
-  X(train_place, "train_place")                       \
-  X(func_train, "func_train")                         \
-  X(secret_closed, "secret_closed")                   \
-  X(secret_back, "secret_back")                       \
-  X(secret_shut_rest, "secret_shut_rest")             \
-  X(secret_shut, "secret_shut")                       \
-  X(secret_open_full, "secret_open_full")             \
-  X(secret_aside, "secret_aside")                     \
-  X(secret_open_rest, "secret_open_rest")             \
-  X(secret_use, "secret_use")                         \
-  X(secret_shot, "secret_shot")                       \
-  X(secret_blocked, "secret_blocked")                 \
-  X(secret_door_touch, "secret_door_touch")           \
-  X(func_door_secret, "func_door_secret")             \
-  X(explobox_die, "explobox_die")                     \
-  X(misc_explobox, "misc_explobox")                   \
-  X(misc_explobox2, "misc_explobox2")                 \
-  X(fireball_touch, "fireball_touch")                 \
-  X(fireball_fly, "fireball_fly")                     \
-  X(misc_fireball, "misc_fireball")                   \
-  X(trap_fire, "trap_fire")                           \
-  X(trap_spikeshooter, "trap_spikeshooter")           \
-  X(trap_shooter_think, "trap_shooter_think")         \
-  X(trap_shooter, "trap_shooter")                     \
-  X(bubble_rise, "bubble_rise")                       \
-  X(bubbles_make, "bubbles_make")                     \
-  X(air_bubbles, "air_bubbles")                       \
-  X(ambient_comp_hum, "ambient_comp_hum")             \
-  X(ambient_drip, "ambient_drip")                     \
-  X(ambient_drone, "ambient_drone")                   \
-  X(ambient_flouro_buzz, "ambient_flouro_buzz")       \
-  X(ambient_light_buzz, "ambient_light_buzz")         \
-  X(ambient_suck_wind, "ambient_suck_wind")           \
-  X(ambient_swamp1, "ambient_swamp1")                 \
-  X(ambient_swamp2, "ambient_swamp2")                 \
-  X(ambient_thunder, "ambient_thunder")               \
-  SE_CAMPAIGN_SEQUEL_FUNCTIONS(X)                     \
+  SE_CAMPAIGN_Q2_FUNCTIONS(X)                         \
   X(coop_plat_rise, "coop_plat_rise")
 
 // THE RULES called by name WITH ARGUMENTS (the tests' and the tools' blows), after the list above:
@@ -362,23 +312,14 @@ struct A : Q {
 #include "shooters_edge/rules/common_rules.inc"
 
 // THE CAMPAIGN'S CONSTANTS.
-constexpr float kMovetypeStep = 4, kMovetypeFly = 5, kMovetypeNoclip = 8;
+constexpr float kMovetypeStep = 4, kMovetypeFly = 5;
 constexpr int kFlFly = 1, kFlSwim = 2, kFlMonster = 32, kFlNotarget = 128, kFlWaterjump = 2048;
-constexpr float kContentWater = -3;
-constexpr float kAttnIdle = 2, kAttnStatic = 3;
-constexpr float kMsgBroadcast = 0, kMsgAll = 2;
-constexpr float kSvcKilledmonster = 27, kSvcFoundsecret = 28, kSvcIntermission = 30,
-                kSvcFinale = 31;
+constexpr float kSvcKilledmonster = 27, kSvcFinale = 31;
 constexpr float kDropShells = 1, kDropCells = 2, kDropRockets = 3;
 constexpr float kAsStraight = 1, kAsMelee = 3, kAsMissile = 4;
 constexpr float kRangeMelee = 0, kRangeNear = 1, kRangeMid = 2, kRangeFar = 3;
 constexpr int kSpawnAmbush = 1;
 constexpr float kForever = 100000000;
-
-// Vector words as the bytecode makes them: a float times a vector (MUL_FV) and the dot product
-// (MUL_V), each in its own order.
-inline Vec3 fv(float k, Vec3 v) { return {k * v.x, k * v.y, k * v.z}; }
-inline float dot(Vec3 a, Vec3 b) { return (a.x * b.x + a.y * b.y) + a.z * b.z; }
 
 // A rule stored in a field, run as the bytecode's call of it (a float one's answer read after).
 inline void run_field(A& q, int32_t e, Fd k) { q.call(q.i(e, k)); }

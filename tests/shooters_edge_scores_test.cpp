@@ -1,7 +1,8 @@
 // Tests: what the scores key shows, read off the listen server (games/shooters_edge/client/
 // scores.hpp): a match's board of the local player and a second client off their user info and
 // their entities' frags, teamplay off the server's cvar, the minutes on the server; which screen
-// the key and the player's state pick in a match.
+// the key and the player's state pick in a match; a joined co-op game's level end drawn (the
+// intermission, the finale), a match's not.
 //
 // ge:summary Tests: the scoreboard's rows off the listen server and which screen the key shows
 // ge:keywords test scores scores_of scores_screen listen-server frags userinfo teamplay
@@ -15,7 +16,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/scores.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 
@@ -88,4 +89,23 @@ TEST(a_teammate_is_another_player_on_the_same_team) {
   CHECK_MSG(!cl::teammate_in_game(b), "an enemy and a spectator are not teammates");
   b.rows.push_back({.name = "mate", .team = "red"});
   CHECK_MSG(cl::teammate_in_game(b), "a red player is a teammate");
+}
+
+TEST(a_joined_co_op_game_draws_its_level_end_and_a_match_does_not) {
+  cl::DemoState ds;
+  shooters_edge::menu::ClassicArt art;  // no pictures: the engine's type
+  ge::ui::DrawList dl;
+  dl.begin(640, 400);
+  CHECK(!cl::draw_joined_level_end(dl, ds, art, 640, 400));  // no level end yet
+  ds.intermission = true;
+  ds.ended_at = 187;
+  ds.stats[12] = 52;
+  ds.stats[14] = 41;
+  CHECK(cl::draw_joined_level_end(dl, ds, art, 640, 400));  // the intermission's figures
+  ds.finale = "The last gate folds shut.";
+  ds.finale_at = 190;
+  ds.time = 192;
+  CHECK(cl::draw_joined_level_end(dl, ds, art, 640, 400));  // the finale, typed
+  ds.serverinfo = {{"deathmatch", "1"}};
+  CHECK(!cl::draw_joined_level_end(dl, ds, art, 640, 400));  // a match: its scoreboard's
 }

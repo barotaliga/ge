@@ -15,6 +15,14 @@ override kEncodeSrgb: bool = true;
 // The share of the bloom mixed in (render/bloom.hpp); 0 reads none.
 override kBloom: f32 = 0.0;
 
+// A picture in the display's values (PostSettings::display, above 0): no exposure and no tone
+// curve, the colour divided by a white face's luminance times this, clipped at white.
+override kDisplay: f32 = 0.0;
+
+// The tone curve's toe (PostSettings::toe): the darkest colours pulled toward black, the least of
+// the three channels most; off, the curve is straight up to its shoulder.
+override kToe: bool = true;
+
 @group(1) @binding(0) var hdr: texture_2d<f32>;
 @group(1) @binding(1) var bloom: texture_2d<f32>;  // rgb summed over `a` levels
 @group(1) @binding(2) var lin: sampler;
@@ -31,6 +39,10 @@ struct Look {
   d: vec4f,  // the screen's blend: an sRGB-encoded colour, its share (`set_post_blend`)
   e: vec4f,  // the arrival (`set_post_warp`): share, reveal, zoom, flash
   f: vec4f,  // the arrival's tint, sRGB-encoded
+  g: vec4f,  // the ripple (`set_post_ripple`): its reach (a share of the screen), waves, phase
+  h: vec4f,  // the view's rectangle (`set_post_view`): its corner, 1 - its size; 0 all of it
+  i: vec4f,  // the edge blend (`set_post_edge_blend`): an sRGB-encoded colour, its share at the edge
+  j: vec4f,  // the edge blend's depth: a share of the view's shorter side (0: flat), -, -, -
 }
 @group(1) @binding(6) var<uniform> look: Look;
 // Motion blur's inputs at the render size (render/motion_blur.hpp): the motion target (rg the
@@ -72,7 +84,7 @@ fn tone(c: vec3f) -> vec3f {
   let start = 0.8 - 0.04;
   let desat = 0.15;
   let x = min(c.r, min(c.g, c.b));
-  let offset = select(0.04, x - 6.25 * x * x, x < 0.08);
+  let offset = select(select(0.04, x - 6.25 * x * x, x < 0.08), 0.0, !kToe);
   var col = c - offset;
   let peak = max(col.r, max(col.g, col.b));
   if (peak < start) {
@@ -249,9 +261,9 @@ fn defocused(uv: vec2f, c: vec3f, size: vec2f) -> vec3f {
   return mix(c, textureSampleLevel(dof, lin, uv, 0.0).rgb, clamp(px / 1.5, 0.0, 1.0));
 }
 
-// THE ARRIVAL (render/post.hpp's PostWarp): outside the clear disc the view is pulled in toward
-// the middle and streaked toward it, red reaching farther than blue, washed out and tinted; the
-// disc's edge is a bright rim and the flash lies over everything. Linear light, before the
+// THE ARRIVAL (render/post.hpp's PostWarp): outside the clear disc the view is streaked toward the
+// middle, red reaching farther than blue, washed out and tinted; the disc's edge is a faint rim.
+// Inside the disc the picture is untouched (a pull and a flash, `e.z` and `e.w`, only when set). Linear light, before the
 // exposure (the tint is divided by it, so a flash of 1 is about white whatever the room).
 const kWarpTaps: i32 = 8;
 
@@ -261,7 +273,7 @@ fn arrived(uv: vec2f, c: vec3f, size: vec2f, e: f32) -> vec3f {
   let aspect = vec2f(size.x / size.y, 1.0);
   let r = length((uv - 0.5) * aspect) / length(0.5 * aspect);  // 0 the middle, 1 a corner
   let outside = smoothstep(reveal - 0.3, reveal + 0.02, r);
-  let k = share * mix(0.3, 1.0, outside);
+  let k = share * outside;
   let q = 0.5 + (uv - 0.5) * (1.0 - 0.35 * look.e.z - 0.12 * k * r);
   let streak = (q - 0.5) * (0.3 * k);
   let split = (q - 0.5) * (0.04 * k);
@@ -273,20 +285,37 @@ fn arrived(uv: vec2f, c: vec3f, size: vec2f, e: f32) -> vec3f {
                  textureSampleLevel(hdr, lin, t - split, 0.0).b);
   }
   var w = mix(c, sum / f32(kWarpTaps), clamp(4.0 * k + look.e.z, 0.0, 1.0));
-  w = mix(w, vec3f(dot(w, kLuma)), 0.7 * outside * share);
+  w = mix(w, vec3f(dot(w, kLuma)), 0.4 * outside * share);
   let ring = (r - reveal) / 0.07;
   let rim = share * exp(-ring * ring);
   let tint = srgb_to_linear(look.f.rgb);
-  return w + tint * ((look.e.w + 1.5 * rim + 0.5 * outside * share) / e);
+  return w + tint * ((look.e.w + 0.2 * rim + 0.15 * outside * share) / e);
 }
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let size = vec2f(textureDimensions(hdr));
-  let uv = in.position.xy / size;
-  let p = vec2i(in.position.xy);
+  var uv = in.position.xy / size;
+  var p = vec2i(in.position.xy);
+  var whole = true;
+  if (look.h.z > 0.0 || look.h.w > 0.0) {  // THE VIEW IN A SMALLER RECTANGLE, black round it
+    uv = (uv - look.h.xy) / (vec2f(1.0) - look.h.zw);
+    if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
+      return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+    p = clamp(vec2i(uv * size), vec2i(0), vec2i(size) - vec2i(1));
+    whole = false;
+  }
   let e = exposure();
-  let base = textureLoad(hdr, p, 0).rgb;
+  var base = textureLoad(hdr, p, 0).rgb;
+  if (!whole) {  // the whole picture shrunk: read between its pixels
+    base = textureSampleLevel(hdr, lin, uv, 0.0).rgb;
+  }
+  if (look.g.x > 0.0) {  // THE RIPPLE: across by the height, down by the width, `g.y` waves
+    let w = 6.2831853 * look.g.y;
+    let at = uv + look.g.x * vec2f(sin(uv.y * w + look.g.z), sin(uv.x * w + look.g.z));
+    base = textureSampleLevel(hdr, lin, clamp(at, vec2f(0.0), vec2f(1.0)), 0.0).rgb;
+  }
   var c = base;
   if (kSharpen) {
     c = sharpened(p, base, e);
@@ -322,9 +351,22 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   if (kVignette) {
     c *= vignette(uv, size);
   }
-  let t = clamp(tone(c * e), vec3f(0.0), vec3f(1.0));
+  var t = clamp(tone(c * e), vec3f(0.0), vec3f(1.0));
+  if (kDisplay > 0.0) {
+    t = clamp(c / (white_luminance() * kDisplay), vec3f(0.0), vec3f(1.0));
+  }
   var o = graded(linear_to_srgb(t));
   o = mix(o, look.d.rgb, look.d.a);
+  if (look.i.a > 0.0) {  // THE EDGE BLEND: a frame round the view, fading inward (edge_blend_share)
+    var share = look.i.a;
+    if (look.j.x > 0.0) {
+      let px = size * (vec2f(1.0) - look.h.zw);  // the view's own size
+      let edge = min(uv, vec2f(1.0) - uv) * px;
+      let inward = max(min(edge.x, edge.y), 0.0) / (look.j.x * min(px.x, px.y));
+      share = select(look.i.a * (1.0 - inward), 0.0, inward >= 1.0);
+    }
+    o = mix(o, look.i.rgb, share);
+  }
   if (kGrain) {
     o = clamp(grained(o, in.position.xy), vec3f(0.0), vec3f(1.0));
   }

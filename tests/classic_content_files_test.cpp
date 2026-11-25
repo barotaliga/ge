@@ -59,7 +59,7 @@ std::string text_of(const cl::SearchPath& sp, const std::string& name) {
 fs::path make_tree() {
   const fs::path root = fs::temp_directory_path() / "ge_se_files_test";
   fs::remove_all(root);
-  const fs::path base = root / std::string(ge::classicenhance::classic_profile().base_dir);
+  const fs::path base = root / std::string(ge::classicenhance::q1_profile().base_dir);
   write_pack(base / "pak0.pak", {{"maps/a.bsp", bytes_of("A")},
                                  {"maps/start.bsp", bytes_of("S")},
                                  {"sound/x.wav", bytes_of("base")}});
@@ -74,7 +74,7 @@ fs::path make_tree() {
 
 TEST(the_base_folder_layers_its_packs_and_loose_files) {
   const fs::path root = make_tree();
-  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  const std::string base(ge::classicenhance::q1_profile().base_dir);
   cl::SearchPath sp;
   std::string error;
   CHECK_MSG(cl::open_game_dir(root.string(), base, sp, error), error);
@@ -86,12 +86,17 @@ TEST(the_base_folder_layers_its_packs_and_loose_files) {
   CHECK(maps.size() == 2 && maps[0] == "start" && maps[1] == "a");
   CHECK(cl::archive_paths(sp).size() == 2);
   CHECK(cl::content_packs(sp).size() == 2);
+  // `path`: the header, then the source searched first at the top, a pack with its count.
+  const std::string path = ge::classic::content::search_path_text(sp);
+  CHECK_MSG(path.starts_with("Current search path:\n"), path);
+  const size_t p1 = path.find("PAK1.PAK (1 files)"), p0 = path.find("pak0.pak (3 files)");
+  CHECK_MSG(p1 != std::string::npos && p0 != std::string::npos && p1 < p0, path);
   fs::remove_all(root);
 }
 
-TEST(the_sequel_s_folders_rank_their_packs_over_their_loose_files) {
+TEST(q2_s_folders_rank_their_packs_over_their_loose_files) {
   const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
-  const fs::path root = fs::temp_directory_path() / "ge_se_files_sequel";
+  const fs::path root = fs::temp_directory_path() / "ge_se_files_q2";
   fs::remove_all(root);
   const fs::path base = root / std::string(two.base_dir);
   write_pack(base / "pak0.pak",
@@ -115,7 +120,7 @@ TEST(the_sequel_s_folders_rank_their_packs_over_their_loose_files) {
 TEST(a_maps_coloured_light_is_found_beside_it_then_in_lits) {
   const fs::path root = fs::temp_directory_path() / "ge_se_files_lit_test";
   fs::remove_all(root);
-  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  const std::string base(ge::classicenhance::q1_profile().base_dir);
   write_pack(root / base / "pak0.pak", {{"maps/a.bsp", bytes_of("A")},
                                         {"maps/a.lit", bytes_of("beside")},
                                         {"maps/b.bsp", bytes_of("B")}});
@@ -138,7 +143,7 @@ TEST(a_maps_coloured_light_is_found_beside_it_then_in_lits) {
 TEST(a_sky_boxs_six_pictures_are_found_each_by_its_own_path_and_format) {
   const fs::path root = fs::temp_directory_path() / "ge_se_files_sky_test";
   fs::remove_all(root);
-  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  const std::string base(ge::classicenhance::q1_profile().base_dir);
   // rt, bk and lf in the pack under env/; ft as a png under gfx/env/; up with an underscore; dn
   // both as a tga and a pcx, the tga first.
   write_pack(root / base / "pak0.pak", {{"env/duskrt.tga", bytes_of("rt")},
@@ -225,9 +230,43 @@ TEST(the_content_packs_key_the_cache_as_the_pipeline_does) {
   fs::remove_all(root);
 }
 
+// A mission pack mounted over the base game: its packs follow the base's in the cache's key, and
+// the game reads the pack's own cache when it was made, else the base game's.
+TEST(a_mission_pack_keys_its_cache_laid_over_the_base_game) {
+  const fs::path root = make_tree();
+  write_pack(root / "Hipnotic" / "pak0.pak", {{"maps/hip1m1.bsp", bytes_of("H")}});
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), "Hipnotic", sp, error), error);
+  const auto base = cl::content_packs(sp);
+  const auto laid = cl::content_packs_with_mission(sp);
+  CHECK(base.size() == 2);
+  CHECK(laid.size() == 3);
+  const auto key_of = [](const std::vector<std::span<const uint8_t>>& packs) {
+    std::vector<std::string> digests;
+    digests.reserve(packs.size());
+    for (const auto p : packs) digests.push_back(ge::assets::sha256_hex(p));
+    return ge::classicenhance::set_key(digests);
+  };
+  const fs::path cache = root / "cache";
+  CHECK(cl::content_cache(sp, cache).empty());  // nothing enhanced yet
+  const fs::path base_dir = ge::classicenhance::pack_dir(cache, key_of(base));
+  CHECK(ge::classicenhance::write_record(base_dir, "textures", "k"));
+  CHECK(cl::content_cache(sp, cache) == base_dir);  // the base game's, until the pack's is made
+  const fs::path laid_dir = ge::classicenhance::pack_dir(cache, key_of(laid));
+  CHECK(ge::classicenhance::write_record(laid_dir, "textures", "k"));
+  CHECK(cl::content_cache(sp, cache) == laid_dir);
+  // Another game folder (not a mission pack) keys the base's cache alone.
+  cl::SearchPath mod;
+  CHECK_MSG(cl::open_game_dir(root.string(), "mod", mod, error), error);
+  CHECK(cl::content_packs_with_mission(mod).size() == 2);
+  CHECK(cl::content_cache(mod, cache) == base_dir);
+  fs::remove_all(root);
+}
+
 TEST(a_content_zip_standing_in_for_the_first_pack_keys_the_cache) {
   const fs::path root = make_tree();
-  const fs::path base = root / std::string(ge::classicenhance::classic_profile().base_dir);
+  const fs::path base = root / std::string(ge::classicenhance::q1_profile().base_dir);
   // The base's first pack repackaged as a content zip: the zip is the first content pack.
   fs::remove(base / "pak0.pak");
   const std::vector<uint8_t> zip =
@@ -258,7 +297,7 @@ TEST(a_content_zip_standing_in_for_the_first_pack_keys_the_cache) {
 // loose file on the search path first; none when neither holds the file.
 TEST(the_releases_words_come_from_its_archive_beside_the_game_folder) {
   const fs::path root = make_tree();
-  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  const std::string base(ge::classicenhance::q1_profile().base_dir);
   cl::SearchPath sp;
   std::string error;
   CHECK_MSG(cl::open_game_dir(root.string(), base, sp, error), error);

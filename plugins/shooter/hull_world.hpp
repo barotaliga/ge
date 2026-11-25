@@ -26,7 +26,8 @@
 // to the model's bounds; paths whose box of bounds empties are dropped), laid as one volume body
 // each so a point inside any of them is under that body's surface. Water is `water::Stuff`'s
 // default; slime and lava take the engine's rows of those names, every swim scale 1 (a classic
-// feel in every liquid), and the caller is told which contents each body was laid for.
+// feel in every liquid) and the classic ticks for their harm (liquid_harm.hpp), and the caller is
+// told which contents each body was laid for.
 //
 // ge:summary The engine mover's world over clip hulls: the trace, contents, liquids as volumes
 // ge:keywords hull-world brush-model mover-world trace engine-axes to_engine to_map axes y-up

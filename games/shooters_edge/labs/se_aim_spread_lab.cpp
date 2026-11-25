@@ -26,8 +26,8 @@
 #include "net/report.hpp"
 #include "server/server.hpp"
 #include "shooter/aim_spread.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_report.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_report.hpp"
 
 namespace {
 
@@ -183,7 +183,7 @@ void bot_match(gl::Lab& lab, double seconds, uint32_t seed) {
   c.rules["timelimit"] = fmt(seconds / 60.0, 3);
   gs::Server s;
   std::string error;
-  if (!gs::server_open(s, se::classic_game(), c, nullptr, nullptr, error)) {
+  if (!gs::server_open(s, se::qw_game(), c, nullptr, nullptr, error)) {
     lab.fail("the bot match did not open: " + error,
              "Read server_open in engine/server/server.cpp; skill: net.");
     return;
@@ -192,7 +192,7 @@ void bot_match(gl::Lab& lab, double seconds, uint32_t seed) {
   for (int f = 0; f < frames && s.reports.empty(); f++) gs::server_frame(s);
   if (s.reports.empty()) {
     lab.fail("the bot match left no report",
-             "Read end_match in games/shooters_edge/net/classic_game.cpp; skill: net.");
+             "Read end_match in games/shooters_edge/net/qw_game.cpp; skill: net.");
     return;
   }
   const gn::MatchReport& r = s.reports.back();
@@ -210,7 +210,7 @@ void bot_match(gl::Lab& lab, double seconds, uint32_t seed) {
   }
   if (col == r.columns.size())
     lab.fail("the report has no aim_spread_min column",
-             "Read tally_end in games/shooters_edge/net/classic_report.cpp; skill: net.");
+             "Read tally_end in games/shooters_edge/net/qw_report.cpp; skill: net.");
   lab.table(std::move(table));
 }
 

@@ -26,6 +26,7 @@ void classic_console(const ClassicArt& art, ClassicConsole& out) {
   st.input = ui::hex(0xffffff);
   st.hint = ui::hex(0x8c7c64);
   st.cursor = ui::hex(0xe8d8b0);
+  st.cursor_glyph = 11;         // the sheet's own cursor: its box cell
   st.edge = ui::hex(0x8c5c2c);  // the scroll marks; the panel has no edge line
   st.edge_px = 0;               // the game's console background ends in its own border
   st.list_fill = ui::hex(0x1c140c, 0.94f);
@@ -34,13 +35,23 @@ void classic_console(const ClassicArt& art, ClassicConsole& out) {
   st.list_detail = ui::hex(0x9c8c74);
   st.notify_band = ui::hex(0x000000, 0.0f);  // the game wrote its notices straight on the view
   st.image_focus_y = 1;                      // the picture slides down with the panel
+  st.bar_glyphs = true;  // the foot's download bar from the sheet's own bar pieces
   out.back = art.find("conback");
+}
+
+const ui::Image* ClassicConsole::background() const {
+  if (back_name.empty() || back_name == "conback" || !read_back) return back;
+  if (back_name != read_name_) {
+    read_name_ = back_name;
+    read_ok_ = read_back(back_name, &own_back_);
+  }
+  return read_ok_ ? &own_back_ : back;
 }
 
 void draw_game_console(ui::DrawList& list, const ge::console::ConsoleView& view,
                        const ClassicConsole& look, double t) {
   if (look.on())
-    ui::draw_console(list, view, look.style, look.back, t);
+    ui::draw_console(list, view, look.style, look.background(), t);
   else
     ui::draw_console(list, view, {}, nullptr, t);
 }

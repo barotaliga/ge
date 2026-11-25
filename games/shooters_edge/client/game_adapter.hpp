@@ -1,13 +1,13 @@
 // A CLASSIC GAME'S ADAPTER: the one set of calls the shell asks a classic game's files through,
 // each implemented once per game, so the window, the console, the menus and the labs never know
 // how a game lays out its mods, names its programs, stores its maps' textures or records its
-// demos. Each game's adapter (`classic_adapter()`, `sequel_adapter()`) is a table of the shared
+// demos. Each game's adapter (`qw_adapter()`, `q2_adapter()`) is a table of the shared
 // calls (client/adapter_parts.hpp: a file read by its kind) and the few that are its own.
 // The data that is only names (folders, packs, file names, extensions) stays in the profile rows
 // (profiles/game_profile.hpp, classicenhance/profile.hpp) the calls read; the readers a family of
 // files shares stay below (engine/vfs: folders, packs and zips; plugins/brush: every map family).
 //
-// THE CALLS, and the first game's answer to each:
+// THE CALLS, and Quake's answer to each:
 //
 // - **list_mods**: the mod folders beside the base folder in an install: each folder over the
 //   base that holds packs, zips or one of the game's program files (loose or in its packs), with
@@ -18,8 +18,8 @@
 //   runner is named in `why` and passed over, as is a QC file of the other mode's layout.
 // - **list_maps** and **map_info**: the maps the files hold (the start map first), and one map's
 //   name, title (the world's message), family and texture count.
-// - **map_textures**: a map's textures' pixels, one entry a texture in the map's order. The first
-//   game's maps carry them (plugins/brush/pictures.hpp), and a PNG or TGA in the game's files
+// - **map_textures**: a map's textures' pixels, one entry a texture in the map's order.
+//   Quake's maps carry them (plugins/brush/pictures.hpp), and a PNG or TGA in the game's files
 //   stands in for one by its name, alpha and all: `textures/<map>/<name>` first, then
 //   `textures/<name>`, `.png` before `.tga`, a `*` in the name written `#`. A later game's
 //   pictures live in other files of its own and its adapter finds them by the texture names.
@@ -36,14 +36,14 @@
 //   multiple), else classic-enhance's upscaled copy when asked, else the pack's lump.
 // - **find_config**: a config file `exec` names, from the game's files after the player's folders
 //   (`read_configs_from`); the startup files run before the game's files open.
-// - **open_locations**: a map's place names into plugins/classic/locs.hpp's `Locs` (the first
-//   game's `locs/<map>.loc`); with none, a game names places off the map's items.
+// - **open_locations**: a map's place names into plugins/classic/locs.hpp's `Locs` (
+//   Quake's `locs/<map>.loc`); with none, a game names places off the map's items.
 //
 // - **menu** and **modes**: the game's own main menu (menu/main_menu.hpp's `MenuTable`: its
-//   pages and rows, the first game's classic pages) and the modes it has (a single-player
+//   pages and rows, Quake's classic pages) and the modes it has (a single-player
 //   campaign, multiplayer: the third game has no campaign, so no SINGLE PLAYER).
 // - **held_weapons**: the game's own first-person weapons, authored at the eye, in the number
-//   keys' order: the first game's `progs/v_*.mdl` with its firing frames as a `fire` clip.
+//   keys' order: Quake's `progs/v_*.mdl` with its firing frames as a `fire` clip.
 //
 // These are load-time calls, never a frame's: plain function pointers, no state (docs/shooters-
 // edge.md § The game adapter). The console's `mods`, `maps` and `demos` print their answers.
@@ -51,7 +51,7 @@
 // ge:summary A classic game's adapter: mods, programs by form and side, maps, textures, demos
 // ge:keywords game-adapter adapter classic-game list_mods find_program list_maps map_info
 // ge:keywords map_textures list_demos find_demo open_demo mod-folder program-form program-side
-// ge:keywords per-game sequel sequel_adapter add_adapter_commands console-mods console-maps
+// ge:keywords per-game q2 q2_adapter add_adapter_commands console-mods console-maps
 // ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
 // ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture find_config
 // ge:keywords config-file cfg exec open_locations loc-file place-names read_configs_from
@@ -172,11 +172,11 @@ struct GameAdapter {
                     std::string& error) = nullptr;
 };
 
-// The first game's adapter.
-const GameAdapter& classic_adapter();
-// The sequel's (client/sequel_adapter.cpp).
-const GameAdapter& sequel_adapter();
-// The adapter of a game row (the first game's for a row with none of its own).
+// Quake's adapter.
+const GameAdapter& qw_adapter();
+// Quake II's (client/q2_adapter.cpp).
+const GameAdapter& q2_adapter();
+// The adapter of a game row (Quake's for a row with none of its own).
 const GameAdapter& adapter_of(const profiles::GameProfile& game);
 
 // Whether this build has a runner for programs of `form`.

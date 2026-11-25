@@ -96,6 +96,16 @@ TEST(tiers_refuse_with_reasons) {
   CHECK(server.find("net_fakelag")->value == "0");
   client.apply_info(server.info_string(kServerInfo), Source::server);
   CHECK(!client.cheats() && client.find("net_fakelag")->value == "0");
+  // A joined game that holds cheats off (Quake II's cheat lock): back to the default, refused,
+  // whatever sv_cheats says, until let go.
+  server.set("sv_cheats", "1", Source::local);
+  CHECK(server.set("net_fakelag", "50", Source::local) == SetResult::changed);
+  server.hold_cheats(true);
+  CHECK(!server.cheats() && server.find("net_fakelag")->value == "0");
+  CHECK(server.set("net_fakelag", "50", Source::local) == SetResult::cheat);
+  server.hold_cheats(false);
+  CHECK(server.cheats() && server.set("net_fakelag", "50", Source::local) == SetResult::changed);
+  server.set("sv_cheats", "0", Source::local);
   CHECK(!set_result_text(SetResult::server, "sv_fps").empty());
   CHECK(client.set("bad name", "1", Source::local) == SetResult::bad_name);
 }
@@ -176,6 +186,30 @@ TEST(synonyms_name_a_setting_or_one_word_of_it) {
   CHECK(!cv.add_synonym("maxclients", "sv_floodprot"));
   CHECK(cv.add_synonym("maxclients", "sv_maxclients"));  // the same again is no conflict
   CHECK(cv.synonyms().size() == 3);
+}
+
+TEST(a_mapped_synonym_sets_and_reads_its_own_values) {
+  Cvars cv;
+  int32_t draw2d = 2;
+  cv.bind({.name = "scr_draw2d", .fallback = "2", .kind = CvarKind::integer, .min = 0, .max = 3},
+          &draw2d);
+  // A game's spelling whose 1 is our 2: set by its name, the mapped value lands in ours.
+  CHECK(!cv.add_mapped_synonym("r_drawhud", "scr_draw2d", {}));  // no values: refused
+  CHECK(cv.add_mapped_synonym("r_drawhud", "scr_draw2d", {{"0", "0"}, {"1", "2"}}));
+  CHECK(cv.find("r_drawhud") == nullptr);  // not the setting under another name
+  const Synonym* s = cv.synonym("r_drawhud");
+  CHECK(s != nullptr);
+  if (s == nullptr) return;
+  CHECK(cv.synonym_value(*s) == "1");  // ours 2 read back as its 1
+  CHECK(cv.set("r_drawhud", "0", Source::local) == SetResult::changed && draw2d == 0);
+  CHECK(cv.synonym_value(*s) == "0");
+  CHECK(cv.set("r_drawhud", "1.0", Source::local) == SetResult::changed && draw2d == 2);
+  CHECK(cv.set("r_drawhud", "3", Source::local) == SetResult::unmapped && draw2d == 2);
+  CHECK(!set_result_text(SetResult::unmapped, "r_drawhud").empty());
+  cv.set("scr_draw2d", "3", Source::local);  // a value of ours it has no word for: ours shown
+  CHECK(cv.synonym_value(*s) == "3");
+  CHECK(Cvars::mapped_words(*s) == "0 (scr_draw2d 0); 1 (scr_draw2d 2)");
+  CHECK(cv.mapped_value(*s, "1") == "2" && cv.mapped_value(*s, "7").empty());
 }
 
 TEST(meta_cvars_imply_restore_and_refuse_a_loop) {

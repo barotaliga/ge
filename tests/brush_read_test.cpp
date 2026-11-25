@@ -352,6 +352,34 @@ TEST(damage_is_refused_with_a_reason) {
   CHECK(ents.size() == 2 && ents[0].get("a") == "b" && ents[1].pairs.empty());
 }
 
+TEST(the_v38_reader_marks_a_lamp_s_strength_and_a_flowing_picture) {
+  br::Fixture fx = br::sample_fixture();
+  fx.rooms[0].ceiling = "lamp1";  // hall
+  fx.rooms[2].floor = "flow1";    // side room
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_bsp(fx, br::Family::v38, &bytes, &error), error);
+  br::Map m;
+  CHECK_MSG(br::read_bsp(bytes, &m, &error), error);
+  int lamps = 0, flows = 0;
+  for (const br::Texture& t : m.textures) {
+    if (t.name == "fixture/lamp1") {
+      CHECK(t.lamp == br::kFixtureLamp && !t.flowing && !t.sky);
+      ++lamps;
+    } else if (t.name == "fixture/flow1") {
+      CHECK(t.flowing && t.lamp == 0);
+      ++flows;
+    } else {
+      CHECK(t.lamp == 0 && !t.flowing);
+    }
+  }
+  CHECK(lamps == 1 && flows == 1);
+  // 29 has no such marks: the names alone change nothing.
+  CHECK_MSG(br::write_bsp(fx, br::Family::v29, &bytes, &error), error);
+  CHECK_MSG(br::read_bsp(bytes, &m, &error), error);
+  for (const br::Texture& t : m.textures) CHECK(t.lamp == 0 && !t.flowing);
+}
+
 TEST(the_v38_reader_marks_how_opaque_each_texture_is_drawn) {
   // Three box brushes: a wall, water drawn two thirds opaque, mud drawn whole; and a texture one
   // side draws a third opaque and another whole, which takes the least.
@@ -421,4 +449,13 @@ TEST(a_box_finds_its_leaves_and_an_eye_its_seen_clusters) {
     br::clusters_seen_from(m, out, 8, seen);
     CHECK(seen[0] == 0xFF);
   }
+}
+
+TEST(an_entity_key_is_found_in_any_case_when_asked_an_exact_one_first) {
+  br::Entity e;
+  e.pairs = {{"Team", "pair"}, {"targetname", "a"}, {"TARGETNAME", "b"}};
+  CHECK(e.get("team").empty());
+  CHECK(e.get_any_case("team") == "pair");
+  CHECK(e.get_any_case("targetname") == "a");
+  CHECK(e.get_any_case("wait").empty());
 }

@@ -1,4 +1,4 @@
-// A FIGHTER'S KEYS AND BUTTONS (games/shooters_edge/bots/footwork.hpp `fighter_keys`,
+// A FIGHTER'S KEYS AND BUTTONS (plugins/shooterbots/footwork.hpp `fighter_keys`,
 // buttons.hpp `button_fires`): a side key turned round passes through 1 to 3 commands with no side
 // key unless the change is a clean one, never on a proven jump; and a button's doors are found
 // through the relays it fires (e1m2's plate: a delayed trigger_once opens the teleporters' doors);
@@ -14,16 +14,18 @@
 #include <vector>
 
 #include "check.hpp"
-#include "progs/entity_text.hpp"
 #include "shooter/brush_hull.hpp"
-#include "shooter/nav.hpp"
-#include "shooters_edge/bots/buttons.hpp"
-#include "shooters_edge/bots/footwork.hpp"
-#include "shooters_edge/bots/keyboard.hpp"
+#include "shooterbots/buttons.hpp"
+#include "shooterbots/entities.hpp"
+#include "shooterbots/footwork.hpp"
+#include "shooterbots/keyboard.hpp"
+#include "shooterbots/nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
-namespace pg = ge::progs;
 
 namespace {
 
@@ -76,14 +78,14 @@ TEST(a_side_key_turned_round_passes_through_no_side_key_unless_clean) {
   // On a proven jump the keys are the proof's.
   f = std::make_unique<fb::Fighter>();
   f->clean_keys = 0;
-  f->bot.pilot.pilot.mode = sh::PilotMode::air;
+  f->bot.pilot.pilot.mode = sb::PilotMode::air;
   CHECK(sent(*f, turn) == turn);
 }
 
 TEST(the_keyboard_presses_a_key_set_late_feathers_and_taps_weapons) {
   for (const uint8_t moves : {uint8_t{20}, uint8_t{90}}) {
     auto f = std::make_unique<fb::Fighter>();
-    f->features.set(sh::Feature::keysteer, false);  // the nearest key set (keysteer: below)
+    f->features.set(sb::Feature::keysteer, false);  // the nearest key set (keysteer: below)
     fb::fighter_keyboard_init(*f, moves, 3);
     // A wish ahead and a little right: W alone, 400, never on the first command.
     int first = -1;
@@ -128,7 +130,7 @@ TEST(the_keyboard_steers_between_two_sets_by_tapping_the_further_in) {
   // with D tapped in about a third of the time, in short taps; without it, W alone.
   for (const bool steer : {false, true}) {
     auto f = std::make_unique<fb::Fighter>();
-    f->features.set(sh::Feature::keysteer, steer);
+    f->features.set(sb::Feature::keysteer, steer);
     fb::fighter_keyboard_init(*f, 90, 3);
     int side = 0, taps = 0, n = 0;
     bool was = false;
@@ -162,8 +164,8 @@ TEST(a_pilots_curve_is_held_on_its_keys_not_tapped) {
   for (const bool hold : {false, true}) {
     fb::KeyHand k;
     fb::key_hand_init(k, 90, 3);
-    sh::Features features = sh::features_all();
-    features.set(sh::Feature::curvekeys, hold);
+    sb::Features features = sb::features_all();
+    features.set(sb::Feature::curvekeys, hold);
     int both = 0, n = 0;
     for (; n < 60; n++) {
       sh::MoveCmd c;
@@ -190,9 +192,9 @@ TEST(a_buttons_doors_are_found_through_the_relays_it_fires) {
       "{ \"classname\" \"trigger_relay\" \"targetname\" \"t73\" \"target\" \"t80\" }\n"
       "{ \"classname\" \"trigger_counter\" \"targetname\" \"t80\" \"target\" \"t90\" }\n"
       "{ \"classname\" \"func_door\" \"targetname\" \"t73\" \"model\" \"*13\" }\n";
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
-  CHECK(pg::parse_entity_text(text, blocks, error));
+  CHECK(sb::parse_entity_text(text, blocks, error));
   const std::vector<std::string> fired = fb::button_fires(blocks, "t65");
   CHECK(has(fired, "t65") && has(fired, "t73") && has(fired, "t80"));
   CHECK(!has(fired, "t90"));  // a counter needs more than one press: not followed
@@ -226,19 +228,19 @@ TEST(a_key_into_lava_is_not_pressed_with_brinkkeys) {
   world.solids[0].mins = {-544, -544, -256};
   world.solids[0].maxs = {544, 544, 256};
   world.count = 1;
-  sh::NavGraph g;
-  sh::build_nav(world, {}, sh::MoveSettings{}, sh::NavSettings{}, g);
+  sb::NavGraph g;
+  sb::build_nav(world, {}, sh::MoveSettings{}, sb::NavSettings{}, g);
   std::vector<uint8_t> harm(g.nodes.size(), 0);
   for (size_t n = 0; n < g.nodes.size(); n++)
     harm[n] = sh::water_contents(world, {g.nodes[n].origin.x, g.nodes[n].origin.y,
                                          g.nodes[n].origin.z - 22}) == sh::kContentsLava;
-  sh::nav_mark_harm(g, harm);
-  CHECK_MSG(sh::nav_harm_near(g, {0, 30, 24}, 192), "the pit's floor has no harm node near");
+  sb::nav_mark_harm(g, harm);
+  CHECK_MSG(sb::nav_harm_near(g, {0, 30, 24}, 192), "the pit's floor has no harm node near");
   for (const bool guard : {false, true}) {
     fb::KeyHand k;
     fb::key_hand_init(k, 90, 3);
-    sh::Features features = sh::features_all();
-    features.set(sh::Feature::brinkkeys, guard);
+    sb::Features features = sb::features_all();
+    features.set(sb::Feature::brinkkeys, guard);
     const fb::KeysNear near{&world, &g, {0, 30, 24}};
     int pressed = 0;
     for (int n = 0; n < 40; n++) {
@@ -246,7 +248,7 @@ TEST(a_key_into_lava_is_not_pressed_with_brinkkeys) {
       c.msec = 13;
       c.angles = {0, -90, 0};
       c.forward = 320;
-      fb::press_keys(k, features, c, {}, true, sh::kNoCurveKeys, &near);
+      fb::press_keys(k, features, c, {}, true, sb::kNoCurveKeys, &near);
       pressed += c.forward > 0;
     }
     if (guard)

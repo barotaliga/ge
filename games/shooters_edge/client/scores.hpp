@@ -12,7 +12,7 @@
 // ge:summary The scoreboard's rows and the level's statistics read off the listen server
 // ge:keywords scores_of level_stats_of scores_screen scoreboard frags ping teamplay spectator
 // ge:keywords teammate_in_game teammate
-// ge:keywords topcolor bottomcolor tab showscores dead campaign match draw_scores
+// ge:keywords topcolor bottomcolor tab showscores dead campaign match draw_scores showpause
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_scores_test.cpp
 #pragma once
@@ -35,13 +35,20 @@ menu::LevelStats level_stats_of(const Listen& l);
 
 enum class ScoresScreen : uint8_t { none, players, teams, solo };
 // What the scores key (`held`, +showscores), the teams' key (`teams_held`, +showteamscores) and
-// the game playing show; none in the sequel, whose rules draw its screens.
+// the game playing show; none in Quake II, whose rules draw its screens.
 ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held = false);
 
 // That screen drawn over the game: a campaign's intermission or text, else its solo scorebar
 // (and the level's statistics with `level_stats`, `scr_levelstats`); a match's players' board, or
 // the teams' board when the player is dead. `board` keeps the board's columns for the session.
 void draw_scores(ge::ui::DrawList& dl, const Listen& l, const menu::ClassicArt& art, int w, int h,
-                 bool held, bool level_stats, menu::BoardView& board, bool teams_held = false);
+                 bool held, bool level_stats, menu::BoardView& board, bool teams_held = false,
+                 bool show_pause = true, double print_speed = kPrintSpeed);
+// A co-op game joined over the network at its level's end (the program's intermission and
+// finale, read from the stream as `ds` keeps them): the intermission's figures, or the finale's
+// title and text typed out; false (nothing drawn) at any other time, and for a match. The pause
+// picture too while the server has the game paused.
+bool draw_joined_level_end(ge::ui::DrawList& dl, const DemoState& ds, const menu::ClassicArt& art,
+                           int w, int h, double print_speed = kPrintSpeed);
 
 }  // namespace shooters_edge::client

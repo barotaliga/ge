@@ -118,7 +118,8 @@ struct HookCall {
 inline constexpr size_t kMaxEffectNames = 1024;  // particleeffectnum's names a server keeps
 
 // A model file's bounds by its name ("maps/b_explob.bsp"): a brush model file's first model's
-// mins and maxs as the file stores them. False when the file is missing or unreadable.
+// mins and maxs as the file stores them; a sprite's half its widest frame across and half its
+// tallest up and down. False when the file is missing or unreadable.
 using ModelBounds = bool (*)(void* ctx, const std::string& name, sh::Vec3f& mins, sh::Vec3f& maxs);
 
 struct QcServerOptions {
@@ -126,8 +127,9 @@ struct QcServerOptions {
   uint32_t seed = 1;        // the generator random, randomvec and movetogoal draw from
   ClockSource clock = &fixed_clock;
   void* clock_ctx = nullptr;
-  // Where a single-player program's setmodel of a brush model in its own file (not "*N") finds
-  // the size it gives the entity (bi_world.cpp's setmodel); null: such an entity keeps its size.
+  // Where a single-player program's setmodel of a brush model in its own file (not "*N") or a
+  // sprite finds the size it gives the entity (bi_world.cpp's setmodel); null: such an entity
+  // keeps its size.
   ModelBounds model_bounds = nullptr;
   void* model_ctx = nullptr;
   // The release's words by key (progs/localized.hpp): a program's `$key` prints, centre prints and
@@ -142,9 +144,12 @@ struct QcServer : RulesCommon {
   pg::ExtensionRegistry extensions;
   NamedHooks named;
 
-  std::vector<std::string> frag_log;      // logfrag's lines
   std::string command_buffer;             // localcmd's text, run at the next frame
   std::vector<std::string> map_messages;  // the entity text's messages ("x is not a field")
+  // Each entity's class name as the map's entity text spawned it, by entity number ("" one the
+  // program made, or a slot the text left free): a program that renames its things (a pack's
+  // exploder) still answers by the map's name.
+  std::vector<std::string> spawned_as;
   // particleeffectnum's names, number n the name at n - 1, kept for the server's life.
   std::vector<std::string> effect_names;
 
@@ -173,7 +178,8 @@ struct QcServer : RulesCommon {
   double paused_seconds = 0;
   double check_time = -1;  // checkclient: when the candidate last moved on
   int64_t trace_lines = 0;
-  int check_client = 0;  // checkclient: the candidate
+  int check_client = 0;   // checkclient: the candidate
+  sh::Vec3f check_eye{};  // checkclient on the single-player clock: the eye its set is from
   int inhibited = 0;
   int next_userid = 1;
 
@@ -193,7 +199,7 @@ std::unique_ptr<QcServer> make_qc_server(const pg::Progs& progs, const QcServerO
 // Loads a map: the server made over its models, the precache seeded, the entities spawned.
 // False with `error` when the entity text does not parse or a key stops the map.
 bool load_map(QcServer& s, const MapSpec& map, std::string& error);
-// A map's models for the loop: `map.models` (a classic map's hulls), or for a version 38 map
+// A map's models for the loop: `map.models` (a Quake map's hulls), or for a version 38 map
 // (classic remix: `map.brushes`, no hulls) each model's bounds, `tracer` made over its brushes;
 // `brush_solids` then traces every model of the server through those brushes. Both rule kinds
 // (the bytecode's and a compiled module's) load a map so.

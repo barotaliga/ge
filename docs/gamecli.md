@@ -180,7 +180,7 @@ Each uses the ticket `account signin` kept.
 
 The game's `locate` says where its install, settings, logs and state are; `where` prints them
 and which programs exist. Shooter's Edge's are the window's own: the install from `--basedir`,
-else the classic game loaded last (kept in the per-user folder), the game folder over it, the
+else Quake loaded last (kept in the per-user folder), the game folder over it, the
 settings in `<install>/<game folder>/settings/`. Logs and state default to the per-user folder
 (`~/Library/Application Support/gameengine2/<game>/` on macOS, `~/.local/share/...` on Linux,
 `%APPDATA%\...` on Windows). `--settings`, `--logs`, `--state` and `--bin` override each.

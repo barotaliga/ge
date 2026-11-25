@@ -1,7 +1,7 @@
 ---
 title: A swapped picture joins its set at the set's density, never at its own
 date: 2026-11-02
-scope: games/shooters_edge/menu/classic_art.cpp, games/shooters_edge/hud/classic_art.cpp, games/shooters_edge/client/classic_adapter.cpp
+scope: games/shooters_edge/menu/classic_art.cpp, games/shooters_edge/hud/classic_art.cpp, games/shooters_edge/client/qw_adapter.cpp
 concepts: [density, replacement-picture, upgrade, glyph-sheet, scaled-nearest, menu, hud]
 ---
 

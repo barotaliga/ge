@@ -32,7 +32,7 @@ namespace con = ge::console;
 constexpr int kFirstDynamic = 33;  // entities after the world and the 32 client slots
 constexpr int kNotInDeathmatch = 2048, kNotEasy = 256, kNotMedium = 512, kNotHard = 1024;
 
-// The settings every runner of a classic mod registers, in order; the row with no name stands for
+// The settings every runner of a Quake mod registers, in order; the row with no name stands for
 // the move's and the loop's own (plugins/shooter/settings.hpp), whose defaults are the options'.
 constexpr ModSetting kModSettings[] = {
     {"deathmatch", "1", "The match's rules as the mod reads them.",
@@ -73,6 +73,11 @@ constexpr ModSetting kModSettings[] = {
      "Whether a dead player leaves the hazard suit they wore, with the time it had left.",
      "0: it is lost (the default); 1: left for whoever takes it first", con::CvarKind::number,
      true},
+    {"sv_episodes_in_order", "0",
+     "Whether the start map opens the episodes one at a time, each once the one before is done.",
+     "0: every episode open from the start, as the original game (the default); 1: one at a "
+     "time, by sv_episodes_done",
+     con::CvarKind::number, false},
     {"sv_episodes_done", "0",
      "The episodes done in coop, a bit each, which the host keeps from game to game.",
      "N: the sum of 1, 2, 4 and 8 for each episode done, the start map opening the next (0 the "
@@ -113,6 +118,38 @@ constexpr ModSetting kModSettings[] = {
      "\"\": the built-in test mod (the default); TEXT: that file", con::CvarKind::text, false},
     {"hostname", "unnamed", "The server's name.", "TEXT: that name (unnamed the default)",
      con::CvarKind::text, true},
+    // Quake's settings for programs to read (and the spare ones they keep their own state in).
+    {"noexit", "0",
+     "Whether a Quake program's level exits kill whoever touches them in deathmatch.",
+     "0: exits work (the default); 1: an exit kills; N: as the program reads it",
+     con::CvarKind::number, false},
+    {"developer", "0",
+     "Whether a Quake single-player program's developer lines (dprint) reach the console.",
+     "0: they are left out (the default); 1: printed", con::CvarKind::number, false},
+    {"nomonsters", "0", "A setting a Quake program may read to leave its monsters out.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"gamecfg", "0", "A setting a Quake program may read.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"temp1", "0", "A spare setting a Quake program may read.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch1", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch2", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch3", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch4", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"savedgamecfg", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved1", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved2", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved3", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved4", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
     // Midair (games/shooters_edge/rules/common_midair.cpp; a loaded mod may read its own).
     {"k_midair", "0", "Whether rockets count only on a player in the air, in deathmatch.",
      "0: every hit counts (the default); 1: midair only", con::CvarKind::number, false},
@@ -129,12 +166,13 @@ void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop) {
   const uint32_t srv = con::kServer, info = con::kServer | con::kServerInfo;
   for (const ModSetting& m : kModSettings) {
     if (m.name != nullptr) {
-      s.cvars.add({.name = m.name,
-                   .fallback = m.fallback,
-                   .flags = m.info ? info : srv,
-                   .help = m.help,
-                   .kind = m.kind,
-                   .values = m.values});
+      s.cvars.add(
+          {.name = m.name,
+           .fallback = m.fallback,
+           .flags = (m.info ? info : srv) | (m.archive ? static_cast<uint32_t>(con::kArchive) : 0u),
+           .help = m.help,
+           .kind = m.kind,
+           .values = m.values});
       continue;
     }
     int count = 0;
@@ -231,16 +269,9 @@ void update_visclients(QcServer& s) {
 // A forced view (`fixangle`, set by a program that turns a player: a spawn, a teleport) is sent
 // to the client once, at the end of the frame: the view becomes `angles` and the flag clears, so
 // the client's next command turns the view again. Left set, every command's angles would be
-// ignored and the player would aim along his spawn's angles forever.
-void send_forced_views(QcServer& s) {
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    if (!s.clients[i].active) continue;
-    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(i) + 1];
-    if (!ed.fixangle) continue;
-    ed.v_angle = ed.angles;
-    ed.fixangle = false;
-  }
-}
+// ignored and the player would aim along his spawn's angles forever. The turn is kept for the
+// protocol's server to send (RulesCommon::turns).
+void send_forced_views(QcServer& s) { s.take_turns(); }
 
 void run_command_buffer(QcServer& s) {
   while (!s.command_buffer.empty()) {
@@ -481,6 +512,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   for (std::string& l : s.lightstyles) l.clear();
   s.out = MessageSink{};
   s.map_messages.clear();
+  s.spawned_as.clear();
   s.loading = true;
   s.map_stopped = false;
   s.stop_reason.clear();
@@ -563,6 +595,9 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
       sim::leave_qc(s.q);
       continue;
     }
+    if (s.spawned_as.size() <= static_cast<size_t>(e))
+      s.spawned_as.resize(static_cast<size_t>(e) + 1);
+    s.spawned_as[static_cast<size_t>(e)] = classname;
     pg::set_global_int(vm, s.q.layout->g.self, pg::entity_value(vm, e));
     pg::set_global_int(vm, s.q.layout->g.other, 0);
     pg::set_global_float(vm, s.q.layout->g.time, static_cast<float>(s.sv.time));
@@ -604,6 +639,7 @@ void connect(QcServer& s, int slot, const std::string& name, bool spectator, boo
     }
   }
   sh::connect_client(s.sv, slot, spectator, bot, parms == nullptr);
+  if (!bot) tell_paused(s, slot);
   fill_world(s, s.world, false);
 }
 
@@ -626,7 +662,7 @@ void save_change_parms(QcServer& s) {
 
 namespace {
 
-// The rocket jump helper's question of a classic program (rjump_rules.hpp): the launcher is the
+// The rocket jump helper's question of a Quake program (rjump_rules.hpp): the launcher is the
 // item bit 32, chosen by impulse 7 in the same command it fires on; it waits out the refire
 // (`attack_finished`, when the program has one).
 constexpr float kRocketLauncherItem = 32;
@@ -679,6 +715,9 @@ void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
                 {static_cast<float>(s.paused_seconds)});
   } else {
     sh::server_frame(s.sv, packets, count);
+    // The single-player engine's own sounds reach the players (a multiplayer program's host
+    // leaves them to its program).
+    if (s.sv.set.single_player_clock) send_engine_sounds(s);
   }
   for (int i = 0; shots != 0 && i < sh::kMaxClients; i++) {
     if ((shots & (1u << i)) == 0) continue;

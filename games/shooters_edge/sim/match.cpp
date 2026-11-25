@@ -101,7 +101,8 @@ bool predict(const World& w, const sh::ServerSettings& server, ClientSim& c, int
              int latency_ms, sh::Vec3f& out, int& unacked) {
   if (!c.acked) return false;
   const sh::MoveSettings& set = server.move;
-  const sh::ClientModel movers[2] = {{&w.models[1], c.last.door}, {&w.models[2], c.last.plat}};
+  const sh::ClientModel movers[2] = {{&w.models[1], c.last.door, {}, 1e30f},
+                                     {&w.models[2], c.last.plat, {}, 1e30f}};
   sh::MoveWorld bare;
   sh::client_world(w.models[0], movers, 2, nullptr, 0, bare);
   const int ms = sh::other_msec(c.last.arrive_ms * 0.001, c.last.other_msec, now_ms * 0.001,
@@ -113,7 +114,7 @@ bool predict(const World& w, const sh::ServerSettings& server, ClientSim& c, int
   if (server.playermove == sh::PlayerMove::original) {
     if (!c.original_built) ge::classic::original_prediction_level(c.original, w.models, server);
     c.original_built = true;
-    const ge::classic::ModelAt at[2] = {{1, c.last.door}, {2, c.last.plat}};
+    const ge::classic::ModelAt at[2] = {{1, c.last.door, {}, 1e30f}, {2, c.last.plat, {}, 1e30f}};
     ge::classic::original_prediction_place(c.original, at, 2, &other.origin, 1);
     out = ge::classic::predict_player_original(c.original, c.last.own, c.sent.data() + c.last.ack,
                                                unacked)

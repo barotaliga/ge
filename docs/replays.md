@@ -487,7 +487,7 @@ game (or a dedicated server) sends the input log as it grows to a relay over `en
 delay so a spectator cannot help a team; spectators step the run themselves and watch it from any
 camera, at a few bytes a second per player. A late joiner takes a snapshot (the replication of
 M17f) and the inputs after it; relays fan out to more relays for a large audience. For Shooter's
-Edge this is the native multi-view demo stream; the classic game's demo formats are read and
+Edge this is the native multi-view demo stream; Quake's demo formats are read and
 written by that game (M18h). A test: every spectator's digest equals the player's at the same
 step, through every preset of the simulated network.
 

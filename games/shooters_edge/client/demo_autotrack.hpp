@@ -23,7 +23,7 @@
 // never two cuts within `gap_s`; a tie keeps the tracked player, then the lowest slot. With
 // `lockteam`, only the first pick's team.
 //
-// A sequel multiview recording (.mvd2) is rated the same, off the stats its view carries for the
+// A Quake II multiview recording (.mvd2) is rated the same, off the stats its view carries for the
 // demo player (demo_mvd2.hpp): the weapon in hand stands for the weapons held, no powerups.
 //
 // A pure function of the demo and the settings: the same plan every run.

@@ -1,6 +1,7 @@
-// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-game 1` the classic game, `-game 2` the
-// sequel, `-mod <folder>` a mod's folder over it), read into `Args`. The flags are read
-// wherever they stand; a `+` word starts a console line that runs to the next flag or `+`, so
+// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-classic q1` Quake, `-classic q2` Quake II,
+// `-game <folder>` a mod's folder over it, as each classic game names one), read into `Args`. The
+// flags are read wherever they stand; a `+` word starts a console line that runs to the next flag
+// or `+`, so
 // `+r_look modern -timedemo demo1` is a look and a benchmark, and the first line needs no `+`
 // (`coopgame 2 expert`). A word that reads as a flag (`-x`,
 // `--x`: a dash and a letter; `-1` is a word) and is not one of the flags is refused, with the
@@ -19,23 +20,24 @@
 #include <vector>
 
 #include "classicenhance/profile.hpp"
+#include "console/manual.hpp"
 
 namespace shooters_edge::client {
 
 struct Args {
   std::string basedir = ".";
-  // The game folder played over the install (`-mod <folder>`; else the profile's own).
-  std::string game{ge::classicenhance::classic_profile().base_dir};
+  // The game folder played over the install (`-game <folder>`; else the profile's own).
+  std::string game{ge::classicenhance::q1_profile().base_dir};
   bool basedir_set = false, game_set = false;  // given on the command line (not the defaults)
-  // `-game N`: the Nth classic game (classicenhance/profile.hpp's `kProfiles`, from 1), opened
-  // from the install kept for it (client/installs.hpp); 0: none named.
+  // `-classic <id>`: that classic game (classicenhance/profile.hpp's `kProfiles`, counted from 1),
+  // opened from the install kept for it (client/installs.hpp); 0: none named.
   int game_number = 0;
   // Set by `choose_folder` when game `game_number` has no install kept that still checks: the
   // window asks for the folder it is installed in and checks it is that game.
   bool ask_install = false;
   // The content profile the install is (classicenhance/profile.hpp's `kProfiles` row id), found
   // by its folders (client/game_folder.hpp's `install_of`); the first row's until one is found.
-  std::string profile{ge::classicenhance::classic_profile().id};
+  std::string profile{ge::classicenhance::q1_profile().id};
   std::string progs;             // a mod's progs file ("": the baseline mod)
   std::string models;            // the held weapons' folder ("": the tree's)
   std::string timedemo;          // a demo to benchmark, then quit ("": none)
@@ -45,10 +47,10 @@ struct Args {
   int highlight = 0;         // -demovideo's clip: the tracked player's Nth highlight
   bool autotrack = false;    // -demovideo of a multiview recording: follow the hottest player
   // The bot client (`--bots=N --server=host:port`): a team of bots joins the server and the window
-  // shows the team's world (net/classic_team_view.hpp), the console driving the bots.
+  // shows the team's world (net/qw_team_view.hpp), the console driving the bots.
   int bots = 0;
   std::string server = "127.0.0.1:27500", team = "bots", skills, bots_out, bots_view;
-  std::string bot_features;  // `--bot-features=-dodge,+rj`: every bot's (shooter/features.hpp)
+  std::string bot_features;  // `--bot-features=-dodge,+rj`: every bot's (shooterbots/features.hpp)
   int colour = 4;
   bool bots_paths = true;  // `--bots-paths=0`: the bots' overview draws no paths
   int gif_width = 480;     // -demovideo to a .gif: its width in pixels
@@ -56,12 +58,68 @@ struct Args {
   std::string playdemo;  // a demo to play at its own pace ("": none)
   std::string tv;        // a live broadcast to watch, its TV node's host:port ("": none)
   long frames = 0;       // 0: until quit
+  bool hidden = false;   // -hidden: the window never shown (a run that takes screenshots)
+  bool recipes = false;  // -recipes: a recipe's commands (docs/console.md § Recipes)
   int width = 1280, height = 720;
   // Whether --fps, --codec and --size (--resolution) were given: -demovideo takes video.cfg's
   // demovideo_fps, demovideo_codec and demovideo_size for those that were not (video_cfg.hpp).
   bool fps_given = false, codec_given = false, size_given = false;
+  std::string manual;  // -manual <file>: the reference manual's source written there, then quit
   std::vector<std::string> plus;  // the command line from the first `+` word on
 };
+
+// THE FLAGS, as data: `parse` refuses a flag-like word no row names, so a flag added to `parse`
+// without its row here is refused (its test fails), and the reference manual and the usage line
+// list every one. `name` as typed ("-classic", or "--fps=" for the ones whose value follows an
+// `=`); a single-dash name is taken with two dashes too; `also` another spelling of it.
+struct Flag {
+  std::string_view name, arg, help, also = {};
+};
+inline constexpr Flag kFlags[] = {
+    {"-classic", "<id>", "Play that classic game: q1 (Quake and QuakeWorld) or q2 (Quake II).",
+     "--classic="},
+    {"-basedir", "<dir>", "The folder that holds the game's folders (id1, baseq2 and mods)."},
+    {"-game", "<folder>", "Play a mod: its folder over the game's own.", "--game="},
+    {"-progs", "<file>", "Run a mod's progs file in place of the game's own rules."},
+    {"-models", "<dir>", "Take the held weapons from this folder."},
+    {"-timedemo", "<demo>", "Play a demo as fast as it draws, print the frame rates, then quit."},
+    {"-playdemo", "<demo>", "Play a demo at its own pace."},
+    {"-demovideo", "<demo> <file>",
+     "Turn a demo into a video or a GIF with no window, then quit (with --fps, --size, --from, "
+     "--to, --highlight, --gif-width, --codec and --seconds)."},
+    {"-autotrack", "", "In -demovideo of a multiview demo, follow the player where the action is."},
+    {"-tv", "<host:port>", "Watch a live broadcast from a TV node."},
+    {"-hidden", "", "Never show the window (a run that only takes screenshots)."},
+    {"-recipes", "",
+     "Give the console a recipe's commands (sleep, menu_press, menu_select, menu_list, entlist, "
+     "enthide, entshow), for a script that drives the window."},
+    {"-manual", "<file>",
+     "Write every setting, command and flag of every game for the reference manual, then quit."},
+    {"--frames=", "N", "Quit after drawing this many frames."},
+    {"--size=", "<WxH|720p|1080p|1440p|4k>", "The window's or the video's size.", "--resolution="},
+    {"--fps=", "N", "The video's frames a second (-demovideo)."},
+    {"--seconds=", "S", "The video's length in seconds (-demovideo)."},
+    {"--from=", "m:ss", "Start the video here on the demo's clock (-demovideo)."},
+    {"--to=", "m:ss", "End the video here on the demo's clock (-demovideo)."},
+    {"--highlight=", "N", "Make the video of the tracked player's Nth highlight (-demovideo)."},
+    {"--gif-width=", "N", "A GIF's width in pixels (-demovideo)."},
+    {"--codec=", "<codec>", "The video's codec (-demovideo)."},
+    {"--bots=", "N", "Join a server with a team of N bots and watch their game."},
+    {"--server=", "<host:port>", "The server the bots join (--bots)."},
+    {"--team=", "<name>", "The bots' team (--bots)."},
+    {"--colour=", "N", "The bots' colour (--bots).", "--color="},
+    {"--skills=", "<list>", "Each bot's skill (--bots)."},
+    {"--bot-features=", "<list>", "Every bot's features turned on or off: -dodge,+rj (--bots)."},
+    {"--bots-paths=", "0|1", "Whether the bots' overview draws their paths (--bots)."},
+    {"--bots-out=", "<file>", "Where the bots' game is written (--bots)."},
+    {"--bots-view=", "<file>", "Where the bots' overview is written (--bots)."},
+};
+// Whether `word` is one of kFlags.
+bool known_flag(std::string_view word);
+// The flags for the reference manual (play/session_flags.hpp's -config and -logfile first).
+std::vector<ge::console::FlagDoc> flag_docs();
+// One line naming every flag, for a refused command line.
+std::string usage();
 
 // `~` or `~/...` as the home folder (a shell leaves a quoted one as it is).
 std::string expand_home(const std::string& p);

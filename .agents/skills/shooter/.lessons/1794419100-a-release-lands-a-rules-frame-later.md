@@ -1,8 +1,8 @@
 ---
-title: In the sequel a released attack lands a rules frame after the last held one
+title: In Quake II a released attack lands a rules frame after the last held one
 date: 2026-11-11
-scope: games/shooters_edge/server/sequel_server.cpp, games/shooters_edge/server/sequel_combat.cpp, tests/shooters_edge_sequel_fight_test.cpp
-concepts: [sequel, hand-grenade, hand-step, stepped, release, intermission, test-timing]
+scope: games/shooters_edge/server/q2_server.cpp, games/shooters_edge/server/q2_combat.cpp, tests/shooters_edge_q2_fight_test.cpp
+concepts: [q2, hand-grenade, hand-step, stepped, release, intermission, test-timing]
 ---
 
 The hand is stepped by the first command of a rules frame that presses attack; when attack is

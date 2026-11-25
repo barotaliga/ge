@@ -13,6 +13,8 @@
 #include "classic/content/soundtrack.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/settings.hpp"
 
 namespace shooters_edge::client {
 
@@ -32,14 +34,58 @@ bool writable(const fs::path& dir) {
   return ok;
 }
 
+std::string lower_word(std::string s) {
+  for (char& c : s)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return s;
+}
+
 }  // namespace
 
-std::string data_root(const std::string& placed, const std::string& prefs) {
-  if (!placed.empty() && writable(fs::path(placed) / "data"))
-    return (fs::path(placed) / "data").string();
+std::string data_root(const std::string& placed, const std::string& prefs,
+                      const std::string& home) {
+  if (!home.empty() && writable(fs::path(home))) return fs::path(home).string();
   if (!prefs.empty() && writable(fs::path(prefs) / "data"))
     return (fs::path(prefs) / "data").string();
+  if (!placed.empty() && writable(fs::path(placed) / "data"))
+    return (fs::path(placed) / "data").string();
   return "";
+}
+
+std::string take_home_dir(std::vector<std::string>* plus) {
+  std::string home;
+  for (size_t i = 0; i + 2 < plus->size();) {
+    if (lower_word((*plus)[i]) == "+set" && lower_word((*plus)[i + 1]) == "homedir") {
+      home = expand_home((*plus)[i + 2]);
+      plus->erase(plus->begin() + static_cast<std::ptrdiff_t>(i),
+                  plus->begin() + static_cast<std::ptrdiff_t>(i + 3));
+    } else {
+      ++i;
+    }
+  }
+  return home;
+}
+
+void add_home_dir(ge::console::Console& con, const std::string& root) {
+  con.cvars().add({.name = "homedir",
+                   .fallback = root,
+                   .flags = ge::console::kReadOnly,
+                   .help = "The folder the game writes in: the games taken in, your settings, "
+                           "screenshots, recordings and downloads. Choose it with +set homedir on "
+                           "the command line.",
+                   .kind = ge::console::CvarKind::text});
+}
+
+bool adopt_placed_settings(const std::string& placed, const std::string& root) {
+  if (placed.empty() || root.empty()) return false;
+  const fs::path old_root = fs::path(placed) / "data";
+  std::error_code ec;
+  if (fs::equivalent(old_root, root, ec)) return false;
+  const fs::path from = series_settings_file(old_root.string());
+  const fs::path to = series_settings_file(root);
+  if (!fs::is_regular_file(from, ec) || fs::exists(to, ec)) return false;
+  fs::create_directories(to.parent_path(), ec);
+  return fs::copy_file(from, to, ec) && !ec;
 }
 
 bool inside(const std::string& path, const std::string& root) {
@@ -47,6 +93,72 @@ bool inside(const std::string& path, const std::string& root) {
   const std::string p = fs::weakly_canonical(path, ec).generic_string();
   const std::string r = fs::weakly_canonical(root, ec).generic_string();
   return !r.empty() && (p == r || p.starts_with(r + "/"));
+}
+
+namespace {
+
+std::string pack_words(const std::vector<const ge::classicenhance::MissionPack*>& packs) {
+  std::string out;
+  for (size_t i = 0; i < packs.size(); i++) {
+    if (i > 0) out += i + 1 == packs.size() ? " and " : ", ";
+    out += std::string(packs[i]->name);
+  }
+  return out;
+}
+
+bool has_game(const content::ImportReport& r) {
+  std::error_code ec;
+  return r.base ||
+         std::filesystem::is_regular_file(
+             std::filesystem::path(r.game_dir) / ge::classicenhance::first_pack_path(*r.game), ec);
+}
+
+}  // namespace
+
+std::string take_in_words(const content::ImportReport& r, const std::string& from) {
+  const std::string game(r.game->what);
+  const std::string packs = pack_words(r.packs);
+  // What was taken: the game, the game with its packs, or the packs alone.
+  const std::string what = !r.base ? packs : r.packs.empty() ? game : game + " with " + packs;
+  // How a pack is played: over the game, from its own folder.
+  std::string play;
+  if (!r.packs.empty()) {
+    play = " Start ";
+    for (size_t i = 0; i < r.packs.size(); i++)
+      play += (i > 0 ? (i + 1 == r.packs.size() ? " or " : ", ") : "") + std::string("-game ") +
+              std::string(r.packs[i]->folder);
+    play += " to play " + std::string(r.packs.size() == 1 ? "it" : "a mission pack") + ".";
+  }
+  const bool have_game = has_game(r);
+  const std::string needs =
+      have_game ? ""
+                : " " + std::string(r.packs.size() == 1 ? "It plays" : "They play") + " over " +
+                      game + ", which is not here yet: add " + game + " too.";
+  if (r.unchanged)
+    return what + " was taken in from " + from +
+           " before and nothing there has changed: it plays from " + r.game_dir + "." + play +
+           needs;
+  int kept = 0;
+  for (const content::StoredTrack& t : r.tracks) kept += t.kept ? 1 : 0;
+  const auto count = [](size_t n, const char* one, const char* many) {
+    return std::to_string(n) + " " + (n == 1 ? one : many);
+  };
+  return "Took " + what + " in from " + from + ": " + count(r.copied.size(), "file", "files") +
+         " copied, " + count(r.same.size(), "was", "were") + " already there, " +
+         count(r.tracks.size(), "music track", "music tracks") + " (" + std::to_string(kept) +
+         " new). It plays from " + r.game_dir + "." + play + needs;
+}
+
+std::string offer_words(const content::Offer& o) {
+  return "Found " + std::string(o.pack->name) + ", a mission pack for " +
+         std::string(o.game->what) + ", in " + o.source + ". Type import \"" + o.source +
+         "\" to take it in.";
+}
+
+void offer_packs(ge::console::Console& con, const std::string& data_root) {
+  if (data_root.empty()) return;
+  for (const content::Offer& o : content::find_offers(content::store_folders(), data_root))
+    con.print(offer_words(o));
 }
 
 bool take_in(const std::string& from, const std::string& root, std::string* basedir,
@@ -71,17 +183,13 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
     *error = "Could not take the game in from " + from + ": " + why;
     return false;
   }
+  *summary = take_in_words(r, from);
+  if (!has_game(r)) {  // the packs are kept; the game playing stays until its game is added
+    *error = *summary;
+    summary->clear();
+    return false;
+  }
   *basedir = r.game_dir;
-  int kept = 0;
-  for (const content::StoredTrack& t : r.tracks) kept += t.kept ? 1 : 0;
-  const auto count = [](size_t n, const char* one, const char* many) {
-    return std::to_string(n) + " " + (n == 1 ? one : many);
-  };
-  *summary = "Took " + std::string(r.game->what) + " in from " + from + ": " +
-             count(r.copied.size(), "file", "files") + " copied, " +
-             count(r.same.size(), "was", "were") + " already there, " +
-             count(r.tracks.size(), "music track", "music tracks") + " (" + std::to_string(kept) +
-             " new). It plays from " + r.game_dir + ".";
   return true;
 }
 
@@ -101,11 +209,23 @@ bool take_in_basedir(std::string* basedir, const std::string& root) {
 }
 
 void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
-                          ge::audio::MusicConsole* music) {
-  if (music != nullptr) {
-    music->track_of = [basedir](int track) { return content::track_path(*basedir, track); };
-    ge::audio::add_music_commands(con, *music);
-  }
+                          ge::audio::MusicConsole* music, const std::string* game,
+                          const bool* remap) {
+  if (music != nullptr)  // its cvar and `cd` are the window's own, bound before the game's
+    music->track_of = [basedir, game, remap](int track) {
+      // A mission pack's own tracks (taken off its disc) first, by the numbers its levels give.
+      if (game != nullptr && !game->empty() && game->find('/') == std::string::npos) {
+        const std::string own = content::track_path(*basedir + "/" + *game, track);
+        if (!own.empty()) return own;
+      }
+      if (game != nullptr && remap != nullptr && *remap)
+        track = content::q2_remap_track(*game, track);
+      return content::track_path(*basedir, track);
+    };
+  if (music != nullptr)  // a track named: `ogg play <name>`, a server's music by text
+    music->file_of = [basedir](const std::string& name) {
+      return content::music_file(*basedir, name);
+    };
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
   con.add_command("basedir", "basedir <folder>: load your game's install (the folder holding id1)",
@@ -136,6 +256,13 @@ bool take_in_ask(std::string* ask, const std::string& root, std::string* error,
   if (!said.empty()) print(said);
   *ask = taken;
   return true;
+}
+
+void demo_music(ge::audio::MusicConsole& music, const DemoState& s) {
+  if (!s.cdname.empty())
+    ge::audio::play_level_named(music, s.cdname);
+  else if (s.cdtrack >= 0)
+    ge::audio::play_level_music(music, s.cdtrack);
 }
 
 void level_music(ge::audio::MusicConsole& music, std::string_view entities) {

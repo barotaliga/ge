@@ -13,7 +13,7 @@
 //   class name (`item_name_lines`), where the baseline mod's `name_of` reads them; an item the
 //   table leaves out keeps the mod's own word, and a game with no table speaks the mod's words.
 //   An ammunition's name is also its unit in a backpack's list ("20 shells").
-// - **Sounds**: the samples a listener reads (plugins/shooter/hearing.hpp's `SoundMeaning`):
+// - **Sounds**: the samples a listener reads (plugins/shooterbots/hearing.hpp's `SoundMeaning`):
 //   pickups, powers, spawns, fire, pain and death, with each pickup's heard word and each
 //   weapon's fire as its call word (what a listener tells the enemy's weapon by).
 //
@@ -33,7 +33,7 @@
 #include <vector>
 
 #include "classic/item_tables.hpp"
-#include "shooter/hearing.hpp"
+#include "shooterbots/hearing.hpp"
 
 namespace shooters_edge::profiles {
 
@@ -47,7 +47,7 @@ using ge::classic::ItemTables;
 using ge::classic::ItemWords;
 using ge::classic::kItemKinds;
 
-inline constexpr ItemRow kClassicItems[] = {
+inline constexpr ItemRow kQ1Items[] = {
     {.class_name = "item_shells", .kind = ItemKind::shells, .amount = 20, .doubles = true},
     {.class_name = "item_spikes", .kind = ItemKind::nails, .amount = 25, .doubles = true},
     {.class_name = "item_rockets", .kind = ItemKind::rockets, .amount = 5, .doubles = true},
@@ -89,7 +89,7 @@ inline constexpr ItemRow kClassicItems[] = {
     {.class_name = "weapon_lightning", .kind = ItemKind::weapon, .respawn_s = 30, .weapon = 64},
 };
 
-inline constexpr ItemWords kClassicWords[] = {
+inline constexpr ItemWords kQ1Words[] = {
     {ItemKind::health, 0, "health", "health"}, {ItemKind::mega, 0, "mh", "mh"},
     {ItemKind::armor1, 0, "ga", "armor"},      {ItemKind::armor2, 0, "ya", "armor"},
     {ItemKind::armor3, 0, "ra", "armor"},      {ItemKind::shells, 0, "shells", "ammo"},
@@ -101,10 +101,10 @@ inline constexpr ItemWords kClassicWords[] = {
     {ItemKind::weapon, 0, "lg", "weapon"},  // any other weapon
 };
 
-// The classic game's pickups: ammunition by its kind ("You got the rockets", a backpack's "5
+// Quake's pickups: ammunition by its kind ("You got the rockets", a backpack's "5
 // rockets"), weapons and powers by their own names. Its armour is "armor" whatever its colour,
 // which is the mod's own line, so the armour rows are left out.
-inline constexpr ItemName kClassicNames[] = {
+inline constexpr ItemName kQ1Names[] = {
     {"item_shells", "shells"},
     {"item_spikes", "nails"},
     {"item_rockets", "rockets"},
@@ -124,8 +124,8 @@ inline constexpr ItemName kClassicNames[] = {
     {"item_artifact_envirosuit", "Biosuit"},
 };
 
-using ge::shooter::SoundClass;
-inline constexpr ge::shooter::SoundMeaning kClassicSounds[] = {
+using ge::shooterbots::SoundClass;
+inline constexpr ge::shooterbots::SoundMeaning kQ1Sounds[] = {
     {"items/armor1.wav", SoundClass::pickup, true, "armor"},
     {"items/r_item2.wav", SoundClass::pickup, true, "mh"},
     {"items/r_item1.wav", SoundClass::pickup, false, "health"},
@@ -149,19 +149,25 @@ inline constexpr ge::shooter::SoundMeaning kClassicSounds[] = {
     {"player/udeath.wav", SoundClass::death, false, ""},
 };
 
-// The monsters' models a co-op companion knows on sight (bots/companion.hpp): a client is sent
-// each entity's model, and these are the ones that walk, fly or swim at the players.
-inline constexpr std::string_view kClassicMonsters[] = {
-    "progs/soldier.mdl", "progs/dog.mdl",      "progs/knight.mdl",   "progs/hknight.mdl",
-    "progs/ogre.mdl",    "progs/zombie.mdl",   "progs/wizard.mdl",   "progs/fish.mdl",
-    "progs/demon.mdl",   "progs/shambler.mdl", "progs/shalrath.mdl", "progs/enforcer.mdl",
-    "progs/tarbaby.mdl", "progs/boss.mdl",     "progs/oldone.mdl"};
+// The monsters' models a co-op companion knows on sight (shooterbots/companion.hpp): a client is
+// sent each entity's model, and these are the ones that walk, fly or swim at the players. The
+// mission packs' model names are their own, so one list serves the game and both packs.
+inline constexpr std::string_view kQ1Monsters[] = {
+    "progs/soldier.mdl", "progs/dog.mdl", "progs/knight.mdl", "progs/hknight.mdl", "progs/ogre.mdl",
+    "progs/zombie.mdl", "progs/wizard.mdl", "progs/fish.mdl", "progs/demon.mdl",
+    "progs/shambler.mdl", "progs/shalrath.mdl", "progs/enforcer.mdl", "progs/tarbaby.mdl",
+    "progs/boss.mdl", "progs/oldone.mdl",
+    // Scourge of Armagon's own: the scourge, the gremlin, Armagon.
+    "progs/scor.mdl", "progs/grem.mdl", "progs/armabody.mdl",
+    // Dissolution of Eternity's own: the eel, the wrath and its overlord, the mummy, the dragon,
+    // the guardians, the lava lord.
+    "progs/eel2.mdl", "progs/wrath.mdl", "progs/s_wrath.mdl", "progs/mummy.mdl", "progs/dragon.mdl",
+    "progs/morph_az.mdl", "progs/morph_eg.mdl", "progs/morph_gr.mdl", "progs/lavaman.mdl"};
 // Of those, the ones only a blast keeps down (a shot one gets up again), and the ones no weapon
 // kills at all (the map's own trap does): a player passes them rather than fights them.
-inline constexpr std::string_view kClassicBlastOnly[] = {"progs/zombie.mdl"};
-inline constexpr std::string_view kClassicNoWeapon[] = {"progs/boss.mdl", "progs/oldone.mdl"};
+inline constexpr std::string_view kQ1BlastOnly[] = {"progs/zombie.mdl"};
+inline constexpr std::string_view kQ1NoWeapon[] = {"progs/boss.mdl", "progs/oldone.mdl"};
 
-inline constexpr ItemTables kClassicTables{kClassicItems, kClassicWords, kClassicSounds,
-                                           kClassicNames};
+inline constexpr ItemTables kQ1Tables{kQ1Items, kQ1Words, kQ1Sounds, kQ1Names};
 
 }  // namespace shooters_edge::profiles

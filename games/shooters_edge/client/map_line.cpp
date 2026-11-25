@@ -1,11 +1,11 @@
-// ge:summary Walks a line through a map's world: the point hull, or the sequel's brushes
+// ge:summary Walks a line through a map's world: the point hull, or Quake II's brushes
 // ge:keywords map-line line-end trace_hull brush-tracer
 // ge:skill shooter
 // ge:test tests/shooters_edge_map_line_test.cpp
 #include "shooters_edge/client/map_line.hpp"
 
 #include "brush/trace.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "shooter/hull.hpp"
 
 namespace shooters_edge::client {

@@ -8,7 +8,7 @@ indexes the demos they keep. Row M56 ([`goals/M56.md`](goals/M56.md)). This page
 nothing is built yet. The maintainer chose the engine in the browser as the way a page shows a
 match (2026-11-11; § Watching in a browser).
 
-The classic game's community runs such a site; what it does, measured and read in its public
+Quake's community runs such a site; what it does, measured and read in its public
 sources, is the working note `porting/shooters-edge/hub.md`. This design takes its shape (the
 pages, the polling, the advert in the status reply, demos addressed by their hash) and makes it
 generic: one hub program for every game on the engine, the game supplying only its words.
@@ -141,6 +141,32 @@ It speaks plain HTTP on one port; TLS and a CDN are the operator's reverse proxy
 `docs/networking.md` rule: no hosted service, a community runs what this tree builds). A hub, a
 master and a TV node can share one small machine. The labs run all of it on the simulated network.
 
+## Match cards
+
+A live match's card on the Servers page is a picture of the match as the game shows it, not an
+HTML table: the map seen from its intermission view with the board over it in the game's own
+letters (`engine/hub/card.hpp`, `engine/hub/stills.hpp`; Shooter's Edge's half in
+`games/shooters_edge/hub/cards.hpp` and `still.hpp`).
+
+| Part | Made | Kept |
+| --- | --- | --- |
+| The map's STILL | Once a map, the first time a match on it is shown, by the game (`HubStills::render`): Shooter's Edge draws the map with the window's own world draw from its first intermission spot (else a deathmatch spawn, else the start) in the classic look with classic enhance off, on any GPU adapter (lavapipe in software on a server with none), on the hub's worker thread so no page waits | On disk, `<--stills>/<game>/<map>-<key>.jpg`. The key digests the map's file, the source stamp of every directory whose code draws it (`cmake/SourceStamp.cmake`, shaders included) and the size: a changed map or a new build draws it again and the old file goes. Never committed: each hub draws its own from its own packs |
+| The BOARD | Every time the card is asked for (`/card/<address>.jpg`, the page's `<img>` keyed by the record's change count), from the live status record | Nowhere: it is as live as the poller |
+
+The board is the game's: its glyph sheet from its packs (`conchars`, never enhanced), drawn at
+whole multiples of its pixels (the largest at which every row fits, a duel's six times) so every texel is a square;
+the columns ping, frags, team and name in the game's order, the team column only when the match
+is played in teams (never in a duel or a free-for-all), the players then grouped by team; Quake's
+frags on a box of the top and bottom colours the player picked (the record's colour rows, drawn in
+the shades of the game's own palette; else the team's colour), Quake II's bare with the column words in its green set; the
+mode on the map and the clock along the top, the spectators along the foot. A map the content does
+not hold, or a hub with no `--content`, gets the map's hue under the same board; a game with no
+glyph sheet gets the HTML card.
+
+A map's name comes from a server's record, so it is used as a file name only when it is a plain
+one (`still_name_ok`). The server's record names its classic game in the `*game` key; a browsed
+classic server is Quake's.
+
 ## Watching in a browser
 
 A hub page shows a match with the ENGINE ITSELF: a viewer built from the same C++ as the game,
@@ -151,11 +177,11 @@ engine's one web build (G5) with its one sibling, the player of § Playing in a 
 | --- | --- |
 | The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
 | Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same messages a native spectator reads: the viewer says hello, turns the messages back into the replay file as it grows (`tv::Watch`) and unpacks each whole block into the recording as it comes (Shooter's Edge's `unpack_more`); it plays two blocks behind and holds its last frame when the next block is late. A demo is fetched by its hash from the archive, decoded in the viewer |
-| Its content | A demo's own content pack (`engine/hub/content.hpp`): the game names the files the demo draws from (`HubSpec::demo_files`: Shooter's Edge's maps, precached models and sounds, and the basics every picture needs; and `HubSpec::file_needs`, what each file found names in turn: a sequel map's texture files and either game's sky box), the hub takes them out of the packs beside the viewer (a later pack wins, as a game folder's numbered packs), writes them as one pack, zstd-packs it and keeps it in the archive's `content/` named by its own SHA-256, served at `/content/<sha>.pak.zst` and cached by the browser for a year. It is made when the demo arrives, so no visitor waits; two demos that need the same files share one pack. A 20-minute 4on4 on the classic game's third level takes 1.6 MB instead of the two packs' 52 MB. A game that names no files hands the viewer every pack beside it |
-| Its games | One viewer plays either classic game's recordings: the format is read off the demo's bytes (Shooter's Edge's `client/demo.hpp`), and the world is drawn with that game's palette and models. The sequel's demo pack's own recording plays from a 9.7 MB content pack |
+| Its content | A demo's own content pack (`engine/hub/content.hpp`): the game names the files the demo draws from (`HubSpec::demo_files`: Shooter's Edge's maps, precached models and sounds, and the basics every picture needs; and `HubSpec::file_needs`, what each file found names in turn: a Quake II map's texture files and either game's sky box), the hub takes them out of the packs beside the viewer (a later pack wins, as a game folder's numbered packs), writes them as one pack, zstd-packs it and keeps it in the archive's `content/` named by its own SHA-256, served at `/content/<sha>.pak.zst` and cached by the browser for a year. It is made when the demo arrives, so no visitor waits; two demos that need the same files share one pack. A 20-minute 4on4 on Quake's third level takes 1.6 MB instead of the two packs' 52 MB. A game that names no files hands the viewer every pack beside it |
+| Its games | One viewer plays either classic game's recordings: the format is read off the demo's bytes (Shooter's Edge's `client/demo.hpp`), and the world is drawn with that game's palette and models. Quake II's demo pack's own recording plays from a 9.7 MB content pack |
 | Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
-| Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
+| Content rights | A hub serves only content its operator may share. For Quake that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
 
 IN THE GAME'S WINDOW. The Watch page's "Open in the game" hands the player's client a
 `<game>://tv/<node>/<stream>` link; Shooter's Edge's game CLI turns it into `se -tv <host:port>`,
@@ -218,7 +244,7 @@ queries (not asked for on the web). A native run asks for exactly the defaults w
 a browser.
 
 A LIVE BROADCAST OF A REAL SERVER (M56o). `setv --watch=<server> --web=<tcp port>
---master=<master>` (`games/shooters_edge/net/classic_watch_tv.hpp`) joins any server as a spectator
+--master=<master>` (`games/shooters_edge/net/qw_watch_tv.hpp`) joins any server as a spectator
 (the watcher, docs/tv.md § The watcher) and broadcasts its view live on the engine's TV wire: game
 windows over UDP, browsers over the WebSocket port. It is listed on the masters as a TV node under
 the game's own protocol (`TvHost::public_protocol`), so the game's hub reads its record, and its
@@ -228,7 +254,7 @@ update; a source on loopback is the TV node's own host), so the server's card ge
 button, a classic server's too, which says nothing of broadcasts itself. A watcher the server drops
 ends the broadcast and a new one starts after `retry_s`. Checked end to end: our server with three
 bots, `setv --watch` two seconds behind, the hub listing both, Watch in headless Chromium showing
-the match (`tests/shooters_edge_classic_watch_tv_test.cpp` does the same on the simulated network).
+the match (`tests/shooters_edge_qw_watch_tv_test.cpp` does the same on the simulated network).
 
 FALL LINE'S VIEWER (M56j). Fall Line's runs are kept as input logs (`play/inputs.hpp`: the
 game's setup and every step's input, about 300 KB for a four-minute race), not as recordings, so its viewer
@@ -309,7 +335,7 @@ Next: Fall Line's live races on its hub, once it has a dedicated server (M17k).
 
 ### Built so far
 
-- **M56a** (`hub-master`): `engine/net/status.hpp` is the record (version 1, rows left out from
+- **M56a** (`hub-master`): `engine/net/status.hpp` is the record (version 2 since the players' colour rows; rows left out from
   the end with a `truncated` flag when it outgrows the datagram) and its ask: a padded 64-byte ask,
   answered first with an 8-byte-heavy cookie (a keyed hash of the asker's address and a 10 s
   bucket) and only then with the record, so a forged source address gets nothing bigger than its
@@ -424,7 +450,7 @@ master can land before them, since a dedicated server's heartbeat needs nothing 
 | --- | --- | --- |
 | One hub for every game | `engine/hub` with a game's `HubSpec` of words and columns, built per game | A hub per game written again: Fall Line and Shooter's Edge would differ only in words |
 | Where the state comes from | The servers' own status records, polled; the broadcasts' meta tracks for the watched ones | A hub that joins as a spectator: it would need each game's simulation |
-| The master | Its own small heartbeat and list protocol next to the rendezvous, plus the classic adapter for the classic game | Only the classic master protocol: a list of addresses with nothing of game, version or streams |
+| The master | Its own small heartbeat and list protocol next to the rendezvous, plus the classic adapter for Quake | Only the classic master protocol: a list of addresses with nothing of game, version or streams |
 | Demo metadata | Read from the file's header and closing summary | File names, as the classic hub's older list did: they hold no durations, no points of view, and break when renamed |
 | Demo names | SHA-256 of the bytes, a fan-out directory | Names by date and players: two nodes' copies differ, and a URL is not stable |
 | The index | In memory, rebuilt from the files at start (M56d measured 500 demos searched in under a millisecond); SQLite with full-text search when an archive outgrows memory | A database server: one more process for a community to run; SQLite from the start: a dependency before an archive needs it |

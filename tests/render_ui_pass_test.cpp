@@ -373,6 +373,33 @@ TEST(a_list_drawn_again_uploads_nothing_and_counts_its_draws) {
   CHECK(rig->pass.pictures.size() == 1);
 }
 
+TEST(a_new_image_at_an_old_ones_address_is_drawn_with_its_own_pixels) {
+  // A game switched builds its pictures and fonts again; one may land at the address of the
+  // last game's, its revision as new (0) as the old one's. Its serial tells them apart.
+  auto rig = make_rig();
+  if (!rig) return;
+  auto& d = *rig->device;
+  u::Image img = u::make_image(4, 4, u::hex(0xff0000));
+  const uint64_t was = img.serial;
+  u::DrawList list;
+  list.begin(8, 8);
+  u::Box b;
+  b.rect = {0, 0, 8, 8};
+  b.image = &img;
+  b.uv = {0, 0, 4, 4};
+  b.feather = 0;
+  list.box(b);
+  r::prepare_ui(d, rig->pass, list, 8, 8);
+  img = u::make_image(4, 4, u::hex(0x00ff00));  // another image, the same address and revision
+  CHECK(img.serial != was && img.revision == 0);
+  check_same(*rig, "ui_pass_image_replaced", list, 8, 8);
+  // A copy is the same image: its serial its source's.
+  const u::Image copy = img;
+  CHECK(copy.serial == img.serial);
+  // A glyph mask likewise.
+  CHECK(u::GlyphMask{}.serial != u::GlyphMask{}.serial);
+}
+
 TEST(a_full_atlas_is_emptied_and_refilled) {
   auto rig = make_rig();
   if (!rig) return;

@@ -1,16 +1,18 @@
 // The classic view of a recording or a game joined (demo_eyes.hpp).
 //
 // ge:summary The classic bob, strafe roll and damage kick on a demo's or a joined server's eye
-// ge:keywords demo_eyes_view demo_eyes_drawn ground-trace
+// ge:keywords demo_eyes_view demo_eyes_drawn ground-trace demo_eyes_kick
 // ge:skill camera shooter
 // ge:test tests/shooters_edge_demo_eyes_test.cpp
 #include "shooters_edge/client/demo_eyes.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "core/math.hpp"
 
 #include "brush/map.hpp"
+#include "camera/pose.hpp"
 #include "camera/to_view.hpp"
 #include "shooter/hull.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -54,7 +56,21 @@ bool on_floor(const sh::BrushModel& world, sh::Vec3f origin) {
 
 }  // namespace
 
-bool demo_eyes_drawn(const DemoState& s) { return s.format != DemoFormat::sequel && rider(s) >= 0; }
+void demo_eyes_kick(const DemoState& read, DemoEyes& e, double dt) {
+  if (read.kicks_taken < e.kicks_seen) e.kicks_seen = read.kicks_taken;  // the demo opened again
+  if (read.kicks_taken != e.kicks_seen) e.kick_to = -static_cast<float>(read.last_kick);
+  e.kicks_seen = read.kicks_taken;
+  const float rate = e.kick_to == 0 ? kKickBack : e.kick_to < -2 ? kKickOutBig : kKickOutSmall;
+  const float step = rate * static_cast<float>(dt);
+  if (e.kick > e.kick_to) {
+    e.kick = std::max(e.kick - step, e.kick_to);
+  } else {
+    e.kick = std::min(e.kick + step, e.kick_to);
+  }
+  if (e.kick == e.kick_to) e.kick_to = 0;
+}
+
+bool demo_eyes_drawn(const DemoState& s) { return s.format != DemoFormat::q2 && rider(s) >= 0; }
 
 ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& read, DemoEyes& e,
                                      const ge::camera::FirstPersonRow& row_in,
@@ -62,13 +78,28 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
                                      double fov_y, double clock_s, double time_s) {
   if (!demo_eyes_drawn(drawn)) {
     e.clock = -1;  // the next one drawn starts over
-    return demo_view(drawn, fov_y, time_s);
+    ge::render::FrameView v =
+        demo_view(drawn, fov_y, time_s, e.view_kick == nullptr || *e.view_kick);
+    demo_view_behind(drawn, e.behind, world, v, e.side, e.up);
+    demo_view_locked(drawn, e, v);
+    return v;
   }
   // A seek back, a new level or another player: the rig and the estimate start over.
   const bool cut = e.clock < 0 || clock_s < e.clock || drawn.levels != e.levels ||
                    drawn.player != e.player || read.frames < e.frames_seen;
   if (cut) {
+    const bool* gun_kick = e.gun_kick;
+    const bool* view_kick = e.view_kick;
+    const float behind = e.behind, side = e.side, up = e.up;
+    const bool lock_pos = e.lock_pos;
     e = DemoEyes{};
+    e.gun_kick = gun_kick;
+    e.view_kick = view_kick;
+    e.behind = behind;
+    e.side = side;
+    e.up = up;
+    e.lock_pos = lock_pos;
+    e.kicks_seen = read.kicks_taken;
     e.levels = drawn.levels;
     e.player = drawn.player;
     e.blows_seen = read.blows_taken;  // what was taken before is not shown
@@ -139,12 +170,79 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   e.fall_speed = velocity.z;
 
   ge::camera::Pose pose = ge::camera::frame_first_person(row, s, e.eyes, dt, 1.0);
+  demo_eyes_kick(read, e, dt);
+  if (e.gun_kick != nullptr && *e.gun_kick &&
+      e.kick != 0) {  // along the view by the kick, pitched up by half of it
+    const ge::camera::Vec3 f = ge::camera::look_forward(pose.yaw, pose.pitch);
+    const double k = e.kick * ge::brush::kUnitM;
+    pose.eye = {pose.eye.x + k * f.x, pose.eye.y + k * f.y, pose.eye.z + k * f.z};
+    pose.pitch -= 0.5 * e.kick * kDeg;
+  }
   if (dead || gib) pose.roll = kDeadRollDeg * kDeg;  // lying on the floor
   ge::render::FrameView view;
   ge::camera::to_frame_view(pose, view);
   view.fov_y = fov_y;
   view.time_s = time_s;
+  demo_view_behind(drawn, e.behind, world, view, e.side, e.up);
+  demo_view_locked(drawn, e, view);
   return view;
+}
+
+void demo_view_locked(const DemoState& s, DemoEyes& e, ge::render::FrameView& view) {
+  if (!e.lock_pos || !(e.behind > 0) || s.intermission || s.format == DemoFormat::single) {
+    e.locked = false;
+    return;
+  }
+  if (!e.locked) {
+    for (int k = 0; k < 3; k++) e.locked_at[k] = view.eye[k];
+    e.locked = true;
+  }
+  const ge::camera::Vec3 at{e.locked_at[0], e.locked_at[1], e.locked_at[2]};
+  const ge::camera::Pose pose =
+      ge::camera::aim_pose(at, engine_point(s.eye), 0, view.fov_y, view.near_m);
+  ge::camera::to_frame_view(pose, view);
+}
+
+void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* world,
+                      ge::render::FrameView& view, float side, float up) {
+  if (!(units > 0) || s.intermission || s.format == DemoFormat::single || s.player < 0 ||
+      static_cast<size_t>(s.player) >= s.players.size() ||
+      !s.players[static_cast<size_t>(s.player)].present)
+    return;
+  // The way the player looks, in map units (yaw counter-clockwise from +x, pitch down positive).
+  const double yaw = s.angles.y * kDeg, pitch = s.angles.x * kDeg;
+  const sh::Vec3f back{static_cast<float>(-std::cos(pitch) * std::cos(yaw)),
+                       static_cast<float>(-std::cos(pitch) * std::sin(yaw)),
+                       static_cast<float>(std::sin(pitch))};
+  sh::Vec3f from = s.eye;
+  float reach = units;
+  if (up > 0) {  // raised first, short of a ceiling
+    float lift = up;
+    if (world != nullptr && world->hulls[0].nodes != nullptr && world->hulls[0].planes != nullptr) {
+      const sh::HullTrace tr =
+          sh::trace_hull(world->hulls[0], from, from + sh::Vec3f{0, 0, up + kBehindWallGap});
+      if (tr.fraction < 1)
+        lift = std::max(0.0f, tr.fraction * (up + kBehindWallGap) - kBehindWallGap);
+    }
+    from.z += lift;
+  }
+  if (world != nullptr) {
+    const sh::Hull& hull = world->hulls[0];
+    if (hull.nodes != nullptr && hull.planes != nullptr) {
+      const sh::HullTrace tr = sh::trace_hull(hull, from, from + back * (units + kBehindWallGap));
+      if (!tr.startsolid && tr.fraction < 1)
+        reach = std::max(0.0f, tr.fraction * (units + kBehindWallGap) - kBehindWallGap);
+    }
+  }
+  // The view's level right is (sin yaw, -cos yaw) in the map's plan whatever the pitch: a step
+  // left is its negative.
+  const sh::Vec3f left{static_cast<float>(-std::sin(yaw)), static_cast<float>(std::cos(yaw)), 0};
+  const ge::camera::Vec3 at = engine_point(from + back * reach + left * side);
+  const ge::camera::Vec3 eye = engine_point(s.eye);
+  // The rig's bob and roll ride along: the camera keeps its offset from the eye it was given.
+  view.eye[0] += at.x - eye.x;
+  view.eye[1] += at.y - eye.y;
+  view.eye[2] += at.z - eye.z;
 }
 
 }  // namespace shooters_edge::client

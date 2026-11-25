@@ -7,6 +7,7 @@
 // ge:summary Tests the crosshair: cvars and a game's defaults, marks, colours, the picture
 // ge:keywords test crosshair crosshaircolor crosshairsize crosshairalpha crosshair-marks defaults
 // ge:skill ui testing
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -93,4 +94,26 @@ TEST(the_picture_is_the_built_mark_or_the_games_own) {
   const ui::Image empty;
   gh::crosshair_picture(s, empty, 3.0f, palette, &shown);
   CHECK(!shown);  // a game with no mark of its own draws none at 1
+}
+
+TEST(cl_crossx_and_cl_crossy_move_it_and_a_game_may_shade_or_colour_it_by_health) {
+  con::Console c;
+  gh::CrosshairSettings s;
+  gh::add_crosshair_cvars(c.cvars(), s);
+  c.execute("cl_crossx 12; cl_crossy -4.5");
+  CHECK(s.offset[0] == 12 && s.offset[1] == -4.5);
+  // Health: white at full, yellow at two thirds, red at a third, black dead.
+  const auto same = [](ui::Color a, float r, float g, float b) {
+    return a.r == r && std::fabs(a.g - g) < 1e-6f && std::fabs(a.b - b) < 1e-6f;
+  };
+  CHECK(same(gh::crosshair_health(100), 1, 1, 1) && same(gh::crosshair_health(66), 1, 1, 0));
+  CHECK(same(gh::crosshair_health(33), 1, 0, 0) && same(gh::crosshair_health(0), 0, 0, 0));
+  CHECK(same(gh::crosshair_health(50), 1, 17 / 33.0f, 0));
+  bool shown = false;
+  s.mark = 2;
+  s.by_health = true;
+  CHECK(same(gh::crosshair_picture(s, {}, 1, {}, &shown, 40).tint, 1, 7 / 33.0f, 0) && shown);
+  s.by_health = false;
+  s.shade[1] = 0.5;  // a game's half of green
+  CHECK(same(gh::crosshair_picture(s, {}, 1, {}, &shown).tint, 1, 0.5f, 1));
 }

@@ -101,7 +101,7 @@ bool origin_of(const br::Entity& e, double o[3]) {
   return !s.empty() && std::sscanf(s.c_str(), "%lf %lf %lf", &o[0], &o[1], &o[2]) == 3;
 }
 
-// The model `name`'s entry, read the first time it is asked for; a sequel player's `look`
+// The model `name`'s entry, read the first time it is asked for; a Quake II player's `look`
 // ("male/grunt") wears `players/male/tris.md2` in `players/male/grunt.pcx`, an entry of its own.
 // A look the files lack (a player's own model or skin) falls back as the game's does: the model's
 // grunt skin, else the male grunt.
@@ -451,9 +451,9 @@ void draw_halo(ui::DrawList& dl, LiveMap& lm, const Figure& f, float strength) {
   dl.box(box);
 }
 
-// A recording of the sequel (any of its protocol's versions: its client's or its multiview).
-bool from_sequel(const cl::DemoState& s) {
-  return s.format == cl::DemoFormat::sequel || s.format == cl::DemoFormat::sequel_multiview;
+// A recording of Quake II (any of its protocol's versions: its client's or its multiview).
+bool from_q2(const cl::DemoState& s) {
+  return s.format == cl::DemoFormat::q2 || s.format == cl::DemoFormat::q2_multiview;
 }
 
 bool playing(const cl::DemoState& s, int slot) {
@@ -572,8 +572,8 @@ ui::Rect live_map_rect(const Plate& p, ui::Rect area) { return ov::fit_rect(p, a
 
 std::span<const uint8_t> recording_palette(const cl::SearchPath& files, const cl::DemoState& s,
                                            std::vector<uint8_t>& store) {
-  const ge::classicenhance::Profile* sequel = ge::classicenhance::find_profile("sequel");
-  if (from_sequel(s) && sequel != nullptr) return cl::game_palette(files, store, *sequel);
+  const ge::classicenhance::Profile* q2 = ge::classicenhance::find_profile("q2");
+  if (from_q2(s) && q2 != nullptr) return cl::game_palette(files, store, *q2);
   return cl::game_palette(files, store);
 }
 
@@ -706,7 +706,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
           std::hypot(t.points.back()[0] - e.origin.x, t.points.back()[1] - e.origin.y) > 6)
         t.points.push_back({e.origin.x, e.origin.y, float(now)});
     }
-    const bool turns = (flags & kRotateFlag) != 0 || (from_sequel(s) && (e.effects & 1) != 0);
+    const bool turns = (flags & kRotateFlag) != 0 || (from_q2(s) && (e.effects & 1) != 0);
     Figure f = figure_of(lm, pl, e, art, turns ? now * kItemSpinDegS : e.angles.y, e.angles.x, -1,
                          -1, v, now, false, turns);
     if (name.find("flame") != std::string::npos) {
@@ -722,11 +722,11 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     const cl::DemoEntity& e = s.players[size_t(slot)];
     const std::string& name = s.models[size_t(std::min<int>(e.model, int(s.models.size()) - 1))];
     if (name.empty()) continue;
-    // The sequel's players wear their look (its model 255, "the client's own"); the first game's
+    // Quake II's players wear their look (its model 255, "the client's own"); Quake's
     // wear their shirt and pants on the player's skin.
-    const bool sequel = from_sequel(s);
-    const int art = art_of(lm, name, sequel ? s.looks[size_t(slot)] : std::string());
-    const bool colours = !sequel && name.find("player") != std::string::npos;
+    const bool q2 = from_q2(s);
+    const int art = art_of(lm, name, q2 ? s.looks[size_t(slot)] : std::string());
+    const bool colours = !q2 && name.find("player") != std::string::npos;
     Figure f = figure_of(lm, pl, e, art, e.angles.y, 0, colours ? s.top[size_t(slot)] : -1,
                          colours ? s.bottom[size_t(slot)] : -1, v, now, true);
     f.slot = slot;

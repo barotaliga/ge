@@ -93,14 +93,11 @@ void set_words(QvmServer& s, const std::string& line) { pg::tokenize_words(line.
 // A forced view (`fixangle`) is sent once, at the end of the frame: the view becomes `angles` and
 // the flag clears.
 void send_forced_views(QvmServer& s) {
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    if (!s.clients[i].active) continue;
-    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(i) + 1];
-    if (!ed.fixangle) continue;
-    ed.v_angle = ed.angles;
-    ed.fixangle = false;
-    if (s.q.data.ents != 0) sim::set_field_f(s.q, i + 1, F.fixangle, 0);
-  }
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].active && s.sv.edicts[static_cast<size_t>(i) + 1].fixangle &&
+        s.q.data.ents != 0)
+      sim::set_field_f(s.q, i + 1, F.fixangle, 0);
+  s.take_turns();  // the turns kept for the protocol's server (RulesCommon::turns)
 }
 
 // The chat a module left to the server: the server's own route (chat_rules.hpp).
@@ -698,6 +695,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     for (const StaticEntity& st : s.statics) w.statics.push_back(world_static(st));
     w.max_clients = s.sv.set.maxclients;
     w.weapon_frames = true;
+    w.items2 = q.fields.items2 != 0;
     w.map_title = std::string(sim::entity_text(q, 0, F.message));
     w.entities.assign(static_cast<size_t>(s.sv.set.max_edicts), WorldEntity{});
     for (WorldClient& c : w.clients) c = WorldClient{};
@@ -737,6 +735,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     n.weapon = sim::field_f(q, e, F.weapon);
     n.weapon_frame = sim::field_f(q, e, F.weaponframe);
     n.items = sim::field_f(q, e, F.items);
+    n.items2 = q.fields.items2 != 0 ? sim::ext_f(q, e, q.fields.items2) : 0;
     n.view_z = sim::field_f(q, e, F.view_ofs + 2);
     n.frags = sim::field_f(q, e, F.frags);
     n.weapon_model = model_index_of(s, sim::entity_text(q, e, F.weaponmodel), n.weapon_model);

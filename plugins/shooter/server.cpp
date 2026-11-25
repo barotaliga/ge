@@ -111,7 +111,54 @@ void link_edict(Server& sv, int e, bool touch_triggers) {
   if (touch_triggers) touch_links(sv, e);
 }
 
+namespace {
+
+// The single-player clock's touching: node by node from the root, each node's triggers taken as
+// they stand when the walk reaches it and each one tested against the entity's box as it is just
+// before its touch; the walk goes down by the box as it is then, so a trigger that moves the
+// entity (a teleporter) stops the triggers at the old place from firing.
+void touch_node(Server& sv, int e, int32_t n) {
+  int list[kMaxEdicts];
+  int count = 0;
+  const AreaNode& node = sv.area.nodes[n];
+  for (int32_t t = node.triggers.head; t != -1 && count < kMaxEdicts;
+       t = sv.edicts[static_cast<size_t>(t)].link_next)
+    list[count++] = t;
+  for (int i = 0; i < count; i++) {
+    const int t = list[i];
+    if (t == e) continue;
+    const Edict& trig = sv.edicts[static_cast<size_t>(t)];
+    if (trig.free || trig.touch == kNoFunc || trig.solid != kSolidTrigger) continue;
+    const Edict& ed = sv.edicts[static_cast<size_t>(e)];
+    if (ed.free) return;
+    if (ed.absmin.x > trig.absmax.x || ed.absmin.y > trig.absmax.y || ed.absmin.z > trig.absmax.z ||
+        ed.absmax.x < trig.absmin.x || ed.absmax.y < trig.absmin.y || ed.absmax.z < trig.absmin.z)
+      continue;
+    sv.g.self = t;
+    sv.g.other = e;
+    sv.g.time = static_cast<float>(sv.time);
+    sv.counts.trigger_touches++;
+    call_program(sv, trig.touch);
+  }
+  const AreaNode& at = sv.area.nodes[n];
+  if (at.axis < 0) return;
+  const Edict& ed = sv.edicts[static_cast<size_t>(e)];
+  if (ed.free) return;
+  if (ed.absmax[at.axis] > at.dist) touch_node(sv, e, at.children[0]);
+  if (sv.edicts[static_cast<size_t>(e)].absmin[at.axis] < at.dist)
+    touch_node(sv, e, at.children[1]);
+}
+
+}  // namespace
+
 void touch_links(Server& sv, int e) {
+  if (sv.set.single_player_clock) {
+    const int old_self = sv.g.self, old_other = sv.g.other;
+    touch_node(sv, e, 0);
+    sv.g.self = old_self;
+    sv.g.other = old_other;
+    return;
+  }
   // Listed first, then touched: a touch may relink anything (this entity included).
   int list[kMaxEdicts];
   const Edict& ed = sv.edicts[static_cast<size_t>(e)];
@@ -183,18 +230,22 @@ void call_program(Server& sv, Func fn) {
 }
 
 void start_sound(Server& sv, int e, int channel, const char* sample, float volume,
-                 float attenuation) {
+                 float attenuation, bool engine) {
   if (sv.sound_count >= kMaxSounds) {
     sv.counts.sounds_dropped++;
     return;
   }
-  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation, false, {}};
+  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation, false, {}, engine};
 }
 
 int world_contents(const Server& sv, Vec3f p) {
   if (sv.brushes != nullptr) return solid_point_contents(*sv.brushes, p);
   if (sv.model_solids.size() > 1) return solid_point_contents(sv.model_solids[1], p);
-  return point_contents(sv.models[1].hulls[0], p);
+  const int c = point_contents(sv.models[1].hulls[0], p);
+  // The six current contents read as water on the single-player clock.
+  if (sv.set.single_player_clock && c <= kContentsCurrent0 && c >= kContentsCurrentDown)
+    return kContentsWater;
+  return c;
 }
 
 namespace {

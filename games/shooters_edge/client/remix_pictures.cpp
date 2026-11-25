@@ -35,7 +35,7 @@ bool take_glyphs(ge::ui::Image& into, float density, const ge::ui::Image& sheet,
   return true;
 }
 
-void bar_pictures(SequelBar& bar, const ClassicPictures& pics) {
+void bar_pictures(Q2Bar& bar, const ClassicPictures& pics) {
   bar.pictures.clear();
   bar.cache = pics.cache;
   if (!pics.letters_swapped || pics.menu.glyphs.empty()) return;

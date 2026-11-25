@@ -1,7 +1,7 @@
 ---
 title: A table built with designated initializers takes its order from the struct, and lint picks that order
 date: 2026-11-12
-scope: games/shooters_edge/server/sequel_monster_kinds.hpp, .clang-tidy
+scope: games/shooters_edge/server/q2_monster_kinds.hpp, .clang-tidy
 concepts: [designated-initializers, padding, clang-analyzer-optin-performance-padding, struct-layout, data-table]
 ---
 

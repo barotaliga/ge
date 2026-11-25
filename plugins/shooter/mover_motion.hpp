@@ -1,6 +1,6 @@
 // A MOVER'S MOTION, frame by frame: how a door, a plat, a button or a train gets from where it
 // stands to where it is going on a server that steps its movers on a fixed frame, for any shooter
-// game whose rules move their own brush entities (Shooter's Edge's sequel today; a later game's
+// game whose rules move their own brush entities (Shooter's Edge's Quake II today; a later game's
 // rules the same way). The game keeps the state machine around it (what arriving does, the sounds,
 // the push of riders); this is the motion alone, as each frame's velocity.
 //
@@ -15,7 +15,7 @@
 //
 // The calls are templates over the entity: any struct with the fields named below (the mover's
 // own numbers and its motion's state) moves the same. Every float is the caller's IEEE 754 single
-// precision, in the order written; held bit-exact by the sequel's lab digests.
+// precision, in the order written; held bit-exact by Quake II's lab digests.
 //
 // ge:summary A mover's motion frame by frame: the plain move, the accelerated move, the turn
 // ge:keywords mover movers door plat button train accelerate decelerate turn motion frame

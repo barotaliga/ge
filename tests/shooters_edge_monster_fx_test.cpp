@@ -105,7 +105,7 @@ TEST(the_shots_glow_and_the_fire_ones_carry_a_flame) {
   }
 }
 
-TEST(the_sequels_cables_and_flashes_are_known_by_name_and_drawn) {
+TEST(q2_cables_and_flashes_are_known_by_name_and_drawn) {
   CHECK(fx::cable_of("te_parasite_attack") == fx::Cable::drain);
   CHECK(fx::cable_of("te_medic_cable_attack") == fx::Cable::heal);
   CHECK(fx::flash_of("te_monster_flash.rocket") == fx::Flash::rocket);

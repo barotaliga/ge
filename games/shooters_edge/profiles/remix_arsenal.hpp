@@ -10,12 +10,12 @@
 //   and health boxes the other game's of the same kind and size (`ItemLook`).
 // - **The held set** (`RemixArsenal::held`): the view models by slot, which the window draws in
 //   the hand in place of the game's own.
-// - **The frames** (`HeldFrames`, `held_frames`): a view model of the sequel's runs every
+// - **The frames** (`HeldFrames`, `held_frames`): a view model of Quake II's runs every
 //   animation in one file (up, firing, idle, down); the hand takes the first idle frame as its
 //   rest and the firing frames as its shot.
 //
 // ge:summary Classic remix's arsenals: a game's rules with another game's weapons, armour, sounds
-// ge:keywords remix classic-remix cr_items remix-arsenal held-frames sequel-weapons
+// ge:keywords remix classic-remix cr_items remix-arsenal held-frames q2-weapons
 // ge:keywords view-model pickup-model fire-sound by-role remix_arsenal held_frames
 // ge:keywords cr_models remix_figure player-figure cr_physics remix_physics sv_physics
 // ge:keywords movement-feel body-physics
@@ -27,18 +27,18 @@
 #include <span>
 #include <string_view>
 
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "shooters_edge/profiles/arsenal.hpp"
 
 namespace shooters_edge::profiles {
 
-// How far above the floor the sequel's items stand: its items are measured from their middle,
+// How far above the floor Quake II's items stand: its items are measured from their middle,
 // 15 units over the floor (profiles/remix.hpp's `kItemFeet`).
-inline constexpr int32_t kSequelLift = 15;
+inline constexpr int32_t kQ2Lift = 15;
 
-// The classic game's eight weapons, their numbers its own, as the sequel's: the axe's slot the
+// Quake's eight weapons, their numbers its own, as Quake II's: the axe's slot the
 // blaster, the nailguns the machinegun and chaingun, the lightning gun the railgun.
-inline constexpr WeaponRow kClassicAsSequelWeapons[] = {
+inline constexpr WeaponRow kQ1AsQ2Weapons[] = {
     {1, Fire::melee, Ammo::none, 0, 0.5f, 1, 20, 0, 64, 0, 0, "models/weapons/v_blast/tris.md2",
      "weapons/blastf1a.wav", "-", "-", "-", "-", 0},
     {2, Fire::pellets, Ammo::shells, 1, 0.5f, 6, 4, 0.04f, 2048, 0, 0,
@@ -61,25 +61,25 @@ inline constexpr WeaponRow kClassicAsSequelWeapons[] = {
     {8, Fire::beam, Ammo::cells, 1, 0.1f, 1, 30, 0, 600, 0, 35, "models/weapons/v_rail/tris.md2",
      "weapons/railgf1a.wav", "-", "-", "-", "models/weapons/g_rail/tris.md2", 15},
 };
-// Its three armours as the sequel's jacket, combat and body armour.
-inline constexpr ArmourRow kClassicAsSequelArmour[] = {
+// Its three armours as Quake II's jacket, combat and body armour.
+inline constexpr ArmourRow kQ1AsQ2Armour[] = {
     {1, 0.3f, 100, 0, "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav"},
     {2, 0.6f, 150, 0, "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav"},
     {3, 0.8f, 200, 0, "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav"},
 };
-// Its ammunition and health as the sequel's: the nails the bullets, the cells the slugs, the
-// small health the medium, the plain one the large, the mega health the sequel's own.
-inline constexpr ItemLook kClassicAsSequelLooks[] = {
-    {"arsenal_ammo1", "models/items/ammo/shells/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
-    {"arsenal_ammo2", "models/items/ammo/bullets/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
-    {"arsenal_ammo3", "models/items/ammo/rockets/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
-    {"arsenal_ammo4", "models/items/ammo/slugs/medium/tris.md2", "misc/am_pkup.wav", kSequelLift},
-    {"arsenal_health1", "models/items/healing/medium/tris.md2", "items/n_health.wav", kSequelLift},
-    {"arsenal_health2", "models/items/healing/large/tris.md2", "items/l_health.wav", kSequelLift},
-    {"arsenal_health3", "models/items/mega_h/tris.md2", "items/m_health.wav", kSequelLift},
+// Its ammunition and health as Quake II's: the nails the bullets, the cells the slugs, the
+// small health the medium, the plain one the large, the mega health Quake II's own.
+inline constexpr ItemLook kQ1AsQ2Looks[] = {
+    {"arsenal_ammo1", "models/items/ammo/shells/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
+    {"arsenal_ammo2", "models/items/ammo/bullets/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
+    {"arsenal_ammo3", "models/items/ammo/rockets/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
+    {"arsenal_ammo4", "models/items/ammo/slugs/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
+    {"arsenal_health1", "models/items/healing/medium/tris.md2", "items/n_health.wav", kQ2Lift},
+    {"arsenal_health2", "models/items/healing/large/tris.md2", "items/l_health.wav", kQ2Lift},
+    {"arsenal_health3", "models/items/mega_h/tris.md2", "items/m_health.wav", kQ2Lift},
 };
 // The view models by slot, 1..8.
-inline constexpr std::string_view kClassicAsSequelHeld[] = {
+inline constexpr std::string_view kQ1AsQ2Held[] = {
     "models/weapons/v_blast/tris.md2",  "models/weapons/v_shotg/tris.md2",
     "models/weapons/v_shotg2/tris.md2", "models/weapons/v_machn/tris.md2",
     "models/weapons/v_chain/tris.md2",  "models/weapons/v_launch/tris.md2",
@@ -93,10 +93,7 @@ struct RemixArsenal {
 };
 
 inline constexpr RemixArsenal kRemixArsenals[] = {
-    {"classic",
-     "sequel",
-     {kClassicAsSequelWeapons, kClassicAsSequelArmour, kClassicAsSequelLooks, "misc/w_pkup.wav"},
-     kClassicAsSequelHeld},
+    {"q1", "q2", {kQ1AsQ2Weapons, kQ1AsQ2Armour, kQ1AsQ2Looks, "misc/w_pkup.wav"}, kQ1AsQ2Held},
 };
 
 // The arsenal `played`'s rules wear with `items`'s things, or null (the same game, or no row).
@@ -108,7 +105,7 @@ constexpr const RemixArsenal* remix_arsenal(std::string_view played, std::string
 }
 
 // A THING RENAMED (`Look`): a rules engine of our own that names its models and sounds in code
-// (the sequel's) wears another game's by name: each name the rules register is sent to the
+// (Quake II's) wears another game's by name: each name the rules register is sent to the
 // players as `to`, an entity drawn with that model takes `skin`, and is drawn `offset` units from
 // where the rules hold it (the other game measures its items from another point of their box).
 struct Look {
@@ -118,16 +115,16 @@ struct Look {
   float offset[3] = {0, 0, 0};
 };
 
-// Where the classic game's items stand against the sequel's: the sequel's lie 15 units over the
+// Where Quake's items stand against Quake II's: Quake II's lie 15 units over the
 // floor, the classic weapons and armour on it, its boxes from their corner, its artifacts 24 over.
-inline constexpr float kOnFloor = -kSequelLift;
-inline constexpr float kArtifact = 24 - kSequelLift;
+inline constexpr float kOnFloor = -kQ2Lift;
+inline constexpr float kArtifact = 24 - kQ2Lift;
 
-// The sequel's rules in the classic game's things, by role as the item table maps the items
+// Quake II's rules in Quake's things, by role as the item table maps the items
 // (profiles/remix.hpp): the shotgun the double-barrelled one, the machinegun and chaingun the
 // nailguns, the hyperblaster, railgun and BFG the lightning gun; the boxes and packs by kind and
-// size; the blaster the classic game's first gun, the hand grenades its grenade launcher.
-inline constexpr Look kSequelAsClassic[] = {
+// size; the blaster Quake's first gun, the hand grenades its grenade launcher.
+inline constexpr Look kQ2AsQ1[] = {
     // In the hand.
     {"models/weapons/v_blast/tris.md2", "progs/v_shot.mdl"},
     {"models/weapons/v_shotg/tris.md2", "progs/v_shot2.mdl"},
@@ -201,7 +198,7 @@ struct RemixLooks {
   std::span<const Look> looks;
 };
 
-inline constexpr RemixLooks kRemixLooks[] = {{"sequel", "classic", kSequelAsClassic}};
+inline constexpr RemixLooks kRemixLooks[] = {{"q2", "q1", kQ2AsQ1}};
 
 // The renames `played`'s rules wear with `items`'s things, or null (the same game, or no row).
 constexpr const RemixLooks* remix_looks(std::string_view played, std::string_view items) {
@@ -227,7 +224,7 @@ constexpr const Look* look_of(std::span<const Look> looks, std::string_view name
 
 // THE FIGURES (`cr_models`): the one figure every player is drawn as while the played game's
 // players wear another game's. The window reads it as the folder `folder` under players/; `file`
-// names where the worn game keeps it when that is not players/<folder>/ (the classic game's own
+// names where the worn game keeps it when that is not players/<folder>/ (Quake's own
 // figure, which stands alone), its frames mapped from the played game's figure's by kind
 // (app/figure_frames.hpp).
 struct RemixFigure {
@@ -238,8 +235,8 @@ struct RemixFigure {
 };
 
 inline constexpr RemixFigure kRemixFigures[] = {
-    {"classic", "sequel", "male", ""},
-    {"sequel", "classic", "classic", "progs/player.mdl"},
+    {"q1", "q2", "male", ""},
+    {"q2", "q1", "q1", "progs/player.mdl"},
 };
 
 // The figure `played`'s players wear as `models`'s, or null (the same game, or no row).
@@ -253,24 +250,24 @@ constexpr const RemixFigure* remix_figure(std::string_view played, std::string_v
 // THE MOVES (`cr_physics`): the played game's players move as another game's do. Each game's move
 // keeps its own code (the step, the duck, the slide); what differs is set on it: the running speed,
 // the ground's friction and how the air steers. `lines` are the played game's server lines from
-// the next map: the classic rules' move told the sequel's (300 and 6, the air steered at 1 by the
-// whole wish, the landing pause), the sequel's told the classic game's by `sv_physics`
-// (`kClassicFeel`).
+// the next map: the classic rules' move told Quake II's (300 and 6, the air steered at 1 by the
+// whole wish, the landing pause), Quake II's told Quake's by `sv_physics`
+// (`kQ1Feel`).
 struct RemixPhysics {
   std::string_view played;   // the content profile id whose rules play
   std::string_view physics;  // the content profile id whose physics they take
   std::span<const std::string_view> lines;
 };
 
-inline constexpr std::string_view kClassicPhysicsAsSequel[] = {
+inline constexpr std::string_view kQ1PhysicsAsQ2[] = {
     "sv_maxspeed 300", "sv_friction 6",      "pm_airaccel 1",    "pm_airwish 0",
     "pm_landpause 1",  "sv_waterfriction 1", "pm_swimscale 0.5", "pm_waterjump 350",
     "pm_airclimb 1",   "set sv_falldamage 1"};
-inline constexpr std::string_view kSequelPhysicsAsClassic[] = {"set sv_physics \"classic\""};
+inline constexpr std::string_view kQ2PhysicsAsQ1[] = {"set sv_physics \"q1\""};
 
 inline constexpr RemixPhysics kRemixPhysics[] = {
-    {"classic", "sequel", kClassicPhysicsAsSequel},
-    {"sequel", "classic", kSequelPhysicsAsClassic},
+    {"q1", "q2", kQ1PhysicsAsQ2},
+    {"q2", "q1", kQ2PhysicsAsQ1},
 };
 
 // The physics `played`'s rules take as `physics`'s, or null (the same game, or no row).
@@ -281,11 +278,11 @@ constexpr const RemixPhysics* remix_physics(std::string_view played, std::string
   return nullptr;
 }
 
-// The classic game's ground and air as the sequel's move takes them (`sv_physics classic`): its
+// Quake's ground and air as Quake II's move takes them (`sv_physics q1`): its
 // running speed, its friction, its air steered by the strafing rule in every mode, and no landing
 // pause, so a hop chains on the landing.
-using MoveFeel = ge::classic::SequelFeel;
-inline constexpr MoveFeel kClassicFeel{320, 4, 10, false, 0.7f, 4, 310, false};
+using MoveFeel = ge::classic::Q2Feel;
+inline constexpr MoveFeel kQ1Feel{320, 4, 10, false, 0.7f, 4, 310, false};
 
 // A view model whose file holds every animation: the frame it rests on and its firing frames.
 struct HeldFrames {
@@ -295,7 +292,7 @@ struct HeldFrames {
   int fire_last = 0;
 };
 
-// The sequel's view models: up 0..a, firing a+1..f, idle from f+1.
+// Quake II's view models: up 0..a, firing a+1..f, idle from f+1.
 inline constexpr HeldFrames kHeldFrames[] = {
     {"models/weapons/v_blast/tris.md2", 9, 5, 8},
     {"models/weapons/v_shotg/tris.md2", 19, 8, 18},
@@ -308,7 +305,7 @@ inline constexpr HeldFrames kHeldFrames[] = {
 };
 
 // The frames of the view model `model`, or null when its first frame is its rest and the rest its
-// shot (the classic game's own).
+// shot (Quake's own).
 constexpr const HeldFrames* held_frames(std::string_view model) {
   for (const HeldFrames& f : kHeldFrames)
     if (f.model == model) return &f;

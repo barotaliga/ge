@@ -59,7 +59,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -490,7 +490,7 @@ void in_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const shooters_edge::look::Picture look;
   std::vector<ge::viewmodel::HeldModel> weapons;
   cl::HeldState held;
-  held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+  held.hand.at_eye = cl::load_held_set(cl::qw_adapter(), files, {}, weapons);
   if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
   se::HudArt free_art = se::free_art();
   free_art.finish();

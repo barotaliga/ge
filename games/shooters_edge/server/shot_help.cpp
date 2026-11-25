@@ -1,6 +1,6 @@
-// The aim help on a classic mod's server, defined: the grant noted, teammates, the line bent.
+// The aim help on a Quake mod's server, defined: the grant noted, teammates, the line bent.
 //
-// ge:summary The aim help on a classic mod's server defined
+// ge:summary The aim help on a Quake mod's server defined
 // ge:keywords aim-help shot_help help_traced_shot team_friends
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_shot_help_test.cpp
@@ -14,7 +14,7 @@ namespace shooters_edge::server {
 
 namespace {
 
-// The classic game's weapons by the item bit a mod holds for them.
+// Quake's weapons by the item bit a mod holds for them.
 struct WeaponBit {
   int bit;
   const char* name;

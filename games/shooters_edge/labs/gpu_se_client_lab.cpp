@@ -26,20 +26,22 @@
 // swings each one played. `--death=1` has the player jump once (the sounds heard, the jump's among
 // them) and die, the weapon sinking out of view: a sheet and a GIF. `--switch=1` has him change
 // weapons twice, calmly and with a shot during the change: sheets, a GIF and a chart.
-// `--film=<n> --hand=1` films the weapon in hand breathing at rest, `--exertion=1` as after a run.
+// `--film=<n> --hand=1` films the weapon in hand at rest; `--fire-film=<frames>` films the shot.
 // `--episodes=<done>` plays the campaign as the full game with those episodes done (a bit each),
 // so the start map's bars stand shut in front of the episodes not yet open and open for the next.
 // `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
 // what the server prints back shown in the HUD's feed (a vote on the settings, say).
 // `--point=1` writes what the player points at from each view, as team chat's `%t` says it, in the
-// feed and the caption.
+// feed and the caption; `--teamsay="$health $bestweapon at %l"` a team line from each view, its
+// macros and codes filled (`--locs="x,y,z,name;..."` the places it names, `--locdraw=1` their
+// markers).
 // `--server="coop 1"` gives the server those lines before the map starts: with the packs' own
 // program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
 // `--remix=<install>` turns classic remix on with that install the other full game, so `--map` may
 // name one of its maps: its walls in its own textures, its items the played game's; with
-// `--remix-items=1` the played game's rules wear the other game's things (`cr_items`): the classic
-// game's rules its rows, the sequel's renamed by `sv_wear`.
+// `--remix-items=1` the played game's rules wear the other game's things (`cr_items`):
+// Quake's rules its rows, Quake II's renamed by `sv_wear`.
 // `--remix-models=1` draws every player as the other game's figure (`cr_models`).
 // `--remix-monsters=1` swaps the map's monsters for the other game's (`cr_monsters`).
 //
@@ -54,7 +56,7 @@
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
 // ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map point-at
-// ge:keywords coop-server-lines addbot remix classic-remix other-game-map
+// ge:keywords coop-server-lines addbot remix classic-remix other-game-map ruleset smackdown
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -63,17 +65,20 @@
 #include <filesystem>
 #include <memory>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "assets/sha256.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classic/rulesets.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/profile.hpp"
 #include "classicenhance/texture.hpp"
 #include "console/console.hpp"
+#include "console/ruleset.hpp"
 #include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "gpu/device.hpp"
@@ -102,12 +107,12 @@
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -556,7 +561,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     if (!module.empty()) lab.note("the mod's compiled module qwprogs.qvm plays the match");
   }
   lo.module = &module;
-  // Or its game library of the sequel's interface, as in the window.
+  // Or its game library of Quake II's interface, as in the window.
   std::string library;
   if (std::filesystem::path lib;
       lab.arg("progs").empty() && !files.folder.empty() &&
@@ -572,7 +577,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
   // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.
   if (const std::string& done = lab.arg("episodes"); !done.empty()) {
-    const shooters_edge::profiles::GameProfile& game = shooters_edge::profiles::classic_game();
+    const shooters_edge::profiles::GameProfile& game = shooters_edge::profiles::q1_game();
     lo.registered = true;
     lo.episodes.start_map = std::string(shooters_edge::profiles::content_of(game).start_map);
     lo.episodes.first_maps.assign(game.episode_maps.begin(), game.episode_maps.end());
@@ -587,7 +592,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     a = b + 1;
   }
   // `--remix=<install>`: classic remix on, that install the other full game (`--remix-game`, the
-  // sequel by default), so `--map` may name one of its maps, played here with this game's items.
+  // Quake II by default), so `--map` may name one of its maps, played here with this game's items.
   cl::RemixFiles remix;
   std::unique_ptr<cl::LoadedMap> map;
   if (const std::string& other = lab.arg("remix"); !other.empty() && folder != "fixture") {
@@ -597,7 +602,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     state.other = lab.arg("remix-game");
     state.other_basedir = other;
     std::string said;
-    std::string_view played = "classic";  // the game whose base folder `--game` names
+    std::string_view played = "q1";  // the game whose base folder `--game` names
     const std::string leaf = cut == std::string::npos ? folder : folder.substr(cut + 1);
     for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
       if (p.base_dir == leaf) played = p.id;
@@ -614,7 +619,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     lab.note(said);
     // `--remix-items=1` (`cr_items` naming the other game): this game's rules wear its things.
-    // The sequel's rules wear the classic game's by name instead (`sv_wear`).
+    // Quake II's rules wear Quake's by name instead (`sv_wear`).
     if (lab.arg("remix-items") == "1") {
       remix.worn = shooters_edge::profiles::remix_arsenal(played, state.other);
       remix.looks = shooters_edge::profiles::remix_looks(played, state.other);
@@ -657,8 +662,27 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   }
   const std::string before = lab.arg("before");
   con[0].execute(before.empty() ? "r_look classic" : before);
+  // `--ruleset=<name>`: the right side under that competition ruleset (classic/rulesets.hpp),
+  // chosen before the cvars, so a held one refuses them as the console would.
+  std::unique_ptr<ge::console::Rulesets> rules;
+  if (const std::string rs = lab.arg("ruleset"); !rs.empty()) {
+    rules = std::make_unique<ge::console::Rulesets>(con[1]);
+    const bool q2 =
+        folder.ends_with("/" + std::string(ge::classicenhance::find_profile("q2")->base_dir));
+    rules->set_book(q2 ? ge::classic::q2_rulesets() : ge::classic::qw_rulesets());
+    con[1].execute("ruleset " + rs);
+    rules->update();
+  }
   con[1].execute(lab.arg("cvars"));
   con[1].execute(lab.cvars());  // the runner's --cvars on the modern side (`ge lab pair`)
+  if (rules) {
+    int held = 0;
+    for (const std::string& line : con[1].output()) {
+      lab.note(line);
+      held += line.find(" is locked by the ") != std::string::npos;
+    }
+    lab.metric("ruleset.refused_sets", held, "sets the ruleset refused on the right side");
+  }
   // `--warp`: another player stood there warping, and the local player's own arrival through his
   // eyes with the weapon in hand (the enhanced side alone draws them).
   float warp_at[4] = {0, 0, 0, 0};
@@ -675,15 +699,15 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // classic status bar as the window raises it.
   const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
-  // The played game's adapter draws: the sequel's when `--game` is its base folder.
+  // The played game's adapter draws: Quake II's when `--game` is its base folder.
   const cl::GameAdapter& draw_game =
-      folder.ends_with("/" + std::string(ge::classicenhance::find_profile("sequel")->base_dir))
-          ? cl::sequel_adapter()
-          : cl::classic_adapter();
+      folder.ends_with("/" + std::string(ge::classicenhance::find_profile("q2")->base_dir))
+          ? cl::q2_adapter()
+          : cl::qw_adapter();
   if (swings > 0 || death || change || in_hand) {
     // The other game's weapons in the hand while the rules wear its things (remix.hpp), from the
     // files both games' packs are in.
-    // A hosted game library reads the sequel's set from the mod's folder over the sequel's packs.
+    // A hosted game library reads Quake II's set from the mod's folder over Quake II's packs.
     if (library.empty()) std::swap(files, remix.files);
     held.hand.at_eye =
         cl::load_worn_held(draw_game, remix, library.empty() ? remix.files : files, {}, weapons);
@@ -729,7 +753,33 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const se::HudArt& art = se::pick_art(hud_art, classic_art, free_art);
   lab.metric("hud.classic_art", &art == &classic_art ? 1 : 0, "");
   cl::ViewState shown;
-  cl::FxState fx_state;
+  // `--locs`' places (team lines name them; `--locdraw=1` stands loc_draw's markers at them).
+  ge::console::Console place_words{false};
+  cl::PlaceNames places_named;
+  cl::SearchPath no_files;
+  cl::add_place_commands(place_words, places_named, cl::qw_adapter(), no_files,
+                         [&l](sh::Vec3f& at) {
+                           if (l.server == nullptr || l.server->sv.edicts.size() < 2) return false;
+                           const auto& me = l.server->sv.edicts[1].origin;
+                           at = {me[0], me[1], me[2]};
+                           return true;
+                         });
+  if (l.map)
+    places_named.clear_line = [&l](sh::Vec3f a, sh::Vec3f b) {
+      const sh::Vec3f e = cl::line_end(l.map->bsp, a, b);
+      return e.x == b.x && e.y == b.y && e.z == b.z;
+    };
+  const std::string locs = lab.arg("locs");
+  for (size_t a = 0; a < locs.size();) {
+    const size_t b = std::min(locs.find(';', a), locs.size());
+    float x = 0, y = 0, z = 0;
+    int used = 0;
+    if (std::sscanf(locs.substr(a, b - a).c_str(), "%f,%f,%f,%n", &x, &y, &z, &used) >= 3)
+      ge::classic::add_loc(places_named.locs, {x, y, z}, locs.substr(a + used, b - a - used));
+    a = b + 1;
+  }
+  if (lab.arg("locdraw") == "1") place_words.execute("loc_draw 1");
+  cl::FxState fx_state = cl::fx_state_for(&places_named);
   cl::FxFrame fx;
   const shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::HandFrame hand;
@@ -761,6 +811,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   if (!say.empty()) {
     lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
     for (const std::string& line : l.prints) lab.note("said: " + line);
+    // The centre prints over the same time (a program's welcome, a pickup's words).
+    lab.metric("said.centres", static_cast<double>(l.centres.size()), "");
+    for (const std::string& line : l.centres)
+      if (!line.empty()) lab.note("centre: " + line);
   }
   // `--botinfo="model cyborg;skin oni911"`: those user info keys on every player but you (the
   // companions `--say=addbot` seated), as if each had set them.
@@ -808,6 +862,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       places.push_back(p);
     }
   }
+  // `--fields="items 8388735; weapon 8388608"`: the player's fields set by name before the views
+  // (a mission pack's weapons and items, its `items2`), then a second and a half run so the
+  // pickups' flash is over.
+  if (const std::string fields = lab.arg("fields"); !fields.empty()) {
+    for (size_t a = 0; a < fields.size();) {
+      const size_t b = std::min(fields.find(';', a), fields.size());
+      std::istringstream one(fields.substr(a, b - a));
+      std::string name;
+      double value = 0;
+      if (one >> name >> value) cl::set_field_named(l, 1, name.c_str(), static_cast<float>(value));
+      a = b + 1;
+    }
+    se::fill_hud(hud, cl::status_of(l, t), art);  // the HUD sees the pickups now
+    for (int i = 0; i < 120; i++) {
+      cl::listen_frame(l, {});
+      t += 0.013;
+      cl::frame_view(l, shown, 1, t, 0.013);
+    }
+  }
   // `--weapon=<impulse>`: every weapon and ammunition given, that one taken in hand and raised.
   if (const int impulse = static_cast<int>(lab.arg_num("weapon")); impulse > 0) {
     cl::set_field_named(l, 1, "items", 1 + 2 + 4 + 8 + 16 + 32 + 64 + 4096);
@@ -846,25 +919,28 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     // `--point=1`: what the player points at from here as team chat's `%t` says it, in the feed.
+    // `--teamsay=<line>`: the line as say_team sends it from here, its `$` macros and percent
+    // codes filled from the player's state and `--locs`' places.
     std::string pointed;
-    if (lab.arg("point") == "1" && l.map) {
+    const std::string teamsay = lab.arg("teamsay");
+    if ((lab.arg("point") == "1" || !teamsay.empty()) && l.map) {
       ge::console::Console words{false};
       cl::TeamChat chat;
       cl::add_team_chat(words, chat);
       chat.scene = [&l] { return cl::point_scene(l); };
-      cl::PlaceNames no_places;
-      no_places.clear_line = [&l](sh::Vec3f a, sh::Vec3f b) {
-        const sh::Vec3f e = cl::line_end(l.map->bsp, a, b);
-        return e.x == b.x && e.y == b.y && e.z == b.z;
-      };
-      chat.places = &no_places;
+      chat.places = &places_named;
+      chat.status = cl::status_of(l, t);
       chat.status.t = t;
-      pointed = cl::fill_team_codes(words, chat, "%t");
-      hud.notify.push("(Sailor): " + pointed, se::hud_style().ink, t);
-      lab.note("view " + std::to_string(v) + " points at: " + pointed);
+      pointed = teamsay.empty()
+                    ? cl::fill_team_codes(words, chat, "%t")
+                    : cl::fun_characters(
+                          cl::fill_team_codes(words, chat, words.expand_text(teamsay)), true);
+      hud.notify.push("(Sailor): " + pointed, se::hud_style().ink, t - 0.05);  // shown from now
+      lab.note("view " + std::to_string(v) + (teamsay.empty() ? " points at: " : " says: ") +
+               pointed);
     }
     ge::render::FrameView view;
-    cl::SequelBar worn_bar, own_bar;
+    cl::Q2Bar worn_bar, own_bar;
     worn_bar.files = &files;
     own_bar.files = &files;
     const auto shoot = [&](const std::string& tag) {
@@ -872,16 +948,16 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       view = cl::frame_view(l, shown, 0, t, 0);
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      // The window's choice (remix_bar.hpp): the sequel's own bar, the sequel's over the classic
-      // status, or the game's HUD (the classic bar over the sequel's player wearing its things).
-      const shooters_edge::server::SequelServer* sq =
-          l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
+      // The window's choice (remix_bar.hpp): Quake II's own bar, Quake II's over the classic
+      // status, or the game's HUD (the classic bar over Quake II's player wearing its things).
+      const shooters_edge::server::Q2Server* sq =
+          l.rules ? shooters_edge::server::q2_of(*l.rules) : nullptr;
       const ge::hud::CrosshairSettings crosshair;  // the default mark
-      if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, l.rules, files, remix,
-                               sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
-                               !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
-                               static_cast<int>(h))) {
-        view.shift_y = 0;  // the sequel's bar
+      if (cl::draw_q2_bars(overlay, own_bar, worn_bar, l.rules, files, remix,
+                           sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
+                           !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
+                           static_cast<int>(h))) {
+        view.shift_y = 0;  // Quake II's bar
       } else {
         se::fill_hud(hud, sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t), art);
         // Drawn twice: the first places the bars, the view's shift over them raises the crosshair.
@@ -913,7 +989,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                   id,
                   "View " + std::to_string(v) + " in the " + kLooks[k] + " look" +
                       (tag.empty() ? std::string(".") : ", after the player fired.") +
-                      (pointed.empty() ? std::string() : " %t says: " + pointed),
+                      (pointed.empty()
+                           ? std::string()
+                           : (teamsay.empty() ? " %t says: " : " The team hears: ") + pointed),
                   "the map from the player's eyes",
                   {{"map", lab.arg("map")}, {"views", views}}},
                  gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
@@ -961,20 +1039,68 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
         return n;
       };
       const int alive_before = alive();
+      const int fire_film = static_cast<int>(lab.arg_num("fire-film"));
+      std::vector<gl::Picture> shot_film;
+      std::vector<std::string> shot_names;
+      // The film's hand throws its spent cases as the window's does (ce_shells, the enhanced look).
+      cl::HeldFire held_fire;
+      if (fire_film > 0 && in_hand && held.hand.at_eye) {
+        std::string fire_error;
+        if (!cl::load_held_fire(held_fire, &fire_error, draw_game.game->held_weapons))
+          lab.note("no muzzle fire in the shot's film: " + fire_error);
+      }
       sh::MoveCmd cmd;
       cmd.msec = 13;
       cmd.angles = {p.pitch, p.yaw, 0};
-      for (int i = 0; i < fire + 40; i++) {
+      for (int i = 0; i < std::max(fire + 40, fire_film); i++) {
         if (p.moved) player.origin = {p.at[0], p.at[1], p.at[2]};
         player.velocity = {};
         cmd.buttons = i < fire ? 1 : 0;
         cl::listen_frame(l, cmd);
         t += 0.013;
         cl::frame_view(l, shown, 1, t, 0.013);
+        if (fire_film > 0) fx_state.on = cl::fx_switches(looks[1]);
         cl::step_fx(l, shown, fx_state, t, 0.013, fx);
         if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
+        if (fire_film > 0 && in_hand) {
+          cl::fire_held(held_fire, hand, fx_state.on.muzzles, t, fx);
+          cl::held_cases(fx_state.cases, held_fire, hand, fx_state.on.shells, t);
+        }
+        // --fire-film: the shot in the enhanced look, a frame every other host frame (1/38 s):
+        // the flash, the kick, a spent case thrown out and landing.
+        if (i < fire_film && i % 2 == 0) {
+          ge::render::FrameView on = cl::frame_view(l, shown, 0, t, 0);
+          on.shift_y = 0;
+          cl::draw_world(*device, *world[1], on, fx, in_hand && hand.drawn ? &hand : nullptr, 0.026,
+                         {}, out.view);
+          const ge::gpu::Image fi = ge::gpu::read_now(*device, out);
+          shot_film.push_back(gl::shrink(
+              gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 480));
+          shot_names.push_back(ge::core::num::to_fixed(i * 0.013, 2) + " S");
+        }
         // --fire-after frames on (the default: the smoke settled, the gibs down).
         if (i == fire + static_cast<int>(lab.arg_num("fire-after"))) shoot("-fired");
+      }
+      if (!shot_film.empty()) {
+        std::vector<gl::Picture> picks;
+        std::vector<std::string> pick_names;
+        const size_t every = std::max<size_t>(1, (shot_film.size() + 7) / 8);
+        for (size_t f = 0; f < shot_film.size() && picks.size() < 8; f += every) {
+          picks.push_back(shot_film[f]);
+          pick_names.push_back(shot_names[f]);
+        }
+        lab.shot({"shot-film-" + std::to_string(v),
+                  "THE SHOT FROM VIEW " + std::to_string(v),
+                  "The player holds attack " + std::to_string(fire) +
+                      " frames in the enhanced look, a frame every other host frame from the "
+                      "first: the flash, the kick and, from a gun that throws them, its spent "
+                      "cases out of the breech to the right, falling and lying on the floor.",
+                  "a case leaves the gun's right side as it fires, falls and comes to rest "
+                  "on the floor; none from a gun that throws none",
+                  {{"map", lab.arg("map")}, {"weapon", lab.arg("weapon")}}},
+                 es::sheet_of(picks, pick_names, 4), gl::Det::measured);
+        lab.attach("shot-film-" + std::to_string(v) + ".gif", gl::encode_gif_frames(shot_film, 3),
+                   gl::Det::measured);
       }
       lab.metric("fire.entities_delta_" + std::to_string(v), alive() - alive_before, "",
                  gl::Det::measured);
@@ -1016,14 +1142,14 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                 {{"map", lab.arg("map")}, {"warp", lab.arg("warp")}}},
                es::sheet_of(film.pics, film.names, 4), gl::Det::measured);
     }
-    // His own arrival through his eyes: the ash at the eyes, the weapon assembling.
+    // His own arrival through his eyes: the view's edges touched, the weapon whole.
     sl::WarpTake own;
     own.figure.entity = 1;
     own.figure.origin = player.origin;
     own.figure.angles = {0, p.yaw, 0};
     own.first_person = true;
     own.palette = take.palette;
-    own.moments = {0.03, 0.15, 0.3, 0.5};
+    own.moments = {0.03, 0.1, 0.2, 0.3, 0.5};
     own.seed = 23;
     own.film_width = 640;
     sl::WarpFilm eyes;
@@ -1032,11 +1158,11 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     for (int i = 0; i < 9; ++i) eyes.frames.push_back(eyes.frames.back());
     lab.shot({"warp-eyes-" + std::to_string(v),
               "his own arrival through his eyes, enhanced",
-              "The local player spawning or coming out of a teleporter here: the whole view opens "
-              "out of a flash in the pack's teleport colour (r_arrival), pulled in and streaked "
-              "toward the middle, a clear disc with a bright rim growing out to the corners; the "
-              "ash blown at his eyes from ahead, the weapon in his hands assembling muzzle first.",
-              "a white-out first, then the world rushing in from the edges; whole by 0.65 s",
+              "The local player spawning or coming out of a teleporter here: the view's edges "
+              "streaked toward the middle and tinted in the pack's teleport colour (r_arrival), a "
+              "clear disc holding the middle from the first frame and growing past the corners; "
+              "no flash, no pull, no ash, the weapon whole in his hands.",
+              "the middle as it is throughout; the edges tinted at first; whole by 0.3 s",
               {{"map", lab.arg("map")}, {"cvars", lab.arg("cvars")}}},
              es::sheet_of(eyes.pics, eyes.names, 4), gl::Det::measured);
     lab.attach("warp-eyes-" + std::to_string(v) + ".gif", gl::encode_gif_frames(eyes.frames, 3),
@@ -1234,8 +1360,7 @@ const gl::LabSpec kSpec{
      {"remix", "",
       "with --game: another full game's install, classic remix on: --map may name its maps, "
       "played with this game's items"},
-     {"remix-game", "sequel",
-      "with --remix: that install's game (a profile id: classic or sequel)"},
+     {"remix-game", "q2", "with --remix: that install's game (a profile id: classic or Quake II)"},
      {"remix-models", "0",
       "with --remix: 1 draws every player as the other game's figure (cr_models)"},
      {"remix-monsters", "0",
@@ -1244,6 +1369,8 @@ const gl::LabSpec kSpec{
       "with --remix: 1 dresses this game's rules in the other game's things: weapons, armour, "
       "ammunition and health (cr_items)"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
+     {"ruleset", "",
+      "with --game: the right side under that competition ruleset (smackdown, duel)"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},
      {"hudcvars", "",
@@ -1256,6 +1383,12 @@ const gl::LabSpec kSpec{
      {"fire-after", "15",
       "with --fire: frames after attack is let go that the -fired views are drawn (0: as it is let "
       "go, the shot in the air)"},
+     {"fire-film", "0",
+      "with --fire: this many host frames of the shot filmed in the enhanced look (a frame every "
+      "other one): a sheet shot-film-<view> and a GIF (the spent cases thrown under ce_shells)"},
+     {"fields", "",
+      "with --game: the player's fields set by name first, ';' between (`items 8388735; weapon "
+      "8388608`): a mission pack's weapons and items on the status bar"},
      {"weapon", "0",
       "with --game: every weapon and its ammunition given and this impulse's taken in hand first "
       "(7: the rocket launcher)"},
@@ -1289,6 +1422,13 @@ const gl::LabSpec kSpec{
      {"say", "",
       "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
       "the server's answers in the HUD's feed"},
+     {"teamsay", "",
+      "with --game: a team line from each view, its $ macros and % codes filled from the "
+      "player's state (`$health $armortype $bestweapon at %l`), in the feed and the caption"},
+     {"locdraw", "",
+      "with --locs: 1 stands loc_draw's markers at the places, the nearest bobbing in its light"},
+     {"locs", "",
+      "with --teamsay: place names, 'x,y,z,name' and ';' between, for $location and %l"},
      {"point", "",
       "with --game: 1 writes what the player points at from each view (team chat's %t) in the "
       "feed and the caption"},

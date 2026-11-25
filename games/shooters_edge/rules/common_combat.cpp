@@ -21,7 +21,9 @@ void score_death(A& q, int32_t targ, int32_t attacker) {
   if (game_quiet(q)) return;
   int32_t how = q.i(targ, f_deathtype);
   const int32_t told = death_words(q, targ, attacker);
-  if (attacker == targ) {
+  // Quake's telefrags against the pentagram: the one who dies loses a frag; the holder gains none.
+  const bool shielded = q.is(how, "deflected") | q.is(how, "satans power");
+  if ((attacker == targ) | (quake_rules(q) & shielded)) {
     q.set_f(targ, q.L.f.frags, q.f(targ, q.L.f.frags) - 1);
     if (!q.is(told, "")) {
       say_all(q, kPrintMedium, {told});
@@ -69,11 +71,86 @@ void blow_push(A& q, int32_t targ, int32_t inflictor, float damage) {
   q.set_v(targ, q.L.f.velocity, q.v(targ, q.L.f.velocity) + dir * damage * 8);
 }
 
+namespace {
+
+// Quake's own order of a hit: the quad, the armour's share, the push (and the rocket jump's
+// extra on one's own blow), then the shield and the teams, then the health. Teamplay 1 and 3
+// spare teammates, 1 also one's own blows; 2 spares nobody. A mover's crush spares nobody.
+bool quake_damage(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float amount) {
+  if (q.f(attacker, f_super_damage_finished) > q.time()) {
+    const bool crush = q.is(q.i(targ, f_deathtype), "squished");
+    if (!crush) amount = amount * (q.deathmatch() == 4 ? 8.0f : 4.0f);
+  }
+  float saved = q.ceil(q.f(targ, q.L.f.armortype) * amount);
+  if (saved >= q.f(targ, q.L.f.armorvalue)) {
+    saved = q.f(targ, q.L.f.armorvalue);
+    q.set_f(targ, q.L.f.armortype, 0);
+    const float items = q.f(targ, q.L.f.items);
+    q.set_f(targ, q.L.f.items, items - band(items, kItArmorAll));
+  }
+  q.set_f(targ, q.L.f.armorvalue, q.f(targ, q.L.f.armorvalue) - saved);
+  const float taken = q.ceil(amount - saved);
+  q.set_f(targ, q.L.f.dmg_take, q.f(targ, q.L.f.dmg_take) + taken);
+  q.set_f(targ, q.L.f.dmg_save, q.f(targ, q.L.f.dmg_save) + saved);
+  q.set_i(targ, q.L.f.dmg_inflictor, inflictor);
+  blow_push(q, targ, inflictor, amount);
+  if ((attacker == targ) & (q.g(g_rj) > 1) & (inflictor != q.world()) &
+      (q.f(targ, q.L.f.movetype) == kMovetypeWalk)) {
+    const Vec3 dir =
+        q.normalize(q.v(targ, q.L.f.origin) -
+                    (q.v(inflictor, q.L.f.absmin) + q.v(inflictor, q.L.f.absmax)) * 0.5f);
+    q.set_v(targ, q.L.f.velocity, q.v(targ, q.L.f.velocity) + dir * amount * q.g(g_rj));
+  }
+  if (q.f(targ, f_invincible_finished) > q.time()) {
+    if (q.time() >= q.f(q.self(), f_protect_heard)) {
+      q.sound(targ, kChanItem, q.s(s_protect3_wav), 1, kAttnNorm);
+      q.set_f(q.self(), f_protect_heard, q.time() + 2);
+    }
+    return false;
+  }
+  const float tp = q.cvar(q.s(s_teamplay));
+  if (!q.is(q.i(targ, f_deathtype), "squished") & (q.g(g_telefragging) == 0)) {
+    const bool mates = same_team(q, targ, attacker);
+    if (((tp == 1) | (tp == 3)) & mates) return false;
+    const bool own = (tp == 1) & (attacker == targ) & q.is(q.i(targ, q.L.f.classname), "player") &
+                     !q.is(q.infokey(targ, q.s(s_team)), "");
+    if (own) return false;
+  }
+  q.set_f(targ, q.L.f.health, q.f(targ, q.L.f.health) - taken);
+  return true;
+}
+
+}  // namespace
+
 // damage(targ, inflictor, attacker, damage): `damage` points from `attacker` through `inflictor`.
 void damage(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float points) {
   float amount = points;
   if ((q.f(targ, q.L.f.takedamage) == 0) | (q.f(targ, q.L.f.health) <= 0)) return;
   if (on(q.g(g_match_over))) return;
+  if (quake_rules(q) && !midair_on(q) && (q.deathmatch() != 4)) {
+    if (!quake_damage(q, targ, inflictor, attacker, amount)) return;
+    q.set_ge(g_damage_attacker, attacker);
+    const int32_t was = q.self();
+    q.set_self(targ);
+    if (q.f(targ, q.L.f.health) <= 0) {
+      score_death(q, targ, attacker);
+      const int32_t die = q.i(q.self(), f_th_die);
+      if (die != 0) {
+        q.call(die);
+      } else {
+        player_die(q);
+      }
+    } else {
+      const int32_t hurt = q.i(q.self(), f_th_hurt);
+      if (hurt != 0) {
+        q.call(hurt);
+      } else {
+        player_pain(q);
+      }
+    }
+    q.set_self(was);
+    return;
+  }
   if (q.f(targ, f_invincible_finished) > q.time()) return;  // the shield
   {
     const bool not_tele = q.g(g_telefragging) == 0;
@@ -146,6 +223,26 @@ void telefrag(A& q, int32_t who) {
     const int32_t next = q.i(p, q.L.f.chain);  // a death may search the world again
     if ((p != who) & q.is(q.i(p, q.L.f.classname), "player") & (q.f(p, q.L.f.health) > 0)) {
       q.set_g(g_telefragging, 1);
+      if (quake_rules(q) & (q.f(p, f_invincible_finished) > q.time())) {
+        // Quake's pentagram: it deflects the telefrag onto the one arriving; when both hold
+        // one, both lose it and both die, each by the other's.
+        if (q.f(who, f_invincible_finished) > q.time()) {
+          for (const int32_t e : {p, who}) {
+            q.set_f(e, f_invincible_finished, 0);
+            const float items = q.f(e, q.L.f.items);
+            q.set_f(e, q.L.f.items, items - band(items, kItInvulnerability));
+          }
+          q.set_i(p, f_deathtype, q.s(s_satans_power));
+          damage(q, p, who, who, 50000);
+          q.set_i(who, f_deathtype, q.s(s_satans_power));
+          damage(q, who, p, p, 50000);
+        } else {
+          q.set_i(who, f_deathtype, q.s(s_deflected));
+          damage(q, who, p, p, 50000);
+        }
+        q.set_g(g_telefragging, 0);
+        return;
+      }
       if ((q.deathmatch() == 4) & (q.f(p, f_shield_finished) > q.time())) {
         // Deathmatch 4 onto a protected player: both protected, both die; else `who` does.
         if (q.f(who, f_shield_finished) > q.time()) {
@@ -185,7 +282,8 @@ void radius_damage(A& q, int32_t inflictor, int32_t attacker, float points, int3
       float d = points - 0.5f * q.vlen(q.v(inflictor, q.L.f.origin) - centre);
       if (e == attacker) d = d * 0.5f;
       if (on(q.f(e, f_blast_share))) d = d * q.f(e, f_blast_share);
-      if (d > 0) {
+      const bool seen = !quake_rules(q) || quake_sees(q, inflictor, e);
+      if ((d > 0) & seen) {
         q.set_i(e, f_deathtype, how);
         damage(q, e, inflictor, attacker, d);
       }

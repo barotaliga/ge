@@ -19,17 +19,17 @@ namespace con = ge::console;
 
 namespace {
 
-const pr::GameProfile& sequel() { return *pr::find_game("sequel"); }
+const pr::GameProfile& q2() { return *pr::find_game("q2"); }
 
 std::string value(con::Console& c, const char* name) { return c.cvars().find(name)->value; }
 
 }  // namespace
 
-TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_sequel) {
+TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_q2) {
   con::Console c;
   con::ConsoleView v(c);
   cl::GameStart s;
-  cl::add_start_cvars(c, s, pr::classic_game());
+  cl::add_start_cvars(c, s, pr::q1_game());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "300");
   CHECK(value(c, "con_speed") == "1.5");  // 300 lines a second of a 200-line screen
@@ -37,21 +37,45 @@ TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_sequel) {
   cl::start_apply_speed(c, s);
   CHECK(value(c, "con_speed") == "3");
   // The player's own speed is kept across a game switched to.
-  cl::start_switch_game(c, s, pr::classic_game(), sequel());
+  cl::start_switch_game(c, s, pr::q1_game(), q2());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "600");
   // The old game's default is not: the new game's own instead.
   c.cvars().set("scr_conspeed", "3", con::Source::local);
-  cl::start_switch_game(c, s, sequel(), pr::classic_game());
+  cl::start_switch_game(c, s, q2(), pr::q1_game());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "300" && value(c, "con_speed") == "1.5");
+}
+
+TEST(another_games_default_left_in_the_config_is_not_taken) {
+  // One config serves every game: Quake II's 3 (screens a second) read at a Quake start would be 3
+  // lines a second, a minute to lift. It is Quake II's left behind: Quake's own 300 instead.
+  con::Console c;
+  con::ConsoleView v(c);
+  cl::GameStart s;
+  cl::add_start_cvars(c, s, pr::q1_game());
+  c.cvars().set("scr_conspeed", "3", con::Source::local);
+  cl::start_apply_speed(c, s);
+  CHECK(value(c, "scr_conspeed") == "300" && value(c, "con_speed") == "1.5");
+  // And Quake's 300 read at a Quake II start: its own 3, not 300 screens a second.
+  con::Console c2;
+  con::ConsoleView v2(c2);
+  cl::GameStart s2;
+  cl::add_start_cvars(c2, s2, q2());
+  c2.cvars().set("scr_conspeed", "300", con::Source::local);
+  cl::start_apply_speed(c2, s2);
+  CHECK(value(c2, "scr_conspeed") == "3" && value(c2, "con_speed") == "3");
+  // A speed of the player's own is kept.
+  c2.cvars().set("scr_conspeed", "5", con::Source::local);
+  cl::start_apply_speed(c2, s2);
+  CHECK(value(c2, "con_speed") == "5");
 }
 
 TEST(the_console_is_held_down_until_the_game_is_up_then_slides_up) {
   con::Console c;
   con::ConsoleView v(c);
   cl::GameStart s;
-  cl::add_start_cvars(c, s, pr::classic_game());
+  cl::add_start_cvars(c, s, pr::q1_game());
   cl::start_apply_speed(c, s);
   cl::start_begin(s, v, c, 10, {"Added packfile id1/pak0.pak"});
   CHECK(v.cover() == 1 && v.lines().back().text == "Added packfile id1/pak0.pak");

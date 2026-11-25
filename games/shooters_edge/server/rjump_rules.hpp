@@ -1,6 +1,6 @@
 // THE ROCKET JUMP HELPER ON A SERVER: who may use `+rjump` and `+rrjump` (shooter/rjump_assist.hpp)
-// and the packets it rewrites, for every runner of the game (the classic rules in QC and the
-// sequel's own), so the helper works alike in both games. Each runner says only whether its
+// and the packets it rewrites, for every runner of the game (Quake's rules in QC and the
+// Quake II's own), so the helper works alike in both games. Each runner says only whether its
 // launcher can fire (`RjumpReadyFn`).
 //
 // THE SETTINGS (`add_rjump_settings`, told in the server info): `sv_rjump` allows the rocket
@@ -9,7 +9,7 @@
 // rules a vote may change for the map). The window's own server turns both on.
 //
 // THE GRANT: the server-only key `*rjump 1` in one player's user info lets him use both helpers
-// where the settings say no (net/classic_admin.hpp's `rjump <id|name> on|off`, and `vote rjump
+// where the settings say no (net/qw_admin.hpp's `rjump <id|name> on|off`, and `vote rjump
 // <id|name> on|off`), as the easy jump's grant does; everyone sees it and is told.
 //
 // THE PLAYER IS TOLD, in a game's words: "The rocket jump helper is off on this server." when it

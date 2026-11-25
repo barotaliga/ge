@@ -2,9 +2,14 @@
 //
 // ge:summary The player's keys and mouse as the view's turn and the server's command
 // ge:keywords controls read_controls turn_view buttons default_binds key_moves
+// ge:keywords bind_defaults reset_binds reset-keys
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/controls.hpp"
+
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "console/cvar.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -14,7 +19,7 @@ namespace shooters_edge::client {
 namespace {
 
 // The default layout: a key, the command it runs (+voice talks, console/talk.hpp binding the
-// other chat and voice keys: net/classic_remote.hpp; screenshot: engine/capture/screenshot.hpp).
+// other chat and voice keys: net/qw_remote.hpp; screenshot: engine/capture/screenshot.hpp).
 constexpr const char* kDefaults[][2] = {
     {"w", "+forward"},
     {"s", "+back"},
@@ -57,6 +62,12 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
   add_quick_cvars(con, c.quick);
   add_group_cvars(con, c.groups);
   add_choice_cvars(con, c.choice);
+  con.add_command("bind_defaults",
+                  "bind_defaults: every key back to the game's own layout, your binds dropped",
+                  [](ge::console::Console& cc, const ge::console::Args&) {
+                    reset_binds(cc);
+                    cc.print("Every key is back to the game's own layout.");
+                  });
   con.add_command(
       "impulse",
       "impulse <n> [n ...]: send the mod impulse n (1..8 a weapon, 10 the next); with "
@@ -95,6 +106,18 @@ void default_binds(ge::console::Console& con) {
   for (const auto& [key, command] : kDefaults)
     if (con.binds().get(ge::console::BindMode::game, key).empty())
       con.binds().set(ge::console::BindMode::game, key, command);
+}
+
+void reset_binds(ge::console::Console& con) {
+  namespace gc = ge::console;
+  // The console's own keys, in every mode, survive: without them nobody could type this again.
+  std::vector<std::pair<std::pair<gc::BindMode, std::string>, std::string>> kept;
+  for (const gc::BindMode m : {gc::BindMode::game, gc::BindMode::console})
+    for (const char* key : {"`", "nonus"})
+      if (const std::string& b = con.binds().get(m, key); !b.empty()) kept.push_back({{m, key}, b});
+  con.binds().clear();
+  for (const auto& [at, command] : kept) con.binds().set(at.first, at.second, command);
+  default_binds(con);
 }
 
 }  // namespace shooters_edge::client

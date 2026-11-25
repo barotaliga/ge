@@ -162,11 +162,11 @@ TEST(the_baseline_mod_names_pickups_in_its_own_words_by_default) {
 
 TEST(the_baseline_mod_names_pickups_in_the_loaded_games_words) {
   namespace pf = shooters_edge::profiles;
-  const sv::ModMatchReport r = play(pf::item_name_lines(pf::kClassicNames));
+  const sv::ModMatchReport r = play(pf::item_name_lines(pf::kQ1Names));
   CHECK_MSG(r.ok, r.error);
   const std::vector<std::string> lines = print_lines(r);
   std::set<std::string> theirs;
-  for (const pf::ItemName& n : pf::kClassicNames) theirs.insert(std::string(n.name));
+  for (const pf::ItemName& n : pf::kQ1Names) theirs.insert(std::string(n.name));
   const std::vector<std::string> got = names_got(lines);
   CHECK_MSG(got.size() >= 2, "only " + std::to_string(got.size()) + " named pickups");
   for (const std::string& n : got) CHECK_MSG(theirs.count(n) == 1, "a pickup named " + n);

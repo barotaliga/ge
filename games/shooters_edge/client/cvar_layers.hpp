@@ -22,19 +22,34 @@
 // ge:summary The window's cvar layers: engine, shooter, classic, shell and the loaded game's own
 // ge:keywords cvar-layer layer game-cvars per-game-cvar one-name-one-meaning same own clash
 // ge:keywords game-switch drop_layer game_layer crosshair vid_gamma s_volume
-// ge:keywords gl_dynamic gl_lightmap cl_gun scr_centertime sequel-crosshair
+// ge:keywords gl_dynamic gl_lightmap cl_gun scr_centertime q2-crosshair
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 
+#include "audio/music_console.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
+#include "shooters_edge/client/chat_lines.hpp"
+#include "shooters_edge/client/console_log.hpp"
+#include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/q2_session.hpp"
+#include "shooters_edge/client/q2_view.hpp"
+#include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/view/hand.hpp"
+
+namespace shooters_edge::menu {
+class GameMenu;
+}
 
 namespace shooters_edge::client {
 
@@ -53,21 +68,69 @@ std::string game_scope(const profiles::GameProfile& game);
 
 // What a game's own settings write: the window's structs they bind to.
 struct GameBindings {
-  ge::hud::CrosshairSettings* crosshair = nullptr;  // the sequel's own `crosshair`
-  ge::shooter::MouseFeel* mouse = nullptr;          // the sequel's own `m_accel` (per frame)
-  bool* predict = nullptr;  // the sequel's `cl_predict` (a server joined); true in the first game
-  int* crouch = nullptr;    // the sequel's `cl_predict_crouch` (the eye's height predicted)
-  int* noskins = nullptr;   // the sequel's `cl_noskins` (the picture's stock_figures)
-  int* hand = nullptr;      // the sequel's `hand` (the view's: 2 draws no weapon)
+  // The game's files: `crosshairimage`'s picture is read from them (picture_files.hpp).
+  const SearchPath* files = nullptr;
+  ge::hud::CrosshairSettings* crosshair = nullptr;  // Quake II's own `crosshair`
+  ge::shooter::MouseFeel* mouse = nullptr;          // Quake II's own `m_accel` (per frame)
+  int* crouch = nullptr;         // Quake II's `cl_predict_crouch` (the eye's height predicted)
+  bool* show_misses = nullptr;   // Quake II's `cl_showmiss` (each prediction miss printed)
+  int* shownet = nullptr;        // Quake II's `cl_shownet` (each message's size printed)
+  bool* showpackets = nullptr;   // Quake II's `cl_showpackets` (each packet sent shown)
+  int* noskins = nullptr;        // Quake II's `cl_noskins` (the picture's stock_figures)
+  bool* items_still = nullptr;   // Quake II's `cl_nobob` (the picture's items_still)
+  int* model_shadows = nullptr;  // Quake II's `gl_shadows` (the picture's model_shadows)
+  bool* flash_blend = nullptr;   // Quake's `gl_flashblend` (the picture's flash_blend); off in II
+  // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
+  // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
+  shooters_edge::view::ViewSettings* view = nullptr;
+  int* moves = nullptr;         // Quake II's own `cl_maxfps`: its moves a second
+  int* stuff_level = nullptr;   // Quake II's `cl_ignore_stufftext` (classic/protocol/stuff_filter)
+  double* frame_cap = nullptr;  // the window's frame cap (our `cl_maxfps`), Quake II's `r_maxfps`
+  // The maps' light: Quake II's `intensity` and `gl_brightness` (the picture's light_intensity and
+  // light_lift: classic/app/look.hpp); Quake keeps 2 and 0. `gl_modulate` is every game's.
+  double* light_intensity = nullptr;
+  double* light_lift = nullptr;
+  bool* no_glow = nullptr;  // Quake II's `cl_noglow` (the picture's no_glow); false in Quake
+  // Quake II's effect switches (the picture's q2fx: classic/q2_fx_switches.hpp); off in Quake.
+  ge::classic::Q2FxSwitches* q2fx = nullptr;
+  // The chat's extras: Quake II's own `cl_chat_sound` (chat_lines.hpp), "" in every other game.
+  ChatExtras* chat = nullptr;
+  // The console's view: Quake II's `con_auto_chat` (console/view.hpp's game_chat; -1 in every other
+  // game, our `con_chat` rules) and its stamps on every line (`con_timestamps`,
+  // `con_timestampsformat`, `con_timestampscolor`; off in every other game).
+  ge::console::ConsoleView* console_view = nullptr;
+  // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_alpha, scr_lag_*,
+  // cl_adjustfov, uf, cl_kickangles); their defaults in every other game. add_game_cvars binds its
+  // own GameCvarValues::screen when this is null.
+  Q2Screen* screen = nullptr;
+  // The music (audio/music_console.hpp): Quake II's `ogg_enable` (its switch, `cd on|off`),
+  // `ogg_shuffle` and `ogg_menu_track`; on, unshuffled and no menu track in every other game.
+  ge::audio::MusicConsole* music = nullptr;
+  // The console's look: Quake II's `con_background` (its picture under `pics/`, read from `files`);
+  // the game's own `conback` in every other game.
+  shooters_edge::menu::ClassicConsole* console = nullptr;
+  // The main menu: Quake II's `ui_scale`, the menus' size (classic_art.hpp's scale; 0, by the
+  // window, in every other game), and its browser's `ui_sortservers` and `ui_pingrate`
+  // (servers_page.hpp's game_sort and game_ping_rate; `sb_sortservers` and `sb_infospersec` in
+  // every other game).
+  shooters_edge::menu::GameMenu* menu = nullptr;
 };
 
-// The sequel's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
+// Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
 // female for female and crackhor, else none.
 std::string auto_gender(std::string_view skin);
 
 // The loaded game's layer.
 struct GameCvarValues {
   std::string layer;  // "game:<id>", or "" before a game is loaded
+  // Every game's map commands (classic layer); Quake II's clock, cl_autopause and state cvars
+  // (q2_session.hpp), their defaults in every other game.
+  Q2Session q2;
+  Q2Screen screen;  // Quake II's view and 2D settings (q2_view.hpp), bound as GameBindings::screen
+  // Quake II's console log (console_log.hpp): written by the console's sink, wrapped once (when it
+  // has one) by the first add_game_cvars, which shares it; off in every other game.
+  std::shared_ptr<ConsoleLog> log;
+  bool log_hooked = false;
 };
 // The loaded game's own settings on `con`, in its layer (`kGameCvars` in cvar_layers.cpp says
 // what each game gives each name).

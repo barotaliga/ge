@@ -17,7 +17,7 @@
 // match_start once the map's entities are spawned. A mod's state lives for one map, as the
 // rules' own globals do. Its log lines go to the server console after each call. A runner whose
 // rules keep their own entities off the loop's program seam lays the mods over them itself
-// (`own_mods`: the sequel's, sequel_mods.hpp); one with neither refuses a mod at `start`.
+// (`own_mods`: Quake II's, q2_mods.hpp); one with neither refuses a mod at `start`.
 //
 // ge:summary The rules runner: the table of calls a host runs a game's rules through, and the
 // ge:summary common part every runner keeps (the loop, the lists, the sink, the world)
@@ -84,6 +84,7 @@ struct ClientInfo {
   bool drop = false;  // a stuffed "disconnect": dropped after the current call
   std::string address = "loopback";
   int ping_ms = 0;
+  int protocol = 0;       // a classic client's protocol (Quake II's 34, 35, 36); 0 ours or a bot
   double entered_at = 0;  // the server's time it connected, s (the scoreboard's minutes)
   ClientBlow blow;        // this frame's (a single-player program's)
 };
@@ -127,8 +128,9 @@ struct RulesCommon {
   ClientInfo clients[sh::kMaxClients];
   std::vector<std::pair<std::string, std::string>> serverinfo, localinfo;
 
-  MessageSink out;                   // what the network builtins wrote (messages.hpp)
-  std::vector<std::string> console;  // the server console's lines, in order
+  MessageSink out;                    // what the network builtins wrote (messages.hpp)
+  std::vector<std::string> console;   // the server console's lines, in order
+  std::vector<std::string> frag_log;  // the rules' frag lines (logfrag), one a frag
 
   std::string stop_reason;  // why the map stopped (error / objerror)
   std::string pending_map;  // a `map`, `changelevel` or `restart` console line: the change made
@@ -146,9 +148,11 @@ struct RulesCommon {
   // Lag compensation: called before (`begin`) and after a trace a player shoots (traceline or
   // tracebox whose pass entity, or its owner, is a client) so the protocol's server can move the
   // other players to where the shooter saw them and back. Null: traces see the players as they
-  // are (games/shooters_edge/net/classic_antilag.hpp).
+  // are (games/shooters_edge/net/qw_antilag.hpp). `lag_level` is sv_antilag: 1 rewinds
+  // only the traces the rules mark (64 added to the trace's kind), 2 every traceline too.
   void (*lag_rewind)(void* ctx, int shooter, bool begin) = nullptr;
   void* lag_ctx = nullptr;
+  int lag_level = 0;
 
   // What the rules show everyone else (rules_world.hpp): filled at the map's start and at the end
   // of each call that changes it.
@@ -156,6 +160,21 @@ struct RulesCommon {
 
   // The rocket jump helper's waiting requests, a seat each (rjump_rules.hpp).
   sh::RjumpSeat rjumps[sh::kMaxClients];
+
+  // THE VIEWS THE RULES TURNED this frame (a program's `fixangle`: a teleport, a spawn), for the
+  // protocol's server to send each its `setangle` (net/qw_server.cpp), which clears them. A turn
+  // of a player alive at the last frame's end and still alive is a TELEPORT (the high-lag
+  // teleport's kind 1, classic/protocol/lag_turn.hpp), any other a RESPAWN (2).
+  struct Turn {
+    bool on = false;
+    bool teleport = false;
+    sh::Vec3f angles;
+  };
+  Turn turns[sh::kMaxClients];
+  bool alive[sh::kMaxClients] = {};  // each player alive at the last frame's end
+  // The turns of `edicts` (its players at 1..kMaxClients) whose `fixangle` is set, kept; the flag
+  // cleared and the view set to the angles, as the frame ends.
+  void take_turns();
 
   bool map_stopped = false;  // error / objerror: the map is over (`stop_reason` says why)
   bool paused = false;
@@ -173,28 +192,29 @@ struct RulesCommon {
   void* bot_ctx = nullptr;
 };
 
-// One setting every runner of a classic mod registers beside the move's and the loop's own.
+// One setting every runner of a Quake mod registers beside the move's and the loop's own.
 struct ModSetting {
   const char* name = nullptr;  // null: the move's and the loop's own stand here
   const char* fallback = "";
   const char* help = "";
   const char* values = "";
   ge::console::CvarKind kind = ge::console::CvarKind::number;
-  bool info = false;  // published in the server info
+  bool info = false;     // published in the server info
+  bool archive = false;  // kept in the config the window saves
 };
 
 // Those settings in the order they are registered, the move's and the loop's own at the row with
 // no name; what the server's check reads for the settings a mod has.
 std::span<const ModSetting> mod_settings();
 
-// The settings every runner of a classic mod registers (the match's rules, the move's and the
+// The settings every runner of a Quake mod registers (the match's rules, the move's and the
 // loop's, the server's own), their defaults `loop`'s; and their values written into `set`: every
 // one (`live_only` false, a map starting) or the move's alone (between frames).
 void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop);
 void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool live_only);
 
-// A CLASSIC SERVER'S STATE ACROSS A MAP CHANGE: what a mod keeps in the server rather than in its
-// own memory survives the change, as a classic server keeps it: every setting not at its
+// A QUAKEWORLD SERVER'S STATE ACROSS A MAP CHANGE: what a mod keeps in the server rather than in
+// its own memory survives the change, as a QuakeWorld server keeps it: every setting not at its
 // default (a match mod's mode, its own memory settings), the local info and the server info,
 // from the rules ending into the next map's (made, not yet started). Only between runners of
 // the same program form ("qc", "qvm"); false (nothing carried) otherwise. A setting named in

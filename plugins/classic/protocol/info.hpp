@@ -1,4 +1,4 @@
-// THE INFO STRINGS of the classic protocol family, the first game's and its sequel's alike:
+// THE INFO STRINGS of the classic protocol family, Quake's and Quake II's alike:
 // `\key\value\key\value...`, a client's user info and the server info. No key or value holds `\` or
 // `"`; keys are case-sensitive and at most 64 bytes; a user info is at most 1024 bytes and 128
 // keys, the server info 512 bytes. Star keys (`*name`) are the server's alone: a client's `setinfo`
@@ -10,7 +10,8 @@
 //
 // ge:summary Info strings: get, set, remove and check; star keys; client names cleaned and unique
 // ge:keywords info-string userinfo serverinfo star-keys setinfo info_get info_set info_remove
-// ge:keywords info_valid sanitize_name unique_name default-name
+// ge:keywords info_valid sanitize_name unique_name default-name msg msg-level msg_level_of
+// ge:keywords print_reaches print-level
 // ge:skill classic shooter net
 // ge:test tests/classic_protocol_test.cpp
 #pragma once
@@ -37,11 +38,25 @@ void info_remove(std::string& info, const std::string& key);
 bool info_pairs(const std::string& info, std::vector<std::pair<std::string, std::string>>& out);
 // True when the string is a well-formed info string within `limit` and kInfoMaxKeys.
 bool info_valid(const std::string& info, size_t limit = kUserInfoBytes);
+// THE STRICT RULE a modern server holds a user info to (its `Malformed userinfo string.`): an
+// optional `\` first, then keys and values by turns; a key may be empty, a value may not; every
+// byte printable (32 to 126) but `"` and `;`; a key and a value under 64 bytes, the whole under
+// 512. A high bit anywhere (a coloured name) fails it.
+bool info_strict(const std::string& info);
 // The info without the keys a starting `_` marks private (what other clients are sent).
 std::string info_public(const std::string& info);
 
 std::string sanitize_name(const std::string& name, const std::string& fallback = "player");
 // `name`, or `(N)name` cut to 10 characters when `taken` already holds it.
 std::string unique_name(const std::string& name, const std::vector<std::string>& taken);
+
+// THE MESSAGE LEVEL. A client's user info key `msg` is the lowest print level it is sent (0 item
+// pickups and up, 1 obituaries and up, 2 the server's high prints and up, 3 chat only). Read as a
+// number held to 0..256, 0 when the key is missing. A print of `level` reaches a client at `msg`
+// when the level is not below it; with `chat_always` (Quake's servers) chat, level 3, always does.
+int msg_level_of(const std::string& value);
+inline bool print_reaches(int level, int msg, bool chat_always) {
+  return level >= msg || (chat_always && level >= 3);
+}
 
 }  // namespace ge::classic::protocol

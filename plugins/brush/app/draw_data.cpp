@@ -45,6 +45,22 @@ void halve(const std::vector<uint8_t>& above, uint32_t pw, uint32_t ph, std::vec
       }
 }
 
+// A lamp's texture (`Texture::lamp`, under `TextureSource::lamps`): its bright texels glow (alpha
+// 255) on every level, the texels at kLampShare of the brightest level-0 texel's luma or more and
+// never under kLampFloor, so a fixture's panel glows and its frame stays lit by the room.
+constexpr int kLampShare = 70, kLampFloor = 96;
+int luma(const uint8_t* t) { return (77 * t[0] + 150 * t[1] + 29 * t[2]) >> 8; }
+void mark_lamp(std::vector<std::vector<uint8_t>>& levels) {
+  if (levels.empty()) return;
+  int top = 0;
+  for (size_t j = 0; j + 3 < levels[0].size(); j += 4) top = std::max(top, luma(&levels[0][j]));
+  const int at = std::max(top * kLampShare / 100, kLampFloor);
+  if (top < kLampFloor) return;
+  for (std::vector<uint8_t>& level : levels)
+    for (size_t j = 0; j + 3 < level.size(); j += 4)
+      if (luma(&level[j]) >= at) level[j + 3] = 255;
+}
+
 bool fail(std::string* error, std::string what) {
   if (error) *error = std::move(what);
   return false;
@@ -164,6 +180,26 @@ double style_level(std::string_view pattern, double t) {
   return double(std::clamp(pattern[at], 'a', 'z') - 'a') / double('m' - 'a');
 }
 
+namespace {
+
+// `pattern`'s level from letter `whole` toward the next by `f` (0..1).
+double style_between(std::string_view pattern, double whole, double f) {
+  const auto letter = [&](double k) {
+    const auto i = size_t(k) % pattern.size();
+    return double(std::clamp(pattern[i], 'a', 'z') - 'a') / double('m' - 'a');
+  };
+  return letter(whole) + (letter(whole + 1) - letter(whole)) * f;
+}
+
+}  // namespace
+
+double style_level_lerped(std::string_view pattern, double t) {
+  if (pattern.empty()) return 1;
+  const double at = std::max(t, 0.0) * kStyleRate;
+  const double whole = std::floor(at);
+  return style_between(pattern, whole, at - whole);
+}
+
 double style_level_glided(std::string_view pattern, double t) {
   if (pattern.empty()) return 1;
   const double at = std::max(t, 0.0) * kStyleRate;
@@ -238,6 +274,31 @@ SkyColours sky_colours_of(const std::vector<uint8_t>& rgba, uint32_t w, uint32_t
 }
 
 }  // namespace
+
+SkyColours sky_box_colours(const Scene& scene) {
+  SkyColours c;
+  const uint32_t n = scene.sky_box_face;
+  if (n == 0 || scene.sky_box.levels.empty()) return c;
+  const std::vector<uint8_t>& texels = scene.sky_box.levels[0];
+  const uint32_t w = scene.sky_box.width;
+  double sum[3] = {0, 0, 0}, count = 0;
+  for (uint32_t f = 0; f < 6; ++f) {
+    if (kSkyBoxLook[f][1] < 0) continue;  // the face below the horizon
+    const bool side = kSkyBoxLook[f][1] == 0;
+    const uint32_t ox = (f % 3) * n, oy = (f / 3) * n;
+    for (uint32_t j = 0; j < (side ? n / 2 : n); ++j)  // a side's upper half
+      for (uint32_t i = 0; i < n; ++i) {
+        const uint8_t* t = &texels[((size_t(oy) + j) * w + ox + i) * 4];
+        for (int k = 0; k < 3; ++k) sum[k] += linear_of(t[k]);
+        count += 1;
+      }
+  }
+  if (count <= 0) return c;
+  for (int k = 0; k < 3; ++k) c.cloud[k] = c.back[k] = sum[k] / count;
+  c.cover = 0.5;
+  c.found = true;
+  return c;
+}
 
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,
                 Scene* out, std::string* error, const TextureSource& source,
@@ -377,6 +438,9 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     // Each texture's levels as RGBA: the map's own through the palette (its own mips where the file
     // has them), or the source's; the levels past those halved from the one above.
     const uint32_t levels = s.textures.mips;
+    // The palette's last 32 colours glow (29 and BSP2); a 38 map's texels are all lit by their
+    // light, and its lamps' bright texels glow when the source asks (`TextureSource::lamps`).
+    const bool glows = m.family == Family::v29 || m.family == Family::bsp2;
     std::vector<std::vector<std::vector<uint8_t>>> rgba(placed.size(),
                                                         std::vector<std::vector<uint8_t>>(levels));
     // Each texture's cover at level 0 (empty: solid): a full-colour picture's alpha, or a fence
@@ -423,11 +487,13 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
             t[0] = palette[idx * 3 + 0];
             t[1] = palette[idx * 3 + 1];
             t[2] = palette[idx * 3 + 2];
-            t[3] = idx >= 224 && idx != 255 ? 255 : idx == 0 ? 1 : 0;
+            t[3] = glows && idx >= 224 && idx != 255 ? 255 : idx == 0 ? 1 : 0;
           }
         }
       }
     }
+    for (size_t i = 0; i < placed.size() && source.lamps; ++i)
+      if (m.textures[i].lamp > 0 && !m.textures[i].sky) mark_lamp(rgba[i]);
     if (s.sky_texture < placed.size() && !rgba[s.sky_texture][0].empty())
       s.sky_colours =
           sky_colours_of(rgba[s.sky_texture][0], placed[s.sky_texture].w, placed[s.sky_texture].h);
@@ -562,7 +628,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       // main ones) and a random set are drawn still.
       if (set.random || set.frames.size() < 2 || anims.is_alt[set.frames[0]]) continue;
       const std::vector<uint32_t>& frames = set.frames;
-      const auto count = uint32_t(std::min<size_t>(frames.size(), 255));  // eight bits a frame
+      const auto count = uint32_t(std::min<size_t>(frames.size(), 127));  // seven bits a count
       const uint32_t first = uint32_t(s.frames.size());
       for (uint32_t k = 0; k < count; ++k) {
         const Placed& p = placed[size_t(frames[k])];
@@ -656,7 +722,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         for (uint32_t k = 0; k < sf.styles; ++k)
           d.styles &= ~(uint32_t(255 - sf.style[k]) << (8 * k));
       }
-      d.anim = anim_of[sf.texture];
+      d.anim = anim_of[sf.texture] |
+               (m.textures[sf.texture].flowing && kind != kSky ? kAnimFlowing : 0u);
       s.vertices.push_back(d);
       if (model_of[si] == 0) {
         for (int k = 0; k < 3; ++k)

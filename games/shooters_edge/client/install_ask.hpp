@@ -1,12 +1,12 @@
-// ASKING FOR A GAME'S INSTALL: `se -game N` when no install is kept for game N on this computer
-// (client/game_folder.hpp's `choose_folder` sets `Args::ask_install`). The desktop's folder chooser
-// opens at the start, titled with the game's number and name; the folder picked is checked to be
-// that game's install (`check_game_folder` against its content profile, so a folder of the other
-// game is refused too), refused with the reason and asked again until it is or the player cancels.
-// The folder that checks opens as LOAD GAME's would, which keeps it for the next `-game N`. Built
-// into the `se` window alone: it asks the platform for the chooser.
+// ASKING FOR A GAME'S INSTALL: `se -classic <id>` when no install is kept for game N on this
+// computer (client/game_folder.hpp's `choose_folder` sets `Args::ask_install`). The desktop's
+// folder chooser opens at the start, titled with the game's number and name; the folder picked is
+// checked to be that game's install (`check_game_folder` against its content profile, so a folder
+// of the other game is refused too), refused with the reason and asked again until it is or the
+// player cancels. The folder that checks opens as LOAD GAME's would, which keeps it for the next
+// `-classic <id>`. Built into the `se` window alone: it asks the platform for the chooser.
 //
-// ge:summary The window asking for -game N's install folder and checking it is that game's
+// ge:summary The window asking for -classic <id>'s install folder and checking it is that game's
 // ge:keywords game-number install-ask folder-chooser pick_folder check_game_folder ask_install
 // ge:keywords answer_install select-game kept-install
 // ge:skill platform shooter

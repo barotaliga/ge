@@ -2,16 +2,18 @@
 //
 // ge:summary Picks a game row's adapter, says which forms run, adds mods, maps, demos, game cfgs
 // ge:keywords game-adapter adapter_of runs_form add_adapter_commands mods maps demos console
-// ge:keywords read_configs_from exec config-file
+// ge:keywords read_configs_from exec config-file com_maplist path dir fdir whereis
 // ge:skill shooter console
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include "shooters_edge/client/game_adapter.hpp"
 
+#include "vfs/search_commands.hpp"
+
 namespace shooters_edge::client {
 
 const GameAdapter& adapter_of(const profiles::GameProfile& game) {
-  if (game.id == sequel_adapter().game->id) return sequel_adapter();
-  return classic_adapter();
+  if (game.id == q2_adapter().game->id) return q2_adapter();
+  return qw_adapter();
 }
 
 bool runs_form(profiles::ProgramForm form) { return form == profiles::ProgramForm::qc; }
@@ -46,12 +48,30 @@ void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                       c.print(line);
                     }
                   });
+  ge::vfs::add_search_commands(con, files.vfs);  // path, dir, fdir, whereis
+  // $com_maplist: every map the files hold, by name, a space between.
+  con.add_macro("com_maplist", [&adapter, &files] {
+    std::string all;
+    for (const std::string& name : adapter.list_maps(adapter, files))
+      all += (all.empty() ? "" : " ") + name;
+    return all;
+  });
   con.add_command("demos", "demos: the recordings the game's files hold (playdemo <it>)",
                   [&adapter, &files](Con& c, const Args&) {
                     const std::vector<std::string> demos = adapter.list_demos(adapter, files);
                     if (demos.empty()) c.print("demos: none in the game's files");
                     for (const std::string& d : demos) c.print(d);
                   });
+  // A demo's name completes after the words that play one: relative to the game's own folder of
+  // recordings where it has one (Quake II's `demos/`), as `find_demo` takes it.
+  const Con::ArgValues demo_names = [&adapter, &files] {
+    std::vector<std::string> out = adapter.list_demos(adapter, files);
+    const std::string_view folder = adapter.game->demo_folder;
+    for (std::string& d : out)
+      if (!folder.empty() && d.starts_with(folder)) d.erase(0, folder.size());
+    return out;
+  };
+  for (const char* word : {"playdemo", "timedemo"}) con.set_arg_values(word, demo_names);
 }
 
 void read_configs_from(ge::console::Console& con, const GameAdapter& adapter,

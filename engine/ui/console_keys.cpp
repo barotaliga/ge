@@ -18,6 +18,10 @@ namespace con = ge::console;
 
 constexpr uint16_t kGrave = 53;   // the key under the tilde
 constexpr uint16_t kNonUs = 100;  // the ISO key, the key under Escape on some Macs (binds.cpp)
+constexpr uint16_t kF1 = 58, kF12 = 69;  // the function keys run their binds over a menu
+constexpr uint16_t kC = 6;               // C: with Command or Ctrl, a copy
+constexpr uint16_t kV = 25;              // V: with Command or Ctrl, a paste
+constexpr uint16_t kLeftGui = 227, kRightGui = 231;  // the Command keys
 
 // The code point as UTF-8.
 std::string utf8(uint32_t cp) {
@@ -86,6 +90,24 @@ std::optional<con::EditKey> edit_key(uint16_t usage) {
   }
 }
 
+std::string paste_line(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size(); ++i) {
+    const char ch = text[i];
+    if (ch == '\r' || ch == '\n') {
+      if (ch == '\r' && i + 1 < text.size() && text[i + 1] == '\n') ++i;  // CR LF is one break
+      if (!out.empty() && i + 1 < text.size()) out += "; ";
+      continue;
+    }
+    if (ch == '\t')
+      out += ' ';
+    else if (static_cast<unsigned char>(ch) >= 0x20)
+      out += ch;
+  }
+  return out;
+}
+
 void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& queue,
                   ConsoleKeys& keys) {
   keys.held = view.typing();
@@ -108,12 +130,27 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
     if (key == "ctrl") keys.ctrl = down;
     if (key == "alt") keys.alt = down;
     if (key == "shift") keys.shift = down;
+    if (e.code == kLeftGui || e.code == kRightGui) keys.cmd = down;
     const bool typing = view.typing();
     if (typing && down) {
       if (const auto edit = edit_key(e.code)) view.key(*edit);
+      // A paste: the clipboard typed at the cursor; the V presses no bind.
+      if (e.code == kV && (keys.cmd || keys.ctrl) && keys.paste) {
+        view.type(paste_line(keys.paste()));
+        continue;
+      }
+      // A copy of the text the mouse selected; the C presses no bind.
+      if (e.code == kC && (keys.cmd || keys.ctrl) && keys.copy && view.has_selection()) {
+        keys.copy(view.selected_text());
+        continue;
+      }
     }
     if (key.empty() || (down && e.aux != 0)) continue;  // a repeat edits; it presses no bind
     if (down && (e.code == kGrave || e.code == kNonUs)) toggled = true;
+    // A menu up has the keys: only the function keys and the console's key press a bind.
+    const bool menu_lets = !keys.menu || typing || (e.code >= kF1 && e.code <= kF12) ||
+                           e.code == kGrave || e.code == kNonUs;
+    if (down && !menu_lets) continue;
     if (down) {
       // While the chat line has the keys the binds are the console's (the tilde alone), so a
       // letter typed presses nothing in the game.
@@ -124,9 +161,13 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
     } else {
       // The console keeps a held `+` bind by the name it went down with, whatever modifiers were
       // held then; a release under every spelling finds it (the others are not held: no-ops).
-      for (int m = 0; m < 8; ++m)
-        c.key(spelled(key, {.ctrl = (m & 1) != 0, .alt = (m & 2) != 0, .shift = (m & 4) != 0}),
-              false);
+      for (int m = 0; m < 8; ++m) {
+        ConsoleKeys held_as;  // the modifiers alone, set one by one (the hooks stay empty)
+        held_as.ctrl = (m & 1) != 0;
+        held_as.alt = (m & 2) != 0;
+        held_as.shift = (m & 4) != 0;
+        c.key(spelled(key, held_as), false);
+      }
     }
     c.run();  // a toggle takes effect before the next event
     keys.held = keys.held || view.typing();

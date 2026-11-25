@@ -5,10 +5,12 @@
 // gives the server's state as it is; the milliseconds since a player's last command, capped at
 // 255; another player's time (the arrival less its msec, against now less the latency plus 0.02,
 // never in the future) and its run forward; the smoothing's window (4 to 64 units) and its decay
-// rates by size.
+// rates by size. A mover's motion read off two frames, its stops where it stood or was built; a
+// mover run on carries its rider, leaves the others and stops after its reach.
 //
 // ge:summary Tests: quantized player state, own and other player prediction, error smoothing
 // ge:keywords test predict prediction quantize net-player smoothing other-player net-msec
+// ge:keywords mover_track mover_motion mover_ahead advance_movers rider
 // ge:skill shooter testing
 #include <cmath>
 #include <string>
@@ -186,4 +188,105 @@ TEST(smoothing_folds_a_middle_error_and_decays_it_by_its_size) {
 
   sh::smoothing_frame(s, {100, 0, 0}, {0, 0, 0});  // over 64: a teleport snaps
   CHECK(sh::length(s.correction) == 0);
+}
+
+TEST(a_client_may_cut_the_error_by_its_latency_drop_a_small_one_or_turn_it_off) {
+  sh::Smoothing s;
+  sh::smoothing_frame(s, {10, 0, 0}, {0, 0, 0}, 0.052);  // a quarter explained by a step's timing
+  CHECK(std::abs(s.correction.x - 7.5f) < 1e-3f);
+  sh::smoothing_frame(s, {10, 0, 0}, {0, 0, 0}, 0.01);  // under a step: taken at once
+  CHECK(std::abs(s.correction.x - 7.5f) < 1e-3f);
+  for (int i = 0; i < 10; i++) sh::smoothing_frame(s, {60, 0, 0}, {0, 0, 0}, 1);
+  CHECK(std::abs(sh::length(s.correction) - sh::kSmoothMax) < 1e-3f);  // capped
+  s.correction = {5, 0, 0};
+  s.drop = 220;
+  sh::smoothing_decay(s, 0.02);  // 200 * 0.02 = 4 off leaves 1, under 220 * 0.02: dropped
+  CHECK(sh::length(s.correction) == 0);
+  s.off = true;
+  sh::smoothing_frame(s, {10, 0, 0}, {0, 0, 0});
+  CHECK(sh::length(s.correction) == 0);
+}
+
+TEST(the_state_after_each_command_and_the_jump_it_took) {
+  ClientMap m;
+  const sh::MoveSettings set;
+  sh::MoveState stand;
+  stand.origin = {0, 0, 24};
+  stand.ground = 0;
+  stand.ground_normal = {0, 0, 1};
+  sh::MoveCmd cmds[6];
+  for (int i = 0; i < 6; i++) cmds[i] = forward_cmd(13);
+  cmds[2].buttons |= sh::kButtonJump;
+  cmds[3].buttons |= sh::kButtonJump;  // still held: one jump
+  const sh::NetPlayer acked = sh::quantize_player(stand);
+  sh::MoveState each[6];
+  const sh::MoveState last = sh::predict_player(acked, cmds, 6, set, m.world, each);
+  CHECK(each[5].origin.x == last.origin.x && each[5].origin.z == last.origin.z);
+  int jumps = 0, at = -1;
+  sh::MoveState before = sh::unquantize_player(acked, set);
+  for (int i = 0; i < 6; i++) {
+    if (sh::move_jumped(before, each[i])) {
+      jumps++;
+      at = i;
+    }
+    before = each[i];
+  }
+  CHECK(jumps == 1 && at == 2);
+  CHECK(each[1].origin.x < each[2].origin.x);
+}
+
+TEST(a_movers_motion_is_read_off_two_frames_and_it_stops_where_it_stood) {
+  sh::MoverTrack t;
+  const auto frame = [&](double s, float z) {
+    sh::mover_track_frame(t, s);
+    sh::mover_track_seen(t, 5, 2, {0, 0, z});
+  };
+  frame(0.0, 60);
+  frame(0.1, 60);  // standing at 60: a stop
+  frame(0.2, 50);
+  frame(0.3, 40);
+  sh::Vec3f v;
+  float reach = 0;
+  sh::mover_motion(t, 5, v, reach);
+  CHECK(std::fabs(v.z + 100) < 0.01f && v.x == 0);
+  CHECK(std::fabs(reach - 40) < 0.01f);  // down to where it was built (0); 60 is behind it
+  CHECK(sh::mover_ahead({0, 0, 40}, v, reach, 1).z == 0);
+  CHECK(std::fabs(sh::mover_ahead({0, 0, 40}, v, reach, 0.1f).z - 30) < 0.01f);
+  frame(0.4, 0);
+  frame(0.5, 0);
+  frame(0.6, 10);  // on its way back up: 60 is ahead
+  sh::mover_motion(t, 5, v, reach);
+  CHECK(v.z > 0 && std::fabs(reach - 50) < 0.01f);
+  // A jump (a train's teleport) or an entity not in the last frame has no motion.
+  frame(0.7, 400);
+  sh::mover_motion(t, 5, v, reach);
+  CHECK(v.z == 0 && reach > 1e29f);
+  sh::mover_motion(t, 9, v, reach);
+  CHECK(v.z == 0);
+}
+
+TEST(a_mover_run_on_carries_its_rider_and_leaves_the_others) {
+  const ClientMap map;
+  sh::ModelData plat_data = sh::build_brush_model({box({-64, -64, -16}, {64, 64, 0})});
+  sh::BrushModel plat = plat_data.model();
+  sh::ClientModel mover{&plat, {0, 0, 100}, {0, 0, 100}, 15};
+  sh::MoveWorld world;
+  sh::client_world(map.model, &mover, 1, nullptr, 0, world);
+  sh::MoveState rider;
+  rider.origin = {0, 0, 124};
+  rider.ground = 1;  // standing on the mover's solid
+  sh::MoveState other;
+  other.origin = {-500, 0, 24};
+  other.ground = 0;
+  sh::advance_movers(world, rider, &mover, 1, 0.1f);
+  CHECK(std::fabs(world.solids[1].origin.z - 110) < 0.01f);
+  CHECK(std::fabs(rider.origin.z - 134) < 0.01f);
+  sh::MoveWorld world2;
+  sh::client_world(map.model, &mover, 1, nullptr, 0, world2);
+  sh::advance_movers(world2, other, &mover, 1, 0.1f);
+  CHECK(other.origin.z == 24);
+  // It stops after its reach: 15 units, however long it runs.
+  sh::advance_movers(world, rider, &mover, 1, 1.0f);
+  CHECK(std::fabs(world.solids[1].origin.z - 115) < 0.01f &&
+        std::fabs(rider.origin.z - 139) < 0.01f);
 }

@@ -37,8 +37,12 @@ class ListenHearing {
                          const bool* enhanced = nullptr);
   // `enhanced` the switch that plays the enhanced cache's copy of a sound (ce_sounds; DemoSounds's
   // enhance_from), read as each sound is first needed.
-  ListenHearing(ge::audio::Synth& synth, const bool* enhanced)
-      : ListenHearing(synth, kDemoVolume, enhanced) {}
+  // `q2`: Quake II's sound switches (DemoSounds::switches_from; null: all on).
+  ListenHearing(ge::audio::Synth& synth, const bool* enhanced,
+                const ge::classic::Q2FxSwitches* q2 = nullptr)
+      : ListenHearing(synth, kDemoVolume, enhanced) {
+    q2_ = q2;
+  }
 
   // One drawn frame: what the server started for the player since the last played (and emptied
   // from `l`), the loops, the listener at his eye; `files` where the recordings are read; `dt`
@@ -47,8 +51,10 @@ class ListenHearing {
   void frame(Listen& l, const SearchPath& files, float dt, std::string_view heard = {});
   // Every sound stopped (the game ended, or another took the window).
   void stop();
+  // The sounds read (`soundlist`); null before the first.
+  const DemoSounds* sounds() const { return sounds_.get(); }
 
-  // The players' counts (null before the first game).
+  // The players' counts (null before Quake).
   const DemoSoundStats* stats() const { return sounds_ ? &sounds_->stats() : nullptr; }
   const DemoVoiceStats* voice_stats() const { return voices_ ? &voices_->stats() : nullptr; }
   // The state the players read, for a test: the sound list, the loops, the entities, the eye.
@@ -58,6 +64,7 @@ class ListenHearing {
   ge::audio::Synth& synth_;
   float volume_;
   const bool* enhanced_ = nullptr;
+  const ge::classic::Q2FxSwitches* q2_ = nullptr;
   std::unique_ptr<DemoSounds> sounds_;
   RetiredSounds retired_;               // the last folders' sounds, until their voices fade
   std::unique_ptr<DemoVoices> voices_;  // a match's players' voices (`Listen::voices`)

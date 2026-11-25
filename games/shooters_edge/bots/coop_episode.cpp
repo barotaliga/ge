@@ -9,14 +9,19 @@
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooters_edge/bots/coop_episode.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <memory>
 
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -26,8 +31,9 @@ namespace pg = ge::progs;
 namespace sv = shooters_edge::server;
 
 constexpr int kMsec = 14;         // a command's length on the 1/72 s host
-constexpr int kSampleEvery = 36;  // frames between the pictures' points (half a second)
+constexpr int kSampleEvery = 14;  // frames between the pictures' points (a fifth of a second)
 constexpr double kHz = 1000.0 / kMsec;
+constexpr int kFlagGodmode = 64;  // the program's `flags` bit for `god`
 
 uint64_t fold(uint64_t h, uint32_t w) { return (h ^ w) * 1099511628211ull; }
 
@@ -56,7 +62,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 }
 
 bool sees(const Fighter& f, int ent) {
-  for (const sh::Contact& c : f.bot.senses.contacts)
+  for (const sb::Contact& c : f.bot.senses.contacts)
     if (c.ent == ent && c.was_visible) return true;
   return false;
 }
@@ -69,8 +75,10 @@ struct Recent {
 // One map's players and plan, made afresh when it is entered.
 struct OnMap {
   std::unique_ptr<MapNav> nav;
-  std::vector<Fighter> players;  // the leader first, then the companions
-  WayThrough way;
+  std::vector<Fighter> players;  // the leader first, his partners, then the companions
+  std::vector<WayThrough> ways;  // the leader's way through and each partner's (party.hpp)
+  sb::Party party;
+  std::vector<sb::PartyMember> members;
   std::vector<Wedge> wedges;     // everyone's shove at a corner
   std::vector<uint8_t> monster;  // entities that were monsters alive at the start
 };
@@ -84,42 +92,65 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   }
   const sv::RulesCommon& s = *c.server;
   m.nav = std::make_unique<MapNav>();
-  if (!build_map_nav(*q, c.map, "info_player_start", *m.nav, error)) return false;
+  m.nav->hatch_drops = true;     // the campaign's floor doors open drops (map_nav.hpp)
+  m.nav->one_way_tricks = true;  // the record runs' blast jumps lead on (map_nav.hpp)
+  if (!build_map_nav(*q, c.map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   em.name = c.map.name;
   em.nav_nodes = static_cast<int64_t>(nav.graph.nodes.size());
+  em.nav_rockets = nav.tricks_made.held;
+  em.nav_grenades = nav.tricks_made.grenades;
+  em.nav_combos = nav.tricks_made.combos;
   em.movers = static_cast<int64_t>(nav.movers.size());
   em.nav_ms = nav.build_ms;
   em.lo = nav.graph.lo;
   em.hi = nav.graph.hi;
-  for (const sh::NavNode& n : nav.graph.nodes) em.nodes.push_back(n.origin);
-  const int n = 1 + static_cast<int>(opt.skills.size());
+  for (const sb::NavNode& n : nav.graph.nodes) em.nodes.push_back(n.origin);
+  const int partners = static_cast<int>(opt.partners.size());
+  const int n = 1 + partners + static_cast<int>(opt.skills.size());
   m.players.clear();
   m.players.resize(static_cast<size_t>(n));
   m.wedges.assign(static_cast<size_t>(n), {});
+  m.ways.clear();
+  m.ways.resize(static_cast<size_t>(partners) + 1);
+  m.party = {};
+  m.members.clear();
   for (int k = 0; k < n; k++) {
     Fighter& f = m.players[static_cast<size_t>(k)];
-    const sh::AimSkill skill = k == 0 ? opt.leader : opt.skills[static_cast<size_t>(k) - 1];
-    f.features = sh::features_of(skill);
+    const sb::AimSkill skill = k == 0          ? opt.leader
+                               : k <= partners ? opt.partners[static_cast<size_t>(k) - 1]
+                                               : opt.skills[static_cast<size_t>(k - partners) - 1];
+    f.features = sb::features_of(skill);
     fighter_init(
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
-        sh::traits_of(skill, sh::Temper::balanced), kHz,
-        opt.seed + 31u * static_cast<uint32_t>(k) + static_cast<uint32_t>(c.history.size()));
+        sb::traits_of(skill, sb::Temper::balanced), kHz,
+        opt.seed + 31u * static_cast<uint32_t>(k) + static_cast<uint32_t>(c.history.size()),
+        first_arsenal());
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;
     f.trap = &nav.trap;
-    if (k == 0) {
+    f.wet = &nav.wet;
+    if (k <= partners) {
       // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
-      f.features.set(sh::Feature::locked, false);
+      WayThrough& way = m.ways[static_cast<size_t>(k)];
+      f.features.set(sb::Feature::locked, false);
       hunt_init(f, s);
-      way_init(m.way, f, nav, s, c.map);
-      if (opt.plan) m.way.log = &em.plan;
+      f.ledge_guard = true;  // a fall into a pit with no way out ends his map
+      way.complete = opt.complete;
+      way.toured = opt.tour;
+      // The last quarter of the map's time is for the way out: a map he cannot clear still ends.
+      way.complete_until = s.sv.time + opt.map_seconds * 0.75;
+      way.avoid = opt.avoid;
+      if (opt.complete) way_complete_init(f, nav, s, c.map);
+      way_init(way, f, nav, s, c.map);
+      if (opt.plan && k == 0) way.log = &em.plan;
+      if (!opt.beside || k > 0) m.members.push_back({&way, k + 1, true});
     } else {
       escort_init(f, s, k, 0);
     }
   }
-  for (const WayStep& st : m.way.steps)
+  for (const WayStep& st : m.ways[0].steps)
     if (st.kind == WayKind::exit) em.exits.push_back((st.lo + st.hi) * 0.5f);
   m.monster.assign(s.sv.edicts.size(), 0);
   for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
@@ -129,7 +160,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       em.monsters++;
     }
   }
-  em.mates.assign(opt.skills.size(), {});
+  em.mates.assign(static_cast<size_t>(n) - 1, {});
   return true;
 }
 
@@ -137,9 +168,12 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
 
 EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   EpisodeReport r;
-  const int mates = static_cast<int>(opt.skills.size());
-  if (mates < 1 || mates > 3 || !opt.load) {
-    r.error = "run_coop_episode: 1..3 companions and a map loader; next: check the options";
+  const int partners = static_cast<int>(opt.partners.size());
+  const int mates = partners + static_cast<int>(opt.skills.size());
+  if (mates > (opt.single ? 0 : 7) || !opt.load) {
+    r.error =
+        "run_coop_episode: at most 7 partners and companions (none in single player) and a map "
+        "loader; next: check the options";
     return r;
   }
   pg::Progs own;
@@ -158,7 +192,10 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   co.server.loop.max_edicts = 1024;
   co.load = opt.load;
   co.load_ctx = opt.load_ctx;
-  co.settings = {"deathmatch 0", "coop 1", "teamplay 1", "skill " + std::to_string(opt.skill)};
+  co.wide_models = opt.wide_models;
+  co.registered = opt.registered;
+  co.settings = {"deathmatch 0", opt.single ? "coop 0" : "coop 1",
+                 opt.single ? "teamplay 0" : "teamplay 1", "skill " + std::to_string(opt.skill)};
   if (!sv::campaign_new_game(c, *progs, co, opt.first, r.error)) {
     r.error = "run_coop_episode: " + r.error;
     return r;
@@ -166,6 +203,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   sv::campaign_join(c, 0, "leader");
   for (int k = 1; k <= mates; k++) sv::campaign_join(c, k, "mate" + std::to_string(k));
   const pg::Def* inter = pg::find_global(*progs, "intermission_running");
+  const pg::Def* counts[4] = {
+      pg::find_global(*progs, "total_monsters"), pg::find_global(*progs, "killed_monsters"),
+      pg::find_global(*progs, "total_secrets"), pg::find_global(*progs, "found_secrets")};
 
   uint64_t h = 1469598103934665603ull;
   std::vector<Recent> recent(static_cast<size_t>(mates) + 1);
@@ -180,43 +220,117 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     const size_t entered = c.history.size();
     std::vector<bool> alive(static_cast<size_t>(mates) + 1, true);
     int64_t near = 0, counted = 0;
+    int64_t helper_near = 0, helper_counted = 0;
+    sb::PartyOptions people;
     const int frames = static_cast<int>(opt.map_seconds * 72);
     int frame = 0;
     bool changed = false;
+    std::vector<sh::Vec3f> blast;  // the leader's blast jump in the air (empty: none)
+    int blast_frame = 0;
+    bool in_grenade = false;
     for (; frame < frames && !changed; frame++) {
       const sv::RulesCommon& now = *c.server;
       const double t = now.sv.time;
       const sv::QcServer* q = sv::qc_of(c.server);
       const bool ending =
           inter && q && pg::global_float(q->q.vm, inter->offset) != 0;  // the intermission
-      way_plan(m.way, m.players[0], *m.nav, now, 1, t);
+      if (ending && em.exit_s < 0) em.exit_s = static_cast<double>(frame) / 72;
+      if (q && !ending) {
+        int* out[4] = {&em.total_monsters, &em.killed_monsters, &em.total_secrets,
+                       &em.found_secrets};
+        const int found_was = em.found_secrets;
+        for (int i = 0; i < 4; i++)
+          if (counts[i]) *out[i] = static_cast<int>(pg::global_float(q->q.vm, counts[i]->offset));
+        for (int k = std::max(found_was, 0); k < em.found_secrets; k++)
+          em.secrets.push_back(now.world.entities[1].origin);
+      }
+      for (int k = 0; opt.god && q && k <= partners; k++) {
+        // The leader's and his partners' `god`: the program's own flag on the entity, as the
+        // cheat sets it.
+        sv::QcServer* qs = sv::qc_of(c.server);
+        uint32_t* fl = pg::entity_field(qs->q.vm, k + 1, pg::vm_layout(qs->q.vm).f.flags);
+        const int had = static_cast<int>(pg::as_float(*fl));
+        if ((had & kFlagGodmode) == 0) {
+          *fl = pg::as_word(static_cast<float>(had | kFlagGodmode));
+          qs->sv.edicts[static_cast<size_t>(k) + 1].flags = had | kFlagGodmode;
+        }
+      }
+      // The party splits the map's work between the leader and his partners (party.hpp).
+      if (partners > 0) {
+        for (sb::PartyMember& pm : m.members)
+          pm.alive = now.world.entities[static_cast<size_t>(pm.ent)].health > 0;
+        if (opt.beside) {  // round the leader, a person's stand-in (party.hpp)
+          people.humans.assign(1, now.world.entities[1].origin);
+          people.facing.assign(1, now.world.entities[1].view_angles.y);
+          people.leash = sb::kPartyLeash;
+          people.exit_held = true;
+        }
+        sb::party_share(m.party, m.members, *m.nav, now, people);
+      }
+      for (int k = 0; k <= partners; k++) {
+        WayThrough& way = m.ways[static_cast<size_t>(k)];
+        const int64_t plans = way.stats.plans;
+        way_plan(way, m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, t);
+        if (opt.beside && k > 0 &&
+            sb::party_stay(m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, people) &&
+            way.stats.plans != plans)
+          em.helper_stays++;
+      }
       for (int k = 0; k <= mates; k++) {
         Recent& rc = recent[static_cast<size_t>(k)];
         rc.cmds[0] = rc.cmds[1];
         rc.cmds[1] = rc.cmds[2];
         rc.cmds[2] = fighter_command(m.players[static_cast<size_t>(k)], now, k, kMsec);
-        if (k == 0) way_dive(m.way, *m.nav, now, 1, rc.cmds[2]);
-        unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
+        if (k <= partners) {
+          WayThrough& way = m.ways[static_cast<size_t>(k)];
+          way_dive(way, *m.nav, now, k + 1, rc.cmds[2]);
+          way_touch(way, now, k + 1, rc.cmds[2]);  // its keys turned or not, he goes on
+          if (opt.beside && k > 0 && sb::party_give_way(now, k + 1, people.humans, rc.cmds[2]))
+            em.helper_gave_way++;
+          if (opt.beside && k > 0 &&
+              exits_keep_off(m.players[static_cast<size_t>(k)], now, k + 1, rc.cmds[2]))
+            em.helper_exits_turned++;
+        }
+        if (!m.players[static_cast<size_t>(k)].bot.pilot.pilot.climbing)  // held to his ladder
+          unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
         if (ending) rc.cmds[2].buttons = (frame & 1) ? sh::kButtonAttack : 0;
         sh::Packet& p = packets[static_cast<size_t>(k)];
         p.client = k;
         p.sequence = ++rc.sequence;
         for (int i = 0; i < 3; i++) p.cmds[i] = rc.cmds[i];
       }
+      // The leader's blast jump starts with the pilot's shot under him (a rocket jump) or the
+      // first command of a grenade trick.
+      {
+        const sb::Pilot& lp = m.players[0].bot.pilot.pilot;
+        const bool grenade = lp.mode == sb::PilotMode::grenade;
+        if (blast.empty() && (lp.shot_now || (grenade && !in_grenade))) {
+          blast.push_back(now.world.entities[1].origin);
+          blast_frame = frame;
+        }
+        in_grenade = grenade;
+      }
       if (!sv::campaign_frame(c, packets.data(), mates + 1, r.error)) {
         r.error = "run_coop_episode: " + em.name + ": " + r.error;
         return r;
       }
       if (c.history.size() != entered) {
+        // The history's entry is "<how> <map>": a level changed to, or the same one restarted
+        // (the leader died in single player).
+        const std::string& h_last = c.history.back();
+        const size_t sp = h_last.rfind(' ');
+        em.next = sp == std::string::npos ? h_last : h_last.substr(sp + 1);
         changed = true;
-        em.finished = true;
-        em.next = c.history.back();
-        em.end = "the exit, to " + em.next;
+        em.finished = h_last.rfind("restart", 0) != 0;
+        em.end = em.finished ? "the exit, to " + em.next : "he died: the level restarted";
         break;
       }
       const sv::RulesCommon& after = *c.server;
       sv::clear_frame(c.server.common->out);
-      if (const sv::QcServer* qa = sv::qc_of(c.server)) em.faults = qa->q.faults;
+      if (const sv::QcServer* qa = sv::qc_of(c.server)) {
+        em.faults = qa->q.faults;
+        em.last_fault = qa->q.last_fault;
+      }
       h = fold_frame(h, after, mates + 1);
       const sv::WorldEntity& L = after.world.entities[1];
       const bool leader_live = L.health > 0;
@@ -227,7 +341,13 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         const bool live = d.health > 0;
         if (alive[static_cast<size_t>(k)] && !live) em.mate_deaths++;
         alive[static_cast<size_t>(k)] = live;
-        if (live && leader_live && !ending) {
+        if (opt.beside && live && leader_live && !ending && k <= partners) {  // a helper's
+          const float dd = dist(d.origin, L.origin);
+          helper_near += dd <= sb::kPartyLeash ? 1 : 0;
+          helper_counted++;
+          em.helper_farthest = std::max(em.helper_farthest, dd);
+        }
+        if (live && leader_live && !ending && k > partners) {  // a companion's keeping near
           const float dd = dist(d.origin, L.origin);
           near += dd < kEscortFar ? 1 : 0;
           counted++;
@@ -238,12 +358,24 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
           }
         }
       }
+      if (!blast.empty()) {
+        // Followed until he stands again (a short hop's landing counts after 0.15 s in the air),
+        // dies or 4 s have passed.
+        if (frame % 6 == 0) blast.push_back(L.origin);
+        const int flown = frame - blast_frame;
+        if ((flown > 11 && (after.sv.edicts[1].flags & sh::kFlagOnGround) != 0) || !leader_live ||
+            flown > 288) {
+          blast.push_back(L.origin);
+          em.blasts.push_back(std::move(blast));
+          blast.clear();
+        }
+      }
       if (frame % kSampleEvery == 0) {
         em.leader.push_back(L.origin);
         for (int k = 1; k <= mates; k++)
           em.mates[static_cast<size_t>(k) - 1].push_back(
               after.world.entities[static_cast<size_t>(k) + 1].origin);
-        em.way_kind.push_back(static_cast<uint8_t>(m.way.kind));
+        em.way_kind.push_back(static_cast<uint8_t>(m.ways[0].kind));
       }
       for (int e = after.sv.set.maxclients + 1;
            e < after.sv.num_edicts && static_cast<size_t>(e) < m.monster.size(); e++) {
@@ -264,6 +396,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         }
         if (by == 0)
           em.killed_by_leader++;
+        else if (by > 0 && by <= partners)
+          em.killed_by_partners++;
         else if (by > 0)
           em.killed_by_mates++;
         else
@@ -273,18 +407,35 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     em.seconds = static_cast<double>(frame) / 72;
     if (!changed) em.end = "the time ran out";
     em.near_share = counted > 0 ? static_cast<double>(near) / static_cast<double>(counted) : 0;
-    em.way = m.way.stats;
+    em.helper_near_share =
+        helper_counted > 0 ? static_cast<double>(helper_near) / static_cast<double>(helper_counted)
+                           : 0;
+    em.way = m.ways[0].stats;
+    em.party = m.party.stats;
+    for (int k = 1; k <= partners; k++) {
+      const WayStats& ws = m.ways[static_cast<size_t>(k)].stats;
+      em.partner_steps += ws.steps_done;
+    }
+    for (const WayThrough& w : m.ways) em.left_to_mates += w.mates_skipped;
     em.leader_shoves = m.wedges[0].shoves;
     for (int k = 1; k <= mates; k++) em.mate_shoves += m.wedges[static_cast<size_t>(k)].shoves;
-    for (int k = 1; k <= mates; k++) {
+    for (int k = partners + 1; k <= mates; k++) {
       const EscortStats& es = m.players[static_cast<size_t>(k)].escort.stats;
       em.mate_buttons += es.buttons;
       em.mate_threats += es.threats;
       em.mate_idle += es.idle_breaks;
     }
     r.faults += em.faults;
+    const std::string next = em.next;
+    const bool died = changed && !em.finished;
     r.maps.push_back(std::move(em));
-    if (!changed) break;
+    if (!changed || died) break;
+    bool stop = false;
+    for (const std::string& x : opt.stop) stop = stop || x == next;
+    // The 100% run: an exit back to a map played ends it (the coop hall's tour loops on itself).
+    if (opt.complete)
+      for (const EpisodeMap& done : r.maps) stop = stop || done.name == next;
+    if (stop) break;
   }
   r.digest = h;
   r.ok = true;

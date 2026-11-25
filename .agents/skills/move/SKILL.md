@@ -1,6 +1,6 @@
 ---
 name: move
-description: "Use for engine/move in gameengine2 and anything about how a character's body moves: walking, running, friction, acceleration, jumping (buffer, coyote time, jump cut, double jumps, held jumps), falling, strafing, strafe jumping and bunny hopping, air control, stairs and step height, slopes and surf ramps, crouching and crouch jumps, slides, free flight and noclip; the MoveSpec knobs and their names (the cvars a game binds), the presets (classic_arena, strafe_arena, modern_shooter, platformer, walker), the step, the trace callback a world answers, the box world, the strafer's best angle, the scenarios and the move-strafe and move-trace labs; the M28 rows."
+description: "Use for engine/move in gameengine2 and anything about how a character's body moves: walking, running, friction, acceleration, jumping (buffer, coyote time, jump cut, double jumps, held jumps), falling, strafing, strafe jumping and bunny hopping, air control, stairs and step height, slopes and surf ramps, crouching and crouch jumps, slides, free flight and noclip; the MoveSpec knobs and their names (the cvars a game binds), the presets (classic_arena, strafe_arena, modern_shooter, platformer, walker), the step, the trace callback a world answers, the box world, the strafer's best angle, the scenarios and the move-strafe, move-trace and move-predict labs; the body and its command on the wire (prediction over the network, a long command split under a cap); the M28 rows."
 ---
 
 # Character movement
@@ -22,6 +22,7 @@ here names a genre's word: a feel is a ROW of knobs, never a code path.
 | `move/mesh_world.hpp` | A world of triangles: the swept separating-axis trace, bucketed in a grid |
 | `move/step.hpp` | `step_move`: the step's order, `MoveCmd`, `MoveState`, `MoveEvents`, `accelerate`, `wish_of` |
 | `move/strafe.hpp` | `best_wish_angle`, `strafe_cmd`: the strafe jumper's hands |
+| `move/wire.hpp` | The body as a row of 16 quantizable fields and the command as 9 bytes, the step a server and its predicting clients share (`step_wire`), a long command split under a cap (`step_move_split`); the `move-predict` lab |
 | `move/scenarios.hpp` | Staged runs, their worlds and scripts; `run_move_scenario` and its digest |
 
 ## Tuning a feel

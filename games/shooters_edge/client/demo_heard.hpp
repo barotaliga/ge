@@ -44,7 +44,9 @@ class DemoHearing {
  public:
   // `enhanced` the switch that plays the enhanced cache's copy of a sound (ce_sounds; DemoSounds's
   // enhance_from).
-  explicit DemoHearing(ge::audio::Synth& synth, const bool* enhanced = nullptr);
+  // `q2`: Quake II's sound switches (DemoSounds::switches_from; null: all on).
+  explicit DemoHearing(ge::audio::Synth& synth, const bool* enhanced = nullptr,
+                       const ge::classic::Q2FxSwitches* q2 = nullptr);
 
   // A level of the demo starts: its sounds read through `files` (made again when the folder
   // changed), the level's loops and the ambience over `map`.
@@ -52,23 +54,28 @@ class DemoHearing {
   // One drawn frame: what `h` gathered played, its ended lines appended to `lines` (a line's
   // start printed without its newline waits for the rest, from later prints) and its centre
   // message (if any, its lines on one line) in `centre`; `h` emptied. `dt` moves the ambience, s.
-  // True when a centre message came (the caller shows it for a while).
+  // True when a centre message came (the caller shows it for a while). `chat`, when given, gets
+  // one flag a line: whether it was a chat print's (print level 3).
   bool frame(const DemoState& s, DemoHeard& h, float dt, std::vector<std::string>& lines,
-             std::string& centre);
+             std::string& centre, std::vector<bool>* chat = nullptr);
   // The demo over: everything it plays stopped (its recordings freed once their fades end, at a
   // later `frame` or `stop`).
   void stop();
+  // The sounds read (`soundlist`); null before the first.
+  const DemoSounds* sounds() const { return sounds_.get(); }
   // Sounds stopped whose voices are still fading, for a test.
   size_t retired() const { return retired_.kept(); }
 
  private:
   ge::audio::Synth& synth_;
   const bool* enhanced_ = nullptr;
+  const ge::classic::Q2FxSwitches* q2_ = nullptr;
   const SearchPath* files_ = nullptr;
   std::unique_ptr<DemoSounds> sounds_;
   RetiredSounds retired_;  // the last folders' and demos' sounds, until their voices fade
   std::unique_ptr<DemoVoices> voices_;
-  std::string partial_;  // printed text not yet ended by a newline
+  std::string partial_;        // printed text not yet ended by a newline
+  bool partial_chat_ = false;  // partial_ began in a chat print
 };
 
 }  // namespace shooters_edge::client

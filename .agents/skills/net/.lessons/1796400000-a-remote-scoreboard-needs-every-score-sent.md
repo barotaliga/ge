@@ -1,7 +1,7 @@
 ---
 title: A remote scoreboard sees a score only when the endpoint sends it
 date: 2026-11-04
-scope: games/shooters_edge/net/classic_server.cpp, games/shooters_edge/net/classic_signon.cpp
+scope: games/shooters_edge/net/qw_server.cpp, games/shooters_edge/net/qw_signon.cpp
 concepts: [classic-protocol, updatefrags, scoreboard, bots, local-seat, dedicated-server]
 ---
 
@@ -12,4 +12,4 @@ showed up only once bots on the dedicated server fought and the `se-dedicated-lo
 the scoreboard from a client. The frame now sends every score that moved (`tell_frags`).
 
 Any new seat kind (a bot, a spectator) must be checked from a remote client's side. Read what
-the client keeps (`ClassicClientEnd::frags`, `userinfos`), not the server's own state.
+the client keeps (`QwClientEnd::frags`, `userinfos`), not the server's own state.

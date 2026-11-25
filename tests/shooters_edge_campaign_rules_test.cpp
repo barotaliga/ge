@@ -96,12 +96,12 @@ TEST(the_campaign_builds_as_a_native_program) {
 TEST(the_campaign_in_cpp_plays_the_qc_coop_hall) {
   sb::CoopOptions o;
   o.seconds = 45;
-  same_run(o, {3240, 3, 3, 13208, 13514, 0, false, 15427148075464556034ull});
+  same_run(o, {3240, 3, 3, 13208, 13514, 0, false, 924693614891381172ull});
 }
 
 TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_with_two_companions_on_hard) {
   sb::CoopOptions o;
-  o.skills = {sh::AimSkill::expert, sh::AimSkill::novice};
+  o.skills = {ge::shooterbots::AimSkill::expert, ge::shooterbots::AimSkill::novice};
   o.skill = 3;
   o.seed = 7;
   o.seconds = 45;
@@ -113,15 +113,14 @@ TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_to_its_exit) {
   o.exit = true;
   o.seed = 3;
   o.seconds = 45;
-  same_run(o, {3240, 3, 3, 13056, 13361, 0, false, 12686590009719983557ull});
+  same_run(o, {3240, 3, 3, 13056, 13361, 0, false, 8924270506675952646ull});
 }
 
-// Classic remix's `cr_monsters 2`: the sequel's monsters spawn in the classic campaign with the
+// Classic remix's `cr_monsters q2`: Quake II's monsters spawn in the classic campaign with the
 // roster's health, play their frames and hurt the player who stands before them.
 namespace {
 
-bool sequel_hall(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out,
-                 std::string& /*error*/) {
+bool q2_hall(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out, std::string& /*error*/) {
   out.models = sv::arena_models();
   out.entities = R"({
 "classname" "worldspawn"
@@ -157,11 +156,11 @@ bool sequel_hall(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out,
 
 }  // namespace
 
-TEST(the_sequels_monsters_run_in_the_classic_campaign) {
+TEST(q2_monsters_run_in_the_classic_campaign) {
   sv::Campaign c;
   sv::CampaignOptions co;
   co.server.loop.max_edicts = 256;
-  co.load = &sequel_hall;
+  co.load = &q2_hall;
   co.settings = {"deathmatch 0", "coop 0", "skill 1"};
   std::string error;
   CHECK_MSG(sv::campaign_new_game(c, native(), co, "hall", error), error);
@@ -185,7 +184,7 @@ TEST(the_sequels_monsters_run_in_the_classic_campaign) {
   CHECK(posed);
 }
 
-// The sequel's medic raises a dead guard while it hunts, and the brain's screen takes a third of a
+// Quake II's medic raises a dead guard while it hunts, and the brain's screen takes a third of a
 // blow, in the classic campaign.
 namespace {
 
@@ -228,7 +227,7 @@ int monster_with(const sv::Campaign& c, float health, int skip = 0) {
 
 }  // namespace
 
-TEST(the_sequels_medic_raises_the_dead_and_the_brains_screen_saves_a_third) {
+TEST(q2_medic_raises_the_dead_and_the_brains_screen_saves_a_third) {
   sv::Campaign c;
   sv::CampaignOptions co;
   co.server.loop.max_edicts = 256;

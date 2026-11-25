@@ -1,7 +1,7 @@
 ---
 title: A hosted game library's error leaves by a long jump, so nothing with a destructor may be alive across it
 date: 2026-11-15
-scope: games/shooters_edge/server/sequel_native_calls.cpp
+scope: games/shooters_edge/server/q2_native_calls.cpp
 concepts: [native-game-library, longjmp, setjmp, leak, asan, error-jump]
 ---
 

@@ -13,7 +13,10 @@
 // turn comes, runs its touch with self the trigger and other the entity. IMPACTS (`impact`): the
 // mover's touch (self the mover, other the hit), then the hit's (self the hit, other the mover),
 // each only when it has one and is not a `not` solid. Both set `time` to the server's time and
-// restore `self` and `other` after.
+// restore `self` and `other` after. On the single-player clock the triggers are touched node by
+// node from the area tree's root, each tested against the entity's box as it is just before its
+// touch, and the walk goes down by the box as it is then (a teleporter stops the triggers at the
+// old place from firing).
 //
 // THE CLOCK: `time` is the server's time in seconds (a double), advanced only by the server's
 // frame (frame.hpp) on the run clock: never the wall clock. A run is a pure function of its map,
@@ -96,6 +99,9 @@ struct SoundEvent {
   // a server's own sound is where its entity stands, so it leaves this unset).
   bool placed = false;
   Vec3f at;
+  // Started by the physics itself (a splash crossing a water surface, a walker's landing thud),
+  // not by the program: a host that sends the program's sounds as they are made sends these too.
+  bool engine = false;
 };
 
 // What a client's connection keeps for the loop (the player is entity slot + 1).
@@ -148,7 +154,7 @@ struct Server {
   // A map of the version 38 family, which has no clip hulls: when set, the world is traced and
   // its contents read through its brushes (`trace_move`, `world_contents`; world.hpp's
   // `brushes` solid); `trace_move` traces nothing else in the pool unless `world_trace` is set. The
-  // rules that keep such a map set it on the pool they mirror their world into (the sequel's).
+  // rules that keep such a map set it on the pool they mirror their world into (Quake II's).
   const Solid* brushes = nullptr;
   // A map of the version 38 family played on rules that trace hulls (classic remix, M18u2):
   // each brush model as a `brushes` solid by modelindex ([0] none, [1] the world), its origin
@@ -178,6 +184,11 @@ struct Server {
   bool original_walk = false;
   std::vector<uint32_t> touched;  // per entity: the packet stamp it last touched a player in
   uint32_t touch_stamp = 0;
+  // Lag compensation for a moving entity (a network server's sv_antilag): asked before (`begin`)
+  // each `push_entity` trace, true when it moved the players to where the entity's owner saw
+  // them, and then again after the trace (not `begin`) to put them back. None when null.
+  bool (*lag_push)(void* ctx, Server& sv, int e, bool begin) = nullptr;
+  void* lag_push_ctx = nullptr;
   // A game's rule on each new missile before its first move (the aim help's lead); none when null.
   void (*missile_watch)(void* ctx, Server& sv, int missile) = nullptr;
   void* missile_watch_ctx = nullptr;
@@ -216,9 +227,9 @@ void set_brush_model(Server& sv, int e, int modelindex);
 void call_program(Server& sv, Func fn);
 // Starts a sound (kept for the host; past kMaxSounds a frame it is counted and dropped).
 void start_sound(Server& sv, int e, int channel, const char* sample, float volume,
-                 float attenuation);
+                 float attenuation, bool engine = false);
 
-// The world's hull 0 at a point.
+// The world's hull 0 at a point; on the single-player clock the six currents read as water.
 int world_contents(const Server& sv, Vec3f p);
 
 // A digest of the whole match state (FNV-1a 64 over the server's time and every entity's and

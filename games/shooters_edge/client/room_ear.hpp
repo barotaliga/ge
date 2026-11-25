@@ -9,10 +9,17 @@
 // DETERMINISTIC and allocation free: the probe's directions are fixed and the walk is the map's
 // tree; it changes only what is heard, never the game.
 //
+// UNDER WATER (`s_underwater`, `s_underwater_gain_hf`): while the eye is in a liquid the whole mix
+// is heard through the synth's muffle, its treble over 5 kHz cut to the setting's share; out of it
+// the mix is dry again at once. One setting of the classic games', on in Quake II as its own client
+// has it and off in Quake, which never muffled.
+//
 // ge:summary Room acoustics on a classic map: the listener's room probed by rays through the BSP's
 // leaves, the synth's reverb glided to it
 // ge:keywords ce_acoustics acoustics room-sound reverb echo room-probe bsp-acoustics listener
-// ge:keywords room_ear hear_room bsp_ray stone-hall corridor open-sky
+// ge:keywords room_ear hear_room bsp_ray stone-hall corridor open-sky s_underwater
+// ge:keywords s_underwater_gain_hf underwater-muffle hear_under s_swapstereo hear_swap s_hrtf
+// ge:keywords al_hrtf hrtf binaural headphones hear_ears s_mixahead snd_mixahead
 // ge:skill audio shooter
 // ge:test tests/shooters_edge_room_ear_test.cpp
 #pragma once
@@ -20,6 +27,7 @@
 #include "audio/room.hpp"
 #include "audio/synth.hpp"
 #include "brush/map.hpp"
+#include "console/console.hpp"
 
 namespace shooters_edge::client {
 
@@ -37,9 +45,35 @@ ge::audio::RoomSound bsp_room(const ge::brush::Map& map, const double ear[3],
                               const double right[3]);
 
 struct RoomEar {
-  double next_s = 0;  // when the room is probed again (the frame clock)
-  bool wet = false;   // the synth holds a room of ours
+  double next_s = 0;   // when the room is probed again (the frame clock)
+  bool wet = false;    // the synth holds a room of ours
+  float muffled = -1;  // the muffle's treble last given to the synth (-1: none yet)
 };
+
+// The muffle under water's settings.
+struct UnderEar {
+  bool on = false;       // s_underwater (Quake II's default 1)
+  double treble = 0.25;  // s_underwater_gain_hf: the treble's share heard, 0.001..1
+  bool swap = false;     // s_swapstereo: left and right swapped at the output
+  int swap_sent = -1;    // what the synth was last told (-1: nothing yet)
+  // s_hrtf (Quake II's al_hrtf): 0 off, 1 as the sound device chooses (it names no headphones:
+  // off), 2 the two ears (audio/synth.hpp's binaural); and what the synth was last told.
+  int hrtf = 0;
+  int hrtf_sent = -1;
+};
+inline constexpr float kUnderCornerHz = 5000;  // the muffle's corner
+
+// s_underwater, s_underwater_gain_hf, s_swapstereo and s_hrtf in the classic games' layer, bound
+// to `s`; and s_mixahead (Quake's `_snd_mixahead`), kept for configs and read by nothing.
+void add_under_cvars(ge::console::Console& c, UnderEar& s);
+// One frame: the synth muffled while `under` (the eye in a liquid) and `s.on`, dry otherwise; told
+// only when that changes (and on the ear's first frame).
+void hear_under(RoomEar& ear, ge::audio::Synth& synth, const UnderEar& s, bool under);
+// One frame: the synth's channels swapped as s_swapstereo says, told only when that changes.
+void hear_swap(ge::audio::Synth& synth, UnderEar& s);
+// Whether s_hrtf asks for the two ears; one frame: the synth told when that changes.
+inline bool hrtf_on(const UnderEar& s) { return s.hrtf >= 2; }
+void hear_ears(ge::audio::Synth& synth, UnderEar& s);
 
 // One frame: with `on` and a map, the room probed when its time comes and given to the synth;
 // otherwise the synth's room set back to dry once.

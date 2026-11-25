@@ -52,10 +52,10 @@ constexpr WeaponLook kLooks[kWeapons] = {
 
 }  // namespace
 
-// The sequel's held weapons, in its rules' weapon order: drawn at the eye (no mount), so only the
+// Quake II's held weapons, in its rules' weapon order: drawn at the eye (no mount), so only the
 // kick and the shot's light are read; the fire is the model's (classicenhance's classic_fire_of).
 // clang-format off
-constexpr WeaponLook kSequelLooks[] = {
+constexpr WeaponLook kQ2Looks[] = {
     {"blaster",          0, {0, 0, 0}, 0.4, 0.5, 0.1, {1.0f, 0.78f, 0.3f}, 0.35f, 5.0f, Weapon(0), false, "", ""},
     {"shotgun",          0, {0, 0, 0}, 1.0, 1.0, 0.1, {1.0f, 0.78f, 0.42f}, 0.35f, 6.0f, Weapon(1), false, "", ""},
     {"super_shotgun",    0, {0, 0, 0}, 1.6, 1.0, 0.12, {1.0f, 0.78f, 0.42f}, 0.55f, 7.0f, Weapon(2), false, "", ""},
@@ -67,13 +67,17 @@ constexpr WeaponLook kSequelLooks[] = {
     {"railgun",          0, {0, 0, 0}, 1.4, 1.5, 0.2, {0.45f, 0.6f, 1.0f}, 0.5f, 6.0f, Weapon(8), false, "", ""},
     {"bfg",              0, {0, 0, 0}, 1.8, 1.0, 0.3, {0.4f, 1.0f, 0.4f}, 0.7f, 8.0f, Weapon(9), false, "", ""},
     {"hand_grenade",     0, {0, 0, 0}, 0.5, 1.0, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon(10), false, "", ""},
+    // The Reckoning's: the ion ripper's yellow bolt, the phalanx's orange balls, the trap thrown.
+    {"ion_ripper",       0, {0, 0, 0}, 0.6, 0.3, 0.08, {1.0f, 0.78f, 0.3f}, 0.3f, 5.0f, Weapon(11), false, "", ""},
+    {"phalanx",          0, {0, 0, 0}, 1.0, 1.6, 0.12, {1.0f, 0.6f, 0.25f}, 0.45f, 6.0f, Weapon(12), false, "", ""},
+    {"trap",             0, {0, 0, 0}, 0.5, 1.0, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon(13), false, "", ""},
 };
 // clang-format on
 
 std::span<const WeaponLook> weapon_looks() { return kLooks; }
 
-const WeaponLook& sequel_weapon_look(int w) {
-  return kSequelLooks[w >= 0 && w < static_cast<int>(std::size(kSequelLooks)) ? w : 0];
+const WeaponLook& q2_weapon_look(int w) {
+  return kQ2Looks[w >= 0 && w < static_cast<int>(std::size(kQ2Looks)) ? w : 0];
 }
 
 const WeaponLook& weapon_look(Weapon w) {

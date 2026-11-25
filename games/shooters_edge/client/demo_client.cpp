@@ -84,7 +84,7 @@ constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd
 constexpr uint32_t kFteScale = 0x2, kFteTrans = 0x8, kFteFloatCoords = 0x8000,
                    kFteChunkedDownloads = 0x20000000;
 constexpr size_t kChunkBytes = 1024;  // a chunked download's chunk
-constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
+constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2, kMvdWeaponPred = 0x80;
 
 constexpr int kMostEntities = 2048;
 
@@ -285,7 +285,24 @@ void player_info(Demo& d, DemoMsg& m) {
   p.model = (flags & 0x20) != 0 ? m.u8() : d.player_model;
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
-  if ((flags & 0x100) != 0) p.weapon_frame = m.u8();
+  ge::classic::WeaponState weapon;
+  if ((flags & 0x100) != 0) {
+    p.weapon_frame = m.u8();
+    // Weapon prediction's byte, and the weapon's state when it is nonzero.
+    if ((d.ext_mvd & kMvdWeaponPred) != 0 && m.u8() != 0) {
+      weapon.known = true;
+      weapon.impulse = m.u8();
+      weapon.weapon = ge::classic::weapon_off_wire(m.i16());
+      weapon.clock = m.f32();
+      weapon.attack_finished = m.f32();
+      weapon.next_think = m.f32();
+      weapon.step = m.u8();
+      weapon.ping_ms = m.u8();
+      weapon.flags = m.u8();
+      for (int& a : weapon.ammo) a = m.u8();
+    }
+    weapon.frame = p.weapon_frame;
+  }
   // The extra byte's look: scale (bit 16), transparency (17), fatness (18, not drawn), the tint
   // (19; no server sends it for a player, but it is read).
   p.scale = (flags & (1 << 16)) != 0 ? player_byte_scale(m.u8()) : 1.0f;
@@ -303,6 +320,7 @@ void player_info(Demo& d, DemoMsg& m) {
   if (slot == d.state.player) {
     d.state.velocity = {vel[0], vel[1], vel[2]};
     d.state.velocity_read = true;
+    d.state.own_weapon = weapon;
   }
 }
 
@@ -372,14 +390,19 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   m.str();                 // the level's title
   m.skip(size_t{10} * 4);  // the movement settings
   s.levels++;
+  s.light_styles = {};
   s.places = {};
   s.map.clear();
   s.models.assign(1, "");
   s.sounds.assign(1, "");
   s.intermission = false;
+  s.ended_at = s.finale_at = -1;
+  s.paused = false;
+  s.finale.clear();
   s.entities.clear();
   s.statics.clear();
   s.static_sounds.clear();
+  s.items_back.clear();
   d.baselines.clear();
   for (Frame& f : d.ring) f.clear();
   for (DemoEntity& p : s.players) p = DemoEntity{};
@@ -515,10 +538,13 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.prints.push_back({level, m.str()});
         break;
       }
-      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."` and `//loc` read, the
-                 // rest skipped
+      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."`, `//loc` and the
+                 // match's start read, the rest skipped
         const std::string text = m.str();
         const std::string word = "fullserverinfo \"";
+        s.bonuses += bonus_lines(text);
+        if (s.format == DemoFormat::multiview && text.rfind("//ktx matchstart", 0) == 0)
+          s.match_starts++;  // the match began (the f_demomatchstart hook)
         if (ge::classic::read_recorded_loc(text, s.places))
           break;                                                // a place name the recording kept
         if (ge::classic::read_vwep_line(text, s.vweps)) break;  // the visible weapons' list
@@ -533,6 +559,10 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 26:
       case 31:  // centerprint, finale
         s.centre = m.str();
+        if (id == 31) {  // the finale's text, typed over the level's end (scores.hpp)
+          s.finale = s.centre;
+          s.finale_at = s.time;
+        }
         break;
       case 10: {  // setangle; a multiview recording's names the player it turns first
         const int slot = s.format == DemoFormat::multiview ? m.u8() : s.player;
@@ -545,10 +575,12 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 11:
         ok = server_data(d, m, error);
         break;
-      case 12:
-        m.u8();
-        m.str();
-        break;    // lightstyle
+      case 12: {  // lightstyle: the style, its pattern
+        const size_t style = m.u8();
+        std::string pattern = m.str();
+        if (style < kDemoLightStyles) s.light_styles[style] = std::move(pattern);
+        break;
+      }
       case 14: {  // updatefrags
         const int slot = m.u8();
         const int frags = m.i16();
@@ -598,16 +630,21 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 23:
         ok = temp_entity(m, w, s, error);
         break;
-      case 24:
+      case 24:  // setpause
+        s.paused = m.u8() != 0;
+        break;
       case 32:
       case 44:
         m.u8();
-        break;  // setpause, cdtrack, chokecount
+        break;  // cdtrack, chokecount
       case 27:
       case 28:
       case 33:
-      case 34:
-      case 35:
+        break;
+      case 34:  // smallkick
+      case 35:  // bigkick
+        s.last_kick = id == 34 ? 2 : 4;
+        s.kicks_taken++;
         break;
       case 29: {  // spawnstaticsound
         DemoStaticSound e;
@@ -624,6 +661,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.eye = {x, y, z};
         s.angles = {a, b, c};
         s.intermission = true;
+        if (s.ended_at < 0) s.ended_at = s.time;
         break;
       }
       case 36:
@@ -771,6 +809,22 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           e.end = point(m, w);
         }
         s.effects.push_back(std::move(e));
+        break;
+      }
+      case 119: {  // the game's own: an item taken and when it comes back
+        if (!d.named_effects) {
+          error = "message id 119 is not one this reader knows";
+          ok = false;
+          break;
+        }
+        DemoItemBack b;
+        b.entity = m.i16();
+        b.model = m.i16();
+        b.skin = m.u8();
+        b.origin = point(m, w);
+        b.yaw = angle(m, w);
+        b.at = s.time + static_cast<double>(m.i32()) * 0.001;
+        if (!m.bad) take_item_back(s, b);
         break;
       }
       case 122:  // the game's own: the aim help bent this player's shot onto an entity

@@ -14,7 +14,7 @@ did not change. A test or lab that owns its QC server wraps it with `qc_runner_o
 not delete it. What still needs the program behind a runner goes through `qc_of` (null for another
 form), so a grep for `qc_of` lists what the world does not carry yet.
 
-The endpoint keeps the runner's address (`ClassicServer::rules`), so a runner handed to
-`classic_start` or `classic_change` must already sit where it lives: move a new map's runner into
+The endpoint keeps the runner's address (`QwServer::rules`), so a runner handed to
+`qw_start` or `qw_change` must already sit where it lives: move a new map's runner into
 the host's member first, then hand it on (the dedicated server's map change kept a pointer to a
 local runner that ASan caught as a stack use after return).

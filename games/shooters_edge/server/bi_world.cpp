@@ -66,8 +66,9 @@ void write_trace(pg::Vm& vm, const sh::HullTrace& tr) {
   pg::set_global_int(vm, g.trace_ent, pg::entity_value(vm, tr.ent < 0 ? 0 : tr.ent));
 }
 
+// A trace's kind with the lag mark (64, qw_antilag.hpp's kAntilagMarked) taken off.
 int trace_kind(float nomonsters) {
-  const int k = static_cast<int>(nomonsters);
+  const int k = static_cast<int>(nomonsters) & ~64;
   return k == 1 ? sh::kTraceNoMonsters : k == 2 ? sh::kTraceMissile : sh::kTraceNormal;
 }
 
@@ -166,14 +167,32 @@ void bi_setmodel(pg::Vm& vm) {
     refresh_from_world(qc_of(vm));
     return;
   }
-  // A single-player program sizes nothing it gives a brush model in its own file (the exploding
-  // boxes): the size is the file's first model's bounds, one unit wider on every side, unrotated.
-  // A multiplayer program sets such sizes itself, and its setmodel leaves them alone.
+  // A single-player program's setmodel gives the entity a box by the model's kind: an alias
+  // model a cube 16 units each way, a sprite half its widest frame across and half its tallest up
+  // and down, a brush model in its own file (the exploding boxes) the file's first model's bounds
+  // one unit wider on every side, unrotated. A multiplayer program sets sizes itself, and its
+  // setmodel leaves them alone.
   const size_t len = std::strlen(m);
-  const bool own_file = len > 4 && std::strcmp(m + len - 4, ".bsp") == 0;
-  if (!own_file || s.progs == nullptr || s.progs->layout == nullptr ||
-      !s.progs->layout->single_player || s.opt.model_bounds == nullptr)
+  const auto ends = [m, len](const char* ext) {
+    return len > 4 && std::strcmp(m + len - 4, ext) == 0;
+  };
+  const bool own_file = ends(".bsp");
+  if (s.progs == nullptr || s.progs->layout == nullptr || !s.progs->layout->single_player) return;
+  if (ends(".mdl")) {
+    flush_to_world(qc_of(vm));
+    sh::set_size(s.sv, e, {-16, -16, -16}, {16, 16, 16});
+    refresh_from_world(qc_of(vm));
     return;
+  }
+  if (ends(".spr") && s.opt.model_bounds != nullptr) {
+    sh::Vec3f lo, hi;
+    if (!s.opt.model_bounds(s.opt.model_ctx, m, lo, hi)) return;
+    flush_to_world(qc_of(vm));
+    sh::set_size(s.sv, e, lo, hi);
+    refresh_from_world(qc_of(vm));
+    return;
+  }
+  if (!own_file || s.opt.model_bounds == nullptr) return;
   sh::Vec3f lo, hi;
   if (!s.opt.model_bounds(s.opt.model_ctx, m, lo, hi)) {
     console_print(s, std::string("setmodel: no bounds for ") + m +
@@ -198,9 +217,12 @@ void bi_setsize(pg::Vm& vm) {
 void bi_break(pg::Vm& vm) { pg::vm_error(vm, "break statement"); }
 
 // The client a trace shoots for (lag compensation, QcServer::lag_rewind): its pass entity when a
-// client, else the pass entity's owner when a client; 0 for none or with no rewind installed.
-int lag_shooter(QcServer& s, int pass) {
+// client, else the pass entity's owner when a client; 0 for none, with no rewind installed, or
+// when the level does not rewind it (sv_antilag 1: only a trace marked 64; 2: every traceline).
+int lag_shooter(QcServer& s, int pass, float kind, bool line) {
   if (s.lag_rewind == nullptr || pass <= 0) return 0;
+  const bool marked = (static_cast<int>(kind) & 64) != 0;
+  if (!(marked && s.lag_level >= 1) && !(line && s.lag_level >= 2)) return 0;
   if (client_slot_of(s, pass) >= 0) return pass;
   const int owner = s.sv.edicts[static_cast<size_t>(pass)].owner;
   return owner > 0 && client_slot_of(s, owner) >= 0 ? owner : 0;
@@ -211,7 +233,7 @@ void bi_traceline(pg::Vm& vm) {
   const int pass = any_entity(vm, 3, "traceline");
   if (pass < 0) return;
   flush_to_world(qc_of(vm));
-  const int shooter = lag_shooter(s, pass);
+  const int shooter = lag_shooter(s, pass, pg::arg_float(vm, 2), true);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
   sh::Vec3f end = vec_arg(vm, 1);
   help_traced_shot(s, pass, vec_arg(vm, 0), end);  // a granted player's shot (shot_help.hpp)
@@ -226,7 +248,7 @@ void bi_tracebox(pg::Vm& vm) {
   const int pass = any_entity(vm, 5, "tracebox");
   if (pass < 0) return;
   flush_to_world(qc_of(vm));
-  const int shooter = lag_shooter(s, pass);
+  const int shooter = lag_shooter(s, pass, pg::arg_float(vm, 4), false);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
   const sh::HullTrace tr = sh::trace_move(s.sv, vec_arg(vm, 0), vec_arg(vm, 1), vec_arg(vm, 2),
                                           vec_arg(vm, 3), trace_kind(pg::arg_float(vm, 4)), pass);
@@ -251,13 +273,17 @@ void bi_checkclient(pg::Vm& vm) {
       s.check_client = c;
       break;
     }
+    // On the single-player clock the candidate's view is taken now and kept until the next
+    // choice (up to 0.1 s old when a monster looks).
+    if (s.check_client > 0 && in_use(s, s.check_client)) s.check_eye = eye_of(s, s.check_client);
   }
   const int c = s.check_client;
   if (c <= 0 || !in_use(s, c) || field_f(vm, c, pg::vm_layout(vm).f.health) <= 0 || self < 0) {
     pg::return_int(vm, 0);
     return;
   }
-  pg::return_int(vm, sees(s, eye_of(s, c), eye_of(s, self)) ? pg::entity_value(vm, c) : 0);
+  const sh::Vec3f from = s.sv.set.single_player_clock ? s.check_eye : eye_of(s, c);
+  pg::return_int(vm, sees(s, from, eye_of(s, self)) ? pg::entity_value(vm, c) : 0);
 }
 
 void bi_find(pg::Vm& vm) {
@@ -418,6 +444,20 @@ void bi_findradius(pg::Vm& vm) {
   const float grow = rad + 1;
   const sh::Vec3f lo = org - sh::Vec3f{grow, grow, grow}, hi = org + sh::Vec3f{grow, grow, grow};
   int32_t head = 0;
+  if (s.sv.set.single_player_clock) {
+    // Every entity in use in number order, linked or not, by the true distance to its box's
+    // centre: the chain runs from the highest number down.
+    for (int e = 1; e < s.sv.num_edicts; e++) {
+      const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+      if (!in_use(s, e) || ed.solid == sh::kSolidNot) continue;
+      const sh::Vec3f d = org - (ed.origin + (ed.mins + ed.maxs) * 0.5f);
+      if (sh::length(d) > rad) continue;
+      *pg::entity_field(vm, e, pg::vm_layout(vm).f.chain) = static_cast<uint32_t>(head);
+      head = pg::entity_value(vm, e);
+    }
+    pg::return_int(vm, head);
+    return;
+  }
   radius_walk(s, vm, 0, lo, hi, org, rad * rad, head);
   pg::return_int(vm, head);
 }
@@ -464,7 +504,8 @@ sh::Vec3f box_centre(const pg::Vm& vm, const pg::LayoutFields& f, int e) {
 
 // The single-player form's autoaim: the entity straight ahead along the line of sight when it
 // takes aimed damage; else the one nearest the line of sight (a cosine of at least `sv_aim`) with
-// a clear line to it, aimed at by correcting the pitch alone; else straight ahead.
+// a clear line to it, aimed at by correcting the pitch alone (from the shooter's origin to the
+// target's); else straight ahead.
 sh::Vec3f autoaim(QcServer& s, pg::Vm& vm, int shooter, sh::Vec3f forward) {
   const ge::console::Cvar* c = s.cvars.find("sv_aim");
   const float least = c != nullptr ? static_cast<float>(c->number) : 0.93f;
@@ -499,7 +540,8 @@ sh::Vec3f autoaim(QcServer& s, pg::Vm& vm, int shooter, sh::Vec3f forward) {
     }
   }
   if (target < 0) return forward;
-  const sh::Vec3f to = box_centre(vm, f, target) - start;
+  // The pitch is corrected from origin to origin.
+  const sh::Vec3f to = field_v(vm, target, f.origin) - field_v(vm, shooter, f.origin);
   const float along = sh::dot(to, forward);
   sh::Vec3f aim{forward.x * along, forward.y * along, to.z};
   sh::normalize(aim);

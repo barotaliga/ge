@@ -55,8 +55,8 @@ fs::path fresh(const std::string& name) {
   return root;
 }
 
-const std::string kBase(ge::classicenhance::classic_profile().base_dir);
-const std::string kMulti(ge::classicenhance::classic_profile().multiplayer_dir);
+const std::string kBase(ge::classicenhance::q1_profile().base_dir);
+const std::string kMulti(ge::classicenhance::q1_profile().multiplayer_dir);
 
 }  // namespace
 
@@ -107,7 +107,7 @@ TEST(the_game_loaded_is_kept_and_chosen_unless_basedir_names_another) {
   CHECK(cl::remember_game(prefs.string(), root.string()));
   const cl::KeptGame kept = cl::remembered_game(prefs.string());
   CHECK(kept.basedir == root.string());
-  CHECK(kept.profile == ge::classicenhance::classic_profile().id);
+  CHECK(kept.profile == ge::classicenhance::q1_profile().id);
   // No -basedir: the game kept, the multiplayer folder over it.
   cl::Args a;
   a.basedir = fresh("cwd").string();
@@ -161,19 +161,19 @@ TEST(the_older_kept_file_of_a_folder_alone_reads_as_the_first_profile) {
   }
   const cl::KeptGame kept = cl::remembered_game(prefs.string());
   CHECK(kept.basedir == "/games/classic");
-  CHECK(kept.profile == ge::classicenhance::classic_profile().id);
+  CHECK(kept.profile == ge::classicenhance::q1_profile().id);
 }
 
 TEST(a_folder_with_no_game_plays_the_baseline_mod_on_the_fallback_map) {
-  const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());
+  const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::q1_game());
   cl::SearchPath files;
   cl::GameContent c;
   std::string error;
   CHECK_MSG(cl::load_programs(adapter, files, "", c, error), error);
   CHECK(c.campaign == nullptr);
   CHECK(!c.registered);
-  CHECK(c.first_map == shooters_edge::profiles::classic_game().fallback_map);
-  CHECK(c.start_map == ge::classicenhance::classic_profile().start_map);
+  CHECK(c.first_map == shooters_edge::profiles::q1_game().fallback_map);
+  CHECK(c.start_map == ge::classicenhance::q1_profile().start_map);
   // Packs holding the start map start on it.
   std::vector<uint8_t> pack;
   CHECK(ge::vfs::write_pak({{"maps/start.bsp", {1, 2}}}, &pack, &error));
@@ -201,9 +201,9 @@ TEST(the_campaign_commands_go_with_the_campaign) {
   for (const char* name : {"newgame", "save", "load"}) CHECK_MSG(!con.has_command(name), name);
 }
 
-// A game whose own rules keep the campaign (the sequel's runner) and no single-player program:
+// A game whose own rules keep the campaign (Quake II's runner) and no single-player program:
 // NEW GAME and COOPERATIVE start its game with deathmatch 0, coop off or on, from its first map;
-// `save` and `load` (the sequel's own saves), and `coopgame` seats its companions (1 by default).
+// `save` and `load` (Quake II's own saves), and `coopgame` seats its companions (1 by default).
 TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   ge::console::Console con;
   cl::Listen listen;
@@ -222,7 +222,7 @@ TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   listen.opt.new_game = false;
   con.execute("coopgame 2 expert demo2");
   CHECK(next_map == "demo2" && listen.opt.new_game && listen.opt.companions == 2);
-  CHECK(listen.opt.companion_skill == ge::shooter::AimSkill::expert);
+  CHECK(listen.opt.companion_skill == ge::shooterbots::AimSkill::expert);
   CHECK(listen.opt.console.back() == "coop 1");
   next_map.clear();
   con.execute("coopgame");  // one companion by default, from the first map
@@ -292,7 +292,7 @@ TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
   const fs::path prefs = fresh("prefs-installs");
   const fs::path shareware = fresh("shareware");
   const fs::path full = fresh("full");
-  const ge::classicenhance::Profile& classic = ge::classicenhance::classic_profile();
+  const ge::classicenhance::Profile& classic = ge::classicenhance::q1_profile();
   write_pack(shareware / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   write_pack(full / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   write_pack(full / kBase / "pak1.pak", {{std::string(classic.full_game), {1}}});
@@ -304,15 +304,15 @@ TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
 
   // Nothing kept yet; then one install a game, the last one kept for each.
   CHECK(cl::remembered_installs(prefs.string()).empty());
-  CHECK(cl::remember_install(prefs.string(), "classic", shareware.string()));
-  CHECK(cl::remember_install(prefs.string(), "sequel", "/games/the sequel"));
-  CHECK(cl::remember_install(prefs.string(), "classic", full.string()));
+  CHECK(cl::remember_install(prefs.string(), "q1", shareware.string()));
+  CHECK(cl::remember_install(prefs.string(), "q2", "/games/Quake II"));
+  CHECK(cl::remember_install(prefs.string(), "q1", full.string()));
   const auto kept = cl::remembered_installs(prefs.string());
   CHECK(kept.size() == 2);
-  CHECK(kept.at("classic") == full.string());
-  CHECK(kept.at("sequel") == "/games/the sequel");  // a folder with a space kept whole
+  CHECK(kept.at("q1") == full.string());
+  CHECK(kept.at("q2") == "/games/Quake II");  // a folder with a space kept whole
   // No preferences folder: nothing kept, nothing read.
-  CHECK(!cl::remember_install("", "classic", full.string()));
+  CHECK(!cl::remember_install("", "q1", full.string()));
   CHECK(cl::remembered_installs("").empty());
 }
 
@@ -333,25 +333,95 @@ TEST(game_n_opens_the_install_kept_for_it_or_asks_for_its_folder) {
   cl::choose_folder(inside, prefs.string());
   CHECK(!inside.ask_install && fs::equivalent(inside.basedir, install));
   // Kept for game 1 (another game loaded last): game 1's own install, no question.
-  CHECK(cl::remember_install(prefs.string(), "classic", install.string()));
-  CHECK(cl::remember_game(prefs.string(), "/games/the sequel"));
+  CHECK(cl::remember_install(prefs.string(), "q1", install.string()));
+  CHECK(cl::remember_game(prefs.string(), "/games/Quake II"));
   cl::Args kept;
   kept.game_number = 1;
   kept.basedir = fresh("number-cwd2").string();
   cl::choose_folder(kept, prefs.string());
   CHECK(!kept.ask_install && fs::equivalent(kept.basedir, install));
-  CHECK(kept.profile == ge::classicenhance::classic_profile().id && kept.game == kBase);
+  CHECK(kept.profile == ge::classicenhance::q1_profile().id && kept.game == kBase);
   // The install kept is gone: asked again. Game 2 kept as game 1's folder: not that game, asked.
-  cl::Args sequel;
-  sequel.game_number = 2;
-  sequel.basedir = fresh("number-cwd3").string();
-  CHECK(cl::remember_install(prefs.string(), "sequel", install.string()));
-  cl::choose_folder(sequel, prefs.string());
-  CHECK(sequel.ask_install);
+  cl::Args q2;
+  q2.game_number = 2;
+  q2.basedir = fresh("number-cwd3").string();
+  CHECK(cl::remember_install(prefs.string(), "q2", install.string()));
+  cl::choose_folder(q2, prefs.string());
+  CHECK(q2.ask_install);
   fs::remove_all(install);
   cl::Args gone;
   gone.game_number = 1;
   gone.basedir = fresh("number-cwd4").string();
   cl::choose_folder(gone, prefs.string());
   CHECK(gone.ask_install);
+}
+
+TEST(the_file_words_link_over_the_game_s_files) {
+  ge::console::Console con;
+  cl::SearchPath files;
+  std::vector<uint8_t> pack;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"maps/a.bsp", {1, 2}}}, &pack, &error));
+  CHECK(cl::add_archive(files, "pak0.pak", std::move(pack), error));
+  cl::add_path_command(con, files);
+  con.execute("link maps/b.bsp maps/a.bsp");
+  con.run();
+  con.execute("link");
+  con.run();
+  bool listed = false;
+  for (const std::string& line : con.output())
+    listed = listed || (line.find("maps/b.bsp") != std::string::npos &&
+                        line.find("maps/a.bsp") != std::string::npos);
+  CHECK(listed);
+  con.execute("unlink -a");
+  con.run();
+  con.execute("fs_restart");
+  con.run();
+  bool banner = false;
+  for (const std::string& line : con.output()) banner = banner || line == "----- FS_Restart -----";
+  CHECK(banner);
+}
+
+TEST(select_game_lists_each_mission_pack_under_its_game) {
+  const fs::path prefs = fresh("prefs-packs");
+  const fs::path install = fresh("packs-install");
+  write_pack(install / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
+  write_pack(install / "rogue" / "pak0.pak", {{"maps/r1m1.bsp", {1}}});
+  write_pack(install / "hipnotic" / "pak0.pak", {{"maps/hip1m1.bsp", {1}}});
+  fs::create_directories(install / "xatrix");  // another game's pack's name, empty
+  CHECK(cl::remember_install(prefs.string(), "q1", install.string()));
+  const auto& q1 = ge::classicenhance::q1_profile();
+  CHECK(cl::packs_of(install.string(), q1).size() == 2);
+  // Playing the game itself: its row in colour, a row a pack under it.
+  auto rows = cl::game_rows(prefs.string(), "q1", install.string(), {}, kMulti);
+  CHECK_MSG(rows.size() == 3, std::to_string(rows.size()));
+  if (rows.size() != 3) return;
+  CHECK(rows[0].pack.empty() && rows[0].playing);
+  CHECK(rows[1].pack == "hipnotic" && rows[1].pack_name == "Scourge of Armagon" &&
+        !rows[1].playing && rows[1].install == install.string());
+  CHECK(rows[2].pack == "rogue" && rows[2].pack_name == "Dissolution of Eternity");
+  // Playing a pack: its row in colour, the game's not.
+  rows = cl::game_rows(prefs.string(), "q1", install.string(), {}, "rogue");
+  CHECK(!rows[0].playing && !rows[1].playing && rows[2].playing);
+}
+
+// NEW GAME as each Quake II game's default.cfg names it: the pack's own first map, its movies
+// first; a cfg with no `newgame` alias, or one that starts no map, names none.
+TEST(new_game_takes_the_map_and_movies_the_default_cfg_names) {
+  std::string map, shows;
+  CHECK(cl::new_game_level("bind ESCAPE togglemenu\nalias newgame \"map *ntro.cin+base1\"\n", map,
+                           shows));
+  CHECK(map == "base1" && shows == "ntro.cin");
+  CHECK(cl::new_game_level("  ALIAS NewGame \"map *logo.cin+xin.cin+xswamp\"\r\n", map, shows));
+  CHECK(map == "xswamp" && shows == "logo.cin+xin.cin");
+  CHECK(cl::new_game_level(
+      "// newgame command\nalias\tnewgame \" killserver ; maxclients 1 ; deathmatch 0 ; map "
+      "*rintro.cin+rmine1\"\n",
+      map, shows));
+  CHECK(map == "rmine1" && shows == "rintro.cin");
+  CHECK(!cl::new_game_level("alias newgamex \"map e1m1\"\nbind x y\n", map, shows));
+  CHECK(cl::new_game_level("alias newgamex \"map e1m1\"\nalias newgame \"map e1m2\"", map, shows));
+  CHECK(map == "e1m2" && shows.empty());
+  CHECK(!cl::new_game_level("alias newgame \"echo hi\"", map, shows));
+  CHECK(!cl::new_game_level("alias newgame \"map end.cin+victory.pcx\"", map, shows));
 }

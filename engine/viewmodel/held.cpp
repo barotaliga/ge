@@ -397,10 +397,28 @@ void pose_frames(const HeldModel& model, int a, int b, double t, std::vector<flo
   normals.resize(n);
   for (size_t i = 0; i < n; ++i)
     positions[i] = fa.positions[i] + (fb.positions[i] - fa.positions[i]) * u;
+  // The model's own flash never slides between a frame that parks it behind the eye and one that
+  // shows it: a flash vertex on opposite sides of the eye's plane in the two frames is frame b's
+  // (between two firing frames it blends with the barrel). The GPU's draw does the same
+  // (render/viewmodel.wgsl).
+  std::vector<uint8_t> at_b;
+  if (u > 0 && u < 1 && !model.flame.empty()) {
+    at_b.assign(n / 3, 0);
+    for (size_t tri = 0; tri < model.flame.size(); ++tri)
+      if (model.flame[tri] != 0)
+        for (size_t k = 0; k < 3; ++k) {
+          const size_t v = model.indices[tri * 3 + k];
+          if ((fa.positions[v * 3 + 2] < 0) != (fb.positions[v * 3 + 2] < 0)) at_b[v] = 1;
+        }
+    for (size_t v = 0; v < at_b.size(); ++v)
+      if (at_b[v] != 0)
+        for (size_t k = 0; k < 3; ++k) positions[v * 3 + k] = fb.positions[v * 3 + k];
+  }
   for (size_t i = 0; i + 2 < n; i += 3) {
     float v[3];
+    const float w = !at_b.empty() && at_b[i / 3] != 0 ? 1.0f : u;
     for (int k = 0; k < 3; ++k)
-      v[k] = fa.normals[i + k] + (fb.normals[i + k] - fa.normals[i + k]) * u;
+      v[k] = fa.normals[i + k] + (fb.normals[i + k] - fa.normals[i + k]) * w;
     const float len = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     const float inv = len > 0 ? 1.0f / len : 0.0f;
     for (int k = 0; k < 3; ++k) normals[i + k] = v[k] * inv;

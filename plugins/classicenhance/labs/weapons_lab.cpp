@@ -343,7 +343,7 @@ void run(ge::lab::Lab& lab) {
               "Each held weapon in its first frame, placed by the classic row, from where the "
               "player starts in " +
                   where + ", lit by the floor under the player.",
-              "the weapons sit low and right where the classic game holds them; none points "
+              "the weapons sit low and right where Quake holds them; none points "
               "back, none clips the near plane; skins read the right way round",
               {{"map", where}, {"width", std::to_string(width)}}},
              sheet(panels, labels, std::min<int>(3, int(panels.size()))));
@@ -512,7 +512,7 @@ const ge::lab::LabSpec kSpec{
     "plugin:classicenhance",
     "plugins/classicenhance/weapons",
     "classicenhance",
-    "Do the classic held weapons sit where the classic game holds them and take the light of the "
+    "Do the classic held weapons sit where Quake holds them and take the light of the "
     "map round the player?",
     {
         {"source", "", "the classic pack (zip, folder or pack); empty: the lab's fixtures"},

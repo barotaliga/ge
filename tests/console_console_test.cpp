@@ -6,6 +6,7 @@
 // ge:keywords test console dispatch buffer wait alias exec problem stuff button complete suggest
 // ge:skill console testing
 #include <map>
+#include <string>
 
 #include "check.hpp"
 #include "console/cfg.hpp"
@@ -48,6 +49,47 @@ TEST(wait_splits_frames) {
   CHECK(c.output().size() == 1 && c.pending());
   c.run();
   CHECK(c.output().size() == 2 && c.output()[1] == "b" && !c.pending());
+}
+
+TEST(sleep_holds_the_buffer_until_the_hosts_time_passes) {
+  Console plain;  // a player's console: no recipe commands at all
+  plain.execute("sleep 1");
+  CHECK(!plain.problems().empty() && plain.commands().count("sleep") == 0);
+  Console c;
+  add_recipe_commands(c);
+  double now = 10.0;
+  c.set_clock([&now] { return now; });
+  c.append("echo a; sleep 1.5; echo b");
+  CHECK(c.run() == 2);
+  CHECK(c.sleeping());
+  now = 11.0;
+  CHECK(c.run() == 0);  // half a second still to go
+  c.past_sleep([&c] {
+    c.append("echo startup");
+    c.run();
+  });  // a host's config, ahead of it
+  CHECK(c.output().back() == "startup" && c.sleeping());
+  c.execute("echo now");  // the host's own line runs past the sleep; the held one waits on
+  CHECK(c.output().size() == 3 && c.output()[2] == "now" && c.sleeping() && c.pending());
+  now = 11.5;
+  c.run();
+  CHECK(!c.sleeping() && c.output().size() == 4 && c.output()[3] == "b" && !c.pending());
+  // No clock handed in: one frame, like wait.
+  Console w;
+  add_recipe_commands(w);
+  w.append("echo a; sleep 3; echo b");
+  w.run();
+  CHECK(w.output().size() == 1 && w.pending());
+  w.run();
+  CHECK(w.output().size() == 2);
+  // A word that is no number is refused with the usage.
+  Console bad;
+  add_recipe_commands(bad);
+  bad.execute("sleep soon");
+  CHECK(!bad.problems().empty());
+  bad.clear_problems();
+  bad.execute("sleep inf");  // never a sleep that never ends
+  CHECK(!bad.problems().empty());
 }
 
 TEST(aliases_with_arguments_run_before_what_follows) {
@@ -135,6 +177,23 @@ TEST(buttons_follow_keys) {
   c.key("ctrl+mouse1", true);  // no ctrl bind: the key's own runs
   c.run();
   CHECK(jump.down());
+}
+
+// A server's stuffed text may let go of a button (`-attack`), never press one (`+attack`).
+TEST(a_server_lets_go_of_a_button_but_never_presses_one) {
+  Console c;
+  Button& attack = c.add_button("attack", "attack while held");
+  c.execute("+attack");
+  c.run();
+  CHECK(attack.down());
+  c.append("-attack", Source::server);
+  c.run();
+  CHECK(!attack.down());
+  CHECK(c.problems().empty());
+  c.append("+attack", Source::server);
+  c.run();
+  CHECK(!attack.down());
+  CHECK(c.problems().size() == 1);
 }
 
 TEST(command_line_plus_commands) {
@@ -229,4 +288,17 @@ TEST(cfg_save_keeps_the_players_value_under_a_meta) {
   c.execute("cl_comp 1");
   CHECK(c.cvars().find("cl_fov")->value == "120");
   CHECK_MSG(c.save_text().find("seta cl_fov \"90\"\n") != std::string::npos, c.save_text());
+}
+
+TEST(a_tap_sees_every_line_printed_and_the_sink_still_gets_it) {
+  ge::console::Console c{false};
+  std::string seen;
+  c.set_tap([&seen](std::string_view line) { seen.append(line).push_back('|'); });
+  c.print("one");
+  c.print("two");
+  CHECK(seen == "one|two|");
+  CHECK(c.output().size() == 2);
+  c.set_tap(nullptr);
+  c.print("three");
+  CHECK(seen == "one|two|");
 }

@@ -1,17 +1,17 @@
 // A CLASSIC GAME'S FILES, for any shooter game that opens them: where a map, a palette or a picture
 // is found by its path in the game ("maps/dm6.bsp", "gfx/palette.lmp"), whichever classic game's
 // install it is (the content profile picks the base folder and the load order). The engine's search
-// path (engine/vfs/search.hpp) over the classic game's folders under the base folder (`-basedir
-// <dir>`): the content profile's base folder first (`id1` for the first game,
+// path (engine/vfs/search.hpp) over Quake's folders under the base folder (`-basedir
+// <dir>`): the content profile's base folder first (`id1` for Quake,
 // classicenhance/profile.hpp), then the game folder
 // `-game` names over it when that is another (a mod), so a mod's file of the same path wins and
 // everything else comes from the base. Each folder's files rank as the game's own client ranks
-// them (content/load_order.hpp): the first game's numbered packs in number order, then its zips
+// them (content/load_order.hpp): Quake's numbered packs in number order, then its zips
 // (`*.pk3`) and unpacked zips (`*.pk3dir`), then its loose files, a later one winning; the
-// sequel's loose files under its packs and zips (`*.pkz`), its rerelease archive under the base
+// Quake II's loose files under its packs and zips (`*.pkz`), its rerelease archive under the base
 // folder. Names are matched ignoring case. A loose file written into the game folder after it
 // was opened (a demo just recorded) is found too: the game folder on disk is looked at first (the
-// sequel's: when its archives do not hold the name).
+// Quake II's: when its archives do not hold the name).
 // Archives are read whole at mount and checked; a file is a view into its archive where it is
 // stored unpacked.
 //
@@ -20,7 +20,7 @@
 // ge:keywords on_disk_any_case any-case letter-case
 // ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
 // ge:keywords map_lit lit coloured-light lits sky_box_files sky-box skybox env content-layer
-// ge:keywords client_folder
+// ge:keywords client_folder search_path_text path-command
 // ge:skill classic vfs shooter
 // ge:test tests/classic_content_files_test.cpp
 #pragma once
@@ -32,18 +32,35 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
+#include "classic/content/map_groups.hpp"
 #include "classicenhance/profile.hpp"
 #include "progs/localized.hpp"
 #include "vfs/search.hpp"
 
 namespace ge::classic::content {
 
+// THE LINKS (`link`, `softlink`; content/fs_words.hpp): read-only path rewrites, a name's
+// prefix replaced by a target. Hard links rewrite every path read before it is looked up; soft
+// links are tried only when the path itself is not found. The first link made that matches wins.
+struct FileLinks {
+  std::vector<std::pair<std::string, std::string>> hard, soft;  // name, target
+  // A map read as another version of it while a server is joined (map_versions.hpp): the whole
+  // path rewritten, before the links.
+  std::vector<std::pair<std::string, std::string>> versions;
+};
+
 struct SearchPath {
   std::string folder;       // the game folder on disk, the mod's when one is named ("" none)
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
   bool loose_first = true;  // the game folder's loose files on disk win (client/load_order.hpp)
+  // The map and sky groups the lookups fall back through (map_groups.hpp), kept when the path is
+  // opened again; copies share them.
+  std::shared_ptr<MapGroups> groups = std::make_shared<MapGroups>();
+  // The links (above), kept when the path is opened again (`fs_restart`); copies share them.
+  std::shared_ptr<FileLinks> links = std::make_shared<FileLinks>();
 };
 
 // The base folder `<basedir>/<the content profile's base folder>`, the bundled client's folder over
@@ -51,9 +68,9 @@ struct SearchPath {
 // fonts and pictures), and, when `game` names another, the mod folder `<basedir>/<game>` over
 // them. False with the reason and the next step when the game
 // folder is missing or an archive does not read.
-bool open_game_dir(
-    const std::string& basedir, const std::string& game, SearchPath& out, std::string& error,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
+                   std::string& error,
+                   const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // Adds an archive held in memory (a pack or a zip: a test's, a lab's or a stand-in), searched
 // before the ones added earlier.
@@ -61,7 +78,7 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
                  std::string& error);
 
 // The bundled client's own folder in the install at `root` (any case; the load order's
-// `client_folder`), "" when the game has none or the install lacks it: the first game's bundle
+// `client_folder`), "" when the game has none or the install lacks it: Quake's bundle
 // keeps its archives (place names, fonts) and its configs folder there, and the search path plays
 // it between the base folder and the game folder.
 std::filesystem::path client_folder(const std::filesystem::path& root,
@@ -74,7 +91,7 @@ std::filesystem::path on_disk_any_case(const std::filesystem::path& dir, std::st
 
 // The file at `path` ('/' separated, as the game names it): a loose file's bytes copied into
 // `store` and viewed, or a view into its pack, a loose file's name matched in any letter case.
-// Empty when no place has it.
+// Empty when no place has it. The links apply (FileLinks above).
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store);
 
@@ -83,14 +100,14 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
 // viewing `store` or a pack. Empty when the files hold none.
 std::span<const uint8_t> game_palette(
     const SearchPath& path, std::vector<uint8_t>& store,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // The map `map`'s coloured light: `maps/lits/<map>.lit`, else `<maps folder>/<map>.lit` beside
 // the map (`maps/dm6.lit`), else `lits/<map>.lit`, the folder players keep downloaded light files
 // in; viewing `store` or a pack, with its path in `found`. Empty when neither is there.
 std::span<const uint8_t> map_lit(
     const SearchPath& path, std::string_view map, std::vector<uint8_t>& store, std::string* found,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // THE SKY BOX `name`'s six pictures, in the order rt, bk, lf, ft, up, dn (brush/app/sky_box.hpp):
 // each the first of `env/<name><suffix>`, `gfx/env/<name><suffix>`, `env/<name>_<suffix>` and
@@ -104,21 +121,35 @@ struct SkyBoxFiles {
 bool sky_box_files(const SearchPath& path, std::string_view name, SkyBoxFiles* out,
                    std::string* missing = nullptr);
 
-// The maps the search path holds (the content row's maps: `maps/<name>.bsp` for the first game),
+// The maps the search path holds (the content row's maps: `maps/<name>.bsp` for Quake),
 // loose or in an archive, by name, the row's start map first and the rest in order.
 std::vector<std::string> map_names(
     const SearchPath& path,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // Every archive mounted (packs and zips), by its path, in mount order.
 std::vector<std::string> archive_paths(const SearchPath& path);
+// The console's `path`: "Current search path:", then a line a source, the one searched first at
+// the top: an archive's path and "(<n> files)", a folder's path alone. With `totals` (Quake II's
+// form) the footers "<n> files in PAK files" and "<n> files in PKZ files" follow, each only when
+// it is not zero.
+std::string search_path_text(const SearchPath& path, bool totals = false);
 // The numbered packs of the first folder mounted (the base game's: pak0, pak1, ...), in order,
 // with its content zip `pak0.pk3` first when it has no `pak0.pak` (the zip standing in for it):
 // what classic-enhance keys its cache by (classicenhance/cached.hpp's `find_cache`).
 std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path);
+// The same, then each mission pack's folder mounted over the base (classicenhance/profile.hpp's
+// `find_pack`, Quake's and Quake II's) with its numbered packs in order: the key of the cache made
+// from the mission pack laid over the base game (`classicenhance run <the pack's folder>`).
+// Equal to `content_packs` with no mission pack mounted.
+std::vector<std::span<const uint8_t>> content_packs_with_mission(const SearchPath& path);
+// The enhanced cache the game reads (classicenhance/cached.hpp's `find_cache` under `root`, the
+// default root when empty): the mission pack's cache laid over the base game's when it was made,
+// else the base game's own, else an empty path.
+std::filesystem::path content_cache(const SearchPath& path, const std::filesystem::path& root = {});
 
 // THE SAVES: ours `<game folder>/saves/<name>.save`; with `classic`, the classic text save
-// `<game folder>/<name>.sav`, where the classic game keeps its own (the name letters, digits, `_`
+// `<game folder>/<name>.sav`, where Quake keeps its own (the name letters, digits, `_`
 // and `-` only). Written whole to a temporary file and renamed over the old one, so a save is
 // never half written. False with the reason and the next step.
 bool write_save(const SearchPath& path, const std::string& name, std::span<const uint8_t> bytes,

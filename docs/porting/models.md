@@ -22,16 +22,16 @@ player carries in the third person. The held weapon in the first person is its o
 | Classic enhance | `plugins/classicenhance/models.hpp`, `cached.hpp` | The pack's models as glTF with enhanced skins, sprites as PNGs; read back by name |
 | Shell | `games/shooters_edge/app/classic_models.hpp`, `figure_frames.hpp` | Models, sprites and brush items as morph meshes; one figure's frames mapped to another's by their names' kinds |
 | Shell | `games/shooters_edge/client/world_models.hpp`, `model_lerp.hpp`, `model_filters.hpp` | Loaded, placed and drawn each frame (`filtered_models` swaps carried weapons); drawn between frames; gibs, bodies and flames hidden by choice |
-| Shell | `games/shooters_edge/net/classic_looks.hpp` | The skins and figures a server offers (`listskins`) |
+| Shell | `games/shooters_edge/net/qw_looks.hpp` | The skins and figures a server offers (`listskins`) |
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Model family | its own, one skin a model, shirt and pants colours | its own, `.pcx` skins in a folder a player model | its own (read today): a body of head, upper and lower parts joined at tags, `.skin` files | sprites in eight rotations; 3D models remixed in are baked to sprites, never the reverse |
-| Poses | the frames' names (`app/figure_frames.hpp`) | `server/sequel_poses.hpp`, stepped at 10 Hz and eased | its animation config: legs and torso apart | sprite frames by state |
+| Poses | the frames' names (`app/figure_frames.hpp`) | `server/q2_poses.hpp`, stepped at 10 Hz and eased | its animation config: legs and torso apart | sprite frames by state |
 | Carried weapon | none in its model: built by `carry.hpp` from the player's pack | a weapon model a figure, the swap only | tagged weapon models: the swap only | a sprite of its own |
-| Gibs | its rules' gib models | `server/sequel_gibs.hpp` | its own | its own |
+| Gibs | its rules' gib models | `server/q2_gibs.hpp` | its own | its own |
 
 ## Adding a game
 
@@ -48,9 +48,9 @@ player carries in the third person. The held weapon in the first person is its o
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Weapons seen in other players' hands | the sequel and the first game's community | `carry.hpp` (shared), `vweps.hpp`; the first game's figure gets one cut and fitted from its own pack |
+| Weapons seen in other players' hands | Quake II and Quake's community | `carry.hpp` (shared), `vweps.hpp`; Quake's figure gets one cut and fitted from its own pack |
 | Animation blended between frames | the later clients | `model_lerp.hpp`, the morph pass |
-| Gib, body and flame filters | the first game's community | `model_filters.hpp`, both games |
+| Gib, body and flame filters | Quake's community | `model_filters.hpp`, both games |
 | Upscaled skins, smooth normals | ours | `ce_models`, `ce_smooth` |
 
 | Drawback left behind | How |
@@ -66,7 +66,7 @@ player carries in the third person. The held weapon in the first person is its o
 
 ## Labs and tests
 
-`morph`, `gpu-morph`, `se-models`, `se-sequel-models`, `se-skins`, `se-model-lerp`,
+`morph`, `gpu-morph`, `se-models`, `se-q2-models`, `se-skins`, `se-model-lerp`,
 `se-deaths`, `se-vweps`, `se-vweps-fit`; `tests/morph_*_test.cpp`.
 
 ## Lessons (from the carried weapons)

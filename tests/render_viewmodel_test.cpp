@@ -86,3 +86,16 @@ TEST(a_packed_draw_carries_its_placement_lens_flags_and_light) {
   d.fov_y = 0;
   CHECK(near(pack_held_draw(d, view, 1600, 900, 0.25).right[3], 1));
 }
+
+TEST(a_mirrored_draw_flips_its_lens_and_its_right) {
+  FrameView view;
+  view.heading = 0.7;
+  view.fov_y = 1.1;
+  HeldDraw d;
+  const GpuHeldDraw r = pack_held_draw(d, view, 1600, 900, 0.25);
+  d.now.mirror = true;
+  const GpuHeldDraw l = pack_held_draw(d, view, 1600, 900, 0.25);
+  CHECK(l.lens[0] == -r.lens[0] && l.lens[1] == r.lens[1]);
+  for (int i = 0; i < 3; ++i) CHECK(l.right[i] == -r.right[i] && l.up[i] == r.up[i]);
+  CHECK(l.right[3] == r.right[3]);
+}

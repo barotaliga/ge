@@ -1,4 +1,4 @@
-// LAB `se-admin`: WHO IS ON, AND THE EASY JUMP FOR ONE PLAYER (net/classic_admin.hpp). Shooter's
+// LAB `se-admin`: WHO IS ON, AND THE EASY JUMP FOR ONE PLAYER (net/qw_admin.hpp). Shooter's
 // Edge's dedicated server on the engine's core, on the simulated network, with `rcon_password`
 // set and `--bots` bots seated; three classic clients join (bert asking for the easy jump with
 // `cl_speedjump 1`), on the arena or a real map (`--root=<install> --map=dm4`). The first client
@@ -13,7 +13,7 @@
 // ge:keywords lab se-admin users status speedjump grant rcon rcon_password easy-jump
 // ge:keywords accessibility console user-id dedicated-server
 // ge:skill net shooter labs
-// ge:test tests/shooters_edge_classic_admin_test.cpp
+// ge:test tests/shooters_edge_qw_admin_test.cpp
 #include <algorithm>
 #include <cstdlib>
 #include <memory>
@@ -28,9 +28,9 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "server/server.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
 
@@ -89,13 +89,13 @@ Session run_session(gl::Lab& lab) {
   c.seed = seed;
   c.rcon_password = lab.arg("password");
   gs::Server s;
-  if (!gs::server_open(s, se::classic_game(), c, &port, nullptr, r.error)) return r;
+  if (!gs::server_open(s, se::qw_game(), c, &port, nullptr, r.error)) return r;
   std::unique_ptr<gn::Transport> ct[kClients];
-  std::unique_ptr<se::ClassicClientEnd> ends[kClients];
+  std::unique_ptr<se::QwClientEnd> ends[kClients];
   for (size_t i = 0; i < kClients; i++) {
     ct[i] = std::make_unique<gn::Transport>();
     gn::open_sim_transport(*ct[i], net, gn::sim_address(static_cast<uint32_t>(i + 1), kClientPort));
-    ends[i] = std::make_unique<se::ClassicClientEnd>();
+    ends[i] = std::make_unique<se::QwClientEnd>();
     se::ClientConfig cc;
     cc.name = kNames[i];
     cc.files = {"skins/base.pcx"};
@@ -114,7 +114,7 @@ Session run_session(gl::Lab& lab) {
   const int second = static_cast<int>(1.0 / s.frame_s);
   step(4 * second);
   for (auto& e : ends) r.active += e->stage == se::ClientStage::active ? 1 : 0;
-  se::ClassicClientEnd& admin = *ends[0];
+  se::QwClientEnd& admin = *ends[0];
   auto rcon = [&](const std::string& password, const std::string& line) {
     admin.oob_prints.clear();
     se::client_rcon(admin, password, line);
@@ -206,7 +206,7 @@ void run(gl::Lab& lab) {
   if (listed != static_cast<int>(kClients) || refused != 1 || granted_rows != 1 ||
       told != static_cast<int>(kClients) || key_seen != static_cast<int>(kClients))
     lab.fail("the session did not go as the administrator's words say",
-             "run tests/shooters_edge_classic_admin_test.cpp; skill: net.");
+             "run tests/shooters_edge_qw_admin_test.cpp; skill: net.");
 
   gl::LabTable table{
       "the administrator's session: each line sent and its answer", {"sent", "answer"}, {}};
@@ -249,7 +249,7 @@ const gl::LabSpec kSpec{
     "se-admin",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_admin (users, status, the easy jump per player, rcon)",
+    "games/shooters_edge/net/qw_admin (users, status, the easy jump per player, rcon)",
     "net",
     "Does the server list every player by user id, and grant the easy jump to one chosen "
     "player over the remote console, disclosed to everyone, refusing a wrong password?",

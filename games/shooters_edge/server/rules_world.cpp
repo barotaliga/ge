@@ -3,6 +3,7 @@
 //
 // ge:summary The QC server filling the rules' world: lists at the start, rows every frame
 // ge:keywords rules-world fill_world qc-server entity-rows player-numbers weapon-model
+// ge:keywords item_back back_in respawn-time item-respawn weapon-prediction attack-finished
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_world_test.cpp
 #include "shooters_edge/server/rules_world.hpp"
@@ -15,6 +16,8 @@
 namespace shooters_edge::server {
 
 namespace {
+
+constexpr int kItemFlag = 256;  // the program's flag on an item lying about
 
 float field(const QcServer& s, int e, int offset) {
   if (offset < 0) return 0;
@@ -70,11 +73,35 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
   n.current_ammo = field(s, e, w.currentammo);
   n.weapon = field(s, e, w.weapon);
   n.weapon_frame = field(s, e, w.weaponframe);
+  n.attack_finished = field(s, e, w.attack_finished);
+  n.next_think = field(s, e, f.nextthink);
+  n.impulse = static_cast<int>(field(s, e, f.impulse));
   n.items = field(s, e, f.items);
+  n.items2 = s.q.fields.items2 >= 0 ? field(s, e, s.q.fields.items2) : 0;
   n.view_z = field(s, e, f.view_ofs + 2);
   n.frags = field(s, e, f.frags);
   n.weapon_model = model_index_of(
       s, static_cast<int32_t>(*pg::entity_field(s.q.vm, e, f.weaponmodel)), n.weapon_model);
+}
+
+// An item a program took away until its respawn (`back_in`, `back_model`): hidden (its model not
+// shown), flagged an item, held by no one (the big health box drains its taker first, ticking a
+// second at a time), and set to think again later: that think brings it back.
+void item_back(const QcServer& s, int e, WorldEntity& r) {
+  r.back_in = -1;
+  r.back_model = 0;
+  if (e <= sh::kMaxClients || r.free || r.modelindex != 0) return;
+  const auto& f = s.q.layout->f;
+  if ((static_cast<int>(field(s, e, f.flags)) & kItemFlag) == 0) return;
+  if (f.owner >= 0 && *pg::entity_field(s.q.vm, e, f.owner) != 0) return;
+  const double in = static_cast<double>(field(s, e, f.nextthink)) - s.sv.time;
+  if (!(in > 0)) return;
+  int model = static_cast<int>(field(s, e, f.modelindex));  // a hidden model text keeps it
+  if (model <= 0 && f.model >= 0)  // or the text kept and the index cleared
+    model = model_index_of(s, static_cast<int32_t>(*pg::entity_field(s.q.vm, e, f.model)), 0);
+  if (model <= 0 || static_cast<size_t>(model) >= s.models.size()) return;
+  r.back_in = static_cast<float>(in);
+  r.back_model = model;
 }
 
 }  // namespace
@@ -135,6 +162,7 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     for (const StaticEntity& st : s.statics) w.statics.push_back(world_static(st));
     w.max_clients = s.sv.set.maxclients;
     w.weapon_frames = s.world_fields.weaponframe >= 0;
+    w.items2 = s.q.fields.items2 >= 0;
     w.map_title.clear();
     {
       const char* title = pg::vm_string(
@@ -202,6 +230,7 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     r.scale = entity_scale(s, e);
     entity_colormod(s, e, r.colormod);
     r.shot = e > sh::kMaxClients && !ed.free ? shot_of(s, e) : WorldShot::none;
+    item_back(s, e, r);
   }
 }
 

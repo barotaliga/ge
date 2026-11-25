@@ -12,7 +12,7 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 `games/<game>/net/`.
 
 A game's own wire protocol uses only the sockets, the simulated network and the capture from
-here. Shooter's Edge's classic protocol (`games/shooters_edge/net/classic_*`, M18g:
+here. Shooter's Edge's classic protocol (`games/shooters_edge/net/qw_*`, M18g:
 `docs/shooters-edge.md` § The network) is the example. It has its own channel, codec, server
 endpoint, scripted client and measured session, and the `se-net` lab runs that session under
 every preset.
@@ -32,19 +32,20 @@ every preset.
 | `net/packet.hpp` | THE WIRE FORMAT, stated once: packet types, the payload header, messages, `describe_packet` |
 | `net/connection.hpp` | One connection: sequences, acks, RTT (RFC 6298), loss, the three channel kinds, big messages in pieces (`largest`), `priority`, `budget_kbps`, `LinkStats` |
 | `net/node.hpp` | Host, client or peer: the challenge handshake, up to 32 peers, timeouts, events, flush |
-| `net/session.hpp` | Sessions: the lobby on a node's reliable channel; `SessionHost` seats players and holds the rules, `SessionClient` asks and mirrors |
+| `net/session.hpp` | Sessions: the lobby on a node's reliable channel; `SessionHost` seats players and holds the rules, `SessionClient` asks and mirrors; the server info, user info and stuffed text it carries (CONFIGS) |
+| `net/session_config.hpp` | Configs over a session tied to a console: the server info followed (`session_host_follow_cvars`, `session_client_follow_cvars`), the user info read (`session_user_value`), stuffed text run under the client's rules; the `net-config` lab |
 | `net/session_wire.hpp` | The session's messages, stated once for both sides (not installed) |
 | `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert (the session's id, a locked flag), the hosts found; the same probe sent to a session address is a ping |
 | `net/hosting.hpp` | Hosting from inside a game: LAN answers and pings, the router's forward, the rendezvous, the list kept current and unlisted on stop; visibility `lan`, `invite`, `listed` |
 | `net/directory.hpp` | The server browser's model: the LAN's games and the list's pages merged by session id, pinged, filtered and sorted; `directory_route` to join one |
-| `net/server_list.hpp` | A game's own servers listed by its STATUS QUERY (a `ServerQuery` of four functions): the LAN broadcast, the masters' lists, the named servers, each queried and pinged, paced; the view's filters and sorts. Shooter's Edge's reader is `net/classic_browse.hpp`, its page `menu/servers_page.hpp` |
+| `net/server_list.hpp` | A game's own servers listed by its STATUS QUERY (a `ServerQuery` of four functions): the LAN broadcast, the masters' lists, the named servers, each queried and pinged, paced; the view's filters and sorts. Shooter's Edge's reader is `net/qw_browse.hpp`, its page `menu/servers_page.hpp` |
 | `net/hosting_trial.hpp` | An evening of hosted games found, pinged, joined, started and unlisted: what the `net-host` lab and `net_hosting_test` run |
 | `net/stun.hpp` | STUN's Binding request and answer: the public address a NAT gave a socket |
 | `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding, the list of advertised games a page at a time |
 | `net/reach.hpp` | The two ends on the node's socket: the host registers and punches, the client joins, connects, follows a punch's port (`node_retarget`), falls back on the relay; `reach_wire.hpp` the messages (not installed) |
 | `net/portmap.hpp` | Opening a port on the router: PCP, then NAT-PMP, then UPnP IGD on a socket of its own; the lease renewed at half its life, closed with a lease of 0; `portmap_wire.hpp` the three protocols' messages (not installed) |
 | `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
-| `net/net_cvars.hpp` | The network's cvars (`sv_fps`, the rates, `cl_timesync`, `cl_smooth`, `cl_interp`, `cl_extrapolate`) bound to a `ReplicateConfig`, the game's values as the defaults; voice chat's (`voice_mode`, `voice_threshold`, `voice_bitrate`, `voice_fec`, `voice_jitter`, `voice_volume`, `sv_voiceflood`) bound to a `VoiceConfig` |
+| `net/net_cvars.hpp` | The network's cvars (`sv_fps`, the rates, `cl_timesync`, `cl_smooth`, `cl_interp`, `cl_extrapolate`) bound to a `ReplicateConfig`, the game's values as the defaults; voice chat's (`voice_mode`, `voice_threshold`, `voice_bitrate`, `voice_fec`, `voice_jitter`, `voice_volume`, `sv_voiceflood`) bound to a `VoiceConfig`; the fake link's cheats (`net_fakeloss`, `net_fakelag`, `net_fakejitter`) put on a transport by `fake_link_follow` |
 | `net/replicate.hpp` | Replication, the server's word: the schema's quantized fields, per-client deltas against the acked snapshot, interest, the budget, redundant inputs, time sync (the server's slack in each snapshot, the client's clock dilation, the interpolation delay from the arrivals' need), prediction and smoothing (the spring, the snap distance), the predicted world (others by their last inputs from the snapshot's trailer, `Schema::interact`, contact events and their outcomes, the replay budget, the horizon), interpolation on cubic curves, capped extrapolation and the blend back, `replicate_rewind` and the capped `replicate_server_rewind_for` at each input's drawn moment; `replicate_server.cpp` and `replicate_client.cpp` its halves, `replicate_wire.hpp` the messages and the bit packing (not installed) |
 | `net/replicate_trial.hpp` | One measured replicated world (clients, a crowd, rewinds) over a link: what the `net-replicate` lab and `ge net sweep` run |
 | `net/lockstep.hpp` | The same step everywhere: seats in a mesh, inputs in turns with a delay, lockstep's waits or rollback's prediction and resimulation, the inputs message with its acks, step digests compared to name a desync |
@@ -53,6 +54,7 @@ every preset.
 | `net/voice.hpp` | Voice chat: the sender's gate (push to talk, activity with a hangover, open) and spurt flags, a frame's sequence and clock, the host's relay (the seat stamped, the route by the session's rules, the flood bucket, the server mute), the talker's jitter buffer (target by the transit spread at a spurt's start; played, recovered, concealed, late, dropped), the listener's mix onto synth streams with each talker's volume and placing, `voice_distance_gain` |
 | `net/voice_trial.hpp` | One measured voice session: talkers on the four routes through a dedicated host, every pair heard and metered against the clean decode; what the `voice` lab runs |
 | `net/crypto.hpp` | The crypto (M17i): XChaCha20-Poly1305 seal and open, keyed BLAKE2b derivation, the nonce from a counter and a packet's type, keys from hex or a named environment variable, `wipe`; the only file that includes Monocypher (`cmake/Crypto.cmake`) |
+| `net/tls_stream.hpp` | TLS 1.2 and 1.3 over caller-carried bytes (M18v): a client on the system's roots with the name checked, or unchecked; a test server on a certificate made on the spot; the only file that includes Mbed TLS (`cmake/Tls.cmake`). `net/http_fetch.hpp` speaks it for `https://`, through a proxy by `CONNECT` |
 | `net/token.hpp` | Connect tokens: the matchmaker's grant sealed under a key derived per host, the client's copy with its session keys, opened and checked by the host; `os_random_bytes` |
 | `net/traffic_attack.hpp` | The attackers of a secure traffic session: forged and stolen tokens, replayed and forged payloads, a flood of requests, loud clients; what `net-link --secure=1` runs |
 | `net/tap.hpp` | The live tap: a running node's datagrams mirrored as pcap records to a loopback port for `ge net watch` |

@@ -1,4 +1,4 @@
-// THE GAME FOLDER THE PLAYER POINTS AT: the classic game's install, chosen with `-basedir`, with
+// THE GAME FOLDER THE PLAYER POINTS AT: Quake's install, chosen with `-basedir`, with
 // OPTIONS ▸ CLASSIC ENHANCED ▸ LOAD GAME (the desktop's folder chooser) or the console's `basedir`,
 // and what the window reads out of it once it is open.
 //
@@ -7,12 +7,12 @@
 //   in for it, names in any case). The base folder itself picked is taken as its parent. Any other
 //   folder is refused with what it lacks: only a game the content profiles know is played.
 // - **Which game** (`install_of`): the first content profile whose base folder and first pack the
-//   folder holds, so an install of the sequel plays as the sequel with no switch to set.
+//   folder holds, so an install of Quake II plays as Quake II with no switch to set.
 // - **Which game folder over it** (`game_of`): the profile's multiplayer folder (`multiplayer_dir`:
 // its player
 //   skins and its multiplayer program) when the install has one, else the base folder, so the
 //   install plays as the multiplayer client sees it.
-// - **The game kept** (`remembered_game`, `remember_game`): the classic game loaded last, which
+// - **The game kept** (`remembered_game`, `remember_game`): Quake loaded last, which
 //   one (its content profile's id) and its install, in `<prefs>/game_folder.txt` (`profile <id>`,
 //   `basedir <folder>`; the older single line of a folder reads as the first profile's). Kept
 //   whenever a game opens (at the start, LOAD GAME, `basedir`) and opened at the next start unless
@@ -28,14 +28,15 @@
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, programs
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
-// ge:keywords install_of which-game content-profile sequel
+// ge:keywords install_of which-game content-profile q2
 // ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
-// ge:keywords campaign-program
-// ge:keywords choose_folder campaign_commands newgame coopgame save load
+// ge:keywords campaign-program path-command search-path
+// ge:keywords choose_folder campaign_commands newgame coopgame save load new_game_level intro
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #pragma once
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -55,7 +56,7 @@ namespace shooters_edge::client {
 // `*basedir`; false with what is missing and the next step in `*error`.
 bool check_game_folder(
     const std::string& folder, std::string* basedir, std::string* error,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // Which classic game the install at `folder` (or its base folder picked) is: the first content
 // profile whose folders it holds, with the install's folder in `*basedir`; null when it is none
@@ -66,8 +67,8 @@ const ge::classicenhance::Profile* install_of(const std::string& folder, std::st
 
 // The game folder played over the install at `basedir`: the multiplayer folder when it has one,
 // else the base folder.
-std::string game_of(const std::string& basedir, const ge::classicenhance::Profile& content =
-                                                    ge::classicenhance::classic_profile());
+std::string game_of(const std::string& basedir,
+                    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // The install the window opens, into `args`: `-basedir`; else the install the game was started
 // inside (client/install_search.hpp's `install_around` of the folder it runs in, `args.basedir`,
@@ -80,7 +81,7 @@ void choose_folder(Args& args, const std::string& prefs,
                    const std::vector<std::string>& places = {},
                    std::vector<FoundInstall>* found = nullptr);
 
-// The classic game loaded last: its content profile's id and its install.
+// Quake loaded last: its content profile's id and its install.
 struct KeptGame {
   std::string profile;  // a `ge::classicenhance::kProfiles` row's id
   std::string basedir;  // the install's folder; "" when no game was kept
@@ -91,9 +92,8 @@ struct KeptGame {
 KeptGame remembered_game(const std::string& prefs);
 // Keeps `basedir`, played as `content`, for the next start; false (nothing kept) when `prefs` is
 // empty or unwritable.
-bool remember_game(
-    const std::string& prefs, const std::string& basedir,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+bool remember_game(const std::string& prefs, const std::string& basedir,
+                   const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // What the window plays out of an open game folder. `campaign` points into this struct (at
 // `progs` or `pack_progs`) or is null, so it is filled in place and never moved.
@@ -103,8 +103,8 @@ struct GameContent {
   // (the mod's rules, physics and weapons: classic remix's other parts take only what it leaves);
   // empty: `progs` plays.
   std::vector<uint8_t> module;
-  // A mod folder's game library of the sequel's interface (server/sequel_native.hpp: the
-  // community's mods built for the sequel), which plays a match in place of `progs` on any map,
+  // A mod folder's game library of Quake II's interface (server/q2_native.hpp: the
+  // community's mods built for Quake II), which plays a match in place of `progs` on any map,
   // classic remix's too; empty: none.
   std::string native_library;
   ge::progs::Progs pack_progs;  // the packs' single-player program, when `progs` is not one
@@ -116,7 +116,11 @@ struct GameContent {
   bool registered = false;    // the packs are the full game
   std::string start_map;      // the profile's start map
   sv::EpisodeOrder episodes;  // the start map and each episode's first map (the profile's)
-  std::string first_map;      // the start map when the packs hold it, else the game's fallback
+  // The first map NEW GAME starts: the map the packs' default.cfg names for `newgame` (a pack's
+  // own first map) when they hold it, else the start map when they hold it, else the game's
+  // fallback; `new_game_shows` the movies that cfg plays before it (`+` joined), else none.
+  std::string first_map;
+  std::string new_game_shows;
   // The game's item names and its server's words as server lines (profiles/items.hpp's
   // `item_name_lines`, profiles/words.hpp's `word_lines`) when the baseline mod plays the game's
   // packs, so its pickups, obituaries, clock and lobby speak the game's words; empty when the
@@ -128,11 +132,16 @@ struct GameContent {
   std::vector<std::string> arsenal;
 };
 
+// The level a game's default.cfg gives its `newgame` alias (`alias newgame "map *ntro.cin+base1"`,
+// in any case): true with its map and the movies before it (`+` joined, `*` taken off); false
+// when the cfg has no such alias or it starts no map.
+bool new_game_level(const std::string& cfg, std::string& map, std::string& shows);
+
 // `out` filled from `files` (`progs_path`: `-progs`, "" for the game's own); false with the
 // reason when the multiplayer program does not load. The status lines say which program runs.
 bool load_programs(const GameAdapter& adapter, const SearchPath& files,
                    const std::string& progs_path, GameContent& out, std::string& error,
-                   const profiles::GameProfile& game = profiles::classic_game());
+                   const profiles::GameProfile& game = profiles::q1_game());
 
 // The campaign's console commands while `content` has a campaign, taken away while it has none
 // (NEW GAME is lit by `newgame`): `newgame` (a new single-player game from the start map), `save
@@ -151,10 +160,11 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
                std::string& error);
 
-// Each of the menu's `slots` save slots' line (`s0`, `s1` ...: files.hpp's `save_label`).
-std::vector<std::string> save_slot_labels(const SearchPath& files, int slots);
+// Each save's line in the menu's order (`s0`, `s1` ... or `save0` ...: files.hpp's `save_label`).
+std::vector<std::string> save_slot_labels(const SearchPath& files,
+                                          std::span<const std::string> names);
 
-// The sequel's autosave (server/sequel_save.hpp) kept as `saves/save0.save` when its rules made one
+// Quake II's autosave (server/q2_save.hpp) kept as `saves/save0.save` when its rules made one
 // as a level was entered; true when the rules asked for the load menu (single player's death).
 bool keep_autosave(Listen& listen, const SearchPath& files);
 
@@ -162,5 +172,13 @@ bool keep_autosave(Listen& listen, const SearchPath& files);
 // name, else the classic text save (`<name>.sav` names it alone). False with the reason.
 bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
                      const std::string& name, std::string& error);
+// The same for the save `ask` names, `ask` cleared: the console's words, "loaded <name>" or
+// "load: " and why not.
+std::string load_save_asked(Listen& listen, const GameContent& content, const SearchPath& files,
+                            std::string& ask);
+
+// The console's `path`: where the game's files come from, the first searched at the top
+// (plugins/classic/content/files.hpp's search_path_text over `files`, read when typed).
+void add_path_command(ge::console::Console& con, const SearchPath& files);
 
 }  // namespace shooters_edge::client

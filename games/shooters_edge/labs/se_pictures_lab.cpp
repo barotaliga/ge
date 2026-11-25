@@ -76,7 +76,7 @@ void run(ge::lab::Lab& lab) {
     lab.fail(error, "The menu's fixture pictures should pack. Skill: ui.");
     return;
   }
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const cl::ClassicPictures own = game.pictures(game, files, false, {});
   const ui::Image* plaque = own.menu.find("qplaque");
   const ui::Image* strip = own.menu.find("mainmenu");

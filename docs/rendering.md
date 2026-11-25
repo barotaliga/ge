@@ -547,6 +547,15 @@ stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`,
 corridor and its six named lights). The GPU pass (`render/viewmodel.hpp`, M48c) draws the same
 light per pixel and is held to that reference.
 
+**A gun on the left** (`Placement::mirror`, a left-handed player's: Quake II's `hand 1` or
+`cl_gun 3`) is the right-handed picture flipped across the screen's middle, not a second offset:
+the CPU raster flips x after culling, the GPU pass flips its lens and swaps each triangle's corners
+so the culling keeps the same faces, and its view right is the view's left, so the sun's shadow and
+the lamps are read where the gun is seen. Its light is found at the grip mirrored and then flipped
+to its side (`mirror_lighting`), and its muzzle, flash and arc are reflected into the world beside
+it (`mirror_world_point`). The `gpu-viewmodel` lab's `reference` shot holds a mirrored row to the
+CPU reference.
+
 **A game's own set** sits on top of these three answers. Shooter's Edge's (`games/shooters_edge/view`,
 M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
 kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
@@ -617,7 +626,7 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 256 bytes each, at most `kMaxMorphDraws`.
+  draws: 464 bytes each (272 and six wounds of 32), at most `kMaxMorphDraws`.
 - **A skin to wear.** A model may be skin-only (a skin, no frames), packed into the atlas with
   the rest. A draw's `skin` names the model whose skin it wears over its own coordinates: one
   shared figure, each player in their own picture.
@@ -665,8 +674,25 @@ frame a list of `MorphDraw`s.
   its own, `pinch` draws the figure into a column stretched up, `shimmer` runs bands up it. A
   warped fragment is marked reactive, so TAA does not trail the cut. The view-model pass reads
   the same warp along an axis of the held frame, so a spawn assembles the gun in the hands.
-  Shooter's Edge times it at 0.7 s arriving and 0.8 s leaving
-  (`games/shooters_edge/client/warps.hpp`).
+  Shooter's Edge times it at 0.35 s arriving and 0.3 s leaving
+  (`games/shooters_edge/client/warps.hpp`), short so a player who just teleported in is seen whole
+  at once and one who left is never seen where he no longer is; the local player's own weapon is
+  never warped (he fights on at once).
+- **The blood** (`MorphBlood`): up to `kMorphWounds` (6) wounds a draw, each a soaked patch round
+  where it struck and blood run down from it: a main stream and a thinner one beside it, wandering,
+  narrowing and ending in a bead at `run`. A wound sits in the model's REST frame (its frame 0,
+  times the draw's scale), which the vertex stage passes beside the posed point, so the stain stays
+  on the same cloth however the frames move the limbs; down is the rest frame's -y. The stain's
+  colour goes from a wet near-black red to a dried brown-black by `wet`. The CPU twin is
+  `wound_cover`. A game moves the patch out, the run down and the wet toward dry over time
+  (Shooter's Edge: `client/world_fx.cpp`'s `body_blood`). No wound: the shader skips it.
+- **The ground shadow** (`MorphDraw::flat`): a second draw of the same pose squashed onto a level
+  floor at `flat_y`, each point moved across by `flat_lean` for each metre it stood above the
+  floor, in the shell's one flat colour (black) and see-through by `alpha`. It is the classic games'
+  blob shadow: one more draw a model, no shadow map. The game finds the floor and sets the floor a
+  hair above it, so the two never fight for depth (Shooter's Edge's `client/model_shadow.hpp`,
+  Quake II's `gl_shadows`). The squashed copy covers the silhouette once, since the dither drops
+  the same pixels from every overlapping triangle, so it never darkens twice.
 - The draws go into the HDR and motion targets after the opaque world. Depth is tested and
   written (reversed z) and back faces are culled.
 
@@ -1885,6 +1911,12 @@ colour along its reflected ray and the share that colour counts for.
   only within a step and a half behind what the last frame drew, so a beam in front of a wall is
   not mirrored as the wall. Walls do not reflect: at a graze they mirrored the corridor beside them
   as a ghost copy.
+- **Wet blood on a floor** (`ce_blood`, the beams pass's paint, `render/marks.hpp`): a pool or a
+  splash on a face turned up past 0.7 mirrors the kept scene by its gloss (0.95 wet in a pool,
+  down to a faint sheen once dried), Fresnel (25 % head on, a wet film's sheen, so a pool seen from
+  where a player stands reads as wet) and `ce_blood_reflect` (1 the default),
+  blurred a little as it dries; only where the faces' reflections are on (`ce_reflections`), since
+  only then is the scene kept.
 
 Not yet: metal and slime in other games' materials (the helper is theirs to call), and a mirror for
 what the picture does not hold (a probe).
@@ -1938,9 +1970,10 @@ in tile memory):
   classic look bakes one that pulls every colour to the nearest of its palette's 256);
 - the screen's blend (`set_post_blend`): the whole picture mixed toward one colour after the
   grade, a game's hurt flash or the liquid round the eye, a uniform the game sets each frame;
-- the arrival (`set_post_warp`, `arrival_warp`): the whole view opening out of a flash and a warp
-  while the player arrives (a spawn, a teleport's far end): pulled in and streaked toward the
-  middle, washed out and tinted, a clear disc with a bright rim growing past the corners; a
+- the arrival (`set_post_warp`, `arrival_warp`): the view's edges touched for 0.3 s while the
+  player arrives (a spawn, a teleport's far end): outside a clear disc that holds the middle from
+  the first frame, streaked toward the middle, washed out and tinted, the disc growing past the
+  corners with a faint rim; no flash and no pull, so the aim is never covered or moved; a
   uniform too, its share 0 one uniform branch;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
 
@@ -1948,7 +1981,12 @@ in tile memory):
 the sun and the sky (read from the sky's light) to 0.78; the tone curve is the Khronos PBR
 neutral operator (linear to 0.76, a smooth shoulder above, so snow keeps its colour); the
 dither is interleaved gradient noise until the blue-noise texture lands; the sRGB encoding
-is an `override` constant off for an `*Srgb` output.
+is an `override` constant off for an `*Srgb` output. Two more constants: `toe` (on by default)
+keeps the operator's toe, which takes a dark colour's least channel toward black; a world of
+painted-dark textures (the classic games') turns it off, since it took their greys and blues to
+brown. `display` (0 by default) shows a picture worked out in the display's values (a classic
+game's look: the painted colour times its light) with no exposure and no tone: the colour over a
+white face's luminance times the scale its passes wrote at, clipped at white.
 
 **As built (M7d3)** (`render/bloom.hpp`, `render/post.hpp`). **Bloom** is a compute pass
 (`bloom`) over a chain of half-size `RGBA16Float` mips of what the post pass reads (six levels
@@ -2039,6 +2077,15 @@ boots, and a figure stands on the snow instead of floating over it:
   only a tenth of the search, so two it is. Fall
   Line keeps it on at 0.6 (`r_ao`): the snow's bounce fills the creases in life, so the full
   strength reads too dark.
+- **Applied after the fact** (`encode_ao_apply`, pass `ao.apply`, `ao_apply.wgsl`; M41w): a
+  renderer with no depth prepass (the classic maps', `plugins/brush`, drawing colour and depth in
+  one pass) runs `ao` after its opaque passes (the map and its models) and then multiplies the
+  colour drawn by the sky each pixel sees, read as `sky_seen` reads it; a pixel with no depth (the
+  sky, drawn after) is left alone. It darkens all of a pixel's light, which suits a world lit by
+  its lightmaps, whose light is all bounced. Shooter's Edge's modern look runs it under `ce_ao`
+  (`ce_ao_strength` 0.8, `ce_ao_radius` 48 units). Cost on Quake's demo1 at 960 x 540 on the
+  software rasterizer: `ao` 12.7 ms and `ao.apply` 3.8 ms; the timedemo's price for the switch
+  20.2 ms of a 365 ms median frame (about 5.5 %, the run's noise 7.6 ms).
 
 **As built (M35d): depth of field** (`render/dof.hpp`, `defocused` in `post.wgsl`; the `post`
 lab's `dof` variant and the `world` lab's `--cfg="r_dof …"`). The picture blurred away from a
@@ -2155,7 +2202,7 @@ A pool over no ground (the second `create_particles`: a world of brushes or room
 stand-ins for the terrain's heights and horizon, so nothing lands and the sun is not shaded by a
 horizon.
 
-**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 96 bytes, a
+**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 112 bytes, a
 ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes
 them into the next slots, so a full pool lets its oldest go first. There is no compaction or
 indirect count yet: `particles.sim` (one thread a slot) skips a dead slot, and `particles`
@@ -2187,7 +2234,7 @@ FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: co
 hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
 and fades (a chip knocked off a wall hops on the floor below). It hops twice at most, a third of
 them three times (`max_hops`, off the particle's own size and life), then lies where it came down,
-off its own floor and off a drawn surface alike. A slot is 96 bytes.
+off its own floor and off a drawn surface alike. A slot is 112 bytes; a speck may carry a steady acceleration of its own (`accel`, m/s²) on top of gravity's share, as Quake II's boss teleport swirl pulls its specks back in and up.
 
 **What was drawn (M47c).** A pool made with `ParticleSettings::collide` lets what falls (a grain,
 a spark, debris) meet whatever the last frame drew, in a world of brushes or models with no

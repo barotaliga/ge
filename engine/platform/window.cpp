@@ -19,8 +19,13 @@
 #include <objc/runtime.h>
 #endif
 
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <mutex>
+#include <span>
 #include <string>
+#include <vector>
 
 #include "core/output.hpp"
 
@@ -71,6 +76,7 @@ std::unique_ptr<Window> open_window(const WindowDesc& desc) {
   }
   SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
   if (desc.resizable) flags |= SDL_WINDOW_RESIZABLE;
+  if (desc.hidden) flags |= SDL_WINDOW_HIDDEN;
 #if defined(__APPLE__)
   flags |= SDL_WINDOW_METAL;
 #endif
@@ -86,8 +92,23 @@ std::unique_ptr<Window> open_window(const WindowDesc& desc) {
 #if defined(__APPLE__)
   impl->metal_view = SDL_Metal_CreateView(impl->window);
 #endif
-  // In front with the keyboard: a game started from a terminal otherwise leaves the keys there.
-  SDL_RaiseWindow(impl->window);
+  // In front with the keyboard: a game started from a terminal otherwise leaves the keys there. On
+  // macOS a process started from a terminal is not the active app, and a window raised in an app
+  // that is not active stays behind without the keys (its title greyed until clicked away and
+  // back): the app is made the active one first.
+#if defined(__APPLE__)
+  if (!desc.hidden) {
+    using SharedApp = id (*)(id, SEL);
+    using Activate = void (*)(id, SEL, BOOL);
+    const id app = reinterpret_cast<SharedApp>(objc_msgSend)(
+        reinterpret_cast<id>(objc_getClass("NSApplication")),
+        sel_registerName("sharedApplication"));
+    if (app != nullptr)
+      reinterpret_cast<Activate>(objc_msgSend)(app, sel_registerName("activateIgnoringOtherApps:"),
+                                               YES);
+  }
+#endif
+  if (!desc.hidden) SDL_RaiseWindow(impl->window);
   return std::unique_ptr<Window>(new Window(std::move(impl)));
 }
 
@@ -192,6 +213,9 @@ void poll_input(Window& window, InputSnapshot& in, Devices& devices, input::Queu
 
 void set_relative_mouse(Window& window, bool on, bool raw) {
   SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, raw ? "0" : "1");
+  // Grabbed too: the pointer kept inside the window, so even while the OS holds relative mode back
+  // (the window not yet given the keys) it never reaches a screen corner (macOS's hot corners).
+  SDL_SetWindowMouseGrab(window.impl_->window, on);
   SDL_SetWindowRelativeMouseMode(window.impl_->window, on);
 }
 
@@ -199,8 +223,67 @@ bool has_focus(const Window& window) {
   return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
 }
 
+bool minimised(const Window& window) {
+  return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
 bool relative_mouse(const Window& window) {
   return SDL_GetWindowRelativeMouseMode(window.impl_->window);
+}
+
+std::string clipboard_text() {
+  char* text = SDL_GetClipboardText();  // "" (never null) when it holds no text
+  std::string out = text != nullptr ? text : "";
+  SDL_free(text);
+  return out;
+}
+
+void set_clipboard_text(const std::string& text) {
+  if (!SDL_SetClipboardText(text.c_str()))
+    out::warn(std::string("platform: the text was not put on the clipboard (") + SDL_GetError() +
+              "); skill: platform.");
+}
+
+namespace {
+
+// What the clipboard offers while it holds a picture: SDL asks for each type when a paste reads it.
+struct ClipboardPicture {
+  std::vector<uint8_t> png;
+  std::string text;
+};
+const void* clipboard_data(void* user, const char* mime, size_t* size) {
+  const auto* c = static_cast<const ClipboardPicture*>(user);
+  if (std::strcmp(mime, "image/png") == 0) {
+    *size = c->png.size();
+    return c->png.data();
+  }
+  if (std::strncmp(mime, "text/plain", 10) == 0 && !c->text.empty()) {
+    *size = c->text.size();
+    return c->text.data();
+  }
+  *size = 0;
+  return nullptr;
+}
+
+void clipboard_cleanup(void* user) { delete static_cast<ClipboardPicture*>(user); }
+
+}  // namespace
+
+bool set_clipboard_png(std::span<const uint8_t> png, const std::string& text, std::string* why) {
+  if (png.empty() || SDL_WasInit(SDL_INIT_VIDEO) == 0) {
+    if (why != nullptr) *why = "there is no window to put the picture on the clipboard from";
+    return false;
+  }
+  auto* c = new ClipboardPicture{{png.begin(), png.end()}, text};
+  const char* types[] = {"image/png", "text/plain;charset=utf-8", "text/plain"};
+  const size_t n = text.empty() ? 1 : 3;
+  // SDL owns `c` from here (video is up): its cleanup runs when the clipboard changes.
+  if (!SDL_SetClipboardData(clipboard_data, clipboard_cleanup, c, types, n)) {
+    if (why != nullptr)
+      *why = std::string("the picture was not put on the clipboard (") + SDL_GetError() + ")";
+    return false;
+  }
+  return true;
 }
 
 void set_text_input(Window& window, bool on) {
@@ -274,7 +357,49 @@ std::vector<Display> displays() {
   return out;
 }
 
-bool set_fullscreen(Window& window, bool on, int display) {
+void set_minimize_on_focus_loss(bool on) {
+  SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, on ? "1" : "0");
+}
+
+bool set_window_style(Window& window, const WindowStyle& style) {
+  SDL_Window* w = window.impl_->window;
+  const bool ok = SDL_SetWindowBordered(w, style.border) &&
+                  SDL_SetWindowAlwaysOnTop(w, style.on_top) &&
+                  SDL_SetWindowResizable(w, style.resizable);
+  if (!ok)
+    out::error(
+        std::string("platform: the window's border, place on top or edges could not be set (") +
+        SDL_GetError() + "); the window keeps what it took; skill: platform.");
+  return ok;
+}
+
+bool set_window_place(Window& window, const WindowPlace& place) {
+  SDL_Window* w = window.impl_->window;
+  bool ok = true;
+  if (place.width > 0 && place.height > 0) ok = SDL_SetWindowSize(w, place.width, place.height);
+  if (place.has_place) ok = SDL_SetWindowPosition(w, place.x, place.y) && ok;
+  if (!ok)
+    out::error(std::string("platform: the window's size or place could not be set (") +
+               SDL_GetError() + "); the window keeps what it had; skill: platform.");
+  return ok;
+}
+
+std::vector<std::string> display_modes() {
+  std::vector<std::string> out;
+  int count = 0;
+  SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &count);
+  if (modes == nullptr) return out;
+  for (int i = 0; i < count; i++) {
+    const SDL_DisplayMode& m = *modes[i];
+    const std::string one = std::to_string(m.w) + "x" + std::to_string(m.h) + "@" +
+                            std::to_string(std::lround(m.refresh_rate));
+    if (std::find(out.begin(), out.end(), one) == out.end()) out.push_back(one);
+  }
+  SDL_free(reinterpret_cast<void*>(modes));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+  return out;
+}
+
+bool set_fullscreen(Window& window, bool on, int display, const FullMode* mode) {
   SDL_Window* w = window.impl_->window;
   if (on && display > 0) {
     // The window moved onto that display first: the fullscreen covers the display it stands on.
@@ -294,8 +419,15 @@ bool set_fullscreen(Window& window, bool on, int display) {
       SDL_SyncWindow(w);
     }
   }
-  // A null mode is the borderless desktop fullscreen: the display keeps its mode.
-  if (!SDL_SetWindowFullscreenMode(w, nullptr) || !SDL_SetWindowFullscreen(w, on)) {
+  // A null mode is the borderless desktop fullscreen: the display keeps its mode; else the
+  // display's mode closest to the one asked (a depth is not the platform's to choose).
+  SDL_DisplayMode closest{};
+  const SDL_DisplayMode* use = nullptr;
+  if (on && mode != nullptr &&
+      SDL_GetClosestFullscreenDisplayMode(SDL_GetDisplayForWindow(w), mode->width, mode->height,
+                                          static_cast<float>(mode->hz), false, &closest))
+    use = &closest;
+  if (!SDL_SetWindowFullscreenMode(w, use) || !SDL_SetWindowFullscreen(w, on)) {
     out::error(std::string("platform: the window could not go ") +
                (on ? "fullscreen" : "back to a window") + " (" + SDL_GetError() +
                "); the window stays as it was; skill: platform.");

@@ -68,6 +68,19 @@ const std::string& Entity::get(const std::string& key) const {
   return kNone;
 }
 
+const std::string& Entity::get_any_case(const std::string& key) const {
+  const std::string& exact = get(key);
+  if (!exact.empty()) return exact;
+  const auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c; };
+  for (const auto& [k, v] : pairs) {
+    if (k.size() != key.size()) continue;
+    bool same = true;
+    for (size_t i = 0; i < k.size() && same; i++) same = lower(k[i]) == lower(key[i]);
+    if (same) return v;
+  }
+  return exact;
+}
+
 uint32_t leaf_at(const Map& map, const float p[3], uint32_t model) {
   int32_t at = model < map.models.size() ? map.models[model].head_node : 0;
   // The reader checked every child is in range; a tree that loops still ends here.
@@ -158,16 +171,35 @@ void clusters_heard_from(const Map& map, const float p[3], std::vector<uint8_t>&
                map.phs.begin() + std::ptrdiff_t(size_t(c + 1) * map.row_bytes));
 }
 
-uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen) {
+uint32_t second_view_leaf(const Map& map, const float p[3], uint32_t eye_leaf) {
+  if (map.family != Family::v38 || eye_leaf >= map.leaves.size()) return ~0u;
+  const Leaf& eye = map.leaves[eye_leaf];
+  const float q[3] = {p[0], p[1], p[2] + (eye.contents != 0 ? 16.0f : -16.0f)};
+  const uint32_t l = leaf_at(map, q);
+  if (l >= map.leaves.size() || map.leaves[l].solid || map.leaves[l].cluster == eye.cluster)
+    return ~0u;
+  return l;
+}
+
+uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen,
+                             std::span<const uint8_t> areas, uint32_t also) {
   const int32_t from = leaf < map.leaves.size() ? map.leaves[leaf].cluster : -1;
-  if (from < 0 || map.pvs.empty()) {
+  const int32_t from2 = also < map.leaves.size() ? map.leaves[also].cluster : -1;
+  const bool every = from < 0 || map.pvs.empty();
+  if (every && areas.empty()) {
     seen->assign(map.surfaces.size(), 1);
     return uint32_t(map.surfaces.size());
   }
+  const auto area_open = [&](int32_t a) {
+    return a >= 0 && size_t(a) / 8 < areas.size() && ((areas[size_t(a) / 8] >> (a % 8)) & 1) != 0;
+  };
   seen->assign(map.surfaces.size(), 0);
   uint32_t n = 0;
   for (const Leaf& l : map.leaves) {
-    if (l.marks == 0 || !cluster_sees(map, from, l.cluster)) continue;
+    if (l.marks == 0 ||
+        (!every && !cluster_sees(map, from, l.cluster) && !cluster_sees(map, from2, l.cluster)))
+      continue;
+    if (!areas.empty() && (l.solid || !area_open(l.area))) continue;
     for (uint32_t k = l.first_mark; k < l.first_mark + l.marks; ++k) {
       uint8_t& s = (*seen)[map.marks[k]];
       n += s == 0;

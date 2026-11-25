@@ -1,0 +1,329 @@
+// THE WAY THROUGH A CAMPAIGN MAP: a fighter (fighter.hpp) playing a map to its exit, as a player
+// does the first time through, off nothing but the map's own entities and his nav graph. Every
+// half second he plans again:
+// - the EXIT (each `trigger_changelevel`'s box) is gone for when a route leads there past every
+//   door now shut that only something else opens (a door with a `targetname`: a button, a trigger
+//   or a key's pickup moves it);
+// - else the nearest STEP a route leads to that is not done yet: a button (walked into, or shot
+//   from where he sees it: `button_poke_cmd`), a key, a trigger that fires something (walked
+//   through) that OPENS a shut door (its target the door's name, or a counter's or relay's that
+//   names it) whose opening would let him reach places he has not seen, or the exit; one he spends
+//   `kWayGiveUp_s` past twice the walk there on without doing is left for a while;
+// - else the nearest place he has not been (exploring: a way may open where he has not looked);
+//   one he spends `kWayGiveUp_s` on without getting there counts as seen;
+// - else any step left (a trigger that only lights a lamp or says a word);
+// - nothing at all for `kWayIdle_s` (a ledge a pool let him out on, its doors opened from the
+//   other side): back into the water, which leads him out to the map's main part.
+// The plan is his `objective` (fighter.hpp): he fights what he meets on the way like anyone, and
+// goes on.
+//
+// THE 100% RUN (`complete`, set before way_init): the exit waits until nothing is left that a
+// route reaches: no place unseen, no step not done once (every button pressed, every trigger walked
+// through), no SECRET not found (Quake's `trigger_secret` boxes, Quake II's triggers that fire a
+// `target_secret`; a secret wall a shot opens, `func_door_secret` or a shot `func_door` with no
+// name, is a shot button of its own, `way_complete_init`), and no MONSTER alive he can get near
+// (the nearest by the way there, gone for once nothing is unseen; he fights it as he fights any). A
+// thing tried `kWayTries` times without being done is given up for good, so a map he cannot clear
+// still ends at its exit. The map's time limit is the runner's (`EpisodeOptions::map_seconds`).
+//
+// Off the hot path: a plan is a few routes on the graph twice a second.
+//
+// ge:summary The way through a campaign map: the exit, else a button, key or trigger, else explore
+// ge:keywords way-through way_init way_plan campaign exit changelevel button key trigger explore
+// ge:keywords leader objective shut-door barred play-through episode
+// ge:skill shooterbots bots
+// ge:test tests/shooters_edge_companion_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "ai/path.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooterbots/tour.hpp"
+
+namespace ge::shooterbots {
+
+constexpr double kWayPlan_s = 0.5;      // he plans again this often, s
+constexpr double kWayGiveUp_s = 25;     // a step not done in this long past twice its walk is left
+constexpr double kWayPreySpent_s = 90;  // a monster chased this long in all, spells added, is left
+constexpr double kWayRetry_s = 60;      // and tried again after this
+constexpr double kWayNoRoute_s = 5;     // an exit his pilot finds no route to this long is left
+constexpr double kWayCall_s = 1.5;      // waited this long for a lift its button calls: pressed
+constexpr double kWayDone_s = 10;  // (`complete`) the exit waits this long past the last thing left
+constexpr float kWayTouchBy = 48;  // (`complete`) a node this near a step's box stands by it, units
+constexpr float kWayTouchFrom = 96;  // and from this near its node he goes into the box, units
+constexpr float kWayHung = 96;       // (`complete`) no node this near a trigger's height: it hangs
+constexpr float kWayFallBy = 64;     // and a floor this near across its box and at most
+constexpr float kWayFallFrom = 640;  // this over it is walked off to fall through it, units
+constexpr float kWayCrawlNear = 32;  // (`complete`) a crawl's point this near: he crawls it, units
+constexpr double kWayCrawlOut_s = 15;  // and the way back out is crawled this long at most, s
+constexpr double kWayIdle_s = 5;       // nothing to do this long: back into the water
+constexpr float kKeyCovered = 96;      // a locked door this near a key's height covers it, units
+constexpr float kWaySeen = 192;        // a node this near where he has stood is explored, units
+
+constexpr uint8_t kLockedOut = 2;     // `locked_turns`: a bridge open only once all the way out
+constexpr uint8_t kLockedGone = 3;    // `locked_turns`: a wall open once it is no longer solid
+constexpr double kWayTour_s = 30;     // (`complete`) the tour worked out again this often, s
+constexpr int kWayTourMax = 96;       // and over the nearest this many stops at most
+constexpr float kWayStill = 96;       // (`complete`) no further than this, units, in
+constexpr double kWayStill_s = 15;    // this long with work to do: what he is on is left
+constexpr double kWayHopeful_s = 20;  // (`complete`) and for this long the doors taken as open
+constexpr int kWayTries = 2;  // (`complete`) a step or a monster left this often is given up
+constexpr double kWayForever = 1e30;  // the time a thing given up for good is left until
+
+enum class WayKind : uint8_t { exit, button, key, trigger, explore, monster, secret };
+inline constexpr int kWayKinds = 7;
+const char* way_kind_name(WayKind k);
+
+struct WayStep {
+  sh::Vec3f lo, hi;  // its box (the item's spot grown a little)
+  std::string target, name;
+  // A trigger that waits for something to make it live (Quake II's TRIGGERED: bunk1's strip by
+  // its locked doors, live once the button beside it is pressed): its name and the names that fire
+  // it in turn (a trigger the button fires), left for good until a step with one as its target is
+  // done.
+  std::vector<std::string> gate;
+  bool repeats = false;  // a trigger_multiple: it fires each time he walks in
+  int32_t node = -1;     // where it is reached from
+  int button = -1;       // a button's index in the fighter's spots
+  int key_bit = 0;       // a key's item bit (Quake's), or
+  int ent = -1;          // the key lying on the map (Quake II's: taken when it is gone)
+  double left_until = -1;
+  WayKind kind = WayKind::exit;
+  bool done = false;
+  bool opens = false;     // it opens a door that only something else opens (or counts toward one)
+  bool keyed = false;     // a trigger that opens only for a key held: done once its doors open
+  bool revisit = false;   // an exit to a map he has played: taken last
+  bool leaves = false;    // a button that leads to a level change (base2's lift down to bunk1)
+  bool drains = false;    // a button that moves water (it strands him in the pool): pressed last
+  bool ever = false;      // (`complete`) done once: a lift's button shut again is not pressed again
+  int tries = 0;          // (`complete`) times it was left
+  bool first = false;     // (`complete`) taken before the tour's stops (a blast weapon)
+  bool reach_in = false;  // (`complete`) its node lies by it, not in it: the last stretch is
+                          // walked or swum into its box (`way_reach_in`)
+  std::vector<sh::Vec3f> crawl;  // (`complete`) or crawled from its node, ducked (a nook under a
+                                 // floor: base1's silencer), these origins in turn
+  bool fall = false;        // (`complete`) the crawl a walk off a floor over it, falling through it
+  std::vector<int> doors;   // those doors' entities
+  std::vector<int> covers;  // a key's: the locked doors (WayThrough::locked) lying over it
+};
+
+// An exit: a trigger walked through, or a button pressed, that changes the level.
+inline bool way_exit(const WayStep& st) { return st.kind == WayKind::exit || st.leaves; }
+
+struct WayStats {
+  int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
+  int64_t given_up = 0;  // (`complete`) steps and monsters given up for good
+  int64_t forgiven = 0;  // (`complete`) times the jumps he gave up on were given another try
+  int64_t retried = 0;   // (`complete`) times nothing was left to do and the left was tried again
+  int64_t hopeful = 0;   // (`complete`) times every door was taken as open with nothing to do
+  int64_t stood = 0;     // (`complete`) steps and monsters left for standing still on the way
+};
+
+struct WayThrough {
+  bool complete = false;                // the 100% run (set before way_init)
+  double complete_until = kWayForever;  // and after this game time, only the way out (a map he
+                                        // cannot clear still ends at its exit in its time)
+  double busy_at = -kWayForever;        // (`complete`) the last time something was left to do
+  std::vector<sh::Vec3f> crawl_out;     // (`complete`) the way back out of a nook, ducked
+  double crawl_out_at = 0;              // since this game time
+  std::vector<std::string> avoid;  // maps an exit to is no way on (a secret level; before way_init)
+  std::vector<WayStep> steps;
+  std::vector<int> locked;           // doors something else opens: their entities
+  std::vector<sh::Vec3f> locked_at;  // and where each stands shut (a turning bridge: its angles)
+  std::vector<uint8_t>
+      locked_turns;  // and whether each is a turning bridge (map_nav.hpp; 2: slid out)
+  // The maps he has played (set before way_init): an exit to one is taken last, once nothing else
+  // is left (base3's way on is back through base2, by another exit than the one he came in by).
+  std::vector<std::string> been;
+  std::vector<int> turners;  // turning doors a step opens (`func_door_rotating`): their entities
+  std::vector<sh::Vec3f> turners_at;  // and the angles each rests shut at
+  std::vector<int> hatches;  // turners lying over an exit (base2's floor hatch over its shaft)
+  std::vector<int> cars;     // doors a button moves that bar no one (a lift's car)
+  std::vector<sh::Vec3f> cars_at;   // and where each rests
+  std::vector<int> sinks;           // floors that sink under a button and come back (ridden)
+  std::vector<sh::Vec3f> sinks_at;  // and where each stands until called
+  std::vector<int32_t> barred;      // those shut now (the plan's)
+  std::vector<int32_t> barred_was;  // and at the last plan
+  std::vector<int32_t> node_door;   // each node: the bridge it stands on (map_nav.hpp), -1 none
+  // The links whose line crosses a secret wall at rest (a drop past it down a hidden lift's shaft
+  // carries no mover of its own): (the link's index, its from node, the wall's entity).
+  struct Crossing {
+    int32_t link = 0, from = 0;
+    int door = -1;
+  };
+  std::vector<Crossing> crossings;
+  // The drops through a floor door (MapNav::hatches) shut now (it rests over its hole): their
+  // links, and at the last plan.
+  std::vector<int32_t> hatch_shut, hatch_shut_was;
+  std::vector<int> walls;  // the secret walls among `locked`
+  // A floor door that starts open and closes when fired (e3m2's over the key's pillar, shut as the
+  // pillar sinks): its edict, where it spawned, and (found the first time it stands closed) the
+  // links through it, shut while it is away from where it spawned (`closed_shut`).
+  struct Closer {
+    int door = -1;
+    sh::Vec3f spawn{};
+    bool known = false;
+    std::vector<int32_t> links, froms;
+  };
+  std::vector<Closer> closers;
+  std::vector<int32_t> closed_shut, closed_from, closed_was;
+  struct KeyDoor {
+    int door = -1, bit = 0;  // a Quake key door among `locked`, and its key's item bit
+  };
+  std::vector<KeyDoor> key_doors;
+  std::vector<uint8_t> on_top;  // each node: standing on its mover's top (a lift's floor)
+  std::vector<int> lifts;       // the shut doors whose button is pressed from their top
+  // The way back (`reach_back`): each node's incoming links, and the nodes he returns from.
+  std::vector<int32_t> rev_first, rev_link, rev_from, back_stack;
+  std::vector<uint8_t> returns, back_here, back_exit;  // and from here, and to an exit
+  double ride_since = -1;          // riding a mover since (the plan held meanwhile)
+  std::vector<int> plats;          // plats that wait for a trigger: shut until they first move
+  std::vector<uint8_t> link_shut;  // scratch: each link, shut now
+  std::vector<int64_t> gain;       // each locked door: the places not yet seen its opening reaches
+  std::vector<int64_t> gain_back;  // and the places at all (seen or not)
+  std::vector<uint8_t> seen;       // nodes he has stood near
+  ge::ai::Search search;
+  WayStats stats;
+  std::vector<std::string>* log = nullptr;  // each change of plan said, when given
+  double plan_at = -1, step_since = 0;
+  double step_for = kWayGiveUp_s;  // how long the step he is on is given (its walk's worth more)
+  int step = -1;                   // the step he is on, -1 none (exploring)
+  int calling = -1;                // a button step pressed to call the lift he waited for, -1
+  // (`complete`) A boss only the map's lightning hurts (Quake's Chthon): the electrodes (the
+  // doors whose target is `lightning`) and where each rests, the button steps that move each, the
+  // button step that fires the bolt, and the doors the boss's death opens and where they rest.
+  // While those stand shut he moves both electrodes, then fires the bolt, again and again.
+  struct Bolt {
+    std::vector<int> electrodes;
+    std::vector<sh::Vec3f> electrodes_at;
+    std::vector<std::vector<int>> plates;  // per electrode, the step indices
+    int fire = -1;                         // the step index
+    std::vector<int> wake;                 // the steps that wake the boss (its rune), first
+    std::vector<int> after;                // the doors the boss's death opens
+    std::vector<sh::Vec3f> after_at;
+  } bolt;
+  double idle_since = -1;        // nothing to do since then, -1 something
+  double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
+  double stuck_since = -1;       // (`complete`) his pilot with no route to what he is on since then
+  int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none
+  int out = -1;                  // and the one on the far side he swims to and climbs out by
+  std::vector<uint8_t> trapped;  // the nodes he could walk to when he went back in
+  int32_t explore = -1;          // the place not seen he is going to
+  double explore_since = 0;      // and since when
+  WayKind kind = WayKind::explore;
+  // (`complete`) The monster he goes for (an entity, -1 none), since when, and each entity's
+  // tries and the time it is left until.
+  int prey = -1;
+  double prey_since = 0;
+  sh::Vec3f still_at;         // (`complete`) where he last moved from with work to do
+  double still_since = -1;    // and since when (-1: no work, or moving)
+  double hopeful_until = -1;  // (`complete`) nothing to do: every door taken as open until then
+  std::vector<double> prey_left;
+  std::vector<uint8_t> prey_tries;
+  std::vector<double> prey_spent;  // the time each has been chased since it was last left, s
+  double prey_tick = -1;           // the last frame a monster was chased (-1: none)
+  // (`complete`) THE TOUR (tour.hpp): the stops open now (a step's index, or -1 - a monster's
+  // entity) in the quickest order through them all and out, worked out again every kWayTour_s or
+  // when the first stop is gone; the time from each to each, and its own search.
+  bool toured = true;  // the tour's order rather than the nearest stop each time
+  Tour tour;
+  std::vector<int32_t> tour_stops, tour_nodes;
+  std::vector<double> tour_cost;
+  ge::ai::Search tour_search;
+  double tour_at = -1;
+  int64_t tours = 0;
+  // (`complete`, a party of bots: party.hpp) The steps (by index) and the monsters (by entity)
+  // another bot of the party holds (1): not his while he has work of his own. With none of his
+  // own left and some held (`mates_help`, set by his last plan), he holds off the exit and helps.
+  // 2: no one's (too far from the people playing): never his, and the exit waits for it.
+  std::vector<uint8_t> mates_steps, mates_prey;
+  bool mates_help = false;
+  int64_t mates_skipped = 0;  // plans with a stop left to a mate
+};
+
+// The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the
+// doors something else opens.
+void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
+              const ge::shooter::MapSpec& spec);
+// (`complete`) The secret walls a shot opens (`func_door_secret`, a `func_door` with `health` and
+// no name) added to the fighter's buttons as shot ones, before way_init reads them.
+void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
+                       const ge::shooter::MapSpec& spec);
+// The plan for the fighter in entity `me`: his objective (and his poke at a button) set.
+void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
+              int me, double t);
+
+// The command after a fighter's own (the leader's or a companion's): wedged on his way (no further
+// than kWayStuck in kWayStuck_s while he means to move), he jumps and steps aside, a side a
+// second, as a person shoves at a corner.
+// The leader's command after his own, going back into the water (the plan's `dive`): over the
+// edge, then across to the far side's entry (`out`) and up onto its land.
+void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
+              sh::MoveCmd& cmd);
+// (`complete`) The leader's command after his own, at a step whose box no node of his reaches
+// (base1's pool secret, a strip over the water at the foot of a ledge he cannot climb): from its
+// node, into the box.
+void way_reach_in(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
+                  sh::MoveCmd& cmd);
+
+// (`complete`) A trigger or secret hung over the floor, no floor node within `kWayHung` of it
+// (e3m5's in the pit under the top floor, t30 for the second tube): touched only falling through
+// it, so its node is the floor beside the open air over it (one `reach` holds first) and its crawl
+// the walk off the edge, steered into it on the way down (`WayStep::fall`).
+void way_fall_steps(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s,
+                    const ge::ai::Search& reach);
+
+// A link from `a` to `b` goes through the floor door from `lo` to `hi`: it passes the door's
+// middle height, and there or at its lower end (a drop falls straight once past the edge) it is
+// over the door, a player's half width allowed.
+bool way_through_floor(sh::Vec3f a, sh::Vec3f b, sh::Vec3f lo, sh::Vec3f hi);
+// The node a player standing on touches the box from, nearest its middle; else the nearest a step
+// beyond it; else one under it that a fall through it lands on; else none.
+int32_t way_node_in(const ge::shooterbots::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi);
+// Door `e` (spawnflags `sf`) noted as a closer (`WayThrough::closers`) when it starts open and lies
+// flat: a floor that closes when fired.
+void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, const char* sf);
+// The closers away from where they spawned: their links in `closed_shut` (each found the first time
+// it stands closed and still); whether that set changed since the last call.
+bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s);
+// (`complete`) A map with monsters only a blast puts down (e3m2's zombies): the weapons lying on it
+// that blast (`BotArsenal::blast_pickup`) as steps walked over first (`WayStep::first`), so he
+// carries one before they wait.
+void way_blast_steps(WayThrough& w, const Fighter& f, const MapNav& nav,
+                     const ge::shooterbots::BotView& s);
+
+constexpr float kWayStuck = 24;
+constexpr double kWayStuck_s = 1.5;
+struct Wedge {
+  sh::Vec3f still_at;      // where he last moved from
+  double still_since = 0;  // and since when he has not
+  int64_t shoves = 0;      // commands he jumped and stepped aside to come free
+  int64_t shots = 0;       // commands he fired at a monster that held him up
+};
+void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd);
+
+// THE PIT'S LIP: on dry ground outside a trap (map_nav.hpp: no way on foot back out), a wish
+// that would carry him over the lip of one (a stride ahead, a floor under it only the trap's, or
+// none within kEdgeFall) is turned back, whatever pressed it (a dodge, a U-turn): a fight's side
+// step in base2 dropped him into its south pool for good. A route of his own into the trap is let
+// be. True when it turned the keys.
+constexpr float kEdgeLook = 40;    // the stride looked along, units
+constexpr float kEdgeDrop = 64;    // a floor this far down is a step, units
+constexpr float kEdgeFall = 1024;  // past it, a floor this far down is a drop's landing, units
+bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotView& s, int me,
+              sh::MoveCmd& cmd);
+
+// INTO THE TRIGGER: a step's trigger, secret or exit out of his box though he is within
+// kTouchReach of it (a thin one past its node at a corridor's end: base3's way back to base2, one
+// that fires only for a player facing into it), or within kTouchNear over open floor (its node a
+// step outside it, or the pilot waiting on a mover beside it: e2m6's trigger round the pillar it
+// lowers), is walked into, facing it. True when it turned the keys.
+constexpr float kTouchReach = 64;
+constexpr float kTouchNear = 96;
+bool way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd);
+
+}  // namespace ge::shooterbots

@@ -50,6 +50,7 @@ bool toy_read(const uint8_t* data, size_t size, ServerInfo& out) {
   out.mode = f[2];
   out.players = std::atoi(f[3].c_str());
   out.max_players = std::atoi(f[4].c_str());
+  out.keys = {{"map", out.map}, {"mode", out.mode}};
   return true;
 }
 
@@ -355,4 +356,86 @@ TEST(server_list_lists_the_servers_that_beat_to_the_engine_s_master) {
     CHECK(e.from == kServerFromMaster);
     if (e.info.name == "ours one") CHECK(e.ping_ms >= 40 && e.ping_ms <= 46);
   }
+}
+
+TEST(server_list_info_filter_columns_and_live_update) {
+  // The info filter's words: the first that decides, a lacking key passed over.
+  std::vector<std::string> problems;
+  const auto rules = parse_info_filter("+map=^dm6$ \"+map=e1m2\" bad -x=( +", &problems);
+  CHECK_MSG(rules.size() == 2 && problems.size() == 3, std::to_string(problems.size()));
+  using Keys = std::vector<std::pair<std::string, std::string>>;
+  CHECK(info_filter_passes(rules, Keys{{"map", "DM6"}}));
+  CHECK(info_filter_passes(rules, Keys{{"map", "xe1m2x"}}));
+  CHECK(!info_filter_passes(rules, Keys{{"map", "dm66"}}));
+  CHECK(!info_filter_passes(rules, Keys{}));  // under + words, a server lacking the key: hidden
+  const auto hide = parse_info_filter("-*gamedir=fortress", nullptr);
+  CHECK(!info_filter_passes(hide, Keys{{"*gamedir", "Fortress"}}));
+  CHECK(info_filter_passes(hide, Keys{}));  // under a - word: shown
+  CHECK(info_filter_passes(parse_info_filter("-ktx +*", nullptr), Keys{{"ktx", ""}}));
+  CHECK(!info_filter_passes(parse_info_filter("-ktx +*", nullptr), Keys{{"ktx", "1.4"}}));
+  CHECK(info_filter_passes(parse_info_filter("+map=*dm", nullptr), Keys{{"map", "e1m1"}}));
+
+  World w;
+  ServerListConfig cfg;
+  build(w, cfg);
+  server_list_init(w.list, cfg, toy(), w.bt);
+  server_list_refresh(w.list, 0);
+  w.run(5000, 6000000);
+  std::vector<int> rows;
+  ServerFilter f;
+  f.info = parse_info_filter("+map=halls", nullptr);
+  server_list_view(w.list, f, ServerSort::name, rows);
+  CHECK((names(w.list, rows) == std::vector<std::string>{"named", "near ffa"}));
+  f = ServerFilter{};
+  f.hide_not_empty = true;
+  server_list_view(w.list, f, ServerSort::name, rows);
+  CHECK((names(w.list, rows) == std::vector<std::string>{"empty coop"}));
+  // By columns: map, then players high to low; none: the busy first, the full next, the empty last.
+  server_list_view(w.list, ServerFilter{},
+                   {{ServerColumn::map, false, {}}, {ServerColumn::players, true, {}}}, rows);
+  CHECK(names(w.list, rows).front() == "far ffa");  // arena, 8 players
+  server_list_view(w.list, ServerFilter{}, std::vector<ServerSortKey>{}, rows);
+  const std::vector<std::string> busy = names(w.list, rows);
+  CHECK_MSG(busy.front() == "lan duel" && busy.back() == "empty coop", busy.front());
+  // The live update: one server asked again, its row kept meanwhile.
+  const int near = rows[1];
+  const uint64_t queries = w.list.stats.queries;
+  server_list_requery(w.list, near);
+  w.run(5000, 7000000);
+  CHECK(w.list.stats.queries == queries + 1 && w.list.entries[static_cast<size_t>(near)].answered);
+}
+
+TEST(the_list_kept_as_text_reads_back_and_a_master_s_list_is_kept) {
+  World w;
+  ServerListConfig cfg;
+  build(w, cfg);
+  server_list_init(w.list, cfg, toy(), w.bt);
+  server_list_refresh(w.list, 0);
+  w.run(5000, 6000000);
+  const std::string text = server_list_cache_text(w.list);
+  ServerList kept;
+  server_list_init(kept, cfg, toy(), w.bt);
+  int bad = -1;
+  const int n = server_list_read_cache(kept, text + "not an address\nsim:1:2\tx\n", &bad);
+  CHECK(n == server_list_answered(w.list) && bad == 2);
+  CHECK(server_list_answered(kept) == n);
+  for (const ServerEntry& e : kept.entries) {
+    const ServerEntry* was = nullptr;
+    for (const ServerEntry& o : w.list.entries)
+      if (o.address == e.address) was = &o;
+    CHECK(was != nullptr && was->info.name == e.info.name && was->ping_ms == e.ping_ms &&
+          was->info.players == e.info.players && e.from == kServerFromCache);
+  }
+  // A master's answer is kept on the list for its cache, and its lines read back.
+  bool listed = false;
+  for (const ServerList::Master& m : w.list.masters)
+    if (!m.got.empty()) {
+      listed = true;
+      CHECK(parse_address_lines(address_lines(m.got) + "\nrubbish\n") == m.got);
+    }
+  CHECK(listed || w.list.config.masters.empty());
+  // Addresses alone read as servers not yet answered.
+  ServerList bare;
+  server_list_init(bare, cfg, toy(), w.bt);
+  CHECK(server_list_read_cache(bare, "sim:9:27500\n", nullptr) == 1 && !bare.entries[0].answered);
 }

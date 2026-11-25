@@ -10,7 +10,7 @@
 //   map's title), the model and sound lists, the light styles, the static entities, every
 //   connected player's user info (his name, team and colours) and the map's place names as
 //   stuffed `//loc` lines (`places`), which another client's console reads as comments. The
-//   sequel's recording carries the same lines in its signon.
+//   Quake II's recording carries the same lines in its signon.
 // - A FRAME each time the server ran (`record_listen_frame`), stamped with the milliseconds since
 //   the last (1..255): every connected player's record (origin, angles, model, skin, effects,
 //   frame, dead when his health is 0 or under), the entity list whole (every live entity with a
@@ -38,7 +38,9 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -48,7 +50,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
-#include "shooters_edge/server/sequel_wire.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 #include "vfs/zstd.hpp"
 
 namespace shooters_edge::client {
@@ -75,9 +77,9 @@ struct ListenRecorder {
   std::string path;  // the file being written
   std::ofstream file;
   int64_t written = 0;  // bytes written to the file
-  // The sequel's rules playing: its own recording (server/sequel_wire.hpp) from the player's
+  // Quake II's rules playing: its own recording (server/q2_wire.hpp) from the player's
   // view, kept whole and written as a replay file (`.ged`) at the stop.
-  std::unique_ptr<sv::SequelRecorder> sequel;
+  std::unique_ptr<sv::Q2Recorder> q2;
   // The map's place names as they are when the recording begins, kept in it (`//loc` lines,
   // plugins/classic/locs.hpp) so it plays back with them; null: none kept.
   const ge::classic::Locs* places = nullptr;
@@ -101,9 +103,31 @@ std::string record_close(ListenRecorder& r);
 // After the window's server frames (`frames` of them): a frame recorded and written out, or the
 // recording closed when the map changed (the line printed to `console`).
 void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Console& console);
-// `record <name>` and `stop`, on `listen`'s server, the file in `files`' game folder, packed as
-// `s` says.
+// RECORDING A GAME JOINED (net/qw_match_record.hpp fills it): while a server is joined,
+// `record` and `stop` reach it, and `easyrecord [name]` names the file by the match
+// (client/match_name.hpp) with the first free `_NNN`; the file `<game folder>/<name>.qwd` (Quake
+// II's `.dm2`) holds the level from its start.
+struct JoinedRecord {
+  std::function<bool()> joined;
+  std::function<bool(const std::filesystem::path& file, std::string& error)> open;
+  std::function<std::string()> close;      // the line to print ("" when not recording)
+  std::function<std::string()> path;       // the file being written ("" when none)
+  std::function<int64_t()> bytes;          // what has gone into it so far (before any gzip)
+  std::function<std::string()> extension;  // the joined game's recording: qwd, or Quake II's dm2
+  std::function<bool()> automatic;         // the match is being recorded on its own
+  std::function<std::string()> match_name;
+  std::function<std::string()> folder;  // the game folder (add_record_commands sets it)
+  // A screenshot of the next frame named `name` (the window's screenshots); false with `why`.
+  std::function<bool(const std::string& name, std::string& why)> screenshot;
+};
+
+// A recording's size in Quake II's words: "1.2 MB", "345 kB", "12 bytes" (decimal units).
+std::string q2_demo_size(int64_t bytes);
+
+// `record <name>`, `stop` and `easyrecord`, on `listen`'s server or the server `joined` says, the
+// file in `files`' game folder, packed as `s` says.
 void add_record_commands(ge::console::Console& console, ListenRecorder& r, const Listen& listen,
-                         const SearchPath& files, const RecordSettings& s);
+                         const SearchPath& files, const RecordSettings& s,
+                         JoinedRecord* joined = nullptr);
 
 }  // namespace shooters_edge::client

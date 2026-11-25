@@ -140,7 +140,7 @@ struct Shot {
 inline const MuzzleLook& look_of(const Shot& s) { return s.look ? *s.look : default_muzzle(); }
 
 // The flame at a moment, on a pose.
-struct Flame {
+struct MuzzleFlame {
   double centre[3];  // world, m: the stretched ball's middle
   double axis[3];    // the barrel's way (unit)
   double side[3];    // square to it: where the first prong points (unit)
@@ -151,7 +151,7 @@ struct Flame {
   double age_s;
   bool alive;
 };
-Flame flame_at(const Shot& s, const MuzzlePose& pose, double now_s);
+MuzzleFlame flame_at(const Shot& s, const MuzzlePose& pose, double now_s);
 
 // The puff the shot leaves, born at the muzzle's pose as it was when the shot went off.
 Blast smoke_of(const Shot& s, const MuzzlePose& pose_at_shot);

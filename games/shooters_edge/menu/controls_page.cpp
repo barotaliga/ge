@@ -21,7 +21,8 @@ constexpr Control kControls[] = {
     {"+right", "TURN RIGHT"},        {"impulse 10", "NEXT WEAPON"}, {"+movedown", "SWIM DOWN"},
     {"+moveup", "SWIM UP"},          {"messagemode", "CHAT"},       {"messagemode2", "TEAM CHAT"},
     {"messagemode3", "CHAT NEARBY"}, {"+voice", "TALK TO ALL"},     {"+voice_team", "TALK TO TEAM"},
-    {"+voice_near", "TALK NEARBY"},
+    {"+voice_near", "TALK NEARBY"},  {"+lookup", "LOOK UP"},        {"+lookdown", "LOOK DOWN"},
+    {"centerview", "CENTER VIEW"},   {"+mlook", "MOUSE LOOK"},      {"+klook", "KEYBOARD LOOK"},
 };
 
 }  // namespace

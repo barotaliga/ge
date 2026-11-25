@@ -17,7 +17,7 @@ each mod's lowest first, a profile's winning copy, the command line, the console
 value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars, and
 `--explain`. M53a part two: a game that speaks its own protocol is handed the port
 (`ServerGame::serve`, `net_frame`), and `sesv` now serves the game's own
-deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
+deathmatch over the classic protocol (`games/shooters_edge/net/qw_game.hpp`), so a classic
 client connects and plays (the `se-dedicated` lab). The game's own rules are settings too: a game
 names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch`, `teamplay`,
 `fraglimit`, `timelimit`, `samelevel`, `pausable`; the move's and the loop's settings every
@@ -37,6 +37,10 @@ are local seats of its classic endpoint: shown to every client as players, sent 
 lines, a countdown run out restarts the map into the match, and the match's end brings the next
 map up in warmup. With `LobbySettings::humans` set (a dedicated server's 1) bots alone never
 count down, and a bot never leads while a player is seated (the `se-dedicated-lobby` lab).
+Quake II's server seats `sv_bots` too, in deathmatch on its own rules: the same bot seats
+(`games/shooters_edge/bots/bot_seats.hpp`, which QuakeWorld's lobby keeps its bots in), their nav
+built off the map's brushes, Quake II's arsenal, their moves run after the clients' each frame, a
+client never given a bot's slot, and the status listing them as bots.
 The lobby and the warmup are apart: with `LobbySettings::warm_on_join` off (a game that has a
 lobby screen of its own, as Shooter's Edge's window does) a player waits on that screen, off the
 map, until `warmup` puts him in the warmup (`sitout` takes him back, `lobby_on_map` says where a
@@ -55,12 +59,12 @@ build/debug/sesv --name="Arena Night" --description="the arena" --port=27500 \
 build/debug/sesv --root=<install> --map=dm6 --port=27512 \
   +set fraglimit 20 +set timelimit 10
 build/debug/sesv --root=servers --mod=arena --cfg=duel --explain=sv_
-build/debug/sesv -game 2 --root=<install> --map=q2dm1 --port=27910
+build/debug/sesv -classic q2 --root=<install> --map=q2dm1 --port=27910
 ```
 
-`sesv -game 2` is the same process over the sequel's rules on its own protocol
-(`games/shooters_edge/net/sequel_game.hpp`): `--root` holds the sequel's game folder, and an
-unmodified client of the sequel joins it. Its levels go round `sv_maprotation` after `sv_map`
+`sesv -classic q2` is the same process over Quake II's rules on its own protocol
+(`games/shooters_edge/net/q2_game.hpp`): `--root` holds Quake II's game folder, and an
+unmodified client of Quake II joins it. Its levels go round `sv_maprotation` after `sv_map`
 when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.
 
 The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
@@ -136,7 +140,12 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   `gesample`). A started server runs the console lines a launcher adds to its `--commands` file
   (`hosted_command`); `mod arena,ctf` there resets every server value, remounts the search path,
   reads the layers again with the command line kept, and restarts the match under them on the
-  same port (`server_switch_mods`). From a game's repo, `ge server --map --bots --for` builds the
+  same port (`server_switch_mods`). `quit [reason]` ends the server after the frame (the game's
+  `ServerGame::quit` says goodbye with the reason first) and `recycle [reason]` the same with the
+  players told to reconnect: both exit with success, so a supervisor (a script, a service) starts
+  the server again. The operator's console also has `showip`, `dns`, `net_stats`, `macrolist` and the macros
+  (`$com_date`, `$com_time`, `$com_uptime`, `$com_uptime_long`, `$random`, `$com_maplist`, the
+  game's maps by `ServerGame::maps`). From a game's repo, `ge server --map --bots --for` builds the
   game's dedicated binary (the one `ge_add_server` names, or `--game`) and runs it headless for
   its digest and input log; `--replay=<log>` runs a log again to the bit.
 
@@ -214,7 +223,7 @@ either name sets the one setting, and the two can never disagree. A name may sta
 a setting that holds several. Shooter's Edge's table serves both classic games, since their names
 do not clash with each other, only with ours:
 
-| Ours | The first classic game's | The sequel's |
+| Ours | The first classic game's | Quake II's |
 | --- | --- | --- |
 | `sv_hostname` | `hostname` | `hostname` |
 | `sv_maxclients` | `maxclients` | `maxclients` |
@@ -246,29 +255,51 @@ rules unless marked engine:
 | `sv_infoflood` (`"N S"`) | `sv_kickuserinfospamcount`, `sv_kickuserinfospamtime` (one word each) | more than N user info changes in S s kicks (`300 3`) |
 | `sv_fullspectate` | `sv_forcespec_onfull` | a player joining a full server: 0 refused, 1 a spectator unless `svf` bit 2, 2 only with `svf` bit 1 |
 | `sv_reconnectwait` | `sv_reconnectlimit` | seconds before a connected address may connect again; a storm gets no answer |
-| `sv_iplimit` | (none) | the most seats one IPv4 address or one IPv6 /48 network may hold, a slot being freed counting a half, loopback and link-local never counted; 0 (the first game's default) no limit, 3 the sequel's (`engine/server/admission.hpp`) |
+| `sv_iplimit` | (none) | the most seats one IPv4 address or one IPv6 /48 network may hold, a slot being freed counting a half, loopback and link-local never counted; 0 (Quake's default) no limit, 3 Quake II's (`engine/server/admission.hpp`) |
 | `sv_locked` | (none) | 1: every new client refused ("Server is locked."), one coming back to the seat its address still holds let in, so a match's players can drop and return while nobody else joins; changed while the server runs by the admin line `sv_locked 0` or `1` over the remote console; 0 (the default) open (`engine/server/admission.hpp`) |
+| `sv_redirect` | `sv_redirect_address` (Quake II) | an address a newcomer is sent on to instead of being refused for a full server ("Server is full. Redirecting you to ...", and their client connects there, at most three times in a row); with a leading `!` every newcomer who is not a VIP is sent there, full or not; empty (the default) nobody (`engine/server/admission.hpp`) |
+| `sv_ruleset` | (none) | the competition ruleset a player must keep to (`smackdown`, Quake II's `duel`; the client sends its own as `*rsn` or `rsn`): a newcomer on another is refused a player's seat ("This server requires the smackdown ruleset. Pick it in OPTIONS or type ruleset smackdown, then join again."), a spectator never; the server info carries it as `ruleset` and the settings sheet shows it as a fixed row; empty (the default) any (`engine/server/admission.hpp`) |
+| `sv_mapcmd` | `sv_changemapcmd` (Quake II) | a console line the dedicated server runs once after each map loads, the first one too (`exec map.cfg`, `say` a greeting, a setting for every map); empty (the default) none (`engine/server/server.hpp`, `server_map_loaded`) |
+| `sv_status` | (none) | what an out-of-band `status` query is answered with: 2 (the default) the server's info and a line per player, 1 the info alone, 0 no answer (`engine/server/status.hpp`; Quake II's `sv_status_show`) |
+| `sv_statusrate` | (none) | how often `status` is answered, `limit[/period][*burst]` as `sv_rconrate`; QuakeWorld's default 0 (no limit), Quake II's 15 (its `sv_status_limit`) (`engine/server/status.hpp`) |
+| `sv_uptime` | (none) | 1 adds `uptime` to a status answer's info, short (`MM.SS`, `H:MM.SS`, `D+H:MM.SS`), 2 in words ("1 day, 2 hours, 3 mins, 4 secs"); 0 (the default) none (`engine/server/status.hpp`) |
+| `sv_fps` (Quake II's rules) | `sv_fps` | the rules' frames a second from the next map, 10 (the default) to 60 by tens: doors, lifts, shots, drops and pieces step every frame, each mover's tenth spread over the frames so it stands at every tenth where it would at 10; monsters, items, the players' hands, bodies and views and the scoreboards keep ten; stock clients, demos and TV still get ten frames a second, our clients every frame (`*ge_ext` bit 256) (`games/shooters_edge/server/q2_server.cpp`). The engine's own `sv_fps` (`engine/net/net_cvars.cpp`) is not this one |
+| `sv_ghosttime` (Quake II) | `sv_ghostime` | the seconds a slot taken by a connect waits for the player's first packet before it is free again, 6 the default (0: only `sv_timeout`) |
+| `sv_nodelta` (Quake II) | `sv_allow_nodelta` | 1 (the default) sends whole frames whenever a player's game asks; 0 drops one that asks for more than 64 ("too many nodelta frames") |
+| `sv_pingmethod` (Quake II) | `sv_calcpings_method` | the ping in the scores, `status` and status answers: 2 (the default) the least of the last 16 round trips, 1 their average, 0 none |
+| `sv_maxents` (Quake II) | `sv_max_packet_entities` | the most entities one frame sends a player, 0 (the default) as many as the packet holds; past it the rest wait for a frame with room (our own rules; a hosted game library's frames are not capped) |
+| `sv_entpriority` (Quake II) | `sv_prioritize_entities` | which entities a capped frame keeps: 0 (the default) the lowest numbers; 1 players, brush models and anything alive first, pieces and model-less entities last, the nearest first in each |
+| `sv_novis` (Quake II) | `sv_novis` | 1 sends every player every entity, behind walls too; 0 (the default) only what the player may see or hear |
+| `sv_vispatch` (Quake II) | `map_visibility_patch` | 1 (the default) mends the visibility of four stock maps (q2dm1, q2dm3, q2dm8 and one of the second mission pack's), known by the map file's checksum, so a player at a few spots is no longer hidden from one nearby; 0 the maps as they were made. Applied as each map loads |
+| `sv_entpath` (Quake II) | `map_override_path` | a folder under the game's whose entity files replace a map's own entities as it loads: `<map>@<crc>.ent` (the CRC-16 of the map's own entities, in four hex digits) first, then `<map>.ent`; empty (the default) none. A file under 2 bytes or one that does not parse is refused and the map keeps its own; the log says which file was loaded |
 | `sv_maxping` | `sv_maxping` | a player over this ping (ms) on entering plays as a spectator |
 | `sv_minping`, `sv_minpingcmd` | `sv_minping`, `sv_enable_cmd_minping` | each player's packets held until its ping reaches this; players may set it with `minping` before a match |
 | `sv_spectalk` (the mod's rule) | `sv_spectalk` | 0: during a match a spectator's `say` reaches only spectators, as `[SPEC] <name>:`; a spectator's `say_team` always does. The engine's chat route (`engine/server/chat.hpp`), when the mod leaves chat to the server |
 | `sv_sayteam_to_spec` (the mod's rule) | `sv_sayteam_to_spec` | when spectators read the team reports of the team they follow: 0 never, 1 in a match, 2 outside one, 3 always; a line typed by hand stays private (`engine/server/chat.hpp`) |
-| `sv_minrate` | `k_minrate` (the mod's own; no synonym) | the fewest bytes a second a client may ask for; a rate out of `sv_minrate`..`sv_maxrate` is reported and set back; the first game's defaults 0 and 0 (none), the sequel's 15000 and 60000 (its `sv_min_rate`, `sv_max_rate`) (`engine/server/rate.hpp`) |
-| `sv_lanrate` | (none) | 1: a client from a private, loopback or link-local address held to neither `sv_minrate` nor `sv_maxrate`, so a LAN plays at each client's own rate; 0 (the default) every client alike (`engine/server/rate.hpp`; the sequel's `sv_lan_force_rate`) |
+| `sv_minrate` | `k_minrate` (the mod's own; no synonym) | the fewest bytes a second a client may ask for; a rate out of `sv_minrate`..`sv_maxrate` is reported and set back; Quake's defaults 0 and 0 (none), Quake II's 15000 and 60000 (its `sv_min_rate`, `sv_max_rate`) (`engine/server/rate.hpp`) |
+| `sv_lanrate` | (none) | 1: a client from a private, loopback or link-local address held to neither `sv_minrate` nor `sv_maxrate`, so a LAN plays at each client's own rate; 0 (the default) every client alike (`engine/server/rate.hpp`; Quake II's `sv_lan_force_rate`) |
 | `sv_safestrafe` | `sv_safestrafe` | N: a reversed sideways move is zeroed until N commands of none lie between; in the server info |
 | `sv_antilagexact` | `sv_antilag_no_pred` | 1: the rewind goes to exactly the frame the shooter saw, no lead |
+| `sv_antilag` | `sv_antilag` | 1: the shots the game marks are traced where the shooter saw the others (ours mark every hitscan); 2: every shot's line; in the server info |
+| `sv_antilag_projectiles` | `sv_antilag_projectiles` | 1, with `sv_antilag 2`: a player's missiles in flight meet the others where he saw them too |
+| `sv_antilag_max` | — | no rewind further back than this many ms (0: as far as the history goes, the default; Quake II's 250) |
 | `sv_voipecho` | `sv_voip_echo` | 1: a speaker hears his own voice back |
 | `sv_earshot` | — | how near (map units, 1000) a player must stand, with no wall sound cannot pass, to read `say_near` and hear a voice aimed `near` (0: neither) |
 | `sv_rconcrypt` | `sv_crypt_rcon` | 1: the remote console takes only a hashed password (SHA-1 of the password, the time and the line); 0 takes either |
 | `sv_rcontime` | `sv_timestamplen` | seconds a hashed line's time may be off the server's clock (0: not checked; 60) |
-| `sv_rconrate` | `sv_rconlim` | how often the remote console is answered, `limit[/period][*burst]` (a period of seconds or `sec`, `min`, `hour`; 1 s and 5 unset): a bucket of tries refilling, a good password's try given back, a try past it not answered; the first game's default 10*10, the sequel's 1 (its `sv_rcon_limit`); 0 no limit (`engine/server/limit.hpp`) |
-| `sv_passwordrate` | (none) | how often a connect with a wrong player's or spectator's password is answered, as `sv_rconrate`; the first game's default 0 (no limit), the sequel's 1 (its `sv_auth_limit`) (`engine/server/limit.hpp`) |
+| `sv_rconrate` | `sv_rconlim` | how often the remote console is answered, `limit[/period][*burst]` (a period of seconds or `sec`, `min`, `hour`; 1 s and 5 unset): a bucket of tries refilling, a good password's try given back, a try past it not answered; Quake's default 10*10, Quake II's 1 (its `sv_rcon_limit`); 0 no limit (`engine/server/limit.hpp`) |
+| `lrcon_password` | (none) | a helper's remote console password: it runs only the lines that start with a prefix the administrator allowed with `lrcon_add <prefix>` (`lrcon_del`, `lrcon_list`; Quake II's `addlrconcmd`, `dellrconcmd`, `listlrconcmds`), anything else "This command is not permitted."; empty (the default) none; never passed to a mod or shown (`engine/server/lrcon.hpp`) |
+| `sv_passwordrate` | (none) | how often a connect with a wrong player's or spectator's password is answered, as `sv_rconrate`; Quake's default 0 (no limit), Quake II's 1 (its `sv_auth_limit`) (`engine/server/limit.hpp`) |
 | `sv_banmode` | `filterban` | 1: the ban list refuses its addresses; 0: only its addresses may join. The list is the engine's (`engine/server/bans.hpp`): `addip <pattern> [ban\|safe] [+seconds\|time]`, `removeip`, `listip`, `writeip`, saved to the game folder's `listip.cfg` and read back at start |
+| (the blackhole list) | (none) | addresses the server never hears: every datagram from one is dropped unread, a query's and a connect's alike. `blackhole_addip <pattern> [+seconds\|time]`, `blackhole_removeip`, `blackhole_listip`, `blackhole_writeip` (Quake II's `addblackhole`, `delblackhole`, `listblackholes`) (`engine/server/bans.hpp`) |
+| (the command filters) | (none) | client commands the server refuses: `filtercmd_add <command> [ignore\|log\|print\|stuff\|kick] [text]` (`print` shows the client the text, `stuff` runs it on the client's console, `log` and `kick` write `<name>[<address>]: issued banned command: <command>`), `filtercmd_remove <command\|number\|all>`, `filtercmd_list` (Quake II's `addfiltercmd`, `delfiltercmd`, `listfiltercmds`). The match is the line's first word in any case; the words a client's signon and downloads need are never filtered (`engine/server/cmdfilter.hpp`) |
+| (setting and user info bans) | (none) | Quake II's servers judge a client by a console setting's value or a user info key's: `cvarban_add <setting> <match> [log\|print\|stuff\|kick] [text]` (log when none is given), `cvarban_remove <number\|setting\|all>`, `cvarban_list`, `cvarban_check` (asks every player again), and `userinfoban_add`, `userinfoban_remove`, `userinfoban_list` over user info keys (Quake II's `addcvarban`, `delcvarban`, `listcvarbans`, `checkcvarbans`, `adduserinfoban`, `deluserinfoban`, `listuserinfobans`). The match: `!` turns it round, `*` any value, `=N` `<N` `>N` numbers, `~text` contains, `#text` exactly, else the exact value, case ignored. A setting is asked at every map by a stuffed `cmd` line the client's console expands; a user info ban that kicks refuses the connect ("<text> Connection refused.") and the others act at every map and every change. Every matching entry acts in order until a kick (`engine/server/settingban.hpp`) |
 | `sv_vippassword`, `sv_vipvalues` | `vip_password`, `vip_values` | words that make a client a VIP, and the level each gives; a VIP skips the passwords and carries `*VIP <level>`. The VIP address list is `vip_addip <pattern> [level]`, `vip_removeip`, `vip_listip`, `vip_writeip` (saved to `vip_ip.cfg`) |
 | `sv_maxvipspectators` | `maxvip_spectators` | spectator slots only a VIP may take |
-| `sv_vipslots` | (none) | the players' last slots only a VIP may take (the sequel's `sv_reserved_slots`, whose `sv_reserved_password` is `sv_vippassword` and whose server password counts as a VIP's there); 0 (the default) none (`engine/server/admission.hpp`) |
+| `sv_vipslots` | (none) | the players' last slots only a VIP may take (Quake II's `sv_reserved_slots`, whose `sv_reserved_password` is `sv_vippassword` and whose server password counts as a VIP's there); 0 (the default) none (`engine/server/admission.hpp`) |
 | `sv_idletime` | (none) | seconds a player may press, move and say nothing before being dropped ("<name> was dropped for idling."); 0 (the default) never (`engine/server/idle.hpp`; the engine's `sv_idlekick` is the lobby's unready time) |
-| `sv_speedwindow`, `sv_speedwarn`, `sv_speedkick` | (none) | a client's asked move time over real time per window (16 s): logged above warn, dropped above kick ("<name> was dropped for a fast clock."); both 0 (the default) off, meaningful above 1 (`engine/server/skew.hpp`; the sequel's `sv_timescale_time`, `_warn`, `_kick`) |
-| `sv_namelimit`, `sv_shownames` | (none) | how often a player in the game may rename: "N S" is N renames in any S seconds (5 60 the default, "N/min" read too, 0 no limit), past which the old name is kept ("You can't change your name too often."); who hears "<old> changed name to <new>.": 0 (the default) nobody, 1 everyone of a player, 2 of a spectator too (`engine/server/names.hpp`; the sequel's `sv_namechange_limit`, `sv_show_name_changes`) |
+| `sv_speedwindow`, `sv_speedwarn`, `sv_speedkick` | (none) | a client's asked move time over real time per window (16 s): logged above warn, dropped above kick ("<name> was dropped for a fast clock."); both 0 (the default) off, meaningful above 1 (`engine/server/skew.hpp`; Quake II's `sv_timescale_time`, `_warn`, `_kick`) |
+| `sv_namelimit`, `sv_shownames` | (none) | how often a player in the game may rename: "N S" is N renames in any S seconds (5 60 the default, "N/min" read too, 0 no limit), past which the old name is kept ("You can't change your name too often."); who hears "<old> changed name to <new>.": 0 (the default) nobody, 1 everyone of a player, 2 of a spectator too (`engine/server/names.hpp`; Quake II's `sv_namechange_limit`, `sv_show_name_changes`) |
 
 With `sv_maxspectators` above 0 the spectators have their own slots beside `sv_maxclients`'s
 players (the loop's slots are both, at most 32); at 0 a spectator takes a free player slot.
@@ -276,7 +307,7 @@ players (the loop's slots are both, at most 32); at 0 a spectator takes a free p
 A mod reads the server it runs on by its game's names too: before the rules start, the game puts
 `hostname`, `maxclients` and `maxspectators` in the rules' own table, so a bytecode or compiled
 mod's `cvar("maxclients")` reads the real number, not a default of its own. A rule only one
-game's mods know (the sequel's `dmflags`) is left alone by a map of the other.
+game's mods know (Quake II's `dmflags`) is left alone by a map of the other.
 
 ## Meta-cvars: one switch for a group
 
@@ -307,6 +338,14 @@ sv_rewindmax 0.2`, 2 includes 1 and adds `sv_maxrate 0; sv_rewindmax 0.1`. The g
 in `tests/golden/console_script.txt` (`meta-*`) hold the precedence, the restore, the nesting and
 the refused loop; the `server-cfg` lab draws a mod setting `sv_modern 1` over a base that set
 `sv_fps`.
+
+A game's dedicated server declares its own levels as data (`ServerGame::metas`, a `GameMeta` row a
+level), so `sv_modern` means "a modern server" in every game and each says what that is for it.
+Only how the network judges play is in it, never a game's feel. Shooter's Edge's QuakeWorld: 1 is
+`sv_antilag 2; sv_antilag_projectiles 1` (every shot's line and every rocket, grenade and nail
+rewound to what the shooter saw), 2 adds `sv_lanrate 1`. Its Quake II: 1 is `sv_antilag 2;
+sv_antilag_projectiles 1; sv_antilag_interp 1`. Held by `tests/shooters_edge_qw_game_test.cpp`;
+the `se-dedicated-lobby` lab plays its matches with `--modern=1`.
 
 ## The lobby and the match's phases
 
@@ -342,13 +381,20 @@ itself: a recording begins at the frame after the phase turns to the match (the 
 see of it: a map restarted for the match shows from there) and ends when the phase leaves it, to
 `demos/<map>-<YYYYMMDD>-<HHMMSS>.ged` in the game's folder, written as it goes, so the warmup and
 the scores after are in no file and a server stopped mid-match keeps every whole second. A game with
-no phases is in its match from the start. Beside `--record` and the server's own TV, every
+no phases is in its match from the start. QuakeWorld's and Quake II's servers both tell their match's phase
+(`sv_lobby`), so each of their matches is a file of its own. Beside `--record` and the server's own TV, every
 recording takes the same frame bytes, which the game is asked for once a frame
 (`Server::tv_frame_bytes`): a game whose frame hands out what its viewers have not had yet, as
 Shooter's Edge's classic game does, would otherwise give each recording only part of a frame. In
 the `se-dedicated-lobby` lab Shooter's Edge's dedicated server with the lobby and three bots plays
 two matches in 60 s: two files of about 19 s each, every one of 11,688 views played back equal to
 the live server's.
+
+`engine/server/hand_record.hpp`. `serverrecord <name>` on the server's console records the match
+from that frame, every player's part, to `demos/<name>.ged` in the game's folder, and `serverstop`
+ends it; a mod switch or the server's end closes it too. It is a stream of its own beside
+`--record`, the TV and `sv_autorecord`. A name with `..`, `/`, `\` or `:` is refused, and so is a
+second recording while one runs.
 
 ## Votes: the players change a setting for one map
 
@@ -391,9 +437,50 @@ Any player may ask everyone on the server to change a setting until the map chan
   rocket on another player at least the least height (64, 128, 256, 512 or 1024 units) above the
   floor kills him and scores 1, 2, 4 or 8 by how far he was above where the shooter fired, and the
   match's end tells each player's midairs. The rules are one C++ file every game's rules call
-  (`plugins/shooter/midair.hpp`); the sequel's rules and the first game's arena
+  (`plugins/shooter/midair.hpp`); Quake II's rules and Quake's arena
   (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
+
+## The settings sheet: the server's settings browsed in the menu
+
+OPTIONS ▸ SERVER SETTINGS shows a player the server's settings with their values now, the ones
+they can change, and how (`engine/server/sheet.hpp`, every game's). The server's answer is a
+SHEET: rows of `{name, words, group, value, values, help, line, how}`, `values` in the console's
+grammar (`0: no limit; 1..N: that many frags`), `line` the words that change it (`%v` the value,
+`up|down` a stepper, no `%v` a toggle sent as it is) and `how` one of fixed (the owner's), direct
+(changed at once by a word, a match mod's `dmm4`), vote (asked of everyone) or admin.
+
+- **The pages.** The first holds the map and the match's rules (mode, deathmatch mode, teamplay,
+  the limits, overtime, midair), always shown so the limits are on view; every other row is on a
+  subpage named by its `group` (PLAYER HELP: the rocket jump helpers, the aim help and each
+  player's own grant; MOVEMENT; RULES). A row is offered only when the player can change it: the
+  vote's lists and the game's check decide (`sheet_how_by_vote`), and a setting the server is
+  started with is never offered.
+- **Votes are starred.** A row a vote decides reads `FRAG LIMIT*`, with a legend line under the
+  first page. Turning a direct row sends its words at once; turning a vote row waits until the
+  focus leaves it or the page is left (ESCAPE included), then asks CALL A VOTE? with the old and the
+  new value: YES sends `vote <name> <value>` (the row's `line`), NO puts it back. Rows the player
+  cannot change are dimmed with the reason.
+- **Where the sheet comes from.** A listen server's window reads its own match through
+  `ServerGame::sheet`. A client of our QuakeWorld server that agreed the `ge` set's
+  `settings-sheet` bit asks with `ge_sheet` and gets svc `ge_sheet` (begin, a row a message, end,
+  a few each frame so the reliable channel never overflows) and the sheet again whenever a vote
+  changes a setting; `ge_sheet stop` ends it. Our Quake II server has no reply to a client's
+  bits, so it OFFERS the sheet instead: a client whose `*ge_ext` carries the bit gets an empty
+  sheet on svc 120 as it enters (begin, end), and only a window that saw that offer sends
+  `ge_sheet` (a stock Quake II server would echo the word as chat). Its parts go as the reliable
+  channel drains, so a packet stays within the 1400 bytes a Quake II client reads. Its votes
+  (`games/shooters_edge/net/q2_votes.hpp`) are the engine's: every rule but the owner's
+  (`deathmatch`, `coop`, `skill`, `sv_maplist`, `nextserver`), `vote map`, `vote kick`, put back
+  at the next map. A stock server is read, never extended
+  (`plugins/classic/server_sheet.hpp`): a QuakeWorld server's serverinfo (a key missing is 0), a
+  match mod's listing (`cmd status1`, `cmd status2`, taken out of the console for a few seconds
+  while it comes) with its own words (`dmm1`..`dmm5`, `fragsup`, `votemap`); a Quake II server's
+  `info` and a match mod's `settings` listing, never a word the game would broadcast as chat.
+- **The window's side** (`games/shooters_edge/net/qw_remote_sheet.hpp`): `serversheet
+  open|refresh|changed|close` is what the page says; the window asks once when it opens, every
+  half second while it is open, at once after a change, and lets the sheet go when the player
+  leaves.
 
 ## Timeouts: the match stopped for a while
 
@@ -406,6 +493,48 @@ next. Spectators, bots and a warmup are refused with the reason. The clock is th
 which runs on through the pause; the game stops and starts its world as the book says (Shooter's
 Edge pauses its rules as the server's own pause, which no player's word undoes). The status line
 says `timeout=out` or `timeout=resuming` while one is on.
+
+**Quake II's match** (`games/shooters_edge/net/q2_match.hpp`) plays the lobby, the timeouts,
+overtime, prewar and the lock as QuakeWorld's server does, on the rules both share
+(`games/shooters_edge/server/match_rules.hpp`). Its players' own words are taken too: `unready`
+and `noready` for `notready`; `time`, `calltime`, `ctime` and `hold` call a timeout and, from the
+caller, end it. Its rules add a tournament's gameplay switches: `g_fast_weap_switch`,
+`g_teleporter_nofreeze`, `g_spawn_mode`, `g_removed_weapons`, `g_removed_powerups` and
+`g_warmup_loadout` (each one's help says what it does). While the rules are paused the server
+keeps sending what is said, so a player's next word is heard.
+
+## Teams and captains
+
+`engine/server/captains.hpp`. A team match's two teams over the lobby's red and blue, named by
+the game, each with a captain: the first to join it, then the lowest seat left when he goes. A
+captain (and the referee, on either team) locks and unlocks the team, renames it in the warmup,
+invites a spectator (`invite`, taken with `accept`, even into a match under way or a locked
+team), picks one straight on when the server allows it, and removes a teammate to watch.
+`team` and `join` take `1`, `a`, `2`, `b` or a team's name, refused while the team is locked or
+full. The book asks the game to seat or unseat a player and says every line; the shuffle deals
+the seats again from a seed. Quake II's server plays it with `dmflags` 64 or 128, every player
+in his team's look.
+
+## Coaches
+
+`engine/server/coach.hpp`. A spectator who wants to help one team asks for it in the warmup of a
+team match (`coach <team>`); the seated players answer `yes` (`no` takes it back) and he is elected
+when the yes reach 51 % of them, 2 at least, within 60 s. One coach a team, at least 3 players on
+the server, one election at a time and never beside a vote; a candidate who withdraws or runs out
+of time waits 30 s. A coach is in his team's team chat both ways (his lines read "(Coach <name>)",
+`engine/server/chat.hpp`) and his chase camera follows only his team's players; nothing else: no
+captain's word. He stops with `coach` again, by leaving or by taking a seat; he stays through the
+match and the map's change. The referee names one with no vote (`coach <team> <player>`) and takes
+one off (`uncoach <team>`); `coaches` lists them. Quake II's server plays it.
+
+## The referee
+
+`engine/server/referee.hpp`. A player who gives the server's administrator password in the game
+(`referee <password>`, or `admin`) runs the match without a vote: `endmatch` (or `break` in a
+match), `tl <minutes>`, `changemap <map>`, `kick`, `kickban` and `ban <player> [minutes]` (60 by
+default, 720 at most), `mute <player> [minutes]` (5 by default, 60 at most) and `unmute`,
+`shuffle`, `readyall` and `unreadyall`; `acommands` lists them. A wrong password is refused and
+logged; a referee is never kicked, banned or muted. The book hands the game each act to do.
 
 ## Player aids: help for one chosen player
 
@@ -437,13 +566,13 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   `sv_aimhelp_x` sideways and `sv_aimhelp_y` up and down, in units at the target (24 and 48; 0
   turns that axis off, so `sv_aimhelp_x 0` is the vertical help alone). A wall between, a teammate
   under `teamplay` and a line that already hits are never bent onto. The classic mods' servers bend
-  the line a mod traces for its shot (`shot_help.hpp`); the sequel's server bends its own lines.
+  the line a mod traces for its shot (`shot_help.hpp`); Quake II's server bends its own lines.
 - **Missiles are led** (`aim_lead`): a rocket, a grenade or a nail he launches is flown ahead (a
   step 1/128 s, gravity for a thrown one) beside each other player foreseen the same way; when it would pass him by no more
   than the leeway at the moment it reaches him, it is sent where he will be instead: a straight
   missile at its own speed, a thrown one on the arc that lands on him after the same flight. The
   classic mods' servers lead the missile the loop has just spawned (`Server::missile_watch`); the
-  sequel's leads its own launch.
+  Quake II's leads its own launch.
 - **How a player is foreseen** (`lead_mover`) was chosen on recorded matches: the `se-aimlead`
   lab replays every player's real path in a folder of multiview recordings, fires a rocket, a
   grenade and a nail at him from where the other players stood, leads each by one rule and flies
@@ -466,8 +595,8 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   charts it on a strafer.
 - **The weapons it may bend** are the server's (`sv_aimhelp_allow`, `sv_aimhelp_deny`: weapon
   names, spaces or commas between, `*` any characters; deny wins, an empty allow list allows the
-  rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in the classic game, `blaster sg
-  ssg mg cg gl rl hb rg bfg` in the sequel. `sv_aimhelp_deny "rl lg"` keeps it off the two
+  rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in Quake, `blaster sg
+  ssg mg cg gl rl hb rg bfg` in the q2. `sv_aimhelp_deny "rl lg"` keeps it off the two
   strongest; a casual server leaves both lists empty.
 
 ## Recording: the match kept, played back and relayed
@@ -503,7 +632,7 @@ broadcasts the file through a source that holds it back 2 s and a relay to 5 vie
 
 No block reaches a viewer before the delay.
 
-Shooter's Edge's classic game fills the same hooks (`games/shooters_edge/net/classic_game_tv.hpp`),
+Shooter's Edge's classic game fills the same hooks (`games/shooters_edge/net/qw_game_tv.hpp`),
 so `sesv --record=PATH` keeps its matches. Its frames are the multiview stream a classic relay
 already takes, written by a recorder of the server's own; its keyframe is the catch-up a relay
 gives a late viewer; a player's view is his place, angles, model, frame and every stat, written
@@ -513,7 +642,7 @@ and after 20 seeks, and every viewer through the 2 s delay and a relay whole and
 last views under every preset. A server with no port (offline) runs no endpoint and records an
 empty match.
 
-The sequel's game fills them too (`games/shooters_edge/net/sequel_game_tv.hpp`). Its wire speaks
+Quake II's game fills them too (`games/shooters_edge/net/q2_game_tv.hpp`). Its wire speaks
 for one viewpoint at a time, so its recording carries every player's state whole instead: each
 frame is a view for each of the 32 slots off the rules' world rows (place, angles, model, frame,
 health, frags, the held weapon and the 32 stats), and a keyframe is the same bytes, so a seek
@@ -552,6 +681,53 @@ earlier than the delay, the one who came at 15 s starting at the keyframe of 10 
 
 The longest lags are the late spectator's catch-up from its keyframe.
 
+## Fast downloads: the server's files over HTTPS
+
+A player who lacks a map waits for it. Over the game's own channel a file comes in pieces paced by
+the client's rate: a base-protocol client at the classic 25000 bytes a second waits 25 s for
+aerowalk (632 kB) on a LAN, and a stock server on the internet took over 35 s for one map. So every
+dedicated server can also send its files over HTTPS from a TCP port beside its game port
+(`engine/server/web_files.hpp` over `engine/net/file_server.hpp`), and a client of any classic
+game takes them from there first (`plugins/classic/content/web_downloads.hpp`), the channel behind
+it for whatever the web gives back.
+
+| Setting | Default | What |
+| --- | --- | --- |
+| `sv_http_port` | 0 (off) | the TCP port the files are served on |
+| `sv_http_rate` | 20000 | kB a second to every player together, shared fairly among those fetching |
+| `sv_http_rate_player` | 5000 | kB a second to one player (one address: their parallel fetches share it) |
+| `sv_http_cert`, `sv_http_key` | none | PEM files of a certificate a public authority signed |
+| `sv_http_url` | none | the address told (a host name the certificate names, or a proxy in front) |
+| `sv_http_plain` | 0 | 1: plain HTTP behind the operator's own TLS proxy |
+
+**Secure with nothing set up.** With no certificate given the server makes its own when it starts
+and tells its clients that certificate's SHA-256 beside the address (QuakeWorld's server info
+`*dlpin`, Quake II's ` dlpin=` in the connect answer). Our client trusts that one certificate and
+nothing else on that connection: the same trust as the game connection the address came over, and
+nothing between them can change a byte. Each answer also names the file's SHA-256 (`Repr-Digest`,
+RFC 9530) and the client keeps a file only when the bytes match it; a map is then checked against
+the server's checksum as every map is.
+
+**What is served** is what the game's channel would send: the game folder played or its base
+folder, the kinds of file the game's servers send (never a pack), and the server's own
+`sv_download_*` switches (`plugins/classic/content/web_serve.hpp`). A path that climbs (`..`, a
+backslash, a colon, an empty part) is refused before the lookup sees it.
+
+**The address told.** `sv_http_url` when set; else `https://<sv_publicaddr's host>:<port>/`; else
+`https://{server}:<port>/`, which our client reads as the host it joined. When `sv_downloadserver`
+names an outside host (a CDN, a GitHub repository) that is told instead. A real address is also put
+in the server info as `sv_dlURL`, the key other QuakeWorld clients read, and Quake II's stock
+clients read ` dlserver=`; a client of another engine cannot check a pin, so to serve them too an
+operator sets a public certificate and `sv_http_url`.
+
+**The client** asks several files at once (`cl_http_max_connections`), resumes a file cut short
+from where it stopped (a `Range` request, three tries), holds every fetch together to
+`cl_http_max_rate` kB a second (0: no cap) and refuses a file larger than `cl_http_max_size` MB.
+The console's download bar follows the fetch (`web_progress`).
+
+The `se-fastdl` lab times both ways on a real map: `make lab LAB=se-fastdl
+ARGS=--map=<path>/aerowalk.bsp`.
+
 ## Open for extension
 
 What a server will grow is a lot: everything a mature classic server offers and match mods on top.
@@ -577,7 +753,9 @@ The core is built so each is an addition, not a rewrite:
   `rcon <password> <line>` (the console's printout sent back; wrong passwords counted, three in a
   row make the seat's tries wait), and the log (`sv_logfile`, never a password). A game that speaks
   its own protocol answers its own clients' words (Shooter's Edge's classic endpoint,
-  `classic_admin.hpp`) and gets only the frame and server-info hooks. The `server-core` lab's
+  `qw_admin.hpp`) and runs the log alone: what its console prints (joins, drops, refusals,
+  bans, a mended map, the rules' lines) goes to the terminal and to `sv_logfile`, each line stamped
+  with the server's time (Quake II's server, M18v). The `server-core` lab's
   admin trial runs it all over the simulated network and adds a feature of its own to the list.
 - **Recording and broadcasting.** A match recorded from the server (every player's view, not one
   client's), relayed to watchers with a delay, and watched by spectators: features over the same
@@ -615,7 +793,7 @@ What maps onto which classic feature is kept in the working area
 | `server-cfg` | M53b, M53e | A base, a mod and a profile `server.cfg` with the explained table drawn as an image; meta-cvars on and off |
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
-| `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
+| `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on Quake II's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
 | `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, relayed with a 2 s delay to viewers, and watched by spectators on the server's own TV, under every network preset: whole, at the digest, the lag |
-| `se-server-record` | M53g | Shooter's Edge's classic and sequel servers recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
+| `se-server-record` | M53g | Shooter's Edge's classic and Quake II servers recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |

@@ -19,12 +19,16 @@
 //   draw; a model without one draws its rest frame. A model with several `fire` clips (its TAKES:
 //   a classic axe's two swings) plays one a shot: the take whose frames hold the frame the game
 //   says the shot starts on (`HandInput::fire_frame`, a classic mod's weapon frame), or, when the
-//   game does not say, one picked at random with even odds, as the classic game picks a swing. A
+//   game does not say, one picked at random with even odds, as Quake picks a swing. A
 //   clip stepped a frame a shot (`HeldClip::frame_a_shot`, a nailgun held firing) goes one frame
 //   round on each shot and holds it, and the shot's muzzle, flash and fire are on the barrel that
 //   frame fires from: the nailgun's two in turn, the super nailgun's cluster one barrel at a time.
-//   Each shot's frame is held (its barrel fires); with `ViewSettings::lerp` a clip played or held
-//   ends by flowing back to the rest frame over a frame's time, never a jump.
+//   With `ViewSettings::lerp` each shot's frame is drawn FROM THE LAST SHOT'S (or from rest on the
+//   first) over the clip's frame time, so the barrels turn and the slide runs every display frame
+//   instead of jumping ten times a second, then held there until the next shot; the model's own
+//   flash is drawn at the shot's frame, never stretched between two frames (render/viewmodel.hpp).
+//   Without it each shot's frame is shown at once and held. A clip played or held ends by flowing
+//   back to the rest frame over a frame's time, never a jump.
 // - DEATH (`HandInput::dead`): the weapon sinks out of view (`kDeathLowerS`), up with a new life.
 // - A CLASSIC GAME'S OWN WEAPONS (`Hand::at_eye`): models authored at the eye, placed by the
 //   classic row (`eye_row`) with no offset of their own; the kick, the flash and the fire are
@@ -47,13 +51,18 @@
 // ge:keywords at_eye eye_row classic-weapons axe-swing two-swings takes fire_frame weaponframe
 // ge:keywords cl_gunidle cl_gunidle_rate cl_gunidle_exertion idle-sway breathing breath
 // ge:keywords cl_gunswitch cl_gunswitch_fire switch-speed rushed-raise fire-during-switch
+// ge:keywords r_viewmodelsize r_viewmodeloffset cl_gun_x cl_gun_y cl_gun_z cl_gunfov game_offset_m
+// ge:keywords gun_next gun_prev gun_model add_gun_commands gun-frame-override
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
 
 #include <span>
+#include <string>
+#include <string_view>
 
 #include "camera/pose.hpp"
+#include "console/console.hpp"
 #include "console/cvar.hpp"
 #include "core/prng.hpp"
 #include "shooters_edge/view/weapons.hpp"
@@ -71,11 +80,34 @@ struct ViewSettings {
   double idle_exertion = 1;     // cl_gunidle_exertion
   bool centre = true;           // r_viewmodel_center
   bool hands = true;            // r_viewmodel_hands
-  int hand = 0;      // the sequel's `hand` (user info): 2, held in the middle, draws no weapon
+  int hand = 0;      // Quake II's `hand` (user info): 1 left, 2 in the middle (no weapon drawn)
+  int gun = 1;       // Quake II's `cl_gun`: 0 or -1 none, 1 by `hand`, 2 always right, 3 left
+  double alpha = 1;  // Quake II's `cl_gunalpha`: how solid the weapon is drawn, 0..1
+  bool last_fired = false;  // r_viewmodellastfired (every game's): a recording shows the last fired
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
   double switch_s = 0.2;   // cl_gunswitch, s a whole switch takes (0: at once)
   double switch_fire = 4;  // cl_gunswitch_fire, a shot's speed-up of the raise
+  // The games' own spellings of the gun's place and lens, in their units (cvar_layers.cpp): each
+  // adds to ours (`gun_m`) or stands in for ours unset (`fov_deg`).
+  double size = 1;                  // r_viewmodelsize (Quake's): depth 0.5 + size / 2
+  std::string offset_text;          // r_viewmodeloffset: "right down forward"
+  double gun_units[3] = {0, 0, 0};  // cl_gun_x, cl_gun_y, cl_gun_z: right, forward, up
+  double gun_fov_h = 0;             // cl_gunfov: degrees across at 4:3 (0: none)
+  double unit_m = 0.025;            // a game unit, m (the brush maps')
+  // The developer's look at a weapon (`gun_next`, `gun_prev`, `gun_model`): a frame shown in place
+  // of the one the game asks (0: the game's) and a weapon of the game's set shown in place of the
+  // one held (-1: the game's). Neither is a setting: nothing saves them.
+  int gun_frame = 0;
+  int gun_model = -1;
 };
+
+// The side the weapon is drawn on: 0 not drawn, 1 right, -1 mirrored to the left. `cl_gun` 1
+// follows `hand` (0 right, 1 left, 2 none); 2 and 3 force right and left whatever the hand.
+int gun_side(const ViewSettings& s);
+
+// The gun's offset the games' own settings add, m, right, up and forward: `r_viewmodeloffset`'s
+// up to three numbers (missing ones 0, extra ones ignored; the second is DOWN) and `cl_gun_x/y/z`.
+void game_offset_m(const ViewSettings& s, double out[3]);
 
 // How far a model authored at the eye (`eye_row`) drops and tips when put away, m and rad: just
 // out of the picture's bottom edge at the bottom of a switch, so every frame of a fast switch shows
@@ -100,6 +132,12 @@ inline constexpr double kDeathLowerS = 0.6;
 inline constexpr double kCentreRiseM = 0.01;
 inline constexpr double kCentreNearM = 0.06;
 
+// `gun_next` and `gun_prev` (the frame shown, one on or back, held at 0; each says "frame <n>") and
+// `gun_model <name>` (the weapon of `held` named `models/<name>/tris.md2` shown in hand; no name:
+// the game's again), over `out`. `held` must outlive the console (a game's static list).
+void add_gun_commands(ge::console::Console& con, ViewSettings& out,
+                      std::span<const std::string_view> held);
+
 // The player's view-model cvars, bound to `out`.
 void add_view_cvars(ge::console::Cvars& cvars, ViewSettings& out);
 
@@ -121,6 +159,7 @@ struct Hand {
   double flash_left = 0;  // s of the last shot's light still to fade
   double fire_t = -1;     // s into the `fire` clip (-1: at rest)
   int shot_frame = -1;  // a clip stepped a frame a shot: the frame of the clip the last shot is on
+  int shot_from = 0;    // ... and the model's frame it is drawn from while it turns (0: rest)
   int barrel = -1;      // the barrel the last shot left from (-1: the one muzzle)
   // Drawn between frames (ViewSettings::lerp): the frame a played or held clip ended on and the
   // time since, while it settles back to rest.
@@ -140,9 +179,12 @@ struct HandInput {
   vm::PlaceInput place;  // the look and the stride (its `shot` and `lowered` are the hand's)
   Weapon weapon = Weapon::shotgun;  // the game's weapon
   bool fired = false;               // a shot of it this frame
-  int fire_frame = 0;   // the model's frame the game says the shot starts on (0: not said)
-  bool dead = false;    // the player is dead: the weapon sinks out of view (kDeathLowerS)
-  bool sequel = false;  // the weapon is the sequel's (its looks: sequel_weapon_look)
+  int fire_frame = 0;  // the model's frame the game says the shot starts on (0: not said)
+  bool dead = false;   // the player is dead: the weapon sinks out of view (kDeathLowerS)
+  bool q2 = false;     // the weapon is Quake II's (its looks: q2_weapon_look)
+  // The game sends the gun's own sway (`place.game_turn`, `place.game_shift_m`): ours, the lag
+  // behind a turn and the swing across, is set aside so it is not swayed twice.
+  bool game_sway = false;
 };
 
 struct HandFrame {

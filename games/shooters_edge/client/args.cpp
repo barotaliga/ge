@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_args_test.cpp
 #include "shooters_edge/client/args.hpp"
 
+#include "play/session_flags.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 
 #include <algorithm>
@@ -61,31 +62,58 @@ bool flag_like(std::string_view w) {
 
 namespace {
 
-// `-game N`: the Nth content profile (classicenhance/profile.hpp's `kProfiles`), counted from 1.
-// False with `why` on anything else, the games there are named; a folder names `-mod`.
-bool game_numbered(std::string_view v, Args& a, std::string& why) {
+// `-classic <id>`: the content profile of that id (classicenhance/profile.hpp's `kProfiles`: q1,
+// q2), kept as its number from 1. False with `why` on anything else, the games there are named; a
+// mod's folder is `-game <folder>`.
+bool game_named(std::string_view v, Args& a, std::string& why) {
   constexpr int kGames = static_cast<int>(std::size(ge::classicenhance::kProfiles));
-  const bool digits = !v.empty() && v.size() <= 3 && std::all_of(v.begin(), v.end(), [](char c) {
-    return std::isdigit(static_cast<unsigned char>(c)) != 0;
-  });
-  const int n = digits ? std::atoi(std::string(v).c_str()) : 0;
-  if (n >= 1 && n <= kGames) {
-    a.game_number = n;
-    return true;
-  }
+  for (int i = 0; i < kGames; ++i)
+    if (ge::classicenhance::kProfiles[i].id == v) {
+      a.game_number = i + 1;
+      return true;
+    }
   std::string games;
   for (int i = 0; i < kGames; ++i)
     games += (i == 0            ? ""
               : i + 1 == kGames ? " or "
                                 : ", ") +
-             std::to_string(i + 1) + " (" + std::string(ge::classicenhance::kProfiles[i].what) +
-             ")";
-  why = "-game " + std::string(v) + " is no game: the games are " + games + "." +
-        (digits ? "" : " A mod's folder is -mod <folder>.");
+             std::string(ge::classicenhance::kProfiles[i].id) + " (" +
+             std::string(ge::classicenhance::kProfiles[i].what) + ")";
+  why = "-classic " + std::string(v) + " is no game: the games are " + games +
+        ". A mod's folder is -game <folder>.";
   return false;
 }
 
 }  // namespace
+
+bool known_flag(std::string_view word) {
+  for (const Flag& f : kFlags)
+    for (const std::string_view n : {f.name, f.also}) {
+      if (n.empty()) continue;
+      if (n.back() == '=' ? word.starts_with(n) : word == n) return true;
+      if (n.size() > 1 && n[1] != '-' && word.size() == n.size() + 1 && word[0] == '-' &&
+          word.substr(1) == n)
+        return true;
+    }
+  return false;
+}
+
+std::vector<ge::console::FlagDoc> flag_docs() {
+  std::vector<ge::console::FlagDoc> out = ge::play::session_flag_docs();
+  for (const Flag& f : kFlags) {
+    std::string help(f.help);
+    if (!f.also.empty()) help += " Also " + std::string(f.also) + ".";
+    out.push_back({std::string(f.name), std::string(f.arg), help});
+  }
+  return out;
+}
+
+std::string usage() {
+  std::string out = "se";
+  for (const ge::console::FlagDoc& f : flag_docs())
+    out += " [" + f.name + (f.arg.empty() ? "" : (f.name.back() == '=' ? "" : " ") + f.arg) + "]";
+  return out + " [+<command> ...]";
+}
 
 // False with `why` (the word refused and the next step) on a flag it does not know, wherever it
 // stands: a flag inside a `+` console line is never taken as one of the line's words.
@@ -96,12 +124,23 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       why = std::string(arg) + " was renamed: use -timedemo <demo>.";
       return false;
     }
+    if (flag_like(arg) && !known_flag(arg)) {
+      why = "unknown flag " + std::string(arg) +
+            (a.plus.empty() ? std::string()
+                            : " (after the console line starting " + a.plus.front() + ")") +
+            ".";
+      return false;
+    }
     // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
     // from a `+` to the next flag or `+`, so `+r_look modern -timedemo demo1` is a look and a
     // benchmark, not one console line of four words.
     if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
       a.basedir = expand_home(argv[++i]);
       a.basedir_set = true;
+    } else if (arg == "-hidden" || arg == "--hidden") {
+      a.hidden = true;
+    } else if (arg == "-recipes" || arg == "--recipes") {
+      a.recipes = true;
     } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
       a.progs = expand_home(argv[++i]);
     } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {
@@ -154,12 +193,15 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.tv = argv[++i];
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
       a.playdemo = expand_home(argv[++i]);
+    } else if ((arg == "-classic" || arg == "--classic") && i + 1 < argc) {
+      if (!game_named(argv[++i], a, why)) return false;
+    } else if (arg.rfind("--classic=", 0) == 0) {
+      if (!game_named(arg.substr(10), a, why)) return false;
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
-      if (!game_numbered(argv[++i], a, why)) return false;
-    } else if (arg.rfind("--game=", 0) == 0) {
-      if (!game_numbered(arg.substr(7), a, why)) return false;
-    } else if ((arg == "-mod" || arg == "--mod") && i + 1 < argc) {
       a.game = argv[++i];
+      a.game_set = true;
+    } else if (arg.rfind("--game=", 0) == 0) {
+      a.game = std::string(arg.substr(7));
       a.game_set = true;
     } else if (arg.rfind("--frames=", 0) == 0) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);
@@ -170,11 +212,10 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
         return false;
       }
       a.size_given = true;
+    } else if ((arg == "-manual" || arg == "--manual") && i + 1 < argc) {
+      a.manual = expand_home(argv[++i]);
     } else if (flag_like(arg)) {
-      why = "unknown flag " + std::string(arg) +
-            (a.plus.empty() ? std::string()
-                            : " (after the console line starting " + a.plus.front() + ")") +
-            ".";
+      why = std::string(arg) + " needs its value after it.";
       return false;
     } else {
       // A console line's word, or the first command, which needs no `+` (`coopgame 2 expert`).

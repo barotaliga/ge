@@ -1,6 +1,6 @@
 // THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. A match is the
-// engine's server core (engine/server) on the game's server (`ListenOptions::game`, the classic
-// game the dedicated server runs) opened in this process with the window's program (the baseline
+// engine's server core (engine/server) on the game's server (`ListenOptions::game`, the game
+// the dedicated server runs) opened in this process with the window's program (the baseline
 // mod, the arena's rules in C++: `baseline_progs`) and map
 // (`ListenHost`): the local player is client slot 0, a local seat whose commands go into each
 // frame as packets that are never lost (no prediction: what he sees is the server's own state
@@ -33,7 +33,7 @@
 // `ListenOptions::companions`, carried from map to map by the campaign host, their packets in each
 // frame after the player's; `removebot` lets one go. With a port, others join it (`CampaignDoor`).
 //
-// THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/classic_game.hpp). Every
+// THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/qw_game.hpp). Every
 // map opens in warmup with the player and the bots seated in `room` (lobby_room.hpp); the player is
 // on the map only once he joins the warmup (`warmup`, F4) or the match starts, and off it again
 // when he goes back to the lobby's screen (`sitout`), the bots fighting on meanwhile; the lobby's
@@ -88,6 +88,8 @@
 namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 
 inline constexpr int kMostFrames = 8;             // server frames a wall frame may run
@@ -120,7 +122,7 @@ std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::st
                                           std::string& error);
 
 // A LISTEN SERVER ON THE CORE: a match is a `ge::server::Server` the listen opens on
-// `ListenOptions::game` (net/classic_game.hpp's `classic_game()`, which the client cannot name:
+// `ListenOptions::game` (net/qw_game.hpp's `qw_game()`, which the client cannot name:
 // it sits above it), handing it this in `ServerConfig::host`. The listen fills the first block;
 // the game's `create` fills the second and keeps it current through the run (a map change swaps
 // `rules` and `map`), so the listen reads the game playing without knowing its type.
@@ -128,7 +130,7 @@ struct ListenHost {
   const ge::progs::Progs* progs = nullptr;  // the program (outlives the server)
   // A mod's compiled module (its qwprogs.qvm) that plays in place of `progs`; null or empty: none.
   const std::vector<uint8_t>* module = nullptr;
-  // A mod's game library of the sequel's interface (server/sequel_native.hpp) that plays in place
+  // A mod's game library of Quake II's interface (server/q2_native.hpp) that plays in place
   // of `progs` and `module`, on any map; empty: none.
   std::string native_library;
   std::shared_ptr<LoadedMap> map;     // the first map, read
@@ -141,7 +143,7 @@ struct ListenHost {
   // The player's side of every frame: the rules' frame before the endpoint routes it (prints,
   // effects, blows), and a line printed to him (the lobby's and the room's answers).
   void (*tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
-  void (*print)(void* ctx, const std::string& text) = nullptr;
+  void (*print)(void* ctx, int level, const std::string& text) = nullptr;  // the print's level
   // A voice the server relayed to him (the match's `sv_voip`): the talker's slot, the protocol's
   // generation and first sequence, the frames (demo.hpp's `DemoVoice`).
   void (*heard)(void* ctx, int talker, int gen, int seq,
@@ -153,7 +155,7 @@ struct ListenHost {
   Room* room = nullptr;  // null: no lobby and no bots
   int changes = 0;       // maps the game moved to (a lobby's restart too)
   std::string asked;     // a map the mod asked for that the window reads (then `change`)
-  // A save of the sequel's game (server/sequel_save.hpp) the next map's rules load, then cleared,
+  // A save of Quake II's game (server/q2_save.hpp) the next map's rules load, then cleared,
   // and its name for a refusal.
   std::vector<uint8_t> load;
   std::string load_name;
@@ -168,7 +170,7 @@ struct ListenHost {
   void (*set_info)(void* game, const std::string& key, const std::string& value) = nullptr;
   // The player's voice message (voice_out.hpp's frames), relayed to those who hear him.
   void (*speak)(void* game, int gen, int seq, const std::vector<uint8_t>& data) = nullptr;
-  // The administrator's words on the window's own server (net/classic_admin.hpp: `users`,
+  // The administrator's words on the window's own server (net/qw_admin.hpp: `users`,
   // `status`, `speedjump <id> on|off|<share>`): false when the line is none of them, the answer
   // in `out`.
   bool (*admin)(void* game, const std::string& line, std::string& out) = nullptr;
@@ -178,7 +180,7 @@ struct ListenHost {
 };
 
 // THE CAMPAIGN'S DOOR: a coop campaign served to others over the classic protocol, so they join
-// the window's coop game as they would a server (net/classic_coop.hpp's `classic_coop()`, which
+// the window's coop game as they would a server (net/qw_coop.hpp's `qw_coop()`, which
 // the client cannot name: it sits above it). The window's player and the companions are its local
 // seats; a client who joins enters the campaign (carried from map to map as the player is), and
 // the endpoint follows the campaign onto each next map.
@@ -210,7 +212,7 @@ struct CampaignDoor {
 struct ListenOptions {
   // In the order that packs it (the lint holds the padding).
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
-  // The server a match runs on (net/classic_game.hpp's `classic_game()`); a match does not start
+  // The server a match runs on (net/qw_game.hpp's `qw_game()`); a match does not start
   // without one. A campaign runs on its own host.
   const ge::server::ServerGame* game = nullptr;
   // Or the socket others join on, opened by the caller (a test's simulated network): it outlives
@@ -223,12 +225,12 @@ struct ListenOptions {
   ge::account::Service* accounts = nullptr;
   int64_t (*unix_us)() = nullptr;
   // A campaign in coop is served to others on `port` (or `transport`) through this door
-  // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
+  // (net/qw_coop.hpp's `qw_coop()`); null: a coop game is the window's alone.
   const CampaignDoor* door = nullptr;
   // A mod's compiled module (GameContent's `module`) that plays a match in place of the program;
   // null or empty: the program (outlives the listen).
   const std::vector<uint8_t>* module = nullptr;
-  // A mod folder's game library of the sequel's interface (GameContent's `native_library`) that
+  // A mod folder's game library of Quake II's interface (GameContent's `native_library`) that
   // plays a match in place of the program; null or empty: none.
   const std::string* native_library = nullptr;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
@@ -259,11 +261,22 @@ struct ListenOptions {
   // A match relays its players' voices (`sv_voip 1`), the window's player among them
   // (`listen_mic`, `Listen::voices`).
   bool voice = true;
-  sh::AimSkill companion_skill = sh::AimSkill::average;
+  sb::AimSkill companion_skill = sb::AimSkill::average;
   // The next map starts a new campaign on these options (`newgame`, `coopgame`, `sv_coop 1`),
   // not the running one's change of map; cleared once it has started.
   bool new_game = false;
 };
+
+// What the console set on the window's listen (`from`: the lobby, its settings, sv_port,
+// maxclients, sv_hostname, sv_login and the rest) copied onto the options a new game opens with.
+inline void take_console_settings(ListenOptions& to, const ListenOptions& from) {
+  to.lobby = from.lobby;
+  to.lobby_settings = from.lobby_settings;
+  to.port = from.port;
+  to.maxclients = from.maxclients;
+  to.hostname = from.hostname;
+  to.login = from.login;
+}
 
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
 // and blood, 0..255 each, and where it came from, map units.
@@ -296,27 +309,39 @@ struct Listen {
   sh::MoveCmd cmds[3];  // the three newest, oldest first
   double owed = 0;      // wall seconds not yet run, s
   int64_t frames = 0;   // server frames run on this map
-  // The sequel's rules frame whose items back and teleporter pads were last thrown (-1 none).
-  int64_t sequel_fx_frame = -1;
+  // Quake II's rules frame whose items back and teleporter pads were last thrown (-1 none).
+  int64_t q2_fx_frame = -1;
   sh::Vec3f view;        // the player's view angles, degrees (his aim)
   sh::AimTurn aim_turn;  // the aim help's turn of the view (shooter/aim_turn.hpp)
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
   // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
   sh::SpeedJumpAid jump_aid;
-  float speedjump_view = 0.5f;       // cl_speedjump_view
-  bool forced = false;               // the server turned the view in the last frame
-  bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
-  int impulse = 0;                   // waiting for a frame
-  std::string pending_map;           // the mod or the console asked for this map
-  std::vector<std::string> prints;   // what the server printed to the player, in order
+  float speedjump_view = 0.5f;      // cl_speedjump_view
+  bool forced = false;              // the server turned the view in the last frame
+  bool load_menu_asked = false;     // the rules asked his client for the load menu (a death)
+  int impulse = 0;                  // waiting for a frame
+  std::string pending_map;          // the mod or the console asked for this map
+  std::string cinematic;            // Quake II's movies before it (cinematic.hpp), for the window
+  std::vector<std::string> prints;  // what the server printed to the player, in order
+  // Each print's level (0 low .. 3 chat) by its index; past the end, or a line of the window's
+  // own, 2 (high).
+  std::vector<int> print_levels;
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
-  // A save of the sequel's game the next match started loads (ListenHost::load), and its name.
+  // The lines a single-player program stuffed into his console other than `bf` (counted in
+  // `bonuses`) and the load menu's, for the window's console to run.
+  std::vector<std::string> stuffed;
+  // A save of Quake II's game the next match started loads (ListenHost::load), and its name.
   std::vector<uint8_t> load;
   std::string load_name;
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;
+  // Quake II's: each one's kind byte by index (q2_model_fx.hpp; 0 any other), as long as the last
+  // one with a kind (the rest are 0).
+  std::vector<uint8_t> explosion_codes;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
+  int64_t bonuses = 0;      // the items he took (the server's `bf`), since the window opened
+  double cshift[4] = {130, 80, 50, 0};  // v_cshift: the tint in open air (red, green, blue, of 255)
   // The sounds the server started for the player (the protocol's sound message to slot 0) since
   // the window last played them (listen_sound.hpp empties it), and the map's looping sounds.
   std::vector<DemoSound> sounds;
@@ -358,6 +383,16 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
 // The game ended and let go (its servers, then the maps they view, then the program), the options
 // kept: another game folder may be opened, and the next start is `listen_start`'s.
 void listen_stop(Listen& l);
+// `quit [reason]` and `recycle [reason]` in the window while it hosts a match: each player who
+// joined over the network told "Server quit" or "Server restarted" (": <reason>" after it when
+// one was given) and dropped, or told to reconnect (`restart`), by the match's game
+// (ServerGame::quit). Nothing when no match is hosted.
+void listen_farewell(Listen& l, const std::string& reason, bool restart);
+// `net_restart` in the window: a hosted match's socket opened again on `port` (sv_port) on every
+// interface, else on the port it had (`port` set back to it), the game told
+// (ServerGame::reopened); what went wrong in `said`. False when no match takes players over the
+// network (nothing to open) or no port opened.
+bool listen_net_restart(Listen& l, int& port, std::string& said);
 // A new game of the single-player program `progs` (which must outlive the listen) on `map`, the
 // match before it (if any) ended. `opt.console`'s lines are the campaign's settings.
 bool listen_campaign(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,
@@ -378,16 +413,16 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
 bool listen_load(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
                  std::span<const uint8_t> bytes, std::string_view name, std::string& error,
                  std::unique_ptr<LoadedMap> map = nullptr);
-// The save `bytes` (named `name`) of the sequel's game (server/sequel_save.hpp) loaded as the game
-// now playing: onto the sequel's game the window plays (its next map the save's), or a new one
+// The save `bytes` (named `name`) of Quake II's game (server/q2_save.hpp) loaded as the game
+// now playing: onto Quake II's game the window plays (its next map the save's), or a new one
 // started on `opt`; its map read from `opt.files`. False with `error` when the save or its map
 // does not load.
-bool listen_load_sequel(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
-                        std::string_view name, std::string& error);
-// The autosave the sequel's rules made as the last level was entered (null when none is waiting),
+bool listen_load_q2(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
+                    std::string_view name, std::string& error);
+// The autosave Quake II's rules made as the last level was entered (null when none is waiting),
 // taken: the caller keeps it.
 std::vector<uint8_t> listen_take_autosave(Listen& l);
-// The same as the classic text save (server/classic_save.hpp), and one loaded: less is kept, so
+// The same as the classic text save (server/q1_save.hpp), and one loaded: less is kept, so
 // the game plays on as the program's state says rather than bit for bit.
 bool listen_save_text(const Listen& l, std::string& out, std::string& error);
 bool listen_load_text(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
@@ -416,14 +451,24 @@ bool listen_lobby(Listen& l, std::string_view line);
 // The player's chat line (`say "..."` or `say_team "..."`) on the window's own server, as slot 0
 // says it: false when no game is playing.
 bool listen_say(Listen& l, const std::string& line);
-// True when the window's own game runs the sequel's rules (server/sequel_server.hpp).
-bool listen_is_sequel(const Listen& l);
+// True when the window's own game runs Quake II's rules (server/q2_server.hpp).
+bool listen_is_q2(const Listen& l);
 // The rules draw their own screens (a scoreboard, an inventory): the window draws none of its own.
 bool listen_own_screens(const Listen& l);
 // A console line the window does not know, given to the rules of a game whose client passes its
-// own commands to its server (the sequel's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
+// own commands to its server (Quake II's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
 // ...) as slot 0 says it; false when no such game is playing or its rules refuse it.
 bool listen_rules_word(Listen& l, const std::string& line);
+// A console line the window does not know, in a single-player program's game: the original's
+// cheats and `kill` (god, notarget, noclip, fly, give, kill) go to the server as slot 0's own
+// command, its level commands (restart, changelevel) to the server's console; false for any other
+// line or game. On any Quake server (deathmatch too), `tell` and `ping` go to it as slot 0's.
+bool listen_campaign_word(Listen& l, const std::string& line);
+// A line the server printed to the player at `level` (0 low .. 3 chat), its level kept beside it.
+void listen_print(Listen& l, int level, const std::string& text);
+// The people playing in the game the window hosts (its own player and those who joined; never
+// a bot, so a game with companions alone still pauses under the menu).
+int listen_players(const Listen& l);
 // An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
 // `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
 bool listen_admin(Listen& l, const std::string& line, std::string& out);
@@ -458,13 +503,15 @@ struct PlayerState {
   sh::Vec3f punch;        // the program's recoil kick on the view, degrees (0 without one)
   float ideal_pitch = 0;  // the pitch the view drifts to (a single-player program's), degrees
   bool on_ground = false;
+  bool noclip = false;
   bool dead = false;
   float health = 0;
-  // The rules work the view out themselves (the sequel's: RulesWorld's `view_set`): `view_ofs` is
+  // The rules work the view out themselves (Quake II's: RulesWorld's `view_set`): `view_ofs` is
   // their eye with its bob, `kick` the angles they add (degrees), `v_angle` the dead view's.
   bool rules_view = false;
   sh::Vec3f kick;
-  // The sequel's rules run a frame every tenth: the frame's number, the seconds since it (-1: no
+  float fov = 0;  // the field of view the rules hold the view to, degrees (0: the player's own)
+  // Quake II's rules run a frame every tenth: the frame's number, the seconds since it (-1: no
   // such rules) and how far its movers carried the player in it.
   int64_t rules_frame = -1;
   double rules_age = -1;
@@ -482,11 +529,21 @@ struct Missile {
   sh::Vec3f origin;
   bool rocket = false;   // a rocket or a grenade: something that explodes
   bool grenade = false;  // a grenade (bounces, smokes) rather than a rocket
-  // Neither: a nail, or one of the sequel's glowing shots, by the kind of shot whoever fired it
+  // Neither: a nail, or one of Quake II's glowing shots, by the kind of shot whoever fired it
   // (a player or a monster): a blaster's bolt, or the BFG's ball.
   bool bolt = false, bfg = false;
+  bool streak = false;  // Quake II's blaster bolt (its blaster bit): specks behind it
+  // Quake II's other marks by its effect bits (q2_look.hpp's Q2Look::Missile as a number: a
+  // flag, the tag token, an ion ripper's, a blue or a plasma bolt); 0 none of these.
+  uint8_t q2_mark = 0;
+  // Quake II's spinning lights: a red light 64 units ahead along its spin from its `yaw` (degrees).
+  bool q2_spin = false;
+  float yaw = 0;
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
+// Quake II's areas the player's eye sees into, one bit an area (server/q2_map.hpp's
+// `map_area_bits`); empty when the game is not Quake II's or its map has no areas.
+void listen_area_bits(const Listen& l, std::vector<uint8_t>& out);
 
 // True when the entity is drawn: a model index and a model text (a program hides a taken item by
 // emptying its text; server::model_shown). Without a QC program: a model index alone.

@@ -1,5 +1,6 @@
 // The arena's map things: teleport destinations, lights and flames, walls, doors, plats, buttons
-// and triggers, teleporters, pushes and hurts.
+// and triggers, teleporters, pushes and hurts; Quake's episode gates, the trigger only the full
+// game fires and the teleport ball that rides a path (the arena's and the campaign's alike).
 //
 // Doors whose boxes touch are one GROUP and open and shut together (spawnflag 4 keeps a door
 // apart). The group's first door is its master, every door's .owner; .enemy chains the group
@@ -10,7 +11,10 @@
 //
 // ge:summary The arena's doors, plats, buttons, triggers, teleporters and lights in C++
 // ge:keywords arena native-arena func_door func_plat func_button trigger_multiple teleporter
-// ge:keywords trigger_push trigger_hurt door_link door-group movers
+// ge:keywords trigger_push trigger_hurt door_link door-group movers func_train train
+// ge:keywords moving-platform
+// ge:keywords path_corner func_episodegate func_bossgate trigger_onlyregistered misc_teleporttrain
+// ge:keywords episode-gates serverflags
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
@@ -27,6 +31,11 @@ constexpr int kDoorSilver = 16;
 constexpr int kDoorToggle = 32;  // opens on one use and stays, shuts on the next
 
 void flame_start(A& q, int32_t mdl, float fr) {
+  // Quake's rules: a flame (not the globe) crackles where it burns.
+  if (quake_rules(q) && (mdl != q.s(s_s_light_spr))) {
+    q.precache_sound(q.s(s_fire1_wav));
+    q.ambientsound(q.v(q.self(), q.L.f.origin), q.s(s_fire1_wav), 0.5f, kAttnStatic);
+  }
   q.precache_model(mdl);
   q.setmodel(q.self(), mdl);
   q.set_f(q.self(), q.L.f.frame, fr);
@@ -48,6 +57,18 @@ void brush_start(A& q) {
 void trigger_start(A& q) {
   if (!same_vec(q.v(q.self(), q.L.f.angles), {0, 0, 0})) set_movedir(q);
   const int32_t me = q.self();
+  // Quake's rules: the trigger's `sounds` 1 the secret's chime, 2 talk, 3 the trigger's click.
+  if (quake_rules(q)) {
+    const float sounds = q.f(me, q.L.f.sounds);
+    const St noise = sounds == 1   ? s_misc_secret_wav
+                     : sounds == 2 ? s_misc_talk_wav
+                     : sounds == 3 ? s_trigger1_wav
+                                   : s_empty;
+    if (noise != s_empty) {
+      q.precache_sound(q.s(noise));
+      q.set_i(me, q.L.f.noise, q.s(noise));
+    }
+  }
   q.set_f(me, q.L.f.solid, kSolidTrigger);
   q.set_f(me, q.L.f.movetype, kMovetypeNone);
   q.setmodel(me, q.i(me, q.L.f.model));
@@ -134,6 +155,7 @@ void door_go_up(A& q) {
     return;
   }
   door_sound(q, q.i(me, q.L.f.noise1));
+  q.set_i(me, q.L.f.goalentity, q.ge(g_activator));  // who opened it: Quake's crush credit
   q.set_f(q.self(), f_state, kStateUp);
   calc_move(q, q.v(q.self(), f_pos2), q.f(q.self(), f_speed), q.fn(fn_door_hit_top));
   use_targets(q);
@@ -202,11 +224,17 @@ void door_spawn_field(A& q, Vec3 lo, Vec3 hi) {
 }
 
 // Whether two things' boxes touch or overlap.
+// Two doors' boxes where the map drew them (their boxes less how far each stands moved): a door
+// that starts open has moved before the doors link, and still links with the doors it touches
+// as drawn (dm2's two sliding plates over the lava come out together off one button: people
+// walk onto the far one from the button's side in their recorded games).
 bool boxes_touch(A& q, int32_t a, int32_t b) {
-  const Vec3 amin = q.v(a, q.L.f.absmin);
-  const Vec3 amax = q.v(a, q.L.f.absmax);
-  const Vec3 bmin = q.v(b, q.L.f.absmin);
-  const Vec3 bmax = q.v(b, q.L.f.absmax);
+  const Vec3 ao = q.v(a, q.L.f.origin);
+  const Vec3 bo = q.v(b, q.L.f.origin);
+  const Vec3 amin = q.v(a, q.L.f.absmin) - ao;
+  const Vec3 amax = q.v(a, q.L.f.absmax) - ao;
+  const Vec3 bmin = q.v(b, q.L.f.absmin) - bo;
+  const Vec3 bmax = q.v(b, q.L.f.absmax) - bo;
   if ((amin.x > bmax.x) | (bmin.x > amax.x)) return false;
   if ((amin.y > bmax.y) | (bmin.y > amax.y)) return false;
   if ((amin.z > bmax.z) | (bmin.z > amax.z)) return false;
@@ -247,6 +275,8 @@ void plat_rise(A& q) { plat_go_up(q); }
 void trigger_fire(A& q) {
   const int32_t me = q.self();
   if (q.f(me, q.L.f.nextthink) > q.time()) return;  // still waiting since the last time
+  if (quake_rules(q) && !q.is(q.i(me, q.L.f.noise), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
   use_targets(q);
   const int32_t s = q.self();
   if (q.f(s, f_wait) > 0) {
@@ -279,8 +309,55 @@ void info_teleport_destination(A& q) {
 }
 
 // Lights are the map compiler's; the torches and flames the clients draw where they stand.
-void light(A& q) { q.remove(q.self()); }
-void light_fluoro(A& q) { q.remove(q.self()); }
+// Under Quake's rules a named light whose style is 32 or more switches on each use ("m" on, "a"
+// off; spawnflag 1 starts it off), and the fluorescent ones hum (`light_fluorospark` buzzes).
+namespace {
+
+void light_switch_start(A& q) {
+  const int32_t me = q.self();
+  if (q.is(q.i(me, q.L.f.targetname), "") | (q.f(me, f_style) < 32)) return;
+  q.set_i(me, q.L.f.use, q.fn(fn_light_use));
+  const bool off = band(q.f(me, q.L.f.spawnflags), 1) != 0;
+  q.lightstyle(q.f(me, f_style), q.s(off ? s_style_off : s_style0));
+}
+
+}  // namespace
+
+void light_use(A& q) {
+  const int32_t me = q.self();
+  const float flags = q.f(me, q.L.f.spawnflags);
+  const bool off = band(flags, 1) != 0;
+  q.lightstyle(q.f(me, f_style), q.s(off ? s_style0 : s_style_off));
+  q.set_f(me, q.L.f.spawnflags, off ? flags - 1 : flags + 1);
+}
+
+void light(A& q) {
+  if (!quake_rules(q) || q.is(q.i(q.self(), q.L.f.targetname), "")) {
+    q.remove(q.self());
+    return;
+  }
+  light_switch_start(q);
+}
+
+void light_fluoro(A& q) {
+  if (!quake_rules(q)) {
+    q.remove(q.self());
+    return;
+  }
+  light_switch_start(q);
+  q.precache_sound(q.s(s_ambience_fl_hum1_wav));
+  q.ambientsound(q.v(q.self(), q.L.f.origin), q.s(s_ambience_fl_hum1_wav), 0.5f, kAttnStatic);
+}
+
+void light_fluorospark(A& q) {
+  if (!quake_rules(q)) {
+    q.remove(q.self());
+    return;
+  }
+  if (q.f(q.self(), f_style) == 0) q.set_f(q.self(), f_style, 10);
+  q.precache_sound(q.s(s_ambience_buzz1_wav));
+  q.ambientsound(q.v(q.self(), q.L.f.origin), q.s(s_ambience_buzz1_wav), 0.5f, kAttnStatic);
+}
 void light_torch_small_walltorch(A& q) { flame_start(q, q.s(s_flame_mdl), 0); }
 void light_flame_large_yellow(A& q) { flame_start(q, q.s(s_flame2_mdl), 1); }
 void light_flame_small_yellow(A& q) { flame_start(q, q.s(s_flame2_mdl), 0); }
@@ -326,7 +403,11 @@ void door_go_down(A& q) {
 // Something stands in the way: it takes the door's damage and the group goes back.
 void door_blocked(A& q) {
   q.set_i(q.other(), f_deathtype, q.s(s_squished));
-  damage(q, q.other(), q.self(), q.self(), q.f(q.self(), f_dmg));
+  // Quake's rules credit the crush to whoever opened the door (a player: "K squishes V").
+  int32_t by = q.self();
+  if (quake_rules(q) && q.is(q.i(q.i(by, q.L.f.goalentity), q.L.f.classname), "player"))
+    by = q.i(by, q.L.f.goalentity);
+  damage(q, q.other(), q.self(), by, q.f(q.self(), f_dmg));
   if (q.f(q.self(), f_wait) >= 0) {
     if (q.f(q.self(), f_state) == kStateDown) {
       door_group_up(q);
@@ -370,12 +451,22 @@ void door_trigger_touch(A& q) {
   if ((key != 0) & (band(q.f(q.other(), q.L.f.items), key) == 0)) {
     if (q.time() >= q.f(me, f_attack_finished))
       q.sound(field, kChanItem, q.i(me, q.L.f.noise3), 1, kAttnNorm);
-    if (key == kItKey1) {
+    if (quake_rules(q)) {
+      const int32_t owner = q.i(me, q.L.f.owner);  // every 2 s at most, as door_say
+      if (q.time() >= q.f(owner, f_attack_finished)) {
+        q.set_f(owner, f_attack_finished, q.time() + 2);
+        q.centerprint(q.other(), {q.s(s_you_need_the), quake_key_name(q, key)});
+      }
+    } else if (key == kItKey1) {
       door_say(q, q.other(), q.s(s_needs_silver_key));
     } else {
       door_say(q, q.other(), q.s(s_needs_gold_key));
     }
   } else {
+    // Quake's rules take the key from whoever opens the door with it.
+    if (quake_rules(q) & (key != 0)) {
+      q.set_f(o, q.L.f.items, q.f(o, q.L.f.items) - key);
+    }
     q.set_ge(g_activator, q.other());
     door_group_up(q);
   }
@@ -459,6 +550,9 @@ void func_door(A& q) {
   if (q.f(me, f_wait) == 0) q.set_f(me, f_wait, 3);
   if (q.f(me, f_lip) == 0) q.set_f(me, f_lip, 8);
   if (q.f(me, f_dmg) == 0) q.set_f(me, f_dmg, 2);
+  // Under Quake's rules a key door stays open for good once opened.
+  if (quake_rules(q) & (band(q.f(me, q.L.f.spawnflags), kDoorGold | kDoorSilver) != 0))
+    q.set_f(me, f_wait, -1);
   q.set_v(me, f_pos1, q.v(me, q.L.f.origin));
   q.set_v(me, f_pos2, far_end(q, me));
   if (on(band(q.f(me, q.L.f.spawnflags), 1))) {
@@ -480,6 +574,98 @@ void func_door(A& q) {
   }
   q.set_i(t, q.L.f.think, q.fn(fn_door_link));
   q.set_f(t, q.L.f.nextthink, q.f(t, q.L.f.ltime) + 0.1f);  // after every brush has its size
+}
+
+// The train's (below): its own clock, its next think at a time, and a crush that hurts what
+// blocks it at most twice a second.
+namespace {
+
+float train_ltime(A& q) { return q.f(q.self(), q.L.f.ltime); }
+
+void train_then_at(A& q, Fn fn, float at) {
+  q.set_i(q.self(), q.L.f.think, q.fn(fn));
+  q.set_f(q.self(), q.L.f.nextthink, at);
+}
+
+void train_crush(A& q, St how) {
+  const int32_t me = q.self();
+  if (q.time() < q.f(me, f_attack_finished)) return;
+  q.set_f(me, f_attack_finished, q.time() + 0.5f);
+  q.set_i(q.other(), f_deathtype, q.s(how));
+  damage(q, q.other(), me, me, q.f(me, f_dmg));
+}
+
+}  // namespace
+
+// THE TRAIN (func_train), a moving platform: a brush that rides its path of corners (dm2's three
+// shuttle along their ledges; the campaign's carry and crush). It waits at each corner for that
+// corner's .wait (none when unset; -1 stops it until used again), crushes what blocks it for .dmg
+// (2) and rides at .speed (100). Its lowest corner is the one that rides the path. Sounds 1 gives
+// it a voice.
+void train_blocked(A& q) { train_crush(q, s_crushed); }
+
+void train_arrived(A& q) {
+  const int32_t me = q.self();
+  if (!q.is(q.i(me, q.L.f.noise1), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
+  if (q.f(me, f_wait) < 0) {  // stops here until used
+    q.set_i(me, q.L.f.use, q.fn(fn_train_next));
+    return;
+  }
+  if (q.f(me, f_wait) > 0) {
+    train_then_at(q, fn_train_next, train_ltime(q) + q.f(me, f_wait));
+    return;
+  }
+  train_next(q);
+}
+
+void train_next(A& q) {
+  const int32_t me = q.self();
+  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
+  if (corner == 0) {
+    q.objerror({q.s(s_a_train_s_path), q.i(me, q.L.f.target)});
+    return;
+  }
+  q.set_i(me, q.L.f.use, q.fn(fn_noop));
+  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
+  q.set_f(me, f_wait, q.f(corner, f_wait));
+  if (!q.is(q.i(me, q.L.f.noise), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
+  calc_move(q, q.v(corner, q.L.f.origin) - q.v(me, q.L.f.mins), q.f(me, f_speed),
+            q.fn(fn_train_arrived));
+}
+
+// Once every corner has spawned: stood on its first, and away unless something names it.
+void train_place(A& q) {
+  const int32_t me = q.self();
+  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
+  if (corner == 0) {
+    q.objerror({q.s(s_a_train_cannot_find), q.i(me, q.L.f.target)});
+    return;
+  }
+  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
+  q.setorigin(me, q.v(corner, q.L.f.origin) - q.v(me, q.L.f.mins));
+  if (q.is(q.i(me, q.L.f.targetname), ""))
+    train_then_at(q, fn_train_next, train_ltime(q) + 0.1f);
+  else
+    q.set_i(me, q.L.f.use, q.fn(fn_train_next));
+}
+
+void func_train(A& q) {
+  const int32_t me = q.self();
+  if (q.f(me, f_speed) == 0) q.set_f(me, f_speed, 100);
+  if (q.f(me, f_dmg) == 0) q.set_f(me, f_dmg, 2);
+  if (q.is(q.i(me, q.L.f.target), "")) q.objerror({q.s(s_a_train_needs_a_path)});
+  if (q.f(me, q.L.f.sounds) == 1) {
+    q.set_i(me, q.L.f.noise, q.s(s_plats_train2_wav));
+    q.set_i(me, q.L.f.noise1, q.s(s_plats_train1_wav));
+    q.precache_sound(q.i(me, q.L.f.noise));
+    q.precache_sound(q.i(me, q.L.f.noise1));
+  }
+  q.set_v(me, q.L.f.angles, {0, 0, 0});
+  brush_start(q);
+  q.set_i(q.self(), q.L.f.blocked, q.fn(fn_train_blocked));
+  q.set_i(q.self(), q.L.f.use, q.fn(fn_noop));
+  train_then_at(q, fn_train_place, train_ltime(q) + 0.1f);
 }
 
 void plat_hit_top(A& q) {
@@ -612,14 +798,54 @@ void func_button(A& q) {
   }
 }
 
-void trigger_ready(A& q) { q.set_f(q.self(), q.L.f.solid, kSolidTrigger); }
+// Ready again after its wait; a shootable one (Quake's rules) takes blows again at full health.
+void trigger_ready(A& q) {
+  const int32_t me = q.self();
+  if (quake_rules(q) && (q.f(me, q.L.f.max_health) > 0)) {
+    q.set_f(me, q.L.f.health, q.f(me, q.L.f.max_health));
+    q.set_f(me, q.L.f.takedamage, kDamageYes);
+    q.set_f(me, q.L.f.solid, kSolidBbox);
+    return;
+  }
+  q.set_f(me, q.L.f.solid, kSolidTrigger);
+}
 
 void trigger_touch(A& q) {
   const int32_t o = q.other();
   if (!q.is(q.i(o, q.L.f.classname), "player") | (q.f(o, q.L.f.health) <= 0)) return;
+  // Quake's rules: a trigger with an angle fires only for a player facing within 90 degrees of it.
+  const Vec3 dir = q.v(q.self(), q.L.f.movedir);
+  if (quake_rules(q) && !same_vec(dir, {0, 0, 0})) {
+    q.makevectors(q.v(o, q.L.f.angles));
+    if (dot(q.v_forward(), dir) < 0) return;
+  }
   q.set_ge(g_activator, q.other());
   trigger_fire(q);
 }
+
+// A shootable trigger (Quake's rules) fires on the blow that takes its health; the one who struck
+// it is the activator.
+void trigger_killed(A& q) {
+  q.set_ge(g_activator, q.ge(g_damage_attacker));
+  q.set_f(q.self(), q.L.f.takedamage, kDamageNo);
+  trigger_fire(q);
+}
+
+namespace {
+
+// Quake's rules: a trigger the map gives health is solid and fired only by blows.
+void trigger_shootable(A& q) {
+  const int32_t me = q.self();
+  if (!quake_rules(q) || (q.f(me, q.L.f.health) <= 0)) return;
+  q.set_f(me, q.L.f.max_health, q.f(me, q.L.f.health));
+  q.set_i(me, f_th_die, q.fn(fn_trigger_killed));
+  q.set_f(me, q.L.f.takedamage, kDamageYes);
+  q.set_f(me, q.L.f.solid, kSolidBbox);
+  q.set_i(me, q.L.f.touch, q.fn(fn_noop));  // only a blow fires it
+  q.setorigin(me, q.v(me, q.L.f.origin));
+}
+
+}  // namespace
 
 void trigger_use(A& q) {
   q.set_ge(g_activator, q.other());
@@ -631,6 +857,7 @@ void trigger_multiple(A& q) {
   trigger_start(q);
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_trigger_touch));
   q.set_i(q.self(), q.L.f.use, q.fn(fn_trigger_use));
+  trigger_shootable(q);
 }
 
 void trigger_once(A& q) {
@@ -638,6 +865,7 @@ void trigger_once(A& q) {
   trigger_start(q);
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_trigger_touch));
   q.set_i(q.self(), q.L.f.use, q.fn(fn_trigger_use));
+  trigger_shootable(q);
 }
 
 // Sends what the variant lets it to the destination named by .target, even a moving one.
@@ -650,6 +878,11 @@ void teleport_touch(A& q) {
   }
   q.makevectors(q.v(dest, q.L.f.angles));
   const int32_t o = q.other();
+  // Quake's rules: a flash where the player leaves and one 32 ahead of where they arrive.
+  if (quake_rules(q)) {
+    quake_flash(q, q.v(o, q.L.f.origin));
+    quake_flash(q, q.v(dest, q.L.f.origin) + q.v_forward() * 32);
+  }
   q.setorigin(o, q.v(dest, q.L.f.origin));
   q.set_v(o, q.L.f.angles, q.v(dest, q.L.f.angles));
   q.set_f(o, q.L.f.fixangle, 1);
@@ -657,12 +890,18 @@ void teleport_touch(A& q) {
   q.set_f(o, q.L.f.teleport_time, q.time() + 0.7f);
   const float flags = q.f(o, q.L.f.flags);
   q.set_f(o, q.L.f.flags, flags - band(flags, kFlOnground));
-  q.sound(o, kChanVoice, q.s(s_r_tele1_wav), 1, kAttnNorm);
+  if (!quake_rules(q)) q.sound(o, kChanVoice, q.s(s_r_tele1_wav), 1, kAttnNorm);
   teleport_arrived(q, q.other());
 }
 
 void trigger_teleport(A& q) {
   trigger_start(q);
+  // Quake's rules: a teleporter hums from its middle unless spawnflag 2 keeps it quiet.
+  if (quake_rules(q) && (band(q.f(q.self(), q.L.f.spawnflags), 2) == 0)) {
+    const Vec3 mid = (q.v(q.self(), q.L.f.mins) + q.v(q.self(), q.L.f.maxs)) * 0.5f;
+    q.precache_sound(q.s(s_hum1_wav));
+    q.ambientsound(mid, q.s(s_hum1_wav), 0.5f, kAttnStatic);
+  }
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_teleport_touch));
   if (q.is(q.i(q.self(), q.L.f.target), "")) q.objerror({q.s(s_teleporter_needs_target)});
 }
@@ -672,10 +911,18 @@ void push_touch(A& q) {
   const int32_t o = q.other();
   if ((q.f(o, q.L.f.health) <= 0) | (q.f(o, q.L.f.movetype) == kMovetypeNone)) return;
   q.set_v(o, q.L.f.velocity, q.v(q.self(), q.L.f.movedir) * q.f(q.self(), f_speed) * 10);
+  if (!quake_rules(q)) return;
+  // Quake's rules: a player hears the wind at most every 1.5 s; spawnflag 1 pushes once.
+  if (q.is(q.i(o, q.L.f.classname), "player") & (q.time() >= q.f(o, f_push_heard))) {
+    q.sound(o, kChanAuto, q.s(s_windfly_wav), 1, kAttnNorm);
+    q.set_f(o, f_push_heard, q.time() + 1.5f);
+  }
+  if (band(q.f(q.self(), q.L.f.spawnflags), 1) != 0) q.remove(q.self());
 }
 
 void trigger_push(A& q) {
   trigger_start(q);
+  if (quake_rules(q)) q.precache_sound(q.s(s_windfly_wav));
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_push_touch));
   if (q.f(q.self(), f_speed) == 0) q.set_f(q.self(), f_speed, 1000);
 }
@@ -696,6 +943,96 @@ void trigger_hurt(A& q) {
   trigger_start(q);
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_hurt_touch));
   if (q.f(q.self(), f_dmg) == 0) q.set_f(q.self(), f_dmg, 5);
+}
+
+// THE EPISODES: Quake's gates by the runes' bits in `serverflags`, kept from map to map, and the
+// trigger only the full game's packs fire. The arena and the campaign share them.
+// Stands (blocking the hall) once its episode is done.
+void func_episodegate(A& q) {
+  if (band(q.gf(q.L.g.serverflags), q.f(q.self(), q.L.f.spawnflags)) == 0) {
+    q.remove(q.self());
+    return;
+  }
+  func_wall(q);
+}
+
+// Gone once all four episodes are done.
+void func_bossgate(A& q) {
+  if (band(q.gf(q.L.g.serverflags), 15) == 15) {
+    q.remove(q.self());
+    return;
+  }
+  func_wall(q);
+}
+
+// Acts as a trigger_once on the full game's packs; on the shareware ones it only shows its message.
+void onlyregistered_touch(A& q) {
+  const int32_t me = q.self();
+  const int32_t other = q.other();
+  if (!q.is(q.i(other, q.L.f.classname), "player") | (q.f(other, q.L.f.health) <= 0)) return;
+  if (q.f(me, f_attack_finished) > q.time()) return;
+  q.set_f(me, f_attack_finished, q.time() + 2);
+  if (on(q.cvar(q.s(s_registered)))) {
+    q.set_i(me, q.L.f.message, q.s(s_empty));
+    q.set_ge(g_activator, other);
+    q.set_f(me, f_wait, -1);
+    trigger_fire(q);
+    return;
+  }
+  if (!q.is(q.i(me, q.L.f.message), "")) {
+    q.centerprint(other, {q.i(me, q.L.f.message)});
+    q.sound(other, kChanBody, q.s(s_misc_talk_wav), 1, kAttnNorm);
+  }
+}
+
+void trigger_onlyregistered(A& q) {
+  trigger_start(q);
+  q.set_i(q.self(), q.L.f.touch, q.fn(fn_onlyregistered_touch));
+}
+
+// A teleport destination that moves: once used it rides its path of corners round at .speed
+// (100 when not set), a teleporter naming it sending a player to wherever it is.
+void teleporttrain_next(A& q) {
+  const int32_t me = q.self();
+  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
+  if (corner == 0) {
+    q.set_v(me, q.L.f.velocity, {0, 0, 0});
+    return;
+  }
+  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
+  const Vec3 delta = q.v(corner, q.L.f.origin) - q.v(me, q.L.f.origin);
+  if (q.vlen(delta) < 1) {
+    q.set_i(me, q.L.f.think, q.fn(fn_teleporttrain_next));
+    q.set_f(me, q.L.f.nextthink, q.time() + 0.1f);
+    return;
+  }
+  q.set_v(me, q.L.f.velocity, q.normalize(delta) * q.f(me, f_speed));
+  q.set_i(me, q.L.f.think, q.fn(fn_teleporttrain_next));
+  q.set_f(me, q.L.f.nextthink, q.time() + q.vlen(delta) / q.f(me, f_speed));
+}
+
+void teleporttrain_use(A& q) {
+  if (!same_vec(q.v(q.self(), q.L.f.velocity), {0, 0, 0})) return;  // already riding
+  q.set_i(q.self(), q.L.f.use, q.fn(fn_noop));
+  teleporttrain_next(q);
+}
+
+void misc_teleporttrain(A& q) {
+  const int32_t me = q.self();
+  if (q.f(me, f_speed) == 0) q.set_f(me, f_speed, 100);
+  if (q.is(q.i(me, q.L.f.target), "")) q.objerror({q.s(s_a_teleport_train_needs)});
+  q.precache_model(q.s(s_teleport_mdl));
+  q.set_f(me, q.L.f.solid, kSolidNot);
+  q.set_f(me, q.L.f.movetype, kMovetypeNoclip);
+  q.set_v(me, q.L.f.avelocity, {100, 200, 300});
+  q.setmodel(me, q.s(s_teleport_mdl));
+  q.setsize(me, {0, 0, 0}, {0, 0, 0});
+  q.setorigin(me, q.v(me, q.L.f.origin));
+  q.set_i(me, q.L.f.use, q.fn(fn_teleporttrain_use));
+  if (q.is(q.i(me, q.L.f.targetname), "")) {  // unnamed: it rides from the start
+    q.set_i(me, q.L.f.think, q.fn(fn_teleporttrain_use));
+    q.set_f(me, q.L.f.nextthink, q.time() + 0.1f);
+  }
 }
 
 }  // namespace shooters_edge::server::rules::SE_RULES_NS

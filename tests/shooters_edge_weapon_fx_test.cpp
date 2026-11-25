@@ -283,9 +283,13 @@ TEST(a_grenades_glow_is_faint_its_skins_colour_and_never_lights_its_own_body) {
 
 TEST(blood_sprays_by_the_weapon_red_falling_and_the_same_for_the_same_seed) {
   // How far along the blow the drops go, on average (m/s), and how many.
-  const auto spray = [](fx::BloodBy by, int count, fx::Particles& out) {
+  const auto spray = [](fx::BloodBy by, int count, fx::Particles& out, bool through = false,
+                        double amount = 1) {
     fx::BloodHit h;
     h.dir[0] = 1, h.dir[1] = 0, h.dir[2] = 0;
+    h.through = through;
+    h.exit[0] = 0.3;  // out of the far side, 0.3 m along the blow
+    h.amount = amount;
     h.by = by;
     h.count = count;
     h.floor_y = -1;
@@ -299,7 +303,8 @@ TEST(blood_sprays_by_the_weapon_red_falling_and_the_same_for_the_same_seed) {
       CHECK(q.tint[0] > 4 * q.tint[1]);  // red
       CHECK(q.floor_y == -1.0f);         // on the floor under the hit
     }
-    return std::pair<double, double>{along / double(out.size()), across / double(out.size())};
+    const double n = out.empty() ? 1.0 : double(out.size());
+    return std::pair<double, double>{along / n, across / n};
   };
   fx::Particles a, b;
   const auto pellet = spray(fx::BloodBy::pellet, 1, a);
@@ -308,9 +313,17 @@ TEST(blood_sprays_by_the_weapon_red_falling_and_the_same_for_the_same_seed) {
   const size_t one = a.size();
   spray(fx::BloodBy::pellet, 6, a);  // a shotgun's six pellets throw six times one's
   CHECK(a.size() == 6 * one);
-  // A nail drives its blood on along its flight, harder than a pellet's.
-  const auto nail = spray(fx::BloodBy::nail, 1, a);
+  // A nail through the body drives most of its blood out of the exit along its flight, harder
+  // than a pellet's; lodged, it only mists back and pours.
+  const auto nail = spray(fx::BloodBy::nail, 1, a, true);
   CHECK(nail.first > pellet.first + 1);
+  const auto lodged = spray(fx::BloodBy::nail, 1, a);
+  CHECK(lodged.first < nail.first);
+  // More blood (ce_blood_amount) throws more; none, nothing.
+  spray(fx::BloodBy::pellet, 1, a, false, 2);
+  CHECK(a.size() > one + one / 2);
+  spray(fx::BloodBy::pellet, 1, a, false, 0);
+  CHECK(a.empty());
   // A blade flings it sideways across the cut more than along it.
   const auto blade = spray(fx::BloodBy::blade, 1, a);
   CHECK(blade.second > blade.first);
@@ -321,4 +334,16 @@ TEST(blood_sprays_by_the_weapon_red_falling_and_the_same_for_the_same_seed) {
   // The arc boils off little.
   spray(fx::BloodBy::arc, 1, a);
   CHECK(a.size() < one + 10);
+}
+
+TEST(quake_twos_rail_trail_beams_take_its_colour_width_and_fade) {
+  // cl_railtrail_type's core: straight, the width and colour asked, fading over cl_railtrail_time;
+  // its spiral circles the core at the radius asked.
+  const float red[3] = {1, 0, 0};
+  const gr::BeamLook core = fx::q2_rail_trail_look(0.05f, 0, red, 2.0f);
+  CHECK(core.wander == 0 && core.braid_m == 0 && core.core_m == 0.05f);
+  CHECK(core.core_rgb[0] == 1 && core.core_rgb[2] == 0 && core.release_s == 2.0f);
+  CHECK(core.light_cd == 0 && core.hit_cd == 0);  // no light of its own
+  const gr::BeamLook spiral = fx::q2_rail_trail_look(0.05f, 0.075f, red, 0);
+  CHECK(spiral.braid_m == 0.075f && spiral.twist > 0 && spiral.release_s > 0);
 }

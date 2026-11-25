@@ -92,8 +92,8 @@ struct Arsenal {
   std::string_view pickup_sound = "";    // a weapon's pickup sound ("": the rules' own)
 };
 
-// The classic game's eight weapons and three armours.
-inline constexpr WeaponRow kClassicWeapons[] = {
+// Quake's eight weapons and three armours.
+inline constexpr WeaponRow kQ1Weapons[] = {
     {1, Fire::melee, Ammo::none, 0, 0.5f, 1, 20, 0, 64, 0, 0, "progs/v_axe.mdl", "weapons/ax1.wav",
      "-", "player/axhit2.wav", "-", "-", 0},
     {2, Fire::pellets, Ammo::shells, 1, 0.5f, 6, 4, 0.04f, 2048, 0, 0, "progs/v_shot.mdl",
@@ -112,12 +112,12 @@ inline constexpr WeaponRow kClassicWeapons[] = {
     {8, Fire::beam, Ammo::cells, 1, 0.1f, 1, 30, 0, 600, 0, 35, "progs/v_light.mdl",
      "weapons/lhit.wav", "-", "-", "-", "progs/g_light.mdl", 15},
 };
-inline constexpr ArmourRow kClassicArmour[] = {
+inline constexpr ArmourRow kQ1Armour[] = {
     {1, 0.3f, 100, 0, "progs/armor.mdl", "items/armor1.wav"},
     {2, 0.6f, 150, 1, "progs/armor.mdl", "items/armor1.wav"},
     {3, 0.8f, 200, 2, "progs/armor.mdl", "items/armor1.wav"},
 };
-inline constexpr Arsenal kClassicArsenal{kClassicWeapons, kClassicArmour};
+inline constexpr Arsenal kQ1Arsenal{kQ1Weapons, kQ1Armour};
 
 inline constexpr std::string_view kFireWords[] = {"melee",   "pellets", "spike",
                                                   "grenade", "rocket",  "beam"};

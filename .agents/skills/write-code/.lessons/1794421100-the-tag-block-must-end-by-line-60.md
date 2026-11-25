@@ -1,7 +1,7 @@
 ---
 title: A file's ge: tags are read from its first 60 lines only
 date: 2026-11-11
-scope: tools/agents-index.mjs, games/shooters_edge/server/sequel_server.hpp
+scope: tools/agents-index.mjs, games/shooters_edge/server/q2_server.hpp
 concepts: [ge-tags, leading-comment, agents-check, scan-lines, missing-ge-skill]
 ---
 

@@ -1,6 +1,6 @@
 // LAB `se-load`: THE GAME'S OWN TRAFFIC AS THE LOAD. Bots play as clients on our server over the
 // simulated network, every move through the classic protocol as a person's would
-// (classic_team.hpp), on many servers: for each count of players (`--players=2,8,16`, split into
+// (qw_team.hpp), on many servers: for each count of players (`--players=2,8,16`, split into
 // two teams), `--servers` matches on their own seeds. Each server's frame is timed on the wall
 // clock, and the bots' thinking (the clients' ticks) apart from it, since a real server carries
 // only its own frame. The table's counts (the frames, the frags, the bytes on the wire, each
@@ -27,12 +27,13 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cl = shooters_edge::client;
 namespace cn = shooters_edge::net;
 using ge::core::num::to_fixed;
@@ -127,8 +128,8 @@ void run(gl::Lab& lab) {
       o.timelimit = 0;
       o.frames = static_cast<int>(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec);
       o.clock_ns = wall_ns;
-      const sh::AimSkill cycle[] = {sh::AimSkill::expert, sh::AimSkill::average,
-                                    sh::AimSkill::novice};
+      const sb::AimSkill cycle[] = {sb::AimSkill::expert, sb::AimSkill::average,
+                                    sb::AimSkill::novice};
       for (int t = 0; t < 2; t++) {
         o.teams[t].skills.clear();
         const int side = t == 0 ? (count + 1) / 2 : count / 2;
@@ -205,7 +206,7 @@ const gl::LabSpec kSpec{
     gl::LabKind::bench,
     "game:shooters_edge",
     "bots as classic-protocol clients on many of our servers (games/shooters_edge/net/"
-    "classic_team.hpp)",
+    "qw_team.hpp)",
     "net",
     "With the game's own bots as the players, what does one of our servers' frames cost as the "
     "players grow, and how many servers does one core hold?",

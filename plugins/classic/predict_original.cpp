@@ -6,8 +6,11 @@
 // ge:test tests/classic_predict_original_test.cpp
 #include "classic/predict_original.hpp"
 
+#include <algorithm>
+
 #include "shooter/frame_recording.hpp"
 #include "shooter/framemove.hpp"
+#include "shooter/push.hpp"
 
 namespace ge::classic {
 
@@ -78,8 +81,11 @@ void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int
     ed.movetype = kMovetypePush;
     set_brush_model(sv, e, index);
     set_origin(sv, e, movers[i].origin);
+    p.mover_velocity[e - 2] = movers[i].velocity;
+    p.mover_reach[e - 2] = movers[i].reach;
     e++;
   }
+  p.movers = e - 2;
   for (int i = 0; i < player_count && i < kPlaceMax; i++) {
     Edict& ed = take(sv, e);
     ed.solid = kSolidSlidebox;
@@ -92,7 +98,9 @@ void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int
 }
 
 MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
-                                  const MoveCmd* cmds, int count) {
+                                  const MoveCmd* cmds, int count, MoveState* each,
+                                  const Teleporters* tele, int skip, TeleHit* hit,
+                                  const float* mover_at) {
   Server& sv = p.sv;
   const MoveState from = unquantize_player(acked, sv.set.move);
   unlink_edict(sv, kPlayer);
@@ -101,12 +109,51 @@ MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
   Edict& ed = sv.edicts[kPlayer];
   if (from.ground != -1) ed.flags |= kFlagOnGround;
   if (acked.jump_held) ed.flags &= ~kFlagJumpReleased;
-  for (int i = 0; i < count; i++) run_split(sv, cmds[i]);
-  MoveState out = from;
-  out.origin = ed.origin;
-  out.velocity = ed.velocity;
-  out.ground = (ed.flags & kFlagOnGround) != 0 ? 0 : -1;
-  out.jump_held = (ed.flags & kFlagJumpReleased) == 0;
+  const auto state = [&] {
+    MoveState out = from;
+    out.origin = ed.origin;
+    out.velocity = ed.velocity;
+    out.ground = (ed.flags & kFlagOnGround) != 0 ? 0 : -1;
+    out.jump_held = (ed.flags & kFlagJumpReleased) == 0;
+    return out;
+  };
+  if (hit != nullptr) *hit = {};
+  // The movers start each replay where the frame put them, so a replay's push is undone after it.
+  Vec3f placed_at[kPlaceMax];
+  for (int m = 0; m < p.movers; m++) placed_at[m] = sv.edicts[2 + static_cast<size_t>(m)].origin;
+  float gone[kPlaceMax] = {};
+  float movers_now = 0;  // seconds the movers have run on
+  for (int i = 0; i < count; i++) {
+    const float to = mover_at != nullptr ? mover_at[i] : movers_now + cmds[i].msec * 0.001f;
+    const float dt = to > movers_now ? to - movers_now : 0;
+    movers_now += dt;
+    for (int m = 0; m < p.movers && dt > 0; m++) {
+      const Vec3f v = p.mover_velocity[m];
+      const float speed = length(v);
+      const float step = std::min(speed * dt, p.mover_reach[m] - gone[m]);
+      if (speed <= 0 || step <= 0) continue;
+      gone[m] += step;
+      push_move(sv, 2 + m, v * (step / speed));
+    }
+    run_split(sv, cmds[i]);
+    if (tele != nullptr && ed.movetype == kMovetypeWalk) {
+      const int pk = pusher_at(*tele, ed.origin, kPlayerMins, kPlayerMaxs, kTeleLinkGrow);
+      if (pk >= 0) ed.velocity = (*tele)[static_cast<size_t>(pk)].velocity;  // the push's touch
+      const int k = teleporter_at(*tele, ed.origin, kPlayerMins, kPlayerMaxs, kTeleLinkGrow, skip);
+      if (k >= 0) {  // as the server's teleporter: there, at its speed, off the ground
+        const Teleporter& t = (*tele)[static_cast<size_t>(k)];
+        set_origin(sv, kPlayer, t.dest);
+        ed.velocity = t.velocity;
+        ed.flags &= ~kFlagOnGround;
+        if (hit != nullptr && hit->cmd < 0) *hit = {i, k};
+      }
+    }
+    if (each != nullptr) each[i] = state();
+  }
+  const MoveState out = state();
+  for (int m = 0; m < p.movers; m++)
+    if (!(sv.edicts[2 + static_cast<size_t>(m)].origin == placed_at[m]))
+      set_origin(sv, 2 + m, placed_at[m]);
   return out;
 }
 

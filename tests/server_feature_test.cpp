@@ -1,9 +1,12 @@
 // The server's feature seam and the administrator's features (engine/server/feature.hpp,
 // admin.hpp), over the simulated network (admin_trial.hpp).
 //
-// ge:summary Tests: the feature seam, status, rcon refused and run, kick, ban, the ban file
+// ge:summary Tests: the feature seam, status, rcon, kick, ban, the ban file, the log
 // ge:keywords test server feature admin rcon kick ban status log
 // ge:skill net testing
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <string>
 
@@ -136,4 +139,32 @@ TEST(admin_ban_words_on_the_console) {
   gs::server_frame(s);
   CHECK(again.bans.entries.size() == 1);
   gs::server_close(s);
+}
+
+// A game that answers its own clients runs the log alone: what its console prints goes in, stamped
+// with the server's time, and into `sv_logfile` in the game's folder when it is named.
+TEST(the_log_alone_takes_a_games_own_lines_into_sv_logfile) {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_server_log";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  ge::console::Console con(true);
+  con.set_search_path({dir});
+  gs::ServerConfig c;
+  gs::add_server_cvars(con.cvars(), c, gs::sample_game());
+  gs::AdminFeatures admin;
+  gs::Features f;
+  f.list.push_back(gs::admin_log_feature(admin));
+  gs::features_attach(f, con);
+  gs::features_log(f, "before the file is named");
+  con.execute("sv_logfile server.log");
+  gs::features_log(f, "eve connected");
+  CHECK(admin.log.size() == 2);
+  CHECK_MSG(admin.log.back() == "0.00 eve connected", admin.log.back());
+  std::ifstream in(dir / "server.log");
+  std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK_MSG(text == "0.00 eve connected\n", text);
+  // Features without the log take no line.
+  gs::Features none;
+  gs::features_log(none, "nobody keeps this");
+  std::filesystem::remove_all(dir);
 }

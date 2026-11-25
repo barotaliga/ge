@@ -1,10 +1,10 @@
 // LAB `se-hub`: SHOOTER'S EDGE'S HUB LISTING THE CLASSIC SERVERS ALREADY OUT THERE (docs/hub.md §
 // The classic adapter, engine/hub/browse.hpp). Five of the game's own dedicated servers on the
-// classic protocol (net/classic_game.hpp on the engine's server core) run on the simulated network,
+// classic protocol (net/qw_game.hpp on the engine's server core) run on the simulated network,
 // classic clients on four of them; none of them speaks the engine's status record or knows the
 // engine's master. A stand-in classic master lists four of them and one that is not running; the
 // fifth is named by hand. The hub reads them the way the game's server browser does (the classic
-// status query, `classic_query()`), and its index fills:
+// status query, `qw_query()`), and its index fills:
 //
 //   listed     every running server in the index with its record: name, map, mode, slots, the
 //              players with their teams and the team game's totals, the match's phase
@@ -40,9 +40,9 @@
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
 #include "server/server.hpp"
-#include "shooters_edge/net/classic_browse.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_browse.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 
@@ -78,7 +78,7 @@ struct Box {
   std::unique_ptr<gn::Transport> port;
   gs::Server server;
   std::vector<std::unique_ptr<gn::Transport>> ct;
-  std::vector<std::unique_ptr<se::ClassicClientEnd>> ends;
+  std::vector<std::unique_ptr<se::QwClientEnd>> ends;
   bool running = true;
 };
 
@@ -114,7 +114,7 @@ struct Evening {
       c.maxclients = p.maxclients;
       c.seed = p.node;
       if (p.teamplay != 0) c.rules["teamplay"] = std::to_string(p.teamplay);
-      if (!gs::server_open(b->server, se::classic_game(), c, b->port.get(), nullptr, error)) {
+      if (!gs::server_open(b->server, se::qw_game(), c, b->port.get(), nullptr, error)) {
         error = std::string(p.name) + ": " + error;
         return false;
       }
@@ -122,7 +122,7 @@ struct Evening {
         const uint32_t node = p.node * 10 + static_cast<uint32_t>(i) + 100;
         b->ct.push_back(std::make_unique<gn::Transport>());
         gn::open_sim_transport(*b->ct.back(), net, gn::sim_address(node, 27001));
-        b->ends.push_back(std::make_unique<se::ClassicClientEnd>());
+        b->ends.push_back(std::make_unique<se::QwClientEnd>());
         se::ClientConfig cc;
         static constexpr const char* kNames[] = {"Vex", "Moss", "Rook", "Tally", "Juno", "Brisk"};
         cc.name = kNames[static_cast<size_t>(i) % 6];
@@ -178,7 +178,7 @@ gh::HubSpec spec() {
   s.protocol = gn::protocol_id("shooters_edge", 1);
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"team", 6}, {"ffa", 3}};
   s.score = "frags";
-  s.browse = se::classic_query();
+  s.browse = se::qw_query();
   return s;
 }
 
@@ -256,7 +256,7 @@ void run(gl::Lab& lab) {
   if (players != joined) {
     lab.fail("the index holds " + std::to_string(players) + " players; " + std::to_string(joined) +
                  " joined",
-             "next: check status_of (engine/hub/browse.cpp) against classic_read_status's roster");
+             "next: check status_of (engine/hub/browse.cpp) against qw_read_status's roster");
   }
   const gh::HubNode* team = gh::poller_find(poller, listed_at(20));
   lab.metric("team_game.teams", team ? static_cast<double>(team->status.teams.size()) : 0, "teams");
@@ -400,7 +400,7 @@ const gl::LabSpec kSpec{
     "se-hub",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "engine/hub/browse (the classic adapter) with games/shooters_edge/net/classic_browse",
+    "engine/hub/browse (the classic adapter) with games/shooters_edge/net/qw_browse",
     "net",
     "Does Shooter's Edge's hub list the classic servers already running, found by a classic master "
     "and by name and read by the classic status query, with their players and teams, and drop one "

@@ -1,4 +1,4 @@
-// LAB `se-dedicated`: Shooter's Edge's playable dedicated server (net/classic_game.hpp) on the
+// LAB `se-dedicated`: Shooter's Edge's playable dedicated server (net/qw_game.hpp) on the
 // engine's server core, as a classic client sees it. The core's server opens on the simulated
 // network under each condition preset; `--clients` classic clients join a second apart, follow
 // the signon and play the game's own deathmatch for `--seconds`. It answers whether every client
@@ -9,7 +9,7 @@
 // ge:keywords lab se-dedicated dedicated-server classic-game classic-client join signon seats
 // ge:keywords preset digest
 // ge:skill net labs
-// ge:test tests/shooters_edge_classic_game_test.cpp
+// ge:test tests/shooters_edge_qw_game_test.cpp
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -21,8 +21,8 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "server/server.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 
@@ -74,15 +74,15 @@ Run run_once(const gn::LinkConditions& link, uint32_t seed, int clients, double 
   c.maxclients = 8;
   c.seed = seed;
   gs::Server s;
-  if (!gs::server_open(s, se::classic_game(), c, &port, nullptr, r.error)) return r;
+  if (!gs::server_open(s, se::qw_game(), c, &port, nullptr, r.error)) return r;
   const auto n = static_cast<size_t>(clients);
   std::vector<std::unique_ptr<gn::Transport>> ct(n);
-  std::vector<std::unique_ptr<se::ClassicClientEnd>> ends(n);
+  std::vector<std::unique_ptr<se::QwClientEnd>> ends(n);
   std::vector<bool> started(n, false);
   for (size_t i = 0; i < n; i++) {
     ct[i] = std::make_unique<gn::Transport>();
     gn::open_sim_transport(*ct[i], net, gn::sim_address(static_cast<uint32_t>(i + 1), kClientPort));
-    ends[i] = std::make_unique<se::ClassicClientEnd>();
+    ends[i] = std::make_unique<se::QwClientEnd>();
   }
   const auto frames = static_cast<int64_t>(ge::core::num::round(seconds / s.frame_s));
   int last = -1;
@@ -122,7 +122,7 @@ Run run_once(const gn::LinkConditions& link, uint32_t seed, int clients, double 
   r.frames = frames;
   for (size_t i = 0; i < n; i++) {
     const double join = static_cast<double>(i + 1);
-    const se::ClassicClientEnd& e = *ends[i];
+    const se::QwClientEnd& e = *ends[i];
     r.connect_s.push_back(e.connected_at < 0 ? -1 : e.connected_at - join);
     r.active_s.push_back(e.active_at < 0 ? -1 : e.active_at - join);
     r.digest = (r.digest ^ static_cast<uint64_t>(e.stage)) * 1099511628211ull;
@@ -200,7 +200,7 @@ const gl::LabSpec kSpec{
     "se-dedicated",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_game (the dedicated server on the engine's core)",
+    "games/shooters_edge/net/qw_game (the dedicated server on the engine's core)",
     "net",
     "Does Shooter's Edge's dedicated server on the engine's core let every classic client in to "
     "play, count them seated, and replay to the bit under each network?",

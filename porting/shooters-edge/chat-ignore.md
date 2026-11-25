@@ -1,6 +1,6 @@
 # Chat ignore lists (clean-room note)
 
-WORKING AREA: deleted when porting ends. A reader's answers on the first game's modern client's ignore lists and chat filters. Built from in `engine/console/chat_ignore.hpp` (the lists, our own design: no 4-team defect, the longest name wins), `plugins/shooter/weapon_lines.hpp` and `games/shooters_edge/client/chat_ignore.hpp` (the classic lines). Question 9, the sequel's modern client's `ignoretext` and `ignorenick`, is still open.
+WORKING AREA: deleted when porting ends. A reader's answers on the first game's modern client's ignore lists and chat filters. Built from in `engine/console/chat_ignore.hpp` (the lists, our own design: no 4-team defect, the longest name wins), `plugins/shooter/weapon_lines.hpp` and `games/shooters_edge/client/chat_ignore.hpp` (the classic lines). Question 9, Quake II's modern client's `ignoretext` and `ignorenick`, is still open.
 
 
 Read: ezQuake at commit 5eb5920 (QW-Group ezquake-source). Q2PRO at commit 601a8df could NOT be
@@ -237,7 +237,7 @@ Not silent [read]:
 - With an argument, each prints "<cmd> : no arguments expected" and does nothing.
 - [read] The command names are registered as "unignoreAll" and "unignoreAll_team". [read] Console command lookup in this client ignores case, so typing them in lower case works.
 
-## 9. The sequel's modern client (Q2PRO 601a8df)
+## 9. Quake II's modern client (Q2PRO 601a8df)
 
 OPEN. The repository could not be fetched in this session, so nothing about `ignoretext`,
 `unignoretext`, `ignorenick` or `unignorenick` is known from reading the source. A reader with

@@ -109,10 +109,10 @@ TEST(model_name_is_the_path_under_its_kinds_folder) {
   CHECK(ce::model_name("sprites/s_bfg1.sp2") == "s_bfg1");
 }
 
-TEST(the_sequels_models_keep_their_own_names_and_their_outside_skins_and_frames) {
+TEST(q2_models_keep_their_own_names_and_their_outside_skins_and_frames) {
   // Two models both called tris in their folders, their skins PCX pictures in the pack, and a
   // sprite whose frames are pictures too: each lands in its own place with its pictures.
-  const ce::Profile& sequel = *ce::find_profile("sequel");
+  const ce::Profile& q2 = *ce::find_profile("q2");
   mo::Model m = mo::sample_model();
   const mo::Skin skin = m.skins[0];
   m.skins.clear();
@@ -134,7 +134,7 @@ TEST(the_sequels_models_keep_their_own_names_and_their_outside_skins_and_frames)
     f.indices.clear();
   }
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
-      {std::string(sequel.palette), pcx_of(8, 8, 1)},
+      {std::string(q2.palette), pcx_of(8, 8, 1)},
       {"models/items/armor/tris.md2", mo::write_model2(m)},
       {"models/items/armor/skin.pcx", pcx_of(skin.width, skin.height, 40)},
       {"models/items/health/tris.md2", mo::write_model2(health)},
@@ -145,14 +145,14 @@ TEST(the_sequels_models_keep_their_own_names_and_their_outside_skins_and_frames)
   CHECK_MSG(ge::vfs::write_pak(files, &pack, &error), error);
   ce::Palette palette;
   for (size_t i = 0; i < palette.rgb.size(); i++) palette.rgb[i] = uint8_t(i);
-  const fs::path dir = fs::temp_directory_path() / "ge_ce_sequel_models_test";
+  const fs::path dir = fs::temp_directory_path() / "ge_ce_q2_models_test";
   fs::remove_all(dir);
   ce::ModelStats stats;
   ce::EnhanceOptions t;
   t.scale = 1;
   ce::ModelOptions o;
   o.skin_scale = 1;
-  CHECK_MSG(ce::enhance_models(pack, palette, dir, o, t, &stats, &error, sequel), error);
+  CHECK_MSG(ce::enhance_models(pack, palette, dir, o, t, &stats, &error, q2), error);
   CHECK(stats.models == 2 && stats.sprites == 1);
   CHECK(fs::exists(dir / "models" / "items_armor_tris.glb"));
   CHECK(fs::exists(dir / "models" / "items_health_tris.glb"));

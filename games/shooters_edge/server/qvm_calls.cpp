@@ -518,8 +518,11 @@ int32_t visibleto(QvmServer& s, int viewer, int first, int32_t len, int32_t buf)
 
 // ---- movement and traces ----
 
-int lag_shooter(QvmServer& s, int pass) {
+// The client a trace shoots for (bi_world.cpp's lag_shooter): sv_antilag 1 only a trace marked
+// 64, 2 every traceline.
+int lag_shooter(QvmServer& s, int pass, int32_t kind, bool line) {
   if (s.lag_rewind == nullptr || pass <= 0) return 0;
+  if (!((kind & 64) != 0 && s.lag_level >= 1) && !(line && s.lag_level >= 2)) return 0;
   const int slot = client_slot(s, pass);
   if (slot >= 0) return s.clients[slot].bot ? 0 : pass;
   const int owner = s.sv.edicts[static_cast<size_t>(pass)].owner;
@@ -527,6 +530,7 @@ int lag_shooter(QvmServer& s, int pass) {
 }
 
 int trace_kind(int32_t nomonsters) {
+  nomonsters &= ~64;  // the lag mark (lag_shooter)
   return nomonsters == 1   ? sh::kTraceNoMonsters
          : nomonsters == 2 ? sh::kTraceMissile
                            : sh::kTraceNormal;
@@ -550,7 +554,7 @@ void trace(QvmServer& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs, sh::Ve
   const int pass = number_arg(s, pass_n, "traceline");
   if (pass < 0) return;
   sim::qvm_flush(s.q);
-  const int shooter = lag ? lag_shooter(s, pass) : 0;
+  const int shooter = lag_shooter(s, pass, nomonsters, lag);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
   if (lag && mins == sh::Vec3f{} && maxs == sh::Vec3f{})
     help_traced_shot(s, pass, start, end);  // a granted player's shot (shot_help.hpp)

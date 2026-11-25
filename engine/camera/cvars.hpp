@@ -63,6 +63,11 @@ struct CameraDefaults {
 struct CameraCvars {
   double unit_m = 1.0;
   double fov = 0, viewheight = 0;
+  double viewlift = 0;   // a game's own raise of the eye (FirstPersonRow::eye_lift_m), units
+  bool bobhead = false;  // a game's own: the weapon's bob carried by the eye too (bob_eye)
+  // A game's own idle sway shape (pitch, yaw, roll): each axis's rate, rad/s, and its degrees at
+  // a scale of 1; all 0: the rig's (FirstPersonRow::idle_*).
+  double idle_cycle[3] = {0, 0, 0}, idle_level[3] = {0, 0, 0};
   double bob = 0, bobcycle = 0, bobup = 0;
   double rollangle = 0, rollspeed = 0;
   double kicktime = 0, kickpitch = 0, kickroll = 0;

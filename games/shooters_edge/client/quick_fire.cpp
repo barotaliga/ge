@@ -102,7 +102,7 @@ const sh::QuickSettings& quick_settings(QuickFire& q) {
 
 sh::QuickArmed quick_armed(const hud::Status& s) {
   sh::QuickArmed a;
-  if (s.keyed.set) {  // the game's own keys (the sequel's)
+  if (s.keyed.set) {  // the game's own keys (Quake II's)
     a.ready = s.keyed.ready;
     a.in_hand = s.keyed.in_hand;
     for (size_t k = 0; k < a.ammo.size() && k < s.keyed.ammo.size(); ++k)

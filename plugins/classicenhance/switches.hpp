@@ -1,4 +1,4 @@
-// EVERY ENHANCEMENT A SWITCH: what classic-enhance adds to the classic game, each thing on or off
+// EVERY ENHANCEMENT A SWITCH: what classic-enhance adds to Quake, each thing on or off
 // on its own, so a player keeps what they like and has the original for the rest. A switch off
 // means the classic original, as the pack has it (the pack's picture, its light, its sound, its
 // effect sprite).
@@ -20,6 +20,7 @@
 // ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art ce_trails ce_hits
 // ge:keywords trails hits heathaze heat-haze fumes burning ce_heathaze ce_fumes ce_burning
 // ge:keywords wade wading ce_wade ce_monsters monster-attacks ce_blood blood gore splatter
+// ge:keywords ce_respawns respawns item-respawn hologram
 // ge:skill classicenhance
 // ge:test tests/classicenhance_switches_test.cpp
 #pragma once
@@ -39,7 +40,7 @@ struct Switches {
   bool textures = true, upscaler = true, relief = true, parallax = true, glow = true,
        pictures = true;
   // Light
-  bool rebake = true, flicker = true, shadows = true;
+  bool rebake = true, flicker = true, shadows = true, ao = true;
   // World
   bool decals = true;
   // Liquids and sky
@@ -48,7 +49,7 @@ struct Switches {
   // Effects
   bool flames = true, bonfires = true, muzzles = true, explosions = true, trails = true,
        hits = true, blood = true, flares = true, bubbles = true, beams = true, warps = true,
-       burning = true, monsters = true;
+       burning = true, monsters = true, respawns = true, shells = true;
   // Air
   bool fog = true, clouds = true, wind = true, weather = true;
   // Picture

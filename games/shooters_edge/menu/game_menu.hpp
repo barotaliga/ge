@@ -55,12 +55,13 @@
 // ge:keywords classic-enhance enhance job switches help-pages window shooters-edge press_key
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
-// ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo
+// ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo recipe
 // ge:keywords select-game menu_games take_game games-page menu-sound menu-cue take_cue click
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
 
+#include <deque>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -78,6 +79,9 @@
 #include "shooters_edge/menu/gallery_page.hpp"
 #include "shooters_edge/menu/games_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
+#include "shooters_edge/menu/menu_script.hpp"
+#include "shooters_edge/menu/player_view.hpp"
+#include "shooters_edge/menu/server_page.hpp"
 #include "shooters_edge/menu/servers_page.hpp"
 #include "ui/draw.hpp"
 #include "ui/menu.hpp"
@@ -85,7 +89,7 @@
 
 namespace shooters_edge::menu {
 
-class GameMenu {
+class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
  public:
   GameMenu();
   GameMenu(const GameMenu&) = delete;
@@ -94,12 +98,21 @@ class GameMenu {
 
   // Registers `menu_look`, the menu's commands and the `ce_` switches on `con`, which must outlive
   // the menu.
-  void add_cvars(ge::console::Console& con);
+  // `recipes` (the window's -recipes): a recipe's commands too, `menu_press`, `menu_select`,
+  // `menu_list` and the console's `sleep` (docs/console.md § Recipes); a player's window has none.
+  void add_cvars(ge::console::Console& con, bool recipes = false);
+  // A page that draws and reads its own rows is up (the server browser, the gallery, the demos,
+  // the games, classic enhance): a recipe's `menu_select` and `menu_list` refuse it.
+  bool on_own_page() const {
+    return in_gallery_ || in_servers_ || in_demos_ || in_games_ || in_enhance_;
+  }
   // `menu_attract`: the recordings a classic game plays behind its main menu ("auto" the game's
   // own, "" none).
   const std::string& attract() const { return attract_; }
   // The classic pictures (empty: the classic look is not offered).
   void set_art(ClassicArt art);
+  // The menus' size the loaded game sets (ClassicArt::scale, kept across set_art).
+  float& menu_scale() { return art_.scale; }
   const ClassicArt& art() const { return art_; }
   // LOAD GAME was pressed since the last call: the window shows the desktop's folder chooser.
   bool take_load() { return std::exchange(load_asked_, false); }
@@ -142,6 +155,9 @@ class GameMenu {
   ge::capture::Gallery& gallery() { return gallery_; }
   // Whether the screenshots page is the one up.
   bool in_gallery() const { return in_gallery_; }
+  // OPTIONS ▸ SERVER SETTINGS (server_page.hpp): its pages live in `main()`, filled from the
+  // host's sheet.
+  ServerPage& server_page() { return server_page_; }
   // The server browser (JOIN A GAME), and whether it is the page up.
   ServersPage& servers() { return servers_; }
   bool in_servers() const { return in_servers_; }
@@ -157,6 +173,7 @@ class GameMenu {
     bool browse = false;
     std::string id;       // the game picked, "" for FIND ANOTHER INSTALL
     std::string install;  // the install to open
+    std::string pack;     // a mission pack's folder to play over it, "" the game itself
   };
   GamesPage& games() { return games_; }
   bool in_games() const { return in_games_; }
@@ -172,10 +189,16 @@ class GameMenu {
   // Whether classic-enhance's menu is the one up.
   bool in_enhance() const { return in_enhance_; }
   ge::ui::Menu& main() { return main_; }
-  // The game's own menu (its adapter's `menu`) in place of the first game's: the pages rebuilt.
-  // The host's `table` must name the same table.
-  void set_table(const MenuTable& table) { main_ = build_menu(table); }
+  // The game's own menu (its adapter's `menu`) in place of Quake's: the pages rebuilt. With
+  // `files` and `menu_script` on, the table's menu script found there is read over it
+  // (menu_script.hpp) and what it could not use told in the console. The host's `table` must
+  // name the table returned.
+  const MenuTable& set_table(const MenuTable& table, const ge::vfs::SearchPath* files = nullptr);
   ge::ui::Menu& enhance() { return enhance_; }
+  // The setup page's live figure (player_view.hpp) and where it was drawn last (screen px).
+  PlayerView& figure() { return figure_; }
+  const ge::ui::Rect& figure_box() const { return figure_box_; }
+  const ge::ui::Rect& swatches() const { return swatches_; }
   int help_page() const { return help_page_; }
   // What the layout drawn last found wrong (layout_problems or classic_problems).
   const std::vector<std::string>& problems() const { return problems_; }
@@ -186,6 +209,8 @@ class GameMenu {
   void watch_enhancing();
   void refresh_main(const Host& host);
   void apply_enhance(const ge::ui::MenuEvent& e, Host& host);
+  void update_figure(const ge::ui::MenuInput& in, const Host& host, double dt);
+  void draw_figure(ge::ui::DrawList& list);
   void show_gallery();
   void update_gallery(const ge::ui::MenuInput& in, Host& host);
   void show_servers();
@@ -202,18 +227,38 @@ class GameMenu {
   ge::ui::MenuView view_;
   ge::ui::MenuStyle style_;
   std::vector<ge::ui::Rect> hits_;  // the last layout's rows, for the pointer
+  PlayerView figure_;
+  ge::ui::Rect figure_box_, swatches_;  // the setup page's figure and colour picker, last drawn
   std::vector<std::string> problems_;
+  // A recipe's presses (`menu_press`, `menu_select`), one a frame, ahead of the real keys.
+  std::deque<ge::ui::MenuInput> pressed_;
   bool open_ = false;
   ge::ui::MenuCue cue_ = ge::ui::MenuCue::none;  // the sound not yet taken
   void cue(ge::ui::MenuCue c) { cue_ = ge::ui::louder(cue_, c); }
   bool toggle_ = false;
   bool settle_ = false;
-  std::string_view toggle_page_ = "main";  // a literal: the commands' pages
+  std::string toggle_page_ = "main";  // the page a command opens
+  bool toggle_open_ = false;          // pushmenu: opened even when the menu is up at the root
+  int pending_ = 0;                   // 1: popmenu (one page back), 2: forcemenuoff
   int help_page_ = 0;
+  // Quake's quit box (main_menu.hpp's quit_joke): whether it was up last frame, the joke it shows
+  // (-1: the shell's own question) and the stream that picks one each time it opens.
+  bool quit_up_ = false;
+  int quit_joke_ = -1;
+  uint32_t quit_seed_ = 0;
+  void dress_quit(const Host& host);
   double dt_ = 1.0 / 60;  // the last frame's, s
+  // How long ESCAPE has been held since it put a screen of the rules away, s (-1: not held): at
+  // kEscapeHold, a key's first repeat, the in-game page opens.
+  double escape_hold_ = -1;
+  static constexpr double kEscapeHold = 0.5;
 
-  std::string waiting_;         // the CUSTOMIZE CONTROLS row waiting for a key, or ""
-  bool waiting_fresh_ = false;  // it started this frame
+  const MenuTable* table_ = &classic_menu();  // the pages built (set_table)
+  std::unique_ptr<ScriptMenu> script_;        // the game's menu script read over it
+  bool use_script_ = true;                    // menu_script
+  std::string waiting_page_;                  // the page of the key row waiting
+  std::string waiting_;                       // the CUSTOMIZE CONTROLS row waiting for a key, or ""
+  bool waiting_fresh_ = false;                // it started this frame
 
   bool in_enhance_ = false;
   ge::classicenhance::Switches switches_;
@@ -237,6 +282,9 @@ class GameMenu {
   std::string demo_ask_;  // the demo picked, the window not told yet
   GamesPage games_;
   GameAsk game_ask_;  // SELECT GAME's pick, the window not told yet
+  ServerPage server_page_;
+  uint32_t sheet_seen_ = 0;  // the sheet's revision the server pages were last filled from
+  void fill_server(const Host& host);
   bool in_gallery_ = false;
   bool in_servers_ = false;
   bool in_demos_ = false;

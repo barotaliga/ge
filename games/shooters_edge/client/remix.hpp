@@ -4,8 +4,8 @@
 // keeps its own assets alone.
 //
 // - **The settings** (`RemixSettings`, `bind_remix`): `cr_enabled` (0 off, the default; 1 on)
-//   and `cr_items` (0 the played game's own items; N the Nth classic game's: 1 the classic game's,
-//   2 the sequel's), both kept in the player's config.
+//   and `cr_items` (empty: the played game's own items; a game's id its: q1 Quake's,
+//   q2 Quake II's), both kept in the player's config.
 // - **The check** (`remix_check`): the installs the window knows, each with its edition; the
 //   remix is on when it is enabled and a second full game is there, else the refusal says what
 //   is missing in the game's words.
@@ -16,7 +16,7 @@
 //   maps are played with that game's items, and the HUD that shows them is that game's. The
 //   played game's rules keep their numbers and wear the other game's things (`worn_arsenal`):
 //   its weapons in the hand and on the floor, their missiles and sounds, its armour. Rules that
-//   name their things in code (the sequel's) wear the other game's by name instead
+//   name their things in code (Quake II's) wear the other game's by name instead
 //   (`worn_looks`): the server's `sv_wear` renames each model and sound as the players are told it.
 // - **The players** (`worn_figure`, `worn_physics`): `cr_models` draws every player as that game's
 //   figure, read from the remix's files; `cr_physics` gives the played game's move that game's
@@ -64,28 +64,29 @@ struct ListenOptions;
 struct LoadedMap;
 
 struct RemixSettings {
-  bool enabled = false;            // cr_enabled
-  int32_t items = 0;               // cr_items: 0 the played game's; N the Nth classic game's
-  int32_t models = 0;              // cr_models: the same for the players' figure
-  int32_t physics = 0;             // cr_physics: the same for the players' bodies' physics
-  int32_t sounds = 0;              // cr_sounds: the same for the sounds heard
-  bool over_mods = false;          // cr_over_mods: the swaps above set over a mod's own too
-  int32_t monsters = 0;            // cr_monsters: the same for a campaign map's monsters
-  int32_t menu = 0;                // cr_menu: the same for the menu's pictures
-  int32_t charset = 0;             // cr_charset: the same for the glyph sheet every letter is
+  bool enabled = false;    // cr_enabled
+  std::string items;       // cr_items: "" the played game's; a game's id (q1, q2) that game's
+  std::string models;      // cr_models: the same for the players' figure
+  std::string physics;     // cr_physics: the same for the players' bodies' physics
+  std::string sounds;      // cr_sounds: the same for the sounds heard
+  bool over_mods = false;  // cr_over_mods: the swaps above set over a mod's own too
+  std::string monsters;    // cr_monsters: the same for a campaign map's monsters
+  std::string menu;        // cr_menu: the same for the menu's pictures
+  std::string charset;     // cr_charset: the same for the glyph sheet every letter is
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
+  bool expansions = true;          // cr_expansions: the mission packs' maps and items taken too
 };
 
 // The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
 // cr_sounds, cr_over_mods, cr_monsters, cr_menu, cr_charset.
-using RemixParts = std::array<int32_t, 8>;
+using RemixParts = std::array<std::string, 8>;
 inline RemixParts remix_parts(const RemixSettings& s) {
-  return {s.items,    s.models, s.physics, s.sounds, s.over_mods ? 1 : 0,
+  return {s.items,    s.models, s.physics, s.sounds, s.over_mods ? "1" : "0",
           s.monsters, s.menu,   s.charset};
 }
 
 // `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods`, `cr_monsters`,
-// `cr_menu`, `cr_charset` and the balance's, writing `out`.
+// `cr_menu`, `cr_charset`, `cr_expansions` and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -99,6 +100,7 @@ struct RemixState {
   bool on = false;
   std::string other;          // the other full game's profile id ("" when off)
   std::string other_basedir;  // its install
+  bool expansions = true;     // cr_expansions: the other game's mission packs mounted too
   std::string why;            // when off but enabled: what is missing, in the game's words
 };
 
@@ -138,9 +140,12 @@ struct RemixReport {
 // remix table and the map then balanced (profiles/remix.hpp: the weapons' tiers, the pools), into
 // `out`. The same text when the games are the same. False with `error` when the text does not
 // parse.
+// `packs` (`cr_expansions`): whether a mission pack's items are read, and the played pack whose own
+// weapons are laid down where it has them (profiles/remix.hpp's `kPackSpawns`).
 bool remix_entities(std::string_view text, std::string_view from, std::string_view to,
                     std::string& out, RemixReport* report, std::string& error,
-                    const profiles::RemixBalance& balance = {});
+                    const profiles::RemixBalance& balance = {},
+                    const profiles::RemixPacks& packs = {});
 
 // The line the console prints for a rewrite, in the game's words.
 std::string remix_line(const RemixReport& r, std::string_view to);
@@ -154,6 +159,7 @@ struct RemixFiles {
   std::string played;              // the played game's profile id
   SearchPath files;                // the other game's, the played game's over it (empty while off)
   profiles::RemixBalance balance;  // the settings' (the window copies them before a load)
+  std::string pack;  // the played game's mission pack folder, lower case ("" the base game)
   // The other game's weapons and armour the played game's rules wear (`cr_items`,
   // profiles/remix_arsenal.hpp), or null: its models and sounds are read from `files`.
   const profiles::RemixArsenal* worn = nullptr;
@@ -254,8 +260,8 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
 
 // The map `name`: the played game's own from `files`, else (the remix on) the other game's from
 // `remix->files`, its items made the played game's (`said`: the line saying so). A map of brushes
-// the classic game plays is played on its programs' rules, traced through its brushes; a map of
-// clip hulls the sequel would play is refused for now in the game's words.
+// Quake plays is played on its programs' rules, traced through its brushes; a map of
+// clip hulls Quake II would play is refused for now in the game's words.
 std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::string& name,
                                             const RemixFiles* remix, std::string& error,
                                             std::string* said = nullptr);

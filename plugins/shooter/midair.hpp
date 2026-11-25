@@ -1,6 +1,6 @@
 // MIDAIR, FOR ANY ARENA SHOOTER: the rocket duel where only a hit on a player in the air counts,
 // and counts for more the higher he flew above the shooter. One set of rules every game's rules
-// call (the sequel's today, server/sequel_fight.cpp; the classic arena's once they are C++), so the
+// call (Quake II's today, server/q2_fight.cpp; the classic arena's once they are C++), so the
 // mode plays alike on every map family and a game adds only its glue: where a hit lands, a trace
 // down, the spawn's kit in its own items, a line printed.
 //
@@ -116,8 +116,8 @@ inline int midair_score(float height, float rise, int level) {
 enum class MidairHarm : uint8_t { none, drowning, lava, slime, telefrag, suicide };
 inline bool midair_harms(MidairHarm h) { return h != MidairHarm::none; }
 
-// How a blow's push changes: the push the game would give (its own law: the classic game's
-// damage × 8, the sequel's by mass) times `scale` along the blow's way, plus `lift` times that
+// How a blow's push changes: the push the game would give (its own law: Quake's
+// damage × 8, Quake II's by mass) times `scale` along the blow's way, plus `lift` times that
 // push times the way's up part, straight up.
 struct MidairPush {
   float scale = 1;

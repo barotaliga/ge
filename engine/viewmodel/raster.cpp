@@ -129,7 +129,8 @@ void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light) {
     Screen s[4];
     for (int i = 0; i < pn; ++i) {
       const float iz = 1.0f / poly[i].p[2];
-      s[i] = {(poly[i].p[0] * iz / tan_x + 1) * hw, (1 - poly[i].p[1] * iz / tan_y) * hh, iz};
+      const float x = d.mirror ? -poly[i].p[0] : poly[i].p[0];
+      s[i] = {(x * iz / tan_x + 1) * hw, (1 - poly[i].p[1] * iz / tan_y) * hh, iz};
     }
     for (int f = 1; f + 1 < pn; ++f) {
       const int id[3] = {0, f, f + 1};
@@ -178,13 +179,14 @@ void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light) {
             for (int k = 0; k < 3; ++k) q.n[k] /= len;
           float base[3];
           bool lit_self = false;
+          float shine = 1;
           if (img) {
             const uint8_t* px8 = assets::texel(*img, q.a[0], q.a[1]);
             for (int k = 0; k < 3; ++k) base[k] = assets::srgb_to_linear(px8[k]);
-            if (glow) {
-              const size_t ti = size_t(px8 - img->rgba.data()) / 4;
-              lit_self = ti < d.skin->glow.size() && d.skin->glow[ti] != 0;
-            }
+            const size_t ti = size_t(px8 - img->rgba.data()) / 4;
+            if (glow) lit_self = ti < d.skin->glow.size() && d.skin->glow[ti] != 0;
+            // The GPU's atlas keeps the shine halved: the same steps here.
+            if (ti < d.skin->shine.size()) shine = float(d.skin->shine[ti] >> 1) * (1.0f / 127);
           } else {
             for (int k = 0; k < 3; ++k) base[k] = q.a[k];
           }
@@ -195,7 +197,7 @@ void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light) {
           }
           float diff[3], spec[3];
           shade_held(light, q.p, q.n, diff, spec);
-          for (int k = 0; k < 3; ++k) out[k] = base[k] * diff[k] + spec[k];
+          for (int k = 0; k < 3; ++k) out[k] = base[k] * diff[k] + spec[k] * shine;
         }
       }
     }

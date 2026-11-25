@@ -52,8 +52,8 @@
 #include "overview/plate.hpp"
 #include "shooter/bsp_world.hpp"
 #include "shooter/intent_draft.hpp"
-#include "shooter/jump_finder.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/jump_finder.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/livemap/icons.hpp"
 #include "ui/draw.hpp"
@@ -77,6 +77,7 @@ using ge::overview::Frame;
 using ge::overview::kNone;
 using ge::overview::shade_floors;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 
 // The sample: two halls, a bridge between them over a pool, a high ledge, and the intent.
 constexpr const char* kSample = R"(# map-overview's sample
@@ -292,14 +293,14 @@ void arrow(ui::DrawList& dl, const mc::PlanTrick& tr, const Frame& fr, const ui:
 // lift carries it past a standing jump's reach), a ring where the jump and the shot are, and how
 // it is done on its badge.
 constexpr ui::Color kFound = ui::hex(0x4fe3ff), kLifted = ui::hex(0xd18cff);
-std::string found_tag(const sh::FoundJump& j) {
+std::string found_tag(const sb::FoundJump& j) {
   std::string t = j.back ? "FLIP" : "RJ";
-  if (j.by == sh::JumpLift::ramp) t += " RAMP";
-  if (j.by == sh::JumpLift::lift) t += " LIFT";
+  if (j.by == sb::JumpLift::ramp) t += " RAMP";
+  if (j.by == sb::JumpLift::lift) t += " LIFT";
   t += " +" + std::to_string(int(std::lround(j.rise)));
   return t;
 }
-void draw_found(ui::DrawList& dl, const sh::FoundJump& j, const Frame& fr, const ui::Font& bold) {
+void draw_found(ui::DrawList& dl, const sb::FoundJump& j, const Frame& fr, const ui::Font& bold) {
   const ui::Color c = j.lifted ? kLifted : kFound;
   const ui::Vec2 l{fr.px(j.launch.x), fr.py(j.launch.y)}, b{fr.px(j.to.x), fr.py(j.to.y)};
   std::vector<ui::Vec2> pts;
@@ -560,19 +561,19 @@ void run(gl::Lab& lab) {
   fr.width = int(std::ceil((fr.hi[0] - fr.lo[0]) * fr.scale)) + 2 * fr.pad;
   fr.height = int(std::ceil((fr.hi[1] - fr.lo[1]) * fr.scale)) + 2 * fr.pad;
   // The jump finder: the map's move world, its nav graph, one proven jump a ledge.
-  std::vector<sh::FoundJump> jumps;
-  sh::JumpFinderCounts jc;
+  std::vector<sb::FoundJump> jumps;
+  sb::JumpFinderCounts jc;
   if (lab.arg_bool("jumps")) {
     sh::BspWorld bsp;
     if (sh::bsp_world(scene.map, &bsp, &error)) {
-      sh::JumpFinderSettings js;
+      sb::JumpFinderSettings js;
       if (lab.arg_num("reach") > 0) js.reach = float(lab.arg_num("reach"));
       // The walls that are brush models (func_wall) as solids; the lifts (func_plat) as movers
       // the graph rides (built at their top, lowered by their height, 150 units/s), so a jump
       // from a lift's top is tried and a ride up counts as a way there; the teleporters as links.
       auto world = std::make_unique<sh::MoveWorld>();
-      sh::map_world(bsp.models[0], *world);
-      std::vector<sh::NavMover> movers;
+      sb::map_world(bsp.models[0], *world);
+      std::vector<sb::NavMover> movers;
       struct Tele {
         sh::Vec3f lo, hi;
         std::string target;
@@ -606,7 +607,7 @@ void run(gl::Lab& lab) {
         if (cls == "func_plat") {
           const float rise = e.get("height").empty() ? m.maxs.z - m.mins.z - 8
                                                      : float(std::atof(e.get("height").c_str()));
-          sh::NavMover mv;
+          sb::NavMover mv;
           mv.ent = int(movers.size());
           mv.model = &m;
           mv.rest = {0, 0, -rise};
@@ -617,16 +618,16 @@ void run(gl::Lab& lab) {
           movers.push_back(mv);
         }
       }
-      sh::NavGraph g;
-      sh::NavSettings ns;
+      sb::NavGraph g;
+      sb::NavSettings ns;
       ns.treads = true;  // the stairs' treads walked: a jump up a stair is no trick
-      sh::build_nav(*world, movers, sh::MoveSettings{}, ns, g);
+      sb::build_nav(*world, movers, sh::MoveSettings{}, ns, g);
       // A teleporter: from every floor node its trigger touches to the node at its destination.
-      std::vector<sh::NavExtraLink> tl;
+      std::vector<sb::NavExtraLink> tl;
       for (const Tele& t : teles_at) {
         const auto d = dests_at.find(t.target);
         if (d == dests_at.end()) continue;
-        const int32_t to = sh::nav_nearest(g, d->second);
+        const int32_t to = sb::nav_nearest(g, d->second);
         if (to < 0) continue;
         for (size_t n = 0; n < g.nodes.size(); ++n) {
           const sh::Vec3f q = g.nodes[n].origin;
@@ -635,22 +636,22 @@ void run(gl::Lab& lab) {
           if (q.x < t.lo.x - 48 || q.x > t.hi.x + 48 || q.y < t.lo.y - 48 || q.y > t.hi.y + 48 ||
               q.z < t.lo.z - 24 || q.z > t.hi.z + 32)
             continue;
-          sh::NavExtraLink x;
+          sb::NavExtraLink x;
           x.from = int32_t(n);
           x.to = to;
           x.teleport = true;
           tl.push_back(x);
         }
       }
-      sh::nav_add_links(g, tl);
+      sb::nav_add_links(g, tl);
       lab.note("the floors' graph: " + std::to_string(g.nodes.size()) + " nodes, " +
                std::to_string(g.links.size()) + " links, " + std::to_string(movers.size()) +
                " lifts ridden, " + std::to_string(tl.size()) + " teleporter links");
       if (const std::string& at = lab.arg("from"); !at.empty()) {
         float p[3] = {0, 0, 0};
         if (std::sscanf(at.c_str(), "%f,%f,%f", &p[0], &p[1], &p[2]) == 3) {
-          jumps = sh::jumps_from(*world, sh::MoveSettings{}, g, {p[0], p[1], p[2]}, js, &jc);
-          const int32_t n = sh::nav_nearest(g, {p[0], p[1], p[2]});
+          jumps = sb::jumps_from(*world, sh::MoveSettings{}, g, {p[0], p[1], p[2]}, js, &jc);
+          const int32_t n = sb::nav_nearest(g, {p[0], p[1], p[2]});
           if (n >= 0) {
             const sh::Vec3f o = g.nodes[size_t(n)].origin;
             lab.note("from the floor at " + std::to_string(int(o.x)) + "," +
@@ -659,7 +660,7 @@ void run(gl::Lab& lab) {
           }
         }
       } else {
-        jumps = sh::find_jumps(*world, sh::MoveSettings{}, g, js, &jc);
+        jumps = sb::find_jumps(*world, sh::MoveSettings{}, g, js, &jc);
       }
     } else {
       lab.note("the jump finder skipped: " + error);
@@ -800,7 +801,7 @@ void run(gl::Lab& lab) {
     glow(dl, at.x, at.y, 26, ui::hex(0xc77dff), 0.55f);
     dl.arc(at, 11, 3, 0, 4.5f, ui::solid(ui::hex(0xe0b3ff)), true);
   }
-  for (const sh::FoundJump& j : jumps) draw_found(dl, j, fr, bold);
+  for (const sb::FoundJump& j : jumps) draw_found(dl, j, fr, bold);
   for (const mc::PlanTrick& t : intent.tricks) arrow(dl, t, fr, bold);
   for (const Spot& s : spawns) draw_spawn(dl, s.x, s.y, s.angle);
   // Items: the small ones first, the powers last and on top.
@@ -1002,7 +1003,7 @@ void run(gl::Lab& lab) {
   lab.metric("jump-arcs", double(jc.arcs), "count");
   lab.metric("jump-reach", double(jc.reach), "units");
   lab.metric("jumps-walkable", double(jc.walkable), "count");
-  for (const sh::FoundJump& j : jumps) {
+  for (const sb::FoundJump& j : jumps) {
     char line[240];
     std::snprintf(
         line, sizeof line,
@@ -1030,7 +1031,8 @@ const gl::LabSpec kSpec{
          "a plan or an .intent file (area, trick and modes lines) to draw; auto: one drafted "
          "from the map's items, attached as <map>.intent"},
         {"size", "1400", "the map's width in px (the panel is beside it)"},
-        {"jumps", "1", "1: find and draw one proven rocket jump a ledge (shooter/jump_finder.hpp)"},
+        {"jumps", "1",
+         "1: find and draw one proven rocket jump a ledge (shooterbots/jump_finder.hpp)"},
         {"from", "",
          "x,y,z: instead of one jump a ledge, every ledge a rocket jump reaches from there"},
         {"reach", "0",

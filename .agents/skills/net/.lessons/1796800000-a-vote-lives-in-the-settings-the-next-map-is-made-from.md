@@ -1,7 +1,7 @@
 ---
 title: A per-map change lives in the settings every map is made from, put back before the next one
 date: 2026-11-10
-scope: engine/server/vote.cpp, games/shooters_edge/net/classic_game.cpp
+scope: engine/server/vote.cpp, games/shooters_edge/net/qw_game.cpp
 concepts: [vote, per-map, revert, restart, settings, fraglimit, hold-limits, prediction, notify-feed]
 ---
 

@@ -34,6 +34,7 @@
 
 #include "console/console.hpp"
 #include "shooter/vec.hpp"
+#include "shooters_edge/client/team_items.hpp"
 
 namespace shooters_edge::client {
 
@@ -74,8 +75,11 @@ struct Pointed {
 // Whether nothing solid stands between two points (null: everything is in sight).
 using ClearLine = std::function<bool(ge::shooter::Vec3f, ge::shooter::Vec3f)>;
 
-// The thing the player points at in `scene`, named in `con`'s words.
-Pointed point_at(const ge::console::Console& con, const PointScene& scene, const ClearLine& clear);
+// The thing the player points at in `scene`, named in `con`'s words, of the items and players
+// `allowed` holds (team_items.hpp's `tp_point`: an item by its name, a player by `enemy`,
+// `teammate` or `eyes`).
+Pointed point_at(const ge::console::Console& con, const PointScene& scene, const ClearLine& clear,
+                 ItemSet allowed = kAllItems);
 
 // The scene of a server joined or a demo played (`ds`: its view, entities and players).
 PointScene point_scene(const DemoState& ds);

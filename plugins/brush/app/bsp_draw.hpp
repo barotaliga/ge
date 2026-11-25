@@ -72,11 +72,19 @@ enum class Lighting : uint8_t { lightmaps, lights, rebaked };
 // "classic" or "v2"; false for any other word.
 bool parse_mode(std::string_view word, Mode* out);
 
+// Options::dlight_falloff's distances, m: 51.2 and 64 of a classic map's units.
+inline constexpr double kDlightSoftM = 1.28, kDlightHardM = 1.6;
+
 struct Options {
   Mode mode = Mode::v2;  // the renderer for BSP maps; classic stays selectable (r_bspmode)
   Lighting lighting = Lighting::lights;
-  double ambient = 0.015;       // the light every face gets, the lightmaps' units
-  double brightness = 2.0;      // a lightmap's 1 against a white face under the open day
+  double ambient = 0.015;   // the light every face gets, the lightmaps' units
+  double brightness = 2.0;  // a lightmap's 1 against a white face under the open day
+  // The classic look's light (Mode::classic): a face shows its painted colour times its luxel /
+  // 128 times `classic_light`, in the display's values, clipped at white; `classic_lift` is added
+  // to every luxel first (0 .. 1 of the lightmap's range). 1 and 0: the maps as lit.
+  double classic_light = 1;
+  double classic_lift = 0;
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
   int shadowed = kMaxShadowedLights;  // the lights that cast shadows (in view first, nearest first)
@@ -97,7 +105,8 @@ struct Options {
   // Which lights throw a figure's shadow: false those whose source the player can see alone
   // (draw_data.hpp's PointLight::seen: a flame, a globe, a lamp at its glowing fitting; and the
   // dynamic lights), so no shadow falls from a fill light hanging unseen in the air, nor from a
-  // pool's or a teleporter's glow, and the light bounced round the room is never shadowed by him.
+  // pool's glow, and the light bounced round the room is never shadowed by him; a teleporter's
+  // light is seen (its panel glows), so he throws a shadow standing before one.
   // True: every light's, and the bounce dimmed by the share of their light he hides (the look
   // before). The walls' own shadows are every shadowed light's either way: they keep its light in
   // its room, as the map's own lightmaps do.
@@ -112,6 +121,10 @@ struct Options {
   // faces by their gloss (the relief's roughness, else a polished stone's), at this strength; 0
   // none. The frame group must bind the kept scene.
   double reflections = 0;
+  // AMBIENT OCCLUSION over the frame (render/ao.hpp, applied after the map and its models are
+  // drawn: `encode_ao_apply`): the share of the light a closed corner loses, 0 none (the pass not
+  // run), and how far a surface still shades another, m. Read by the frame that draws the map.
+  double ao = 0, ao_radius_m = 1.2;
   // THE SHADOWS IN THE MAP DRAWN AGAIN FOR ITS WATER (bsp_views.hpp: the mirror, the view up):
   // 2 as the frame's own, 1 the walls' kept cubes alone, 0 none. The views draw no model, so a
   // figure's shadow there would be cast by nothing: 1 by default (the same price as 2, measured
@@ -156,6 +169,25 @@ struct Options {
   // gl_picmip: the map's textures drawn from this mip at the nearest (0 their own detail; each
   // step halves it), as a texture that many times smaller would be. Either mode.
   int picmip = 0;
+  // The most taps along a slanted surface's long axis when the textures are filtered (1 none: a
+  // pixel's footprint read at its long axis's mip; 16 the most). Either mode.
+  int anisotropy = 4;
+  // The solid faces' textures alone (never the liquids, the sky, the models or the light): how
+  // much of their colour shows (1 as painted, 0 grey by its luminance) and then inverted, a
+  // negative. Either mode.
+  double saturation = 1;
+  bool invert = false;
+  // The map's sky box read sharp, each texel a square (else smoothed). Either mode.
+  bool crisp_sky = false;
+  // The lightmaps' light: how much of its colour shows (1 as baked, 0 grey by its luminance).
+  double lightmap_saturation = 1;
+  // The light styles glided linearly from each letter to the next (draw_data.hpp's
+  // `style_level_lerped`), else stepped (or, under v2's `flicker`, eased).
+  bool lerp_styles = false;
+  // The dynamic lights' edge on the lightmaps: 0 a straight fall to nothing at its radius; 1 the
+  // same to nothing kDlightSoftM short of it; 2 its light (radius - distance) cut off where that
+  // falls under kDlightHardM, a hard edge.
+  int dlight_falloff = 0;
   // r_fullbright: every solid face drawn as its texture is painted, with no light or shade on it
   // (the lightmaps, the lights, the sun and the shadows all left out). Either mode.
   bool fullbright = false;
@@ -291,10 +323,14 @@ struct GpuJob {
   float o[4], x[4], y[4], z[4], info[4];
 };
 
-// A brush model as the shaders move it: its run of vertices (first, end), 1 hidden, and its offset.
+// A brush model as the shaders move it: its run of vertices (first, end), 1 hidden, its texture
+// frame + 1 (0: on the clock), its offset and its turn (a quaternion, x y z w, about the map's
+// origin, before the offset); [0] the world's, its offset's w the textures' frames a second
+// (0: kFrameRate).
 struct GpuMover {
   uint32_t range[4];
   float offset[4];
+  float rotation[4] = {0, 0, 0, 1};
 };
 
 struct GpuBsp {
@@ -335,6 +371,14 @@ struct GpuBsp {
   // The textures' detail: x the mip they are drawn from at the nearest (Options::picmip), y 1 for
   // the faces as painted (Options::fullbright), zw unused.
   float detail[4];
+  // The classic look's light: its scale (Options::classic_light), the light added to every luxel
+  // (Options::classic_lift); z the filtered textures' most taps (Options::anisotropy), w 1 for
+  // the sky box sharp (Options::crisp_sky).
+  float classic[4];
+  // The solid faces' textures: x their saturation, y 1 inverted (Options::saturation, invert); z
+  // the lightmaps' saturation (Options::lightmap_saturation), w the dynamic lights' edge
+  // (Options::dlight_falloff).
+  float paint[4];
 };
 
 struct BspDraw {
@@ -405,7 +449,8 @@ struct BspDraw {
   std::vector<GpuMover> mover_rows;
   bool movers_dirty = false;
   BspCull cull;
-  std::vector<DynamicLight> dynamic;       // this frame's (set_dynamic_lights)
+  std::vector<DynamicLight> dynamic;  // this frame's (set_dynamic_lights)
+  std::vector<uint8_t> areas;  // the areas shown, one bit each (set_areas); empty: every area
   std::vector<PointLight> dynamic_points;  // the same as v2's point lights
   uint64_t culled_frames = 0;  // frames culled since the targets were made (0: no pyramid yet)
   // The scene's lava lights and teleporters' lights (made once).
@@ -423,6 +468,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& draw, const render::FrameView& vi
 // This frame's dynamic lights (before `prepare_bsp`); the classic draws at most kMaxDynamic.
 inline constexpr int kMaxDynamic = 32;
 void set_dynamic_lights(BspDraw& draw, std::span<const DynamicLight> lights);
+// The areas this frame shows (a version 38 map's, one bit an area: brush/map.hpp's
+// `potentially_visible`); empty, every area. A leaf in an unshown area draws none of its faces.
+void set_areas(BspDraw& draw, std::span<const uint8_t> areas);
 // This frame's moving casters (before `prepare_bsp`): their triangles, world m, nine floats a
 // triangle (kMaxCasterVerts vertices at most; past them, the rest cast nothing), and each one's box
 // (the lights that light one of them most get the cubes).
@@ -431,12 +479,21 @@ void set_shadow_casters(BspDraw& draw, std::span<const float> triangles,
 // THE MOVING MODELS: a brush model (a door, a plat, a button; model k of the map, k > 0) drawn
 // `offset` engine metres from where the map built it, or not drawn at all when `hidden` (an
 // entity the game removed). A model not named keeps its last place; all start at the map's.
+// `frame` steps its animated textures from each face's own place in its sequence (frame mod the
+// sequence's length; an entity's frame, as a family that drives them so asks); -1 turns them on
+// the map's clock as the world's. `rotation` (a unit quaternion x, y, z, w in the engine's frame)
+// turns it about the map's own origin before the offset: a rotating door, a turning fan.
 struct Mover {
   uint32_t model = 0;
   double offset[3] = {0, 0, 0};
+  float rotation[4] = {0, 0, 0, 1};
   bool hidden = false;
+  int32_t frame = -1;
 };
 void set_movers(BspDraw& draw, std::span<const Mover> movers);
+// The animated textures' frames a second on the map's clock (kFrameRate unless set; a family
+// whose world turns at another rate sets its own).
+void set_texture_rate(BspDraw& draw, double frames_per_second);
 // Light style `style` (0 .. 63) played from now on as `pattern`: letters 'a' (dark) .. 'z', 'm'
 // the light as baked, ten a second (draw_data.hpp's `style_level`); empty for steady.
 void set_light_style(BspDraw& draw, int style, std::string_view pattern);
@@ -464,8 +521,9 @@ render::PrecipShelter bsp_shelter(const BspDraw& draw);
 std::vector<PointLight> lava_lights(const Scene& scene, double core_c = 1150, double cover = 0.75);
 // The lights the scene's slime gives off: the same grid, a faint green of `luminance` cd/m^2.
 std::vector<PointLight> slime_lights(const Scene& scene, double luminance = 3);
-// The lights the teleporters give off: one half a metre before each panel, a cool grey-white,
-// breathing slowly, its brightness by the panel's area.
+// The lights the teleporters give off: one 0.8 m before each panel, a cool grey-white, breathing
+// slowly, its brightness by the panel's area; `seen` (its panel glows), so it throws a figure's
+// shadow.
 std::vector<PointLight> portal_lights(const Scene& scene);
 
 }  // namespace ge::brush::app

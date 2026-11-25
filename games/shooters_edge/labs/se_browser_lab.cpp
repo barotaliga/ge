@@ -1,6 +1,6 @@
 // LAB `se-browser`: THE SERVER BROWSER (MULTIPLAYER ▸ JOIN A GAME, menu/servers_page.hpp over the
 // engine's server list, net/server_list.hpp) finding real servers. Seven of the game's own
-// dedicated servers (net/classic_game.hpp on the engine's server core) run on the simulated
+// dedicated servers (net/qw_game.hpp on the engine's server core) run on the simulated
 // network, each on its own map, rules and link: two on the LAN, three a classic master lists, one
 // that announces itself to our hub's master (`sv_master`, read through `sb_hubmasters`), one only
 // the player names (`sb_servers`); the classic master also lists one that is not running. Classic
@@ -9,11 +9,14 @@
 //
 //   refreshing  the first moments: the LAN's answers in, the internet's still coming
 //   ping        every server in, sorted by ping; the selection's facts and players at the foot
-//   players     RIGHT: sorted by players, the busiest first
+//   players     RIGHT and D: sorted by players, the busiest first (sb_sortservers)
 //   locked      DOWN to the server that wants a password: its `*`
 //   hide-full-empty  F and E: the full and the empty servers hidden (sb_hidefull, sb_hideempty)
 //   ping-bound  P: servers over 50 ms hidden too (sb_maxping)
 //   team-only   M to TEAM: one mode (sb_mode)
+//   columns     the address, game folder, frag and time limits shown, sorted by map (sb_show*)
+//   info-filter the 8-slot servers hidden (sb_info_filter), the foot's lines off (sb_status)
+//   routes      a forwarder listed, asked whom it reaches (sb_findroutes): a route's ping
 //   empty       the LAN off and no master named: what the page says
 //
 // and ENTER on a server runs `connect <its address>` on the console (checked). Every layout is
@@ -24,8 +27,9 @@
 // ge:summary Lab: the server browser listing real servers: LAN, master, named, sorts, join
 // ge:keywords lab se-browser server-browser servers status-query master-server lan ping sort
 // ge:keywords join connect menu_servers players mode map viewports filter sb_hidefull sb_mode
+// ge:keywords sb_findroutes forwarder route pingstatus
 // ge:skill net ui labs
-// ge:test tests/net_server_list_test.cpp tests/shooters_edge_classic_browse_test.cpp
+// ge:test tests/net_server_list_test.cpp tests/shooters_edge_qw_browse_test.cpp
 #include <algorithm>
 #include <memory>
 #include <span>
@@ -40,9 +44,9 @@
 #include "server/server.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
-#include "shooters_edge/net/classic_browse.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_browse.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "ui/raster.hpp"
 
 namespace {
@@ -81,12 +85,16 @@ constexpr Plan kPlans[] = {
     {"Home of the brave", "e1m6", 1, 10, 1, 15, 30, false, false, true, false, ""},
 };
 constexpr uint32_t kSilent = 25;  // listed by the master, not running
+// A forwarder the master lists once the routes shot asks for it: 3 ms from the player, it
+// reaches the duel server in 10 ms and the clan's in 20 (its `pingstatus`).
+constexpr uint32_t kForwarder = 40;
+constexpr std::pair<uint32_t, int> kForwarderReach[] = {{20, 10}, {23, 20}};
 
 struct Box {
   std::unique_ptr<gn::Transport> port;
   gs::Server server;
   std::vector<std::unique_ptr<gn::Transport>> ct;
-  std::vector<std::unique_ptr<se::ClassicClientEnd>> ends;
+  std::vector<std::unique_ptr<se::QwClientEnd>> ends;
 };
 
 struct Evening {
@@ -96,6 +104,9 @@ struct Evening {
   gn::Transport hub_port;
   gn::Master hub;  // our own master (net/master.hpp), the one `beats` servers announce to
   gn::Transport browser;
+  gn::Transport routes;  // the browser's socket for the forwarders' asks
+  gn::Transport fwd;
+  bool forwarder = false;  // listed by the master
   std::string error;
   double frame_s = 1.0 / 77;
   int64_t now_us = 0;
@@ -105,6 +116,13 @@ struct Evening {
     gn::open_sim_transport(hub_port, net, gn::sim_address(kHub, gn::kMasterPort));
     gn::master_init(hub, gn::MasterConfig{}, hub_port);
     gn::open_sim_transport(browser, net, gn::sim_address(kBrowser, 27001));
+    gn::open_sim_transport(routes, net, gn::sim_address(kBrowser, 27002));
+    gn::open_sim_transport(fwd, net, gn::sim_address(kForwarder, kNetPort));
+    {
+      gn::LinkConditions near;
+      near.latency_ms = 3;
+      gn::sim_set_path(net, kBrowser, kForwarder, near);
+    }
     for (const Plan& p : kPlans) {
       gn::LinkConditions lc;
       lc.latency_ms = p.latency_ms;
@@ -122,7 +140,7 @@ struct Evening {
       if (p.teamplay != 0) c.rules["teamplay"] = std::to_string(p.teamplay);
       if (p.beats)
         c.masters = "sim:" + std::to_string(kHub) + ":" + std::to_string(gn::kMasterPort);
-      if (!gs::server_open(b->server, se::classic_game(), c, b->port.get(), nullptr, error)) {
+      if (!gs::server_open(b->server, se::qw_game(), c, b->port.get(), nullptr, error)) {
         error = std::string(p.name) + ": " + error;
         return false;
       }
@@ -131,7 +149,7 @@ struct Evening {
         const uint32_t node = p.node * 10 + static_cast<uint32_t>(i) + 100;
         b->ct.push_back(std::make_unique<gn::Transport>());
         gn::open_sim_transport(*b->ct.back(), net, gn::sim_address(node, 27001));
-        b->ends.push_back(std::make_unique<se::ClassicClientEnd>());
+        b->ends.push_back(std::make_unique<se::QwClientEnd>());
         se::ClientConfig cc;
         static constexpr const char* kNames[] = {"Vex", "Moss", "Rook", "Tally", "Juno", "Brisk"};
         cc.name = kNames[static_cast<size_t>(i) % 6];
@@ -186,13 +204,43 @@ struct Evening {
       for (const Plan& p : kPlans)
         if (p.listed) add(p.node);
       add(kSilent);
+      if (forwarder) add(kForwarder);
       gn::transport_send(master, from, r.data(), r.size(), now_us);
+    }
+  }
+
+  // The forwarder: its status (a `*version` of qwfwd) and its `pingstatus`.
+  void forwarder_frame() {
+    uint8_t buf[256];
+    gn::Address from;
+    int n;
+    while ((n = gn::transport_receive(fwd, buf, sizeof buf, from, now_us)) >= 0) {
+      const std::string ask(reinterpret_cast<const char*>(buf) + 4,
+                            static_cast<size_t>(std::max(0, n - 4)));
+      std::string r = "\xff\xff\xff\xffn";
+      if (ask.rfind("pingstatus", 0) == 0) {
+        for (const auto& [node, ping] : kForwarderReach) {
+          uint8_t ip[4];
+          gn::sim_to_ipv4(gn::sim_address(node, kNetPort), ip);
+          r.append(reinterpret_cast<const char*>(ip), 4);
+          r.push_back(static_cast<char>(kNetPort & 0xff));
+          r.push_back(static_cast<char>(kNetPort >> 8));
+          r.push_back(static_cast<char>(ping & 0xff));
+          r.push_back(static_cast<char>(ping >> 8));
+        }
+      } else if (ask.rfind("status", 0) == 0) {
+        r += "\\*version\\qwfwd 1.2\\hostname\\Forwarder in town\\maxclients\\128\n";
+      } else {
+        continue;
+      }
+      gn::transport_send(fwd, from, reinterpret_cast<const uint8_t*>(r.data()), r.size(), now_us);
     }
   }
 
   void frame() {
     gn::sim_advance(net, now_us);
     master_frame();
+    forwarder_frame();
     gn::master_update(hub, now_us);
     for (auto& b : boxes) {
       for (auto& e : b->ends) se::client_tick(*e, now_us);
@@ -294,8 +342,10 @@ void run(gl::Lab& lab) {
     }
     while (static_cast<double>(ev.now_us) * 1e-6 < warm) ev.frame();
     Game g;
-    g.menu.servers().set_query(se::classic_query());
+    g.menu.servers().set_query(se::qw_query());
     g.menu.servers().use_transport(&ev.browser);
+    g.menu.servers().set_routes(se::qw_route_query());
+    g.menu.servers().use_route_transport(&ev.routes);
     g.menu.servers().set_lan_ports(kLanPort, kLanPort);
     g.con.execute("sb_masters sim:" + std::to_string(kMaster) + ":" + std::to_string(kMasterPort));
     g.con.execute("sb_hubmasters sim:" + std::to_string(kHub) + ":" +
@@ -342,7 +392,7 @@ void run(gl::Lab& lab) {
                 {{"viewport", v.name()},
                  {"answered", std::to_string(gn::server_list_answered(page.list()))},
                  {"asked", std::to_string(page.list().entries.size())},
-                 {"sort", gn::server_sort_name(page.sort())}}},
+                 {"sort", page.sort_words()}}},
                picture_of(std::move(img)));
     };
     settle(0.05);
@@ -363,8 +413,14 @@ void run(gl::Lab& lab) {
     down.down = true;
     accept.accept = true;
     step(right);
+    {
+      ui::MenuInput turn;
+      turn.letter = 'd';
+      step(turn);
+    }
     snap("players", "SORTED BY PLAYERS",
-         "RIGHT: the sort moves to players, the busiest first; the column's head lit.",
+         "RIGHT puts players first in the sort (sb_sortservers 632), D turns it round (-632): "
+         "the busiest first; the column's head lit.",
          "the 4on4 with six on top, the empty server last");
     // DOWN to the locked one.
     for (int i = 0; i < static_cast<int>(page.rows().size()); i++) {
@@ -409,6 +465,27 @@ void run(gl::Lab& lab) {
     // Every filter off again, from the console as a config would, for the join below.
     g.con.execute("sb_hidefull 0; sb_hideempty 0; sb_mode \"\"; sb_maxping 0");
     step({});
+    // The columns a config turns on, a sort by map then players, and the info filter.
+    g.con.execute(
+        "sb_showaddress 1; sb_showgamedir 1; sb_showfraglimit 1; sb_showtimelimit 1; "
+        "sb_sortservers 5-6");
+    step({});
+    snap("columns", "EVERY COLUMN, SORTED BY MAP",
+         "sb_showaddress, sb_showgamedir, sb_showfraglimit and sb_showtimelimit add their "
+         "columns; sb_sortservers 5-6 sorts by map, then the busiest first on each map. On a "
+         "narrow screen the optional columns step aside for the name.",
+         "ADDRESS, GAME, FL and TL columns; the maps A to Z");
+    g.con.execute("sb_info_filter -maxclients=^8$; sb_status 0");
+    step({});
+    hidden_metric("info-filter");
+    snap("info-filter", "THE INFO FILTER",
+         "sb_info_filter -maxclients=^8$: the servers whose own settings say 8 slots leave, "
+         "every other one stays; sb_status 0 drops the selected server's two lines at the foot.",
+         "no n / 8 row, INFO FILTER in the title row, no facts at the foot");
+    g.con.execute(
+        "sb_info_filter \"\"; sb_status 1; sb_sortservers 32; sb_showaddress 0; "
+        "sb_showgamedir 0; sb_showfraglimit 0; sb_showtimelimit 0");
+    step({});
     // The table of what the browser read, and the metrics.
     if (!table_done) {
       table_done = true;
@@ -436,6 +513,37 @@ void run(gl::Lab& lab) {
       for (const gn::ServerEntry& e : sl.entries) players += e.info.players;
       lab.metric("players.listed", players, "players");
     }
+    // The routes: the master lists a forwarder, sb_findroutes asks it whom it reaches and how
+    // fast, and the clan's server is faster through it.
+    ev.forwarder = true;
+    g.con.execute("sb_findroutes 1");
+    {
+      ui::MenuInput again;
+      again.refresh = true;  // R: the list again, the forwarder in it
+      step(again);
+    }
+    settle(6.0);
+    for (int i = 0; i < 40 && !page.routes_ready(); i++) settle(0.25);
+    for (int i = 0; i < static_cast<int>(page.rows().size()); i++) {
+      const gn::ServerEntry& e =
+          sl.entries[static_cast<size_t>(page.rows()[static_cast<size_t>(page.selected())])];
+      if (e.info.locked) break;
+      step(down);
+    }
+    {
+      const ge::forward::Route r = page.route_to(page.rows()[static_cast<size_t>(page.selected())]);
+      lab.metric(v.name() + ".route.ping", r.ping_ms, "ms");
+      lab.metric(v.name() + ".route.direct", r.direct_ms, "ms");
+    }
+    snap("routes", "A ROUTE THROUGH A FORWARDER",
+         "sb_findroutes 1: the forwarder the master listed is asked whom it reaches. The duel and "
+         "the clan's servers are faster through it than straight: the PING column shows the "
+         "route's ping with a star and the foot the route; joining from here goes through the "
+         "forwarder (cl_proxyaddr).",
+         "the forwarder's row; a starred ping on the duel's and the clan's rows; ROUTE 1 HOP at "
+         "the foot");
+    g.con.execute("sb_findroutes 0");
+    ev.forwarder = false;
     const std::string want = gn::to_string(
         sl.entries[static_cast<size_t>(page.rows()[static_cast<size_t>(page.selected())])].address);
     step(accept);

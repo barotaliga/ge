@@ -56,8 +56,9 @@ inline constexpr int kKinds = 10;
 // the map vertex it was made from, its place in the rebaked atlas (rebake.hpp; −1 when there is
 // none), its face's light styles (four bytes, the first in the low byte, 255 past the last; the
 // k-th style's lightmap is layer k of the atlas) and its texture's animation (`Scene::frames`:
-// the sequence's first frame in the low 16 bits, its frame count in the next 8, this texture's
-// own frame in the top 8; 0 a still texture).
+// the sequence's first frame in the low 16 bits, its frame count in the next 7, kAnimFlowing when
+// the picture slides along the face (`Texture::flowing`), this texture's own frame in the top 8;
+// 0 a still texture).
 struct DrawVertex {
   float pos[3];
   float st[2];
@@ -71,6 +72,10 @@ struct DrawVertex {
   uint32_t anim;
 };
 static_assert(sizeof(DrawVertex) == 80);
+// DrawVertex::anim's flowing bit: the texture slides toward −s, kFlowWidths of its widths a
+// second (kFlowWarpWidths on a warped liquid's face), each whole width seamless.
+inline constexpr uint32_t kAnimFlowing = 1u << 23;
+inline constexpr double kFlowWidths = 1.6, kFlowWarpWidths = 0.5;
 
 // THE LIGHT STYLES: a map's faces name up to four styles each, numbers 0 .. 63 a game sets to a
 // pattern of brightness letters played at ten a second ('a' dark, 'm' the light as baked, 'z' about
@@ -82,6 +87,8 @@ double style_level(std::string_view pattern, double t);
 // The same level glided from each letter to the next (a smoothstep over the tenth of a second), so
 // a flickering light wavers as a flame does rather than stepping ten times a second (ce_flicker).
 double style_level_glided(std::string_view pattern, double t);
+// The same level blended linearly from each letter to the next across its tenth of a second.
+double style_level_lerped(std::string_view pattern, double t);
 // The textures' animation: frames a second (a sequence of "+0" .. "+9" textures).
 inline constexpr double kFrameRate = 5;
 
@@ -229,6 +236,12 @@ inline constexpr int kSkyBoxLook[6][3] = {{1, 0, 0},  {-1, 0, 0}, {0, 1, 0},
 inline constexpr int kSkyBoxUp[6][3] = {{0, 1, 0}, {0, 1, 0}, {0, 0, 1},
                                         {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
 
+// The colours of the sky the map's own box shows (Scene::sky_box), in SkyColours' terms: the
+// mean of what is above the horizon (the top face and the sides' upper halves) as both layers,
+// half covered; `found` false when the scene has no box. A game whose sky is its box (Quake II)
+// picks its weather by these in place of its sky texture's.
+SkyColours sky_box_colours(const Scene& scene);
+
 // THE TEXTURE SOURCE: where a texture's pixels come from. The map's own (its miptex through the
 // palette) unless `replace` is set and fills `rgba` (sRGB; alpha 255 a texel that glows) for the
 // texture `name` of the map's size w x h, from its own colours `indexed` (palette indices) — a
@@ -251,6 +264,9 @@ struct TextureSource {
   // in the map's order, views valid through `load_scene`); null: what the file carries itself
   // (`read_map_pictures`, 29 and BSP2).
   const std::vector<MapPicture>* pictures = nullptr;
+  // A lamp's texture (`Texture::lamp`: a face that lights the room, family 38) glows in its bright
+  // texels (the atlas's alpha 255, as the palette's fullbright range does in 29 and BSP2).
+  bool lamps = false;
 };
 // A texel of `Scene::surface` where a texture has no relief: flat, at the top, fairly rough.
 inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};

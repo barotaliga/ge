@@ -1,11 +1,11 @@
-// MD4 (RFC 1320): the digest the classic game's map checks and the sequel's map checksum are
+// MD4 (RFC 1320): the digest Quake's map checks and Quake II's map checksum are
 // made of. Three rounds of 16 steps over 64-byte blocks, the message padded with 0x80, zeros, and
 // its length in bits as a little-endian 64-bit number.
 //
 // ge:summary MD4 and its four words XORed, for the games' map checksums
 // ge:keywords md4 md4_digest md4_word map-checksum rfc1320
 // ge:skill shooter
-// ge:test tests/shooters_edge_classic_mapsum_test.cpp
+// ge:test tests/shooters_edge_qw_mapsum_test.cpp
 #pragma once
 
 #include <cstdint>

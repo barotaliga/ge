@@ -52,6 +52,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -107,9 +108,15 @@ struct Texture {
   // - `alpha`: how opaque the face is drawn, where the family stores it (38: a third with the
   //   flag 0x10, two thirds with 0x20, else whole; the least of the name's faces); -1 where it
   //   stores none (29, BSP2, 46).
+  // - `lamp`: how strongly its faces light the room, where the family marks a texture as a
+  //   light's panel (38: the light flag 0x1 with its texinfo's value, the most of the name's
+  //   faces); 0 on any other (29 lights its rooms from entities alone).
+  // - `flowing`: its faces' picture slides along them (38: the flag 0x40).
   bool sky = false;
+  bool flowing = false;
   Liquid liquid = Liquid::none;
   int32_t next = -1;
+  int32_t lamp = 0;
   float alpha = -1;
 };
 
@@ -144,6 +151,7 @@ struct ClipNode {
 struct Leaf {
   int32_t contents = 0;
   int32_t cluster = -1;
+  int32_t area = 0;  // its area (38; areas.hpp), 0 none
   bool solid = false;
   float mins[3] = {}, maxs[3] = {};
   uint8_t ambient[4] = {};  // the sounds near it, 0..255 (`kAmbientWater` ...): 29 and BSP2 only
@@ -183,11 +191,23 @@ struct Entity {
   std::vector<std::pair<std::string, std::string>> pairs;
   // The value of `key`, or "" when the block has none.
   const std::string& get(const std::string& key) const;
+  // The same with the key's case ignored (ASCII; a family that reads its keys so: 38's "Team" is
+  // "team"), an exact match first.
+  const std::string& get_any_case(const std::string& key) const;
 };
 
 struct BspxLump {
   std::string name;            // as stored, up to 24 bytes
   std::vector<uint8_t> bytes;  // a copy: the map outlives the file
+};
+
+// A version 38 map's area: its portals out, `Map::area_portals[first, first + portals)`; and one
+// of those: the portal's number (a game opens and shuts it) and the area across it (areas.hpp).
+struct Area {
+  int32_t portals = 0, first = 0;
+};
+struct AreaPortal {
+  int32_t portal = 0, other = 0;
 };
 
 struct Map {
@@ -218,6 +238,8 @@ struct Map {
   std::vector<Brush> brushes;          // 38
   std::vector<BrushSide> brush_sides;  // the brushes' sides, runs of them
   std::vector<uint32_t> leaf_brushes;  // the leaves' brushes (Leaf::first_brush), brush indices
+  std::vector<Area> areas;             // 38: the areas (areas.hpp), [0] never used
+  std::vector<AreaPortal> area_portals;
 
   std::vector<BspxLump> bspx;  // in the directory's order (29 and BSP2)
 
@@ -240,8 +262,17 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to);
 // surfaces) set to 1 for every surface marked in a leaf whose cluster `leaf`'s cluster sees, 0
 // elsewhere; the number set. A leaf with no cluster (the eye in solid, outside the map) sees every
 // surface, as does a map with no visibility. Only the world's own leaves mark surfaces: a brush
-// model's (a door, a lift) are the caller's to draw.
-uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen);
+// model's (a door, a lift) are the caller's to draw. With `areas` (one bit an area, area n bit
+// n % 8 of byte n / 8; an area past its end counts as unset), a leaf in solid or in an area whose
+// bit is unset marks nothing, with or without visibility: a room behind a shut door is not drawn.
+// `also`: a second leaf whose cluster sees too (`second_view_leaf`); ~0u none.
+uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen,
+                             std::span<const uint8_t> areas = {}, uint32_t also = ~0u);
+// THE SECOND VIEW POINT (38): a version 38 map's view also sees from a point 16 units below the
+// eye (16 above when the eye's leaf holds contents, such as water), so the far side of a water
+// surface stays drawn with the eye just over or under it. The leaf there, when it is not solid and
+// its cluster is not the eye leaf's; ~0u otherwise, and always in another family.
+uint32_t second_view_leaf(const Map& map, const float p[3], uint32_t eye_leaf);
 // THE LEAVES A BOX TOUCHES in the world's tree (`lo`..`hi`, file coordinates): their indices into
 // `out`, at most `most`; the number found, which is more than `most` when some did not fit (then
 // `out` holds the first `most`). A leaf whose box the planes reach on both sides counts.

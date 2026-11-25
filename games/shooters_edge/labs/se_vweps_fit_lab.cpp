@@ -293,7 +293,7 @@ void real(gl::Lab& lab, const std::string& folder) {
   }
   std::vector<uint8_t> store;
   const std::span<const uint8_t> palette = cl::find_file(files, "gfx/palette.lmp", store);
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const auto open_morph = [&](std::string_view path, mo::Model& out) {
     cl::OpenedModel o;
     std::string why;
@@ -306,7 +306,7 @@ void real(gl::Lab& lab, const std::string& folder) {
   vw::FigureParts parts;
   if (!open_morph("progs/player.mdl", figure) || !vw::figure_parts(figure, parts)) {
     lab.fail("se-vweps-fit: the pack's progs/player.mdl did not open as a figure with a gun",
-             "Pass a --game whose packs hold the first game's player. Skill: shooter.");
+             "Pass a --game whose packs hold Quake's player. Skill: shooter.");
     return;
   }
   mo::Model body, plain_gun;

@@ -200,7 +200,7 @@ void real(gl::Lab& lab, const std::string& folder) {
   look.look = lab.arg("look").empty() ? "classic" : lab.arg("look");
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {},
-                            error, load, cl::classic_adapter());
+                            error, load, cl::qw_adapter());
   if (!world) {
     lab.fail("se-vweps: " + error, "Read the gpu: lines above. Skill: render.");
     return;

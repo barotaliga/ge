@@ -2,20 +2,27 @@
 // player stands, removed nearest first, saved under the game folder in the shared format and read
 // back by name and when the map starts; the same map again keeps unsaved edits; a name that would
 // leave the folder refused; no game, no adding; a place reaches loc_dist (500 units in
-// every classic game); the sequel's `$loc_here` and `$loc_there`; a file in any letter case; `%l`
-// in chat.
+// every classic game); Quake II's `$loc_here` and `$loc_there`; a file in any letter case; `%l`
+// in chat; the view watched answers where the player stands and looks, nothing played none.
 //
 // ge:summary Tests the window's place names: added, removed, saved, read at map start
 // ge:keywords test shooters-edge place-names addloc saveloc loadloc removeloc map_started loc_dist
 // ge:keywords loc_here loc_there place-macros
 // ge:skill shooter console testing
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
 
+#include "brush/read.hpp"
+#include "brush/survey.hpp"
+#include "brush/write.hpp"
 #include "check.hpp"
 #include "console/console.hpp"
+#include "shooters_edge/client/face_hit.hpp"
+#include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/place_names.hpp"
+#include "shooters_edge/client/place_seen.hpp"
 
 namespace cl = shooters_edge::client;
 namespace fs = std::filesystem;
@@ -38,11 +45,11 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   cl::SearchPath files;
   bool playing = false;
   ge::shooter::Vec3f here{0, 0, 0};
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return playing;
   });
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   con.execute("addloc quad");
   CHECK(p.locs.points.empty());  // no game playing
   playing = true;
@@ -62,11 +69,11 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   con.execute("removeloc");
   CHECK(p.locs.points.size() == 1 && p.locs.points[0].name == "ra room");
   // The same map again keeps the edit; another map and back reads the saved file.
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   CHECK(p.locs.points.size() == 1);
-  cl::map_started(p, cl::classic_adapter(), files, "dm4");
+  cl::map_started(p, cl::qw_adapter(), files, "dm4");
   CHECK(p.locs.points.empty());
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   CHECK(p.locs.points.size() == 2);
   con.execute("clearlocs");
   CHECK(p.locs.points.empty());
@@ -74,12 +81,12 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   CHECK(p.locs.points.size() == 2);
   // tp_loadlocs 0: nothing read at a map's start.
   con.execute("tp_loadlocs 0");
-  cl::map_started(p, cl::classic_adapter(), files, "dm4");
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm4");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   CHECK(p.locs.points.empty());
 }
 
-TEST(the_sequel_s_loc_sub_commands_edit_the_same_places) {
+TEST(q2_s_loc_sub_commands_edit_the_same_places) {
   const fs::path game = fs::temp_directory_path() / "ge_se_place_names_two";
   fs::remove_all(game);
   ge::console::Console con;
@@ -87,11 +94,11 @@ TEST(the_sequel_s_loc_sub_commands_edit_the_same_places) {
   p.game_dir = game;
   cl::SearchPath files;
   ge::shooter::Vec3f here{0, 0, 0};
-  cl::add_place_commands(con, p, cl::sequel_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::q2_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return true;
   });
-  cl::map_started(p, cl::sequel_adapter(), files, "q2dm1");
+  cl::map_started(p, cl::q2_adapter(), files, "q2dm1");
   con.execute("loc add red armor");
   CHECK(p.locs.points.size() == 1 && p.locs.points[0].raw == "red armor");
   here = {10, 0, 0};
@@ -115,7 +122,7 @@ TEST(a_classic_place_reaches_500_units_too) {
   cl::PlaceNames p;
   p.game_dir = fs::temp_directory_path() / "ge_se_place_names_three";
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {9000, 0, 0};
     return true;
   });
@@ -128,14 +135,14 @@ TEST(a_classic_place_reaches_500_units_too) {
   CHECK(p.locs.points.empty());
 }
 
-TEST(the_sequel_s_macros_name_where_the_player_is_and_looks) {
+TEST(q2_s_macros_name_where_the_player_is_and_looks) {
   ge::console::Console con;
   cl::PlaceNames p;
   p.game_dir = fs::temp_directory_path() / "ge_se_place_names_four";
   cl::SearchPath files;
   bool playing = false;
   ge::shooter::Vec3f here{0, 0, 0}, looked{0, 0, 0};
-  cl::add_place_commands(con, p, cl::sequel_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::q2_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return playing;
   });
@@ -153,15 +160,15 @@ TEST(the_sequel_s_macros_name_where_the_player_is_and_looks) {
   CHECK(con.expand_text("$loc_here") == "unknown");
 }
 
-TEST(the_first_game_has_no_place_macros) {
+TEST(the_first_game_has_the_place_macros_too) {
   ge::console::Console con;
   cl::PlaceNames p;
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {0, 0, 0};
     return true;
   });
-  CHECK(con.expand_text("$loc_here") == "$loc_here");
+  CHECK(con.expand_text("$loc_here") == "unknown");  // no point read yet
 }
 
 TEST(a_loc_file_is_found_whatever_its_letter_case) {
@@ -173,11 +180,11 @@ TEST(a_loc_file_is_found_whatever_its_letter_case) {
   cl::PlaceNames p;
   p.game_dir = game;
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {0, 0, 0};
     return true;
   });
-  cl::map_started(p, cl::classic_adapter(), files, "dm6");
+  cl::map_started(p, cl::qw_adapter(), files, "dm6");
   CHECK(p.locs.points.size() == 1 && p.locs.points[0].name == "tower");
   fs::remove_all(game);
 }
@@ -188,7 +195,7 @@ TEST(a_chat_line_s_percent_l_becomes_the_place_the_player_is_in) {
   cl::SearchPath files;
   bool playing = true;
   ge::shooter::Vec3f here{10, 0, 0};
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return playing;
   });
@@ -204,7 +211,7 @@ TEST(loc_trace_passes_over_a_place_behind_a_wall) {
   ge::console::Console con;
   cl::PlaceNames p;
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {0, 0, 0};
     return true;
   });
@@ -215,4 +222,107 @@ TEST(loc_trace_passes_over_a_place_behind_a_wall) {
   CHECK(cl::fill_place_codes(p, "%l") == "other side");
   con.execute("loc_trace 1");
   CHECK(cl::fill_place_codes(p, "%l") == "this side");
+}
+
+TEST(the_view_watched_answers_where_the_player_stands_and_looks) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::Listen listen;
+  cl::PlaceSeen seen;
+  cl::SearchPath files;
+  cl::add_place_queries(con, p, listen, seen, cl::qw_adapter(), files);
+  ge::shooter::Vec3f at{1, 2, 3};
+  CHECK(!p.looked_at(at));                      // nothing watched, no game played
+  CHECK(p.clear_line({0, 0, 0}, {100, 0, 0}));  // no map: nothing in the way
+  seen.on = true;
+  seen.at = {10, 20, 30};
+  seen.angles = {0, 90, 0};  // looking along +y, no map read
+  CHECK(p.looked_at(at));
+  CHECK_MSG(at.x > 9.99f && at.x < 10.01f && at.y > cl::kLookReach + 19 &&
+                at.y < cl::kLookReach + 21 && at.z == 30,
+            std::to_string(at.x) + " " + std::to_string(at.y) + " " + std::to_string(at.z));
+}
+
+TEST(cl_surface_names_the_texture_straight_ahead) {
+  for (const ge::brush::Family fam : {ge::brush::Family::v29, ge::brush::Family::v38}) {
+    std::vector<uint8_t> bytes;
+    std::string error;
+    CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), fam, &bytes, &error), error);
+    ge::brush::Map m;
+    CHECK_MSG(ge::brush::read_bsp(bytes, &m, &error), error);
+    // In the hall (0..512, 0..384, 0..256): down to its floor, across to its east wall.
+    const std::string floor = cl::surface_ahead(m, {256, 100, 100}, {256, 100, 0});
+    CHECK_MSG(floor == "flagstone 0" || floor == "fixture/flagstone 0", floor);  // 38: a path
+    const std::string wall = cl::surface_ahead(m, {256, 100, 100}, {512, 100, 100});
+    CHECK_MSG(wall == "brick 0" || wall == "fixture/brick 0", wall);
+    CHECK(cl::surface_ahead(m, {256, 100, 100}, {300, 100, 100}) == " 0");  // nothing near
+  }
+}
+
+TEST(loc_draw_stands_a_marker_at_each_place_within_reach) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::SearchPath files;
+  bool playing = true;
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [&playing](ge::shooter::Vec3f& at) {
+    at = {0, 0, 0};
+    return playing;
+  });
+  p.locs.points.push_back({.name = "near", .at = {100, 0, 0}, .raw = "near"});
+  p.locs.points.push_back({.name = "far", .at = {400, 0, 0}, .raw = "far"});
+  p.locs.points.push_back({.name = "out", .at = {900, 0, 0}, .raw = "out"});  // past loc_dist 500
+  std::vector<cl::PlaceMarker> marks;
+  CHECK(p.draw != nullptr && p.draw->value == "0" && !cl::place_markers(p, 0, marks));
+  con.execute("loc_draw 1");
+  const double quarter = 3.14159265358979 / 20;  // a quarter of the 0.63 s swing: the bob's top
+  CHECK(cl::place_markers(p, quarter, marks) && marks.size() == 2);
+  CHECK(marks[0].nearest && !marks[1].nearest);
+  CHECK_MSG(marks[0].at.z > 9.99f && marks[0].at.z < 10.01f && marks[0].light.z == 0,
+            std::to_string(marks[0].at.z));
+  CHECK(marks[1].at.x == 400 && marks[1].at.z == 0);
+  con.execute("loc_dist 0");  // no limit
+  CHECK(cl::place_markers(p, 0, marks) && marks.size() == 3);
+  playing = false;
+  CHECK(!cl::place_markers(p, 0, marks) && marks.empty());
+}
+
+TEST(pruneloc_tidies_a_dense_place_file_on_a_real_map) {
+  std::vector<uint8_t> bytes;
+  std::string error;
+  const ge::brush::Fixture fixture = ge::brush::sample_fixture();
+  CHECK_MSG(ge::brush::write_bsp(fixture, ge::brush::Family::v29, &bytes, &error), error);
+  ge::brush::Map m;
+  CHECK_MSG(ge::brush::read_bsp(bytes, &m, &error), error);
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::SearchPath files;
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
+    at = {256, 192, 40};
+    return true;
+  });
+  // Every room marked every 32 units at waist height, each point by its room's name.
+  for (const ge::brush::FixtureRoom& r : fixture.rooms)
+    for (int y = r.min[1] + 16; y < r.max[1]; y += 32)
+      for (int x = r.min[0] + 16; x < r.max[0]; x += 32)
+        ge::classic::add_loc(p.locs, {float(x), float(y), float(r.min[2] + 40)}, r.name);
+  con.execute("loc_dist 0");
+  const std::vector<std::array<float, 3>> open = ge::brush::open_spots(m, 32);
+  std::vector<ge::shooter::Vec3f> spots;
+  spots.reserve(open.size());
+  for (const auto& o : open) spots.push_back({o[0], o[1], o[2]});
+  p.spots = [&spots] { return spots; };
+  std::vector<std::string> before;
+  before.reserve(spots.size());
+  for (const auto& s : spots) before.push_back(ge::classic::loc_name_at(p.locs, s));
+  const size_t was = p.locs.points.size();
+  con.execute("pruneloc");
+  const size_t now = p.locs.points.size();
+  CHECK_MSG(spots.size() > 1000 && was > 400 && now * 4 < was,
+            std::to_string(spots.size()) + " spots, " + std::to_string(was) + " -> " +
+                std::to_string(now));
+  size_t moved = 0;
+  for (size_t i = 0; i < spots.size(); ++i)
+    moved += ge::classic::loc_name_at(p.locs, spots[i]) != before[i] ? 1 : 0;
+  CHECK(moved == 0);
+  std::printf("pruneloc on the fixture: %zu spots, %zu places -> %zu\n", spots.size(), was, now);
 }

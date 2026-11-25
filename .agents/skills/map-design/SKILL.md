@@ -14,7 +14,7 @@ own move and rules; re-measure after a physics or rules change (`labs map-moves`
 ## 0. Study proven maps first
 
 Before a new map, look at the maps people have played for decades and still pick: they are
-balanced, they flow for speed jumps and tricks, and their camps are known. The first game's own
+balanced, they flow for speed jumps and tricks, and their camps are known. Quake's own
 `dm2`, `dm3`, `dm4`, `dm6` and `e1m2` (in the player's packs), and the community's `aerowalk`,
 `ztndm3`, `schloss`, `cmt3` (`cmt3b`), `cmt4` and `cmt5`. The community's maps are kept in the
 project's shared folder (`maps/reference/`), never in the tree.
@@ -41,7 +41,7 @@ map: `dm2`, `dm3`, `e1m2`, `schloss`, the `cmt` maps):
 
 Each game has its own move and rules. Build for one; a map for both is two plans.
 
-**The first game** (the classic rules in `games/shooters_edge/rules`, the move in
+**Quake** (the classic rules in `games/shooters_edge/rules`, the move in
 `plugins/shooter/pmove.cpp`):
 
 | What | Number | Where it comes from |
@@ -76,8 +76,8 @@ Design by these rows, with a margin: a ledge meant for everyone is at most the s
 8; a trick meant for experts sits within 85 % of its way's best (a jump at the very edge of the
 table is made one time in ten, and a bot's proof is kinder than a hand).
 
-**The sequel** has its own move (crouch, a higher step, a different blast); its numbers come when
-the version 38 writer lands. Never reuse the first game's numbers for it.
+**Quake II** has its own move (crouch, a higher step, a different blast); its numbers come when
+the version 38 writer lands. Never reuse Quake's numbers for it.
 
 ## 2. Decide what the map is for
 
@@ -179,7 +179,7 @@ as below: `labs map-overview --game=<folder> --map=<path>.bsp --intent=<path>.in
 4. Change the plan, not the bots. Then run it again with the same seed, and keep the before and
    after in the PR.
 
-Bots follow the map's own plan (`games/shooters_edge/bots/map_plan.hpp` works out what to hold
+Bots follow the map's own plan (`plugins/shooterbots/map_plan.hpp` works out what to hold
 from the items): an area the bots never use may still be good for people, so say so beside it
 (`note=`) rather than bend the map to the bots. Recordings of people on the map (`--demos=`) are
 the better judge when there are any.
@@ -195,7 +195,7 @@ publish`):
   the tricks as arrows (green for anyone, amber practised, red experts; dashed through the air),
   the items as pictures of the game's own models (the pack's; badges where it has none), the
   powers glowing with their respawn, the starts and the teleporters. The panel beside it lists
-  the areas with their notes. **The jump finder** (`plugins/shooter/jump_finder.hpp`) draws,
+  the areas with their notes. **The jump finder** (`plugins/shooterbots/jump_finder.hpp`) draws,
   unasked, one likely rocket jump a ledge, CALCULATED from the map: the take-off (the run, the
   jump, a ramp's rise or a rising lift), the rocket's burst where its line meets the world, the
   blast's push, then the arc through the map with the air steering it, its real path drawn from

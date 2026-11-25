@@ -1,7 +1,7 @@
 ---
 title: A classic client's downloads come before begin, so the frame must carry them while connected
 date: 2026-10-30
-scope: games/shooters_edge/net/classic_frame.cpp, games/shooters_edge/net/classic_signon.cpp
+scope: games/shooters_edge/net/qw_frame.cpp, games/shooters_edge/net/qw_signon.cpp
 concepts: [classic-protocol, downloads, chunked, signon, skins, send-frames]
 ---
 

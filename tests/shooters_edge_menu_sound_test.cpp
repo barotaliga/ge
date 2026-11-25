@@ -37,7 +37,7 @@ TEST(every_cue_plays_from_the_game_s_recordings) {
   CHECK_MSG(cl::mount_own_sounds(files, kContent, own, error), error);
   ge::audio::Synth synth;
   cl::MenuSounds sounds(synth);
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   CHECK(!sounds.play(MenuCue::none, game, files));
   for (MenuCue c : {MenuCue::enter, MenuCue::move, MenuCue::move, MenuCue::change, MenuCue::back})
     CHECK_MSG(sounds.play(c, game, files, 0.7f), std::string(cl::menu_sound_name(c)));
@@ -60,7 +60,7 @@ TEST(a_folder_without_the_recordings_is_silent_and_counted_once) {
   cl::SearchPath none;
   ge::audio::Synth synth;
   cl::MenuSounds sounds(synth);
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   CHECK(!sounds.play(MenuCue::move, game, none));
   CHECK(!sounds.play(MenuCue::move, game, none));
   CHECK(sounds.stats().missing == 1 && sounds.stats().played == 0);

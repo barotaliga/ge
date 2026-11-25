@@ -11,7 +11,8 @@
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(shooters_edge_sim STATIC ${SHOOTERS_EDGE_SIM_SOURCES})
 target_include_directories(shooters_edge_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_console ge_mod ge_shooter ge_classic ge_progs)
+target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_console ge_mod ge_shooter ge_shooterbots ge_classic
+                      ge_progs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sim)
 
 file(GLOB SHOOTERS_EDGE_SOUND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sound/*.cpp)
@@ -61,7 +62,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
                                                                         -Wno-bitwise-instead-of-logical)
 endif()
 
-# Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav
+# Its bots (bots/): the pilot (plugins/shooterbots/pilot.hpp) played on the game's maps, on the nav
 # course through the move and on the arena through the server's bot slots, for the tests and the
 # `se-pilot` lab (skills: shooter, bots).
 file(GLOB SHOOTERS_EDGE_BOTS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/bots/*.cpp)
@@ -69,14 +70,14 @@ add_library(shooters_edge_bots STATIC ${SHOOTERS_EDGE_BOTS_SOURCES})
 target_link_libraries(shooters_edge_bots PUBLIC shooters_edge_server)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 
-# The classic protocol (net/classic_*): the codec, the net channel, the classic server over the
+# The QuakeWorld protocol (net/qw_*, and the single-player netgame's net/q1_*): the codec, the net channel, the classic server over the
 # QC server on engine/net's sockets, the scripted client and the measured trial (skill: net); and
-# the sequel's live protocol beside it (net/sequel_*: its client and server). Only the classic_ and
-# sequel_ files, and the window console's game words (net/game_commands): net/host_* belong to the
-# host's own library.
+# Quake II's live protocol beside it (net/q2_*: its client and server). Only the classic_ and
+# q2_ files, and the window console's game words (net/game_commands, net/window_words): net/host_*
+# belong to the host's own library.
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/sequel_*.cpp
-     ${CMAKE_CURRENT_SOURCE_DIR}/net/game_commands.cpp)
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/qw_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q2_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q1_*.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/game_commands.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/window_words.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play
                       ge_forward ge_tv)
@@ -84,23 +85,30 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `sesv` on disk, at the build's root
 # (build/<preset>/sesv): the engine's dedicated process (engine/server) over the game's playable
-# ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic protocol), or with
-# `-game 2` the same core over the sequel's rules on its own protocol (net/sequel_game.hpp), so an
-# existing client of the sequel joins it. `--help` lists its flags.
+# ServerGame (net/qw_game.hpp: the mod's deathmatch on the classic protocol), or with
+# `-classic q2` the same core over Quake II's rules on its own protocol (net/q2_game.hpp), so an
+# existing client of Quake II joins it. `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
 
 # The hub (hub/), named `sehub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
-# The classic protocol's library gives it the classic status query (net/classic_browse,
+# The classic protocol's library gives it the classic status query (net/qw_browse,
 # plugins/classic/protocol/info) and the match a Play page's map is started on to name its files
 # (client/play_content.hpp); the client's demo reader names a demo's (client/demo_content.hpp).
+# The match cards' game half (hub/cards.cpp, docs/hub.md § Match cards): the game a record's match
+# is of, its content under the hub's --content, the board's look (the packs' glyph sheet), the
+# still's camera. No GPU; the stills themselves are drawn by `shooters_edge_hub_gpu` (below).
+add_library(shooters_edge_hub STATIC hub/cards.cpp)
+target_link_libraries(shooters_edge_hub PUBLIC shooters_edge_client ge_hub)
+target_include_directories(shooters_edge_hub PUBLIC ${PROJECT_SOURCE_DIR}/games)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_hub)
 ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME sehub SOURCES hub/main.cpp
-           LINK shooters_edge_classic)
+           LINK shooters_edge_classic shooters_edge_hub)
 target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
 # The bot team, headless (net/bots_main.cpp), named `sebots` on disk at the build's
-# root: a team of bots joins a classic server, any server (net/classic_bot_team.hpp). `--help`
+# root: a team of bots joins a classic server, any server (net/qw_bot_team.hpp). `--help`
 # lists its flags.
 add_executable(shooters_edge_bots_cli net/bots_main.cpp)
 target_link_libraries(shooters_edge_bots_cli PRIVATE shooters_edge_classic ge_flags)
@@ -149,12 +157,13 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_view)
 file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/menu/*.cpp)
 add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
 target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net ge_classicenhance
+target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net ge_server ge_forward ge_classicenhance
+                                            ge_classic ge_morph ge_overview
                                             ge_assets ge_play shooters_edge_hud)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
 # SELECT GAME's pictures of the games' names, by content profile (menu/games_page.cpp).
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
-foreach(name classic sequel)
+foreach(name classic q2)
   ge_embed_binary(shooters_edge_menu se_game_name_${name}
                   ${CMAKE_CURRENT_SOURCE_DIR}/menu/art/${name}.png)
 endforeach()
@@ -202,7 +211,7 @@ target_compile_definitions(shooters_edge_rules_campaign_package PRIVATE SE_RULES
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|window_cvars|install_ask|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_fx_blood|world_models|burning|demo_video|title|map_load)\.cpp$")
+     "/client/(main|window_cvars|install_ask|bot_view|bot_client|world_draw|world_extras|world_fx|world_fx_book|world_fx_blood|world_fx_q2|world_fx_screen|world_fx_shells|world_fx_wounds|world_lasers|world_models|burning|demo_video|title|map_load)\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -229,7 +238,9 @@ if(TARGET ge_brush_app)
 endif()
 if(GE_GPU AND TARGET ge_brush_app)
   add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_extras.cpp
-                                              client/world_fx.cpp client/world_fx_book.cpp client/world_fx_blood.cpp
+                                              client/world_fx.cpp client/world_fx_book.cpp client/world_fx_blood.cpp client/world_fx_q2.cpp
+                                              client/world_fx_screen.cpp client/world_fx_shells.cpp client/world_fx_wounds.cpp
+                                              client/world_lasers.cpp
                                               client/world_models.cpp client/burning.cpp
                                               client/demo_video.cpp client/title.cpp
                                               client/map_load.cpp)
@@ -239,11 +250,25 @@ if(GE_GPU AND TARGET ge_brush_app)
                                                         ge_ui ge_morph ge_play ge_detail)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
+# The maps' stills under the hub's match cards (hub/still.cpp): each map drawn from its intermission
+# view by the world draw above in the classic look, keyed by the map and by the stamp of the code
+# that draws it (cmake/SourceStamp.cmake), so a new renderer draws them again. `sehub` draws them
+# when this is built (SE_HUB_STILLS); without the GPU its cards show each map's hue.
+if(TARGET shooters_edge_client_gpu)
+  add_library(shooters_edge_hub_gpu STATIC hub/still.cpp)
+  target_link_libraries(shooters_edge_hub_gpu PUBLIC shooters_edge_hub shooters_edge_client_gpu)
+  ge_source_stamp(shooters_edge_hub_gpu still_code_stamp CONSTANT kStillCodeStamp SHADERS
+                  DIRS games/shooters_edge/hub games/shooters_edge/client games/shooters_edge/app
+                       plugins/brush plugins/classic/app engine/render engine/gpu)
+  set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_hub_gpu)
+  target_link_libraries(shooters_edge_hub_bin PRIVATE shooters_edge_hub_gpu)
+  target_compile_definitions(shooters_edge_hub_bin PRIVATE SE_HUB_STILLS=1)
+endif()
 # The web viewer (web/viewer.cpp, docs/hub.md § Watching in a browser): the world drawn on the hub
 # page's canvas, a demo played from the hub's archive; `shooters_edge_viewer.js` and `.wasm` in
 # the web build's `shooters_edge_viewer/`, the folder a hub's --viewer=<dir> serves. Beside it the
 # player (`shooters_edge_play`, docs/hub.md § Playing in a browser): the same viewer that also
-# plays a match on the page against bots (web/play.cpp, its server the classic game's), kept apart
+# plays a match on the page against bots (web/play.cpp, its server Quake's), kept apart
 # so a page that only watches downloads no server.
 if(TARGET shooters_edge_client_gpu)
   ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)
@@ -255,12 +280,13 @@ if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   # The window, `se` on disk at the build's root (build/<preset>/se) beside `sesv` and the hops;
   # the target keeps the game's name, so `make run:shooters_edge` builds it.
   add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp
+                 client/bot_client.cpp
                  client/install_ask.cpp)
   set_target_properties(shooters_edge PROPERTIES OUTPUT_NAME se
                         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
                                               shooters_edge_menu
-                                              ge_platform ge_hud ge_console)
+                                              ge_platform ge_hud ge_console ge_build_info)
   # The held weapons' models and the game's own content (its sounds for the built-in arena)
   # where the tree is, for a game run from somewhere else (-models wins).
   target_compile_definitions(shooters_edge

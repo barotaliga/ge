@@ -373,7 +373,7 @@ int frame_move(Server& sv, int e, const FrameMoveSettings& set, double dt) {
   if (ent(sv, e).movetype == kMovetypeNoclip) {
     Edict& ed = ent(sv, e);
     ed.origin = mad(ed.origin, static_cast<float>(dt), ed.velocity);
-    link_edict(sv, e, false);
+    link_edict(sv, e, true);  // through walls, yet still picking up and setting off what it meets
     return 0;
   }
   if (ent(sv, e).movetype != kMovetypeWalk) return 0;
@@ -383,7 +383,7 @@ int frame_move(Server& sv, int e, const FrameMoveSettings& set, double dt) {
     const float factor = ed.gravity != 0 ? ed.gravity : 1.0f;
     ed.velocity.z = static_cast<float>(ed.velocity.z - factor * sv.set.move.gravity * dt);
   }
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 3 && !sv.set.single_player_clock; i++) {  // that clock bounds it earlier
     float& c = ed.velocity[i];
     if (c != c) c = 0;
     if (c > sv.set.maxvelocity) c = sv.set.maxvelocity;

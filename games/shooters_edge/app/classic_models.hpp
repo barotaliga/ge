@@ -78,7 +78,7 @@ bool player_skin(const ge::assets::IndexedImage& picture, std::span<const uint8_
 // WHICH SKIN A PLAYER WEARS. The player's choice (look.hpp's noskins, baseskin and allskins):
 struct SkinChoice {
   int noskins = 0;  // 0, 2: the skins drawn; 1: every player in the figure's own skin
-  int stock = 0;    // the second game's cl_noskins: 1 the default figure, 2 its sex's (choose_look)
+  int stock = 0;    // Quake II's cl_noskins: 1 the default figure, 2 its sex's (choose_look)
   std::string base = "base";  // the skin of a player who names none, or one the files lack
   std::string all;            // one skin on every player ("": each their own)
   std::string figure;         // one figure's folder every player is drawn as ("": each their own)
@@ -131,7 +131,7 @@ Look choose_look(const SkinChoice& choice, std::string_view look,
                  const std::unordered_map<std::string, uint32_t>& figures,
                  const std::unordered_map<std::string, uint32_t>& skins);
 
-// THE FIRST GAME'S FIGURES: a player's `model` names a folder `players/<model>/` with a figure
+// QUAKE'S FIGURES: a player's `model` names a folder `players/<model>/` with a figure
 // (`figures`, by lower-case folder), drawn in place of the game's own figure. Its skin is the
 // folder's picture of the player's skin name (`skins`, by "<folder>/<skin>", the name as
 // `forced_skin` leaves it, lower case, its extension dropped), else the folder's first
@@ -183,8 +183,12 @@ struct LightProbe {
 };
 LightProbe make_probe(const ge::brush::Map& map);
 // The light (lightmap units, rgb) under `p` (map units); false (and 1s) when no floor is found
-// within `depth` units below.
+// within `depth` units below. `floor` (when given) gets the floor's height (map units) and its
+// facing's upward share (1 level, 0.5 sixty degrees steep).
+struct FloorUnder {
+  float z = 0, up = 1;
+};
 bool light_under(const LightProbe& probe, const ge::brush::Map& map, const float p[3], float rgb[3],
-                 float depth = 512);
+                 float depth = 512, FloorUnder* floor = nullptr);
 
 }  // namespace shooters_edge::models

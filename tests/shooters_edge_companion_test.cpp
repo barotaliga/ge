@@ -1,4 +1,4 @@
-// THE CO-OP COMPANION (games/shooters_edge/bots/companion.hpp, coop_run.hpp; plugins/shooter/
+// THE CO-OP COMPANION (plugins/shooterbots/companion.hpp, coop_run.hpp; plugins/shooter/
 // idle.hpp): our campaign in coop on the coop hall, a scripted leader walking his tour and an
 // expert companion beside him. The companion keeps to him (near him most of the run, never left
 // far behind), presses the button that opens the shut door he waits by (he never presses it), kills
@@ -19,12 +19,14 @@
 
 #include "check.hpp"
 #include "golden.hpp"
-#include "shooter/idle.hpp"
+#include "shooterbots/idle.hpp"
 #include "shooters_edge/bots/coop_episode.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
 
 namespace {
@@ -154,8 +156,8 @@ TEST(the_companion_idles_like_a_person_while_he_waits) {
   if (!r.ok) return;
   const fb::CoopMate& m = r.mates[0];
   int kinds = 0;
-  for (int k = 1; k < sh::kIdleActs; k++) {
-    std::printf("  %s %lld\n", sh::idle_act_name(static_cast<sh::IdleAct>(k)),
+  for (int k = 1; k < sb::kIdleActs; k++) {
+    std::printf("  %s %lld\n", sb::idle_act_name(static_cast<sb::IdleAct>(k)),
                 static_cast<long long>(m.idle.acts[k]));
     kinds += m.idle.acts[k] > 0 ? 1 : 0;
   }
@@ -280,4 +282,60 @@ TEST(a_coop_episode_replays_to_the_bit_and_matches_its_golden) {
               "the coop episode moved off its golden bits: if the way through, the companion, the "
               "fighter or the campaign mod changed on purpose, rewrite with GE_GOLDEN_WRITE=1 and "
               "say why in the PR");
+}
+
+TEST(a_party_of_bots_splits_the_hall_and_clears_it_at_100_percent) {
+  // Two and three bots in co-op, each running the way through (party.hpp): the work split among
+  // them, what one saw told to the others, every monster down before anyone takes the exit.
+  for (int size : {2, 3}) {
+    fb::EpisodeOptions o = episode_options();
+    o.skills.clear();
+    o.partners.assign(static_cast<size_t>(size) - 1, sb::AimSkill::expert);
+    o.complete = true;
+    o.god = true;
+    o.maps = 2;
+    const fb::EpisodeReport r = fb::run_coop_episode(o);
+    CHECK_MSG(r.ok, r.error);
+    if (!r.ok) return;
+    CHECK(r.faults == 0);
+    CHECK(r.maps.size() == 1);
+    for (const fb::EpisodeMap& m : r.maps) {
+      std::printf(
+          "party of %d, %s: out %d at %.1f s, kills %d/%d (leader %d, partners %d), "
+          "shares %lld, seen told %lld, left to a mate %lld\n",
+          size, m.name.c_str(), m.finished ? 1 : 0, m.exit_s, m.killed_monsters, m.total_monsters,
+          m.killed_by_leader, m.killed_by_partners, static_cast<long long>(m.party.shares),
+          static_cast<long long>(m.party.seen_told), static_cast<long long>(m.left_to_mates));
+      CHECK_MSG(m.finished, m.name + ": the party did not get out: " + m.end);
+      CHECK_MSG(m.monsters == static_cast<int>(m.kills.size()),
+                "a monster was left alive at the exit of a 100% run");
+      CHECK(m.party.shares > 0 && m.party.seen_told > 0);
+      CHECK(m.mates.size() == static_cast<size_t>(size) - 1);
+    }
+  }
+}
+
+TEST(a_bot_alone_clears_the_hall_at_100_percent_and_then_leaves) {
+  fb::EpisodeOptions o = episode_options();
+  o.skills.clear();
+  o.single = true;
+  o.complete = true;
+  o.god = true;
+  o.maps = 2;
+  const fb::EpisodeReport r = fb::run_coop_episode(o);
+  CHECK_MSG(r.ok, r.error);
+  if (!r.ok) return;
+  CHECK(r.faults == 0);
+  CHECK_MSG(r.maps.size() == 1, "an exit back to a map already played ends the run");
+  for (const fb::EpisodeMap& m : r.maps) {
+    std::printf("%s: out %d at %.1f s (%s), kills %d/%d, secrets %d/%d, given up %lld\n",
+                m.name.c_str(), m.finished ? 1 : 0, m.exit_s, m.end.c_str(), m.killed_monsters,
+                m.total_monsters, m.found_secrets, m.total_secrets,
+                static_cast<long long>(m.way.given_up));
+    CHECK_MSG(m.finished, m.name + ": he did not get out: " + m.end);
+    CHECK_MSG(m.exit_s > 0, "the intermission never began");
+    CHECK_MSG(m.monsters == static_cast<int>(m.kills.size()),
+              "a monster was left alive at the exit of a 100% run");
+    CHECK(m.leader_deaths == 0);
+  }
 }

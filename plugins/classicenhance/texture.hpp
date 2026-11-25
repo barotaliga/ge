@@ -61,7 +61,7 @@ struct TextureMarks {
 struct MaterialWords {
   std::span<const std::string_view> metal, wood, stone;
 };
-// The classic game's words (the first content row's).
+// Quake's words (the first content row's).
 const MaterialWords& classic_words();
 // The texture's material: `sky` or `liquid` by its marks, else the first list of `words` with a
 // word in its name; `other` when none has.
@@ -70,7 +70,7 @@ Material material_of(std::string_view name, const TextureMarks& marks,
 // The marks a map of the first family gives by name alone (a '*' name a liquid, a name starting
 // "sky" the sky), for a picture known only by its name (a lab's, a test's).
 TextureMarks marks_by_name(std::string_view name);
-// material_of with marks_by_name's marks and the classic game's words.
+// material_of with marks_by_name's marks and Quake's words.
 Material material_of(std::string_view name);
 // A texture no one ever sees drawn (trigger volumes, clip brushes): not worth enhancing.
 bool never_drawn(std::string_view name);
@@ -90,6 +90,8 @@ struct EnhanceOptions {
   // Where the network runs: the CPU when null, else this device (a picture it refuses runs on the
   // CPU).
   UpscaleDevice* device = nullptr;
+  // The first fullbright palette index (`Profile::fullbright_first`): those texels glow. 256: none.
+  int fullbright_first = kFullbrightFirst;
 };
 
 struct Enhanced {

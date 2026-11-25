@@ -1,8 +1,8 @@
 // The mouse's feel (shooter/mouse_feel.hpp): the filter blends a frame with the last raw one; the
-// acceleration adds sensitivity by speed (counts a millisecond, or the sequel's counts a frame),
+// acceleration adds sensitivity by speed (counts a millisecond, or Quake II's counts a frame),
 // with its power, offset and cap.
 //
-// ge:summary Tests m_filter and m_accel with its power, offset, cap and the sequel's per frame
+// ge:summary Tests m_filter and m_accel with its power, offset, cap and Quake II's per frame
 // ge:keywords test mouse m_filter m_accel m_accel_power m_accel_offset m_accel_senscap
 // ge:skill input testing
 #include "check.hpp"
@@ -43,7 +43,7 @@ TEST(acceleration_adds_sensitivity_by_speed) {
   CHECK(sh::feel_mouse(f, 30, 40, 0.1, 0.011).sensitivity == 0.1);  // old saves: never
 }
 
-TEST(the_sequels_acceleration_is_per_frame) {
+TEST(q2_acceleration_is_per_frame) {
   sh::MouseFeel f;
   f.per_frame = true;
   f.accel = 0.1;

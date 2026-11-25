@@ -1,6 +1,6 @@
 // LAB `se-remix`: CLASSIC REMIX'S ITEM SWAP ON REAL MAPS (games/shooters_edge/client/remix.hpp,
-// profiles/remix.hpp). A map of each game (`--map` from the classic game's install `--game`,
-// `--sequel-map` from the sequel's `--sequel`) is drawn from above, its floors shaded by height,
+// profiles/remix.hpp). A map of each game (`--map` from Quake's install `--game`,
+// `--q2-map` from Quake II's `--q2`) is drawn from above, its floors shaded by height,
 // twice: with its own items, and with every item made the other game's by the remix table, each
 // item a dot coloured by what it is and named. A table counts each swap, so a reviewer sees that
 // every weapon, ammunition, health, armour and powerup found a match by role and what was left
@@ -48,6 +48,17 @@ constexpr const char* kHall =
     "{\n\"classname\" \"item_health\"\n\"spawnflags\" \"2\"\n\"origin\" \"256 128 0\"\n}\n"
     "{\n\"classname\" \"item_armorInv\"\n\"origin\" \"384 128 0\"\n}\n"
     "{\n\"classname\" \"item_artifact_super_damage\"\n\"origin\" \"0 256 0\"\n}\n";
+
+// A made-up Quake II hall for the smoke run's mission pack case (`cr_expansions`): its rapid energy
+// weapon and its room-clearer, which Quake lays down as its lightning gun twice and Scourge of
+// Armagon as its own laser cannon and Mjolnir.
+constexpr const char* kQ2Hall =
+    "{\n\"classname\" \"worldspawn\"\n}\n"
+    "{\n\"classname\" \"weapon_hyperblaster\"\n\"origin\" \"128 0 0\"\n}\n"
+    "{\n\"classname\" \"weapon_bfg\"\n\"origin\" \"256 0 0\"\n}\n"
+    "{\n\"classname\" \"weapon_shotgun\"\n\"origin\" \"384 0 0\"\n}\n"
+    "{\n\"classname\" \"weapon_machinegun\"\n\"origin\" \"0 128 0\"\n}\n"
+    "{\n\"classname\" \"ammo_cells\"\n\"origin\" \"128 128 0\"\n}\n";
 
 struct Spot {
   std::string cls;
@@ -208,10 +219,11 @@ gl::Picture pair(const gl::Picture& a, const gl::Picture& b, const std::string& 
 // One map remixed: its two panels, its table rows and its metrics.
 void remix_map(gl::Lab& lab, const std::string& id, const std::string& name,
                const std::string& text, const ge::brush::Map* map, const std::string& from,
-               const std::string& to, std::vector<std::vector<std::string>>& rows) {
+               const std::string& to, std::vector<std::vector<std::string>>& rows,
+               const shooters_edge::profiles::RemixPacks& packs = {}) {
   std::string out, error;
   cl::RemixReport rep;
-  if (!cl::remix_entities(text, from, to, out, &rep, error))
+  if (!cl::remix_entities(text, from, to, out, &rep, error, {}, packs))
     return lab.fail(name + ": " + error,
                     "next: read the entity text's parse error; skill: shooter.");
   const std::vector<Spot> before = items_of(text), after = items_of(out);
@@ -223,7 +235,8 @@ void remix_map(gl::Lab& lab, const std::string& id, const std::string& name,
   const ce::Profile* pf = ce::find_profile(from);
   const ce::Profile* pt = ce::find_profile(to);
   const std::string left = name + ": " + std::string(pf->what) + "'s items";
-  const std::string right = "with " + std::string(pt->what) + "'s items";
+  const std::string right = "with " + std::string(pt->what) + "'s items" +
+                            (packs.to_pack.empty() ? "" : " (" + std::string(packs.to_pack) + ")");
   lab.shot({id,
             name + " WITH ITS ITEMS SWAPPED",
             "The map from above, floors shaded by height, with its own items (left) and with each "
@@ -233,7 +246,7 @@ void remix_map(gl::Lab& lab, const std::string& id, const std::string& name,
                 "gold, health green, armour blue, powerups violet.",
             "every item on the left still has a dot on the right, a match by role (the nail "
             "weapons the bullet ones, the beam the rail), and only items with no match gone",
-            {{"map", name}, {"from", from}, {"to", to}}},
+            {{"map", name}, {"from", from}, {"to", to}, {"to-pack", std::string(packs.to_pack)}}},
            pair(a, b, left, right));
   lab.metric(id + "-items", rep.items, "items");
   lab.metric(id + "-swapped", rep.swapped, "items");
@@ -252,8 +265,8 @@ int health_of(const std::string& text, const std::string& game) {
   for (const auto& b : blocks) {
     const std::string c = value_of(b, "classname");
     const int f = std::atoi(value_of(b, "spawnflags").c_str());
-    if (game == "classic" && c == "item_health") total += (f & 2) ? 100 : (f & 1) ? 15 : 25;
-    if (game == "sequel") {
+    if (game == "q1" && c == "item_health") total += (f & 2) ? 100 : (f & 1) ? 15 : 25;
+    if (game == "q2") {
       if (c == "item_health_small") total += 2;
       if (c == "item_health") total += 10;
       if (c == "item_health_large") total += 25;
@@ -283,28 +296,35 @@ std::vector<std::string> split(const std::string& list) {
 
 void run(gl::Lab& lab) {
   std::vector<std::vector<std::string>> rows, survey, unmatched, notes;
-  const std::string q1 = lab.arg("game"), q2 = lab.arg("sequel");
+  const std::string q1 = lab.arg("game"), q2 = lab.arg("q2");
+  const bool expansions = lab.arg_num("expansions") != 0;
+  // `--q1-pack`: Quake's side opened over that mission pack's folder (its maps, its items read);
+  // `--q1-to-pack`: the played Quake pack Quake II's maps are remixed for (its own weapons laid).
+  const std::string q1_pack = lab.arg("q1-pack"), to_pack = lab.arg("q1-to-pack");
   if (q1.empty() && q2.empty()) {
-    remix_map(lab, "hall-to-sequel", "the made-up hall", kHall, nullptr, "classic", "sequel", rows);
+    remix_map(lab, "hall-to-q2", "the made-up hall", kHall, nullptr, "q1", "q2", rows);
+    remix_map(lab, "q2-hall-to-q1", "the Quake II hall", kQ2Hall, nullptr, "q2", "q1", rows);
+    remix_map(lab, "q2-hall-to-hipnotic", "the Quake II hall", kQ2Hall, nullptr, "q2", "q1", rows,
+              {expansions, "hipnotic"});
   }
   struct Side {
-    std::string dir, map, maps, from, to, id;
+    std::string dir, folder, map, maps, from, to, id;
+    shooters_edge::profiles::RemixPacks packs;
   };
   const Side sides[] = {
-      {q1, lab.arg("map"), lab.arg("maps"), "classic", "sequel", "classic-map"},
-      {q2, lab.arg("sequel-map"), lab.arg("sequel-maps"), "sequel", "classic", "sequel-map"}};
+      {q1, q1_pack, lab.arg("map"), lab.arg("maps"), "q1", "q2", "classic-map", {expansions, {}}},
+      {q2, "", lab.arg("q2-map"), lab.arg("q2-maps"), "q2", "q1", "q2-map", {expansions, to_pack}}};
   for (const Side& s : sides) {
     if (s.dir.empty()) continue;
     const ce::Profile* content = ce::find_profile(s.from);
     cl::SearchPath files;
     std::string error;
-    if (!cl::open_game_dir(s.dir, "", files, error, *content))
+    if (!cl::open_game_dir(s.dir, s.folder, files, error, *content))
       return lab.fail(error, "next: pass the install folder that holds " +
                                  std::string(content->base_dir) + "; skill: shooter.");
     std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(files, s.map, error);
-    if (!m)
-      return lab.fail(error, "next: name a map the install holds with --map or --sequel-map.");
-    remix_map(lab, s.id, s.map, m->spec.entities, &m->bsp.map, s.from, s.to, rows);
+    if (!m) return lab.fail(error, "next: name a map the install holds with --map or --q2-map.");
+    remix_map(lab, s.id, s.map, m->spec.entities, &m->bsp.map, s.from, s.to, rows, s.packs);
     // The survey: every map named, weighed as a whole.
     for (const std::string& name : split(s.maps)) {
       std::unique_ptr<cl::LoadedMap> one = cl::load_named_map(files, name, error);
@@ -319,8 +339,9 @@ void run(gl::Lab& lab) {
       off.strong_share = 1;
       off.pool_radius = 0;
       off.weak_same = 0;
-      if (!cl::remix_entities(one->spec.entities, s.from, s.to, out, &rep, error) ||
-          !cl::remix_entities(one->spec.entities, s.from, s.to, by_role, &plain, error, off)) {
+      if (!cl::remix_entities(one->spec.entities, s.from, s.to, out, &rep, error, {}, s.packs) ||
+          !cl::remix_entities(one->spec.entities, s.from, s.to, by_role, &plain, error, off,
+                              s.packs)) {
         lab.note(std::string(name).append(": ").append(error));
         continue;
       }
@@ -361,13 +382,16 @@ const gl::LabSpec kSpec{
     "Does every item on a real map of each classic game find its match by role in the other "
     "game's set, and which are left out?",
     {
-        {"game", "", "the classic game's install (the folder holding id1; empty: none)"},
-        {"map", "dm3", "the classic game's map"},
-        {"sequel", "", "the sequel's install (the folder holding baseq2; empty: none)"},
-        {"sequel-map", "q2dm1", "the sequel's map"},
-        {"maps", "dm2,dm3,dm4,dm6,e1m2,e2m1", "the classic game's maps weighed whole"},
-        {"sequel-maps", "q2dm1,q2dm2,q2dm3,q2dm4,q2dm5,q2dm6,q2dm7,q2dm8",
-         "the sequel's maps weighed whole"},
+        {"game", "", "Quake's install (the folder holding id1; empty: none)"},
+        {"map", "dm3", "Quake's map"},
+        {"q2", "", "Quake II's install (the folder holding baseq2; empty: none)"},
+        {"q2-map", "q2dm1", "Quake II's map"},
+        {"maps", "dm2,dm3,dm4,dm6,e1m2,e2m1", "Quake's maps weighed whole"},
+        {"q2-maps", "q2dm1,q2dm2,q2dm3,q2dm4,q2dm5,q2dm6,q2dm7,q2dm8",
+         "Quake II's maps weighed whole"},
+        {"expansions", "1", "cr_expansions: 1 the mission packs' items read and laid; 0 not"},
+        {"q1-pack", "", "a Quake mission pack's folder the Quake side is opened over (hipnotic)"},
+        {"q1-to-pack", "", "the Quake mission pack Quake II's maps are remixed for (hipnotic)"},
     },
     "",
     run,

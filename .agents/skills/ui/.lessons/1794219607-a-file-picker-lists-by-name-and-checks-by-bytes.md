@@ -11,7 +11,7 @@ unpacked, read to its level's map) before anything plays: a web page saved as `x
 then refused with the reason, never started. Keep the two apart; a name never proves a format.
 
 The clean-slate scan (`tools/agents-index.mjs`, LEGACY) refuses the client recording's plain
-extension and the classic game folder's name as words anywhere outside `porting/`, in code, tests,
+extension and Quake folder's name as words anywhere outside `porting/`, in code, tests,
 labs and docs alike. The profile's `demo_extensions` leaves it out for that reason; the list the
 browser shows is `client::listed_extensions` (the profile's plus each format's `plain_extension`,
 the client one derived from its voice form). Tests and labs name fixture files with another

@@ -17,11 +17,29 @@
 #include <system_error>
 
 #include "shooters_edge/client/demo_v2.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/client/match_name.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
 namespace fs = std::filesystem;
+
+// `n` bytes as Quake II says a recording's size: decimal units, a tenth below ten of them.
+std::string q2_demo_size(int64_t n) {
+  char text[32];
+  if (n >= 1000000000)
+    std::snprintf(text, sizeof text, "%.1f GB", static_cast<double>(n) / 1e9);
+  else if (n >= 10000000)
+    std::snprintf(text, sizeof text, "%lld MB", static_cast<long long>(n / 1000000));
+  else if (n >= 1000000)
+    std::snprintf(text, sizeof text, "%.1f MB", static_cast<double>(n) / 1e6);
+  else if (n >= 1000)
+    std::snprintf(text, sizeof text, "%lld kB", static_cast<long long>(n / 1000));
+  else
+    std::snprintf(text, sizeof text, n == 1 ? "%lld byte" : "%lld bytes",
+                  static_cast<long long>(n));
+  return text;
+}
 
 namespace {
 
@@ -344,8 +362,8 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     return false;
   }
   const int level = record_pack_level(s);
-  sv::SequelServer* sequel = l.rules ? sv::sequel_of(*l.rules) : nullptr;
-  const fs::path file = fs::path(files.folder) / (name + (sequel      ? ".ged"
+  sv::Q2Server* q2 = l.rules ? sv::q2_of(*l.rules) : nullptr;
+  const fs::path file = fs::path(files.folder) / (name + (q2          ? ".ged"
                                                           : level > 0 ? ".mvdz"
                                                                       : ".mvd"));
   std::error_code ec;
@@ -359,15 +377,15 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
   r.path = file.string();
   r.game_dir = fs::path(files.folder).filename().string();
   r.written = 0;
-  if (sequel) {
-    // The sequel's own recording from the player's view (slot 0), packed at the stop.
-    sv::SequelWireOptions opt;
+  if (q2) {
+    // Quake II's own recording from the player's view (slot 0), packed at the stop.
+    sv::Q2WireOptions opt;
     opt.server_count = static_cast<int32_t>(l.maps_started) + 1;
-    if (l.map) opt.map_checksum = sv::sequel_map_checksum(l.map->file);
-    if (l.map && l.map->spec.brushes) sv::sequel_sky(*l.map->spec.brushes, opt);
+    if (l.map) opt.map_checksum = sv::q2_map_checksum(l.map->file);
+    if (l.map && l.map->spec.brushes) sv::q2_sky(*l.map->spec.brushes, opt);
     if (r.places != nullptr) opt.stuffed = ge::classic::recorded_loc_lines(*r.places);
-    r.sequel = std::make_unique<sv::SequelRecorder>();
-    sv::sequel_record_start(*r.sequel, *l.server, 0, opt);
+    r.q2 = std::make_unique<sv::Q2Recorder>();
+    sv::q2_record_start(*r.q2, *l.server, 0, opt);
     r.on = true;
     r.frames = 0;
     return true;
@@ -379,17 +397,17 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
 
 std::string record_close(ListenRecorder& r) {
   if (!r.on && !r.file.is_open()) return "";
-  if (r.sequel) {
-    sv::sequel_record_stop(*r.sequel);
+  if (r.q2) {
+    sv::q2_record_stop(*r.q2);
     std::vector<uint8_t> file;
     std::string error;
-    const bool packed = pack_demo(r.sequel->bytes, file, error);
-    const std::vector<uint8_t>& out = packed ? file : r.sequel->bytes;
+    const bool packed = pack_demo(r.q2->bytes, file, error);
+    const std::vector<uint8_t>& out = packed ? file : r.q2->bytes;
     r.file.write(reinterpret_cast<const char*>(out.data()),
                  static_cast<std::streamsize>(out.size()));
     r.file.close();
-    const int64_t frames = r.sequel->frames;
-    r.sequel.reset();
+    const int64_t frames = r.q2->frames;
+    r.q2.reset();
     r.on = false;
     const long kib = std::lround(static_cast<double>(out.size()) / 1024);
     return "recorded " + r.path + ": " + std::to_string(frames) + " frames, " +
@@ -417,41 +435,176 @@ void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Co
     return;
   }
   if (frames <= 0) return;
-  if (r.sequel) {
-    if (sv::SequelServer* sq = l.rules ? sv::sequel_of(*l.rules) : nullptr)
-      sv::sequel_record_frame(*r.sequel, *l.server, static_cast<int32_t>(sq->frame_number),
-                              &sq->players[0].move);
+  if (r.q2) {
+    if (sv::Q2Server* sq = l.rules ? sv::q2_of(*l.rules) : nullptr)
+      sv::q2_record_frame(*r.q2, *l.server, static_cast<int32_t>(sq->frame_number),
+                          &sq->players[0].move);
     return;
   }
   record_listen_frame(r, l);
   write_ready(r);
 }
 
+namespace {
+
+// A name `record` takes: 1 to 64 letters, digits, `_` or `-`.
+bool record_name_fits(const std::string& name) {
+  bool ok = !name.empty() && name.size() <= 64;
+  for (const char c : name)
+    ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                c == '_' || c == '-');
+  return ok;
+}
+
+bool joined_now(const JoinedRecord* j) { return j != nullptr && j->joined && j->joined(); }
+
+// Quake II's `record [-z] [-e] [-s] <name>` on a joined server, in its own words: the name gets
+// `.dm2` (and `.gz` with -z, the file then written through gzip); a recording already going is
+// left as it is. -e and -s set the original's frame buffer; ours copies the server's messages
+// whole, so they change nothing.
+void q2_record(ge::console::Console& c, const ge::console::Args& a, JoinedRecord& j) {
+  bool gzip = false;
+  std::string name;
+  for (size_t i = 1; i < a.size(); i++) {
+    const std::string& w = a[i];
+    if (w == "-h" || w == "--help") {
+      c.print(
+          "Usage: record [-h] [-z] [-e] [-s] <filename>\nBegin client demo recording.\n"
+          "-h | --help: display this message\n-z | --compress: compress demo with gzip\n"
+          "-e | --extended: use extended packet size\n-s | --standard: use standard packet "
+          "size");
+      return;
+    }
+    if (w == "-z" || w == "--compress") {
+      gzip = true;
+    } else if (w == "-e" || w == "--extended" || w == "-s" || w == "--standard") {
+    } else if (w.size() > 1 && w[0] == '-') {
+      c.print("Unknown option: " + w + ".\nTry record --help for more information.");
+      return;
+    } else {
+      name = w;
+    }
+  }
+  if (const std::string now = j.path(); !now.empty()) {
+    c.print("Already recording (" + q2_demo_size(j.bytes ? j.bytes() : 0) + ").");
+    return;
+  }
+  if (name.empty()) {
+    c.print("Missing filename argument.\nTry record --help for more information.");
+    return;
+  }
+  for (char& ch : name)  // what a file's name may not hold becomes an underscore
+    if (ch == '/' || ch == '\\' || ch == ':' || ch == '*' || ch == '?' || ch == '"' || ch == '<' ||
+        ch == '>' || ch == '|' || static_cast<unsigned char>(ch) < 32)
+      ch = '_';
+  if (name.size() < 4 || name.compare(name.size() - 4, 4, ".dm2") != 0) name += ".dm2";
+  if (gzip) name += ".gz";
+  const std::filesystem::path file = std::filesystem::path(j.folder()) / name;
+  std::string error;
+  if (!j.open(file, error))
+    c.print("Couldn't open " + name + ": " + error);
+  else
+    c.print("Recording client demo to " + file.string() + ".");
+}
+
+}  // namespace
+
 void add_record_commands(ge::console::Console& console, ListenRecorder& r, const Listen& listen,
-                         const SearchPath& files, const RecordSettings& s) {
+                         const SearchPath& files, const RecordSettings& s, JoinedRecord* joined) {
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
+  if (joined != nullptr) joined->folder = [&files] { return files.folder; };
   console.add_command(
       "record",
       "record <name>: the match recorded as <game folder>/<name>.mvdz (packed: demo_pack; the "
-      "sequel's maps: <name>.ged) until "
-      "stop",
-      [&r, &listen, &files, &s](Con& c, const CArgs& a) {
+      "Quake II's maps: <name>.ged; a server joined: <name>.qwd, Quake II's <name>.dm2) until stop",
+      [&r, &listen, &files, &s, joined](Con& c, const CArgs& a) {
+        const bool on_server = joined_now(joined);
         if (a.size() < 2) {
-          c.print("record: name the recording (record match1)");
+          const std::string path = on_server ? joined->path() : (r.on ? r.path : "");
+          if (on_server && joined->automatic())
+            c.print("The match is being recorded on its own to " + path + ".");
+          else if (!path.empty())
+            c.print("Recording to " + path + ".");
+          else
+            c.print("Not recording. Type record and a name to start (record match1).");
           return;
         }
+        if (on_server && joined->extension() == "dm2" && !joined->automatic()) {
+          q2_record(c, a, *joined);
+          return;
+        }
+        if (!on_server) {
+          std::string error;
+          if (!record_open(r, listen, files, a[1], s, error))
+            c.print(error);
+          else
+            c.print("recording " + r.path);
+          return;
+        }
+        if (joined->automatic()) {
+          c.print("The match is being recorded on its own; type stop to end that first.");
+          return;
+        }
+        if (!record_name_fits(a[1])) {
+          c.print("\"" + a[1] +
+                  "\" can't be a recording's name: use 1 to 64 letters, digits, _ or -.");
+          return;
+        }
+        if (const std::string done = joined->close(); !done.empty()) c.print(done);
         std::string error;
-        if (!record_open(r, listen, files, a[1], s, error))
+        const std::filesystem::path file =
+            std::filesystem::path(joined->folder()) / (a[1] + "." + joined->extension());
+        if (!joined->open(file, error))
           c.print(error);
         else
-          c.print("recording " + r.path);
+          c.print("Recording to " + file.string() + ".");
       });
   console.add_command("stop", "stop: ends the recording and closes its file",
-                      [&r](Con& c, const CArgs&) {
+                      [&r, joined](Con& c, const CArgs&) {
+                        if (joined != nullptr && joined->path && !joined->path().empty()) {
+                          const std::string line = joined->close();
+                          if (!line.empty()) {
+                            c.print(line);
+                            return;
+                          }
+                        }
                         const std::string line = record_close(r);
-                        c.print(line.empty() ? "stop: not recording" : line);
+                        c.print(line.empty() ? "Not recording a demo." : line);
                       });
+  console.add_command(
+      "easyrecord",
+      "easyrecord [name]: the server joined recorded, the file named by the match "
+      "(match_format_*) or by the name, with the first free _NNN",
+      [joined](Con& c, const CArgs& a) {
+        if (!joined_now(joined)) {
+          c.print("You must be connected to a server to easyrecord.");
+          return;
+        }
+        if (a.size() > 2) {
+          c.print("Usage: easyrecord [name]");
+          return;
+        }
+        if (joined->automatic()) {
+          c.print("The match is being recorded on its own; type stop to end that first.");
+          return;
+        }
+        const std::string name =
+            a.size() == 2 ? clean_match_text(a[1], true) : joined->match_name();
+        const std::filesystem::path folder = joined->folder();
+        const std::string ext = joined->extension();
+        const std::string stem = free_match_file(folder, name, {"qwd", "qwz", "mvd", "dm2"});
+        if (stem.empty()) {
+          c.print("Every name from " + name + "_000 to _999 is taken.");
+          return;
+        }
+        if (const std::string done = joined->close(); !done.empty()) c.print(done);
+        std::string error;
+        if (!joined->open(folder / (stem + "." + ext), error))
+          c.print(error);
+        else
+          c.print("Recording to " + stem + "." + ext + ".");
+      });
 }
 
 }  // namespace shooters_edge::client

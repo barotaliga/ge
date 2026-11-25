@@ -13,14 +13,18 @@
 // ge:keywords test synth render golden hash envelope onset pan bus echo layer glide limiter
 // ge:keywords ring steal rack determinism
 // ge:skill audio testing
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "audio/meter.hpp"
 #include "audio/rack.hpp"
+#include "audio/sample_voice.hpp"
 #include "audio/synth.hpp"
 #include "check.hpp"
 #include "golden.hpp"
@@ -227,6 +231,93 @@ TEST(a_bus_at_zero_is_silent_and_a_bus_fades) {
   f.bus_gain(2, 0, 0.05f);
   const std::vector<float> after = render(f, 0.6);
   CHECK(peak_of(after, after.size() / 2) < 0.0005f);
+}
+
+TEST(the_muffle_cuts_the_treble_and_leaves_the_bass) {
+  // A held sine heard dry and muffled to a quarter over 5 kHz: 12 kHz falls to near a quarter,
+  // 200 Hz is untouched; set back to 1, the mix is dry again.
+  const auto held = [](float hz, float treble) {
+    Synth s;
+    if (treble < 1) s.muffle(treble, 5000, 0);
+    s.tone({.wave = Wave::sine, .from_hz = hz, .duration_ms = 400, .hold_ms = 400});
+    render(s, 0.1);  // past the onset
+    return peak_of(render(s, 0.2));
+  };
+  const float high = held(12000, 0.25f) / held(12000, 1);
+  const float low = held(200, 0.25f) / held(200, 1);
+  CHECK_MSG(high > 0.2f && high < 0.4f, "12 kHz muffled to " + std::to_string(high));
+  CHECK_MSG(low > 0.97f && low < 1.03f, "200 Hz muffled to " + std::to_string(low));
+  Synth back, dry;
+  back.muffle(0.25f, 5000, 0);
+  render(back, 0.05);
+  back.muffle(1, 5000, 0);
+  render(back, 0.05);
+  render(dry, 0.1);
+  back.tone({.wave = Wave::sine, .from_hz = 12000, .duration_ms = 100});
+  dry.tone({.wave = Wave::sine, .from_hz = 12000, .duration_ms = 100});
+  CHECK(peak_of(render(back, 0.2)) == peak_of(render(dry, 0.2)));  // the dry mix's own bits
+}
+
+TEST(swap_stereo_trades_the_channels) {
+  // A tone panned hard left comes out on the right while swapped, and on the left again after.
+  const auto sides = [](Synth& s) {
+    s.tone({.wave = Wave::sine, .from_hz = 440, .duration_ms = 100, .pan = -1});
+    const std::vector<float> v = render(s, 0.1);
+    float l = 0, r = 0;
+    for (size_t i = 0; i + 1 < v.size(); i += 2) {
+      l = std::max(l, std::abs(v[i]));
+      r = std::max(r, std::abs(v[i + 1]));
+    }
+    return std::pair{l, r};
+  };
+  Synth s;
+  s.swap_stereo(true);
+  const auto [l1, r1] = sides(s);
+  CHECK(r1 > 0.05f && l1 < r1 * 0.01f);
+  s.swap_stereo(false);
+  const auto [l2, r2] = sides(s);
+  CHECK(l2 > 0.05f && r2 < l2 * 0.01f);
+}
+
+TEST(two_ears_hear_a_click_to_the_right_later_and_softer_on_the_left) {
+  // A click at 48 kHz: one frame at 1, then silence.
+  static const Pcm click = [] {
+    Pcm p;
+    p.rate = kRate;
+    p.samples.assign(400, 0.0f);
+    p.samples[0] = 1;
+    return p;
+  }();
+  const auto first_and_peak = [](const std::vector<float>& v, size_t side) {
+    size_t first = v.size();
+    float peak = 0;
+    for (size_t i = side; i < v.size(); i += 2) {
+      const float a = std::abs(v[i]);
+      if (a > 1e-4f && first == v.size()) first = i / 2;
+      peak = std::max(peak, a);
+    }
+    return std::pair{first, peak};
+  };
+  Synth ears;
+  ears.binaural(true);
+  ears.sample(click, {.gain = 0.5f, .pan = 1});
+  const std::vector<float> v = render(ears, 0.02);
+  const auto [right_at, right_peak] = first_and_peak(v, 1);
+  const auto [left_at, left_peak] = first_and_peak(v, 0);
+  CHECK_MSG(left_at >= right_at + 30 && left_at <= right_at + 33,
+            "the far ear " + std::to_string(left_at - right_at) + " frames late, not about 32");
+  CHECK(left_peak > 0 && left_peak < right_peak * 0.5f);  // quieter and duller
+  // Centred, the two ears hear what the level pan does, to the bit.
+  Synth plain, centred;
+  centred.binaural(true);
+  plain.sample(saw_recording(), {.gain = 0.2f});
+  centred.sample(saw_recording(), {.gain = 0.2f});
+  CHECK(render(plain, 0.1) == render(centred, 0.1));
+  float delay = 0, gain = 0, coeff = 0;
+  ge::audio::far_ear(-1, delay, gain, coeff);
+  CHECK(delay == ge::audio::kItdFrames && gain == 1 - ge::audio::kFarShade);
+  ge::audio::far_ear(0, delay, gain, coeff);
+  CHECK(delay == 0 && gain == 1 && coeff == 1);
 }
 
 TEST(the_echo_answers_after_its_delay) {

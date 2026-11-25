@@ -5,6 +5,9 @@
 // ge:test tests/shooters_edge_view_test.cpp
 #include "shooters_edge/view/hand.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+#include <string>
 #include <string_view>
 
 #include "core/math.hpp"
@@ -16,6 +19,31 @@ namespace con = ge::console;
 // A frame stepped on by a shot is held this many of the clip's frame times waiting for the next
 // shot before the weapon goes back to rest (the classic weapon falls back a frame after the last).
 constexpr double kShotFrameHold = 1.5;
+
+void add_gun_commands(con::Console& con, ViewSettings& out,
+                      std::span<const std::string_view> held) {
+  con.add_command("gun_next", "gun_next: the held weapon's next frame shown (a developer's look)",
+                  [&out](con::Console& c, const con::Args&) {
+                    out.gun_frame++;
+                    c.print("frame " + std::to_string(out.gun_frame));
+                  });
+  con.add_command("gun_prev",
+                  "gun_prev: the held weapon's frame before shown; at 0 the game's own again",
+                  [&out](con::Console& c, const con::Args&) {
+                    out.gun_frame = std::max(0, out.gun_frame - 1);
+                    c.print("frame " + std::to_string(out.gun_frame));
+                  });
+  con.add_command("gun_model",
+                  "gun_model <name>: the weapon models/<name>/tris.md2 shown in hand; no name: "
+                  "the game's own again",
+                  [&out, held](con::Console&, const con::Args& a) {
+                    out.gun_model = -1;
+                    if (a.size() != 2) return;
+                    const std::string path = "models/" + a[1] + "/tris.md2";
+                    for (size_t i = 0; i < held.size(); i++)
+                      if (held[i] == path) out.gun_model = static_cast<int>(i);
+                  });
+}
 
 void add_view_cvars(con::Cvars& c, ViewSettings& out) {
   con::CvarLayer shell(c, "shell");  // the shell's own (client/cvar_layers.hpp's layers)
@@ -29,16 +57,19 @@ void add_view_cvars(con::Cvars& c, ViewSettings& out) {
   c.bind({.name = "r_viewmodel_fov",
           .fallback = "0",
           .flags = con::kArchive,
-          .help = "The held weapon's own lens, in degrees vertical.",
+          .help = "The held weapon's own lens, in degrees vertical; when set it wins over a "
+                  "game's own (Quake II's cl_gunfov).",
           .kind = con::CvarKind::number,
           .min = 0,
           .max = 150,
           .values = "0: the view's (the default); 1..150: that many degrees"},
          &out.fov_deg);
   const std::string_view names[3] = {"cl_gunx", "cl_guny", "cl_gunz"};
-  const std::string_view helps[3] = {"How far the held weapon is moved right, in metres.",
-                                     "How far the held weapon is moved up, in metres.",
-                                     "How far the held weapon is moved forward, in metres."};
+  // A game's own offset in its units (r_viewmodeloffset, cl_gun_x/y/z) adds to these.
+  const std::string_view helps[3] = {
+      "How far the held weapon is moved right, in metres; a game's own offset adds to it.",
+      "How far the held weapon is moved up, in metres; a game's own offset adds to it.",
+      "How far the held weapon is moved forward, in metres; a game's own offset adds to it."};
   const std::string_view values[3] = {"-0.5..0.5: that far, negative to the left (0 the default)",
                                       "-0.5..0.5: that far, negative down (0 the default)",
                                       "-0.5..0.5: that far, negative back (0 the default)"};
@@ -141,6 +172,48 @@ void breathe(vm::PlaceRow& r, const vm::PlaceRow& base, const ViewSettings& s) {
 
 }  // namespace
 
+int gun_side(const ViewSettings& s) {
+  switch (s.gun) {
+    case 1:
+      return s.hand == 1 ? -1 : s.hand == 2 ? 0 : 1;
+    case 2:
+      return 1;
+    case 3:
+      return -1;
+    default:
+      return 0;  // 0 and -1: none
+  }
+}
+
+void game_offset_m(const ViewSettings& s, double out[3]) {
+  double text[3] = {0, 0, 0};
+  const char* at = s.offset_text.c_str();
+  for (double& v : text) {
+    char* end = nullptr;
+    v = std::strtod(at, &end);
+    if (end == at) break;  // no number left: the rest stay 0
+    at = end;
+  }
+  out[0] = (text[0] + s.gun_units[0]) * s.unit_m;
+  out[1] = (-text[1] + s.gun_units[2]) * s.unit_m;
+  out[2] = (text[2] + s.gun_units[1]) * s.unit_m;
+}
+
+namespace {
+
+// The games' own settings over a row: the offset they add, the depth, and Quake II's lens when
+// ours is unset.
+void game_settings(vm::PlaceRow& r, const ViewSettings& s) {
+  double add[3];
+  game_offset_m(s, add);
+  for (int k = 0; k < 3; ++k) r.offset_m[k] += add[k];
+  r.depth = 0.5 + std::clamp(s.size, 0.0, 1.0) / 2;
+  if (s.fov_deg <= 0 && s.gun_fov_h > 0)
+    r.fov_y = ge::camera::fov_y_of(std::max(s.gun_fov_h, 30.0) * ge::core::kPi / 180, 4.0 / 3.0);
+}
+
+}  // namespace
+
 vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::PlaceRow& base) {
   vm::PlaceRow r = base;
   for (int k = 0; k < 3; ++k) r.offset_m[k] = look.offset_m[k] + s.gun_m[k];
@@ -154,6 +227,7 @@ vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::P
   r.sway_shift = base.sway_shift * s.sway;
   r.bob_side = base.bob_side * s.sway;
   breathe(r, base, s);
+  game_settings(r, s);
   return r;
 }
 
@@ -168,6 +242,7 @@ vm::PlaceRow eye_row(const ViewSettings& s) {
   r.sway_shift = base.sway_shift * s.sway;
   r.bob_side = base.bob_side * s.sway;
   breathe(r, base, s);
+  game_settings(r, s);
   return r;
 }
 
@@ -216,8 +291,9 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   }
 
   const WeaponLook& look =
-      in.sequel ? sequel_weapon_look(static_cast<int>(hand.held)) : weapon_look(hand.held);
+      in.q2 ? q2_weapon_look(static_cast<int>(hand.held)) : weapon_look(hand.held);
   vm::PlaceRow row = hand.at_eye ? eye_row(s) : held_row(look, s);
+  if (in.game_sway) row.sway_max = row.sway_shift = row.bob_side = 0;  // the game's sway alone
   const bool down = hand.held != hand.wanted || in.dead;
   if (in.dead)
     row.switch_s = kDeathLowerS;  // the death's slower sink
@@ -228,6 +304,9 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
                    (hand.rushed ? ge::core::num::max(s.switch_fire, 1.0) : 1.0);
   if (row.switch_s <= 0) hand.place.lowered = down ? 1.0 : 0.0;  // at once: no frame between
   vm::PlaceInput pin = in.place;
+  // The stride's bob moves a weapon authored at the eye (the classic push forward); the built
+  // set's own row keeps its grip still until its bob is tuned against the stride.
+  if (!hand.at_eye) pin.bob_m = 0;
   pin.lowered = down ? 1.0 : 0.0;
   pin.shot = in.fired ? look.kick : 0.0;
   HandFrame f;
@@ -237,7 +316,10 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   f.switching = hand.held != hand.wanted || hand.place.lowered > 0;
   f.rushed = hand.rushed;
   f.lowered = hand.place.lowered;
-  f.drawn = s.draw && s.hand != 2 && hand.place.lowered < 1.0;
+  const int side = gun_side(s);
+  f.placement.mirror = side < 0;
+  f.drawn = s.draw && side != 0 && hand.place.lowered < 1.0;
+  f.opacity = static_cast<float>(std::clamp(s.alpha, 0.0, 1.0));  // cl_gunalpha
   f.hands = s.hands;
   f.fired = in.fired;
 
@@ -251,14 +333,25 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     const vm::HeldClip* c = clip >= 0 ? &m.clips[static_cast<size_t>(clip)] : nullptr;
     if (c != nullptr && c->frame_a_shot && c->count > 0) {
       if (in.fired) {
+        // Drawn from the frame the last shot turned to, or from where it settles back to rest
+        // (the rest frame itself once settled).
+        hand.shot_from = hand.fire_t >= 0 && hand.shot_frame >= 0 ? c->first + hand.shot_frame
+                         : hand.settle_t >= 0                     ? hand.settle_from
+                                                                  : 0;
         hand.settle_t = -1;
         hand.shot_frame = (hand.shot_frame + 1) % c->count;
         hand.fire_t = 0;
         hand.barrel = vm::barrel_of_frame(m, c->first + hand.shot_frame);
       }
       if (hand.fire_t >= 0 && hand.shot_frame >= 0) {
-        f.frame_a = f.frame_b =
-            c->first + hand.shot_frame;  // held: the shot's barrel is this frame's
+        // The shot's frame (its barrel fires), turned to from the last over a frame's time, then
+        // held; shown at once without the blend.
+        f.frame_a = f.frame_b = c->first + hand.shot_frame;
+        const double turned = hand.fire_t * c->fps;
+        if (s.lerp && turned < 1 && hand.shot_from != f.frame_b) {
+          f.frame_a = hand.shot_from;
+          f.frame_t = turned;
+        }
         hand.fire_t += dt;
         if (hand.fire_t * c->fps > kShotFrameHold) {
           hand.settle_from = c->first + hand.shot_frame;
@@ -306,6 +399,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     float tip[3];
     vm::muzzle_at(m, 0, 0, 0, tip, hand.barrel);
     vm::held_to_world(f.placement, row.fov_y, view, tip, f.flash.position);
+    if (f.placement.mirror) vm::mirror_world_point(view, f.flash.position);
     for (int k = 0; k < 3; ++k) f.flash.colour[k] = look.flash_rgb[k];
     f.flash.intensity = static_cast<float>(
         look.flash_intensity * ge::core::clamp(hand.flash_left / look.flash_s, 0.0, 1.0));
@@ -321,6 +415,12 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
                         hand.barrel);
     f.arc = vm::arc_to_world(models[static_cast<size_t>(hand.held)], f.frame_a, f.frame_b,
                              f.frame_t, f.placement, row.fov_y, view, f.arc_from, f.arc_to);
+    // A gun drawn on the left fires from where it is seen.
+    if (f.placement.mirror) {
+      for (double* p : {f.muzzle_at, f.arc_from, f.arc_to}) vm::mirror_world_point(view, p);
+      vm::mirror_world_dir(view, f.muzzle_dir);
+      vm::mirror_world_dir(view, f.muzzle_up);
+    }
   }
   return f;
 }

@@ -1,7 +1,7 @@
 ---
 title: Ask a game for its broadcast frame once a frame, and start a match's recording a frame late
 date: 2026-11-15
-scope: engine/server/record.cpp, engine/server/autorecord.cpp, games/shooters_edge/net/classic_game_tv.cpp
+scope: engine/server/record.cpp, engine/server/autorecord.cpp, games/shooters_edge/net/qw_game_tv.cpp
 concepts: [tv-frame, server-record, autorecord, phase-events, keyframe, map-restart]
 ---
 

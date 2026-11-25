@@ -15,9 +15,16 @@
 // THE PORTRAIT has five health bands (0 near death .. 4 healthy), each calm and wincing, and four
 // powered faces.
 //
+// A MISSION PACK'S PICTURES: a pack's graphics archive replaces the base game's whole and adds its
+// own pictures by name; the classic set loads them when every one of a pack's set is there, and
+// `pack` says which set came (any pack or mod whose archive carries the same names gets the same
+// status bar). With it the classic bar reads the status's items word (status.hpp) as that pack's
+// program fills it.
+//
 // ge:summary Shooter's Edge's HUD pictures by what they show, and the free set painted in code
 // ge:keywords hud art pictures icons free-art portrait face digits status-bar inventory-bar
 // ge:keywords weapons ammo armour keys powerups runes crosshair density glyph-sheet
+// ge:keywords mission-pack scourge-of-armagon dissolution-of-eternity pack-pictures team-border
 // ge:skill ui
 // ge:test tests/shooters_edge_hud_test.cpp
 #pragma once
@@ -35,6 +42,19 @@ namespace shooters_edge::hud {
 
 inline constexpr int kFaceBands = 5;
 inline constexpr int kFlashFrames = 5;  // a picked-up weapon's flash, 10 frames a second
+
+// Which mission pack's pictures a set carries (`HudArt::pack`).
+enum class Pack : uint8_t { none, armagon, eternity };
+
+// A gun's three looks: as held, lit in hand, and the pickup's flash frames.
+struct GunPictures {
+  ge::ui::Image plain, lit;
+  std::array<ge::ui::Image, kFlashFrames> flash;
+};
+
+// Scourge of Armagon's guns on the inventory bar, by `ArmagonGun`.
+enum class ArmagonGun : uint8_t { laser, hammer, launcher_and_prox, prox_and_launcher, prox };
+inline constexpr int kArmagonGuns = 5;
 
 struct HudArt {
   float density = 1;  // picture pixels per art pixel
@@ -55,6 +75,18 @@ struct HudArt {
   std::array<ge::ui::Image, 4> rune;
   std::array<ge::ui::Image, 11> digit, digit_low;  // 0..9 and the minus; low: the alarm colour
   ge::ui::Image crosshair;
+  ge::ui::Image turtle, net;  // the slow-frame and the silent-server icons; empty: none drawn
+
+  // A mission pack's own pictures (above); `pack` none: none loaded.
+  Pack pack = Pack::none;
+  std::array<GunPictures, kArmagonGuns> armagon_gun;  // by ArmagonGun
+  std::array<ge::ui::Image, 2> armagon_item;          // the wetsuit, the empathy shields
+  std::array<ge::ui::Image, 2> eternity_bar;   // the inventory bar: a pack gun in hand, a base one
+  std::array<ge::ui::Image, 5> eternity_gun;   // lava nailgun, lava super nailgun, multi grenade
+                                               // launcher, multi rocket launcher, plasma gun
+  std::array<ge::ui::Image, 3> eternity_ammo;  // lava nails, plasma, multi rockets
+  std::array<ge::ui::Image, 2> eternity_item;  // the power shield, the anti-grav belt
+  ge::ui::Image team_border;                   // the frame the team colours fill
   // The classic palette's 256 colours (768 bytes) when the set came from the packs; empty for the
   // free set (crosshair.hpp's colours by index).
   std::vector<uint8_t> palette;
@@ -68,6 +100,7 @@ struct HudArt {
   // Filled by `finish` from the pictures above; the layouts point at them.
   ge::hud::DigitSheet sheet;
   ge::hud::Face count_face;
+  ge::hud::Face plain_face;  // the sheet's white figures (the team border's frags)
 
   // Points `sheet` and `count_face` at this set's pictures: call once the pictures are in, and
   // again after the set is moved.

@@ -174,11 +174,11 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
     }
     Frame fe = f;
     fe.scale = (parent ? parent->drawn_scale : f.scale) * static_cast<float>(e.place.scale);
-    const float dx =
+    float dx =
         (flipped ? -1.0f : 1.0f) * (parent ? static_cast<float>(e.place.x) * parent->drawn_unit
                                            : static_cast<float>(e.place.x) * f.safe.w);
-    const float dy = parent ? static_cast<float>(e.place.y) * parent->drawn_unit
-                            : static_cast<float>(e.place.y) * f.safe.h;
+    float dy = parent ? static_cast<float>(e.place.y) * parent->drawn_unit
+                      : static_cast<float>(e.place.y) * f.safe.h;
     // The picture kinds' unit: screen px per picture pixel, fitted and snapped.
     float u = fe.scale * e.spec.unit;
     if (picture_kind(e.spec.kind)) {
@@ -187,6 +187,8 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
         u = e.spec.fit * f.safe.w / n.w;
       if (e.spec.snap && u >= 1) u = static_cast<float>(static_cast<int>(u));
       fe.scale = u / e.spec.unit;
+      dx += c.shift_x * u;  // the player's own nudge, in art pixels
+      dy += c.shift_y * u;
     }
     const ui::Align align = align_of(a);
     const size_t mark = dl.size();

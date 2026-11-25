@@ -13,12 +13,12 @@
 //   crumbling from his back to his face as the ash the wind takes is thrown off where the cut
 //   passes (app/effects.hpp's dust); one arriving (a spawn, a respawn, a teleport's far end) is
 //   blown in as ash from ahead of him, each flake on a way of its own landing on his skin as it
-//   appears there (FxState::models), whole after kArriveS. The local player's own arrival blows
-//   the ash past his eyes (never through them) and assembles the weapon in his hands
-//   (`held_shown`). That is the enhanced warp (`FxSwitches::warps`: ce_warps in the modern
-//   look); off, the original: the figure there or gone at once and the teleport's fog at each end
-//   (in a campaign the program's own; with the dust on, the program's fog at a player's warp is
-//   left out).
+//   appears there (FxState::models), whole after kArriveS. The local player's own arrival throws
+//   no ash and keeps the weapon whole (`held_shown` 1); only his view's edges are touched
+//   (`arrival_s`, r_arrival). That is the enhanced warp (`FxSwitches::warps`: ce_warps in the
+//   modern look); off, the original: the figure there or gone at once and the teleport's fog at
+//   each end (in a campaign the program's own; with the dust on, the program's fog at a player's
+//   warp is left out).
 // - THE SCREEN'S BLEND: the liquid round the eye (the player's `waterlevel` and `watertype`), and
 //   a hit's flash, fading: in a campaign off the blows the program reported (Listen::blows: the
 //   blood red, what the armour took a duller amber), in a match off the health lost.
@@ -61,6 +61,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -69,25 +70,34 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
+#include "classic/q2_fx_switches.hpp"
+#include "core/prng.hpp"
 #include "detail/decals.hpp"
 #include "particles/effect.hpp"
 #include "render/beam.hpp"
 #include "render/beams.hpp"
 #include "render/explosions.hpp"
 #include "render/haze.hpp"
+#include "render/mark_fire.hpp"
 #include "render/marks.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
+#include "shooters_edge/client/chain.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/model_lerp.hpp"
+#include "shooters_edge/client/own_beam.hpp"
+#include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/q2_model_fx.hpp"
+#include "shooters_edge/client/shells.hpp"
 #include "shooters_edge/client/warps.hpp"
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/view/hand.hpp"
@@ -110,12 +120,26 @@ struct FxSwitches {
   // ce_blood: a body hit sprays blood by the weapon (app/weapon_fx.hpp's `blood_spray`) and paints
   // the walls and floor near (`splatter`); off, the classic specks.
   bool blood = false;
+  // ce_blood_time: how long its marks stay, s (< 0: until their place is needed).
+  double blood_life_s = 120;
+  // ce_blood_amount: how much a body bleeds, 1 as drawn (0: none).
+  double blood_amount = 1;
+  // ce_respawns: an item about to come back drawn as a blue hologram filling in to solid
+  // (classicenhance/hologram.hpp); off, it appears at once.
+  bool respawns = false;
+  // ce_shells: the guns throw out their spent cases (shells.hpp); off, none.
+  bool shells = false;
   bool gibs_hidden = false;  // cl_gibfilter (either look): the pieces hidden lay no blood trail
   // cl_muzzleflash (either look): 1 every gun's flash lights the room, 2 the others' alone (the own
   // is the hand's: main.cpp), 0 none, a monster's neither.
   int muzzle_flash = 1;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
+  // cl_fakeshaft (either look): the own lightning beam turned this share of the way from the
+  // server's line to the view's, traced again every frame (`own_beam`); 0 the server's line.
+  double fake_shaft = 0;
+  // Quake II's own (either look): specks, explosions' balls, lights and guns' fire left out.
+  ge::classic::Q2FxSwitches q2;
 };
 // The switches `picture` asks for: each ce_ switch, in the modern look only.
 // The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
@@ -128,17 +152,58 @@ struct HeldBeam {
   ge::render::BeamShot shot;   // engine metres
   sh::Vec3f map_from, map_to;  // map units (the classic bolt's segments)
   EffectModel model = EffectModel::bolt2;
+  int listed = -1;  // the model list's own instead (the grappling beam's progs/beam.mdl), or -1
   ge::render::BurnTrail trail;  // where its burnt line ends on the wall it lands on
   // Its melt (render/beam.hpp's BeamBurn::melt) and the marks' slot it was pressed in last.
   uint32_t melt = 0;
   int melt_slot = -1;
   uint32_t melt_serial = 0;
   bool across = false;  // the arc across the player's gun's prongs (fx::prong_arc_look)
-  bool rail = false;    // the sequel's rail (fx::rail_look): fired once, then fading
+  bool rail = false;    // Quake II's rail (fx::rail_look): fired once, then fading
   bool coil = false;    // with `rail`: the line circling it (fx::rail_coil_look)
   bool plasma = false;  // a bolt's streak (fx::plasma_look), riding it while it flies
+  // Quake II's `cl_railtrail_type` beam (fx::q2_rail_trail_look), drawn in either look: its width
+  // or (the spiral) its radius off the axis, m; its colour; its fade, s.
+  bool q2_trail = false;
+  float trail_m = 0, trail_radius_m = 0, trail_rgb[3] = {1, 0, 0}, trail_fade_s = 1;
+  // A laser (Quake II's beam entity): drawn in either look, its width and this frame's colour
+  // (one of its four palette shades, picked again every frame) set in `laser_m` and `laser_rgb`.
+  bool laser = false;
+  float laser_m = 0;
+  float laser_rgb[3] = {1, 0, 0};
   double seen = 0;
+  // The line the server sent last (map units), the player's own beam turned from it each frame
+  // (`own_beam`); the grappling beam (never turned); the server's sparks owed at the turned end.
+  sh::Vec3f server_from{0, 0, 0}, server_to{0, 0, 0};
+  bool grapple = false;
+  bool sparks_due = false;
+  // The way it pointed last (map, from its root), and the edge it crossed since (own_beam.hpp's
+  // `beam_edge`): the last point on the face it left and the first on the next, engine metres,
+  // burnt before this frame's end so its line goes round the corner unbroken.
+  sh::Vec3f was_dir{0, 0, 0};
+  bool was = false;
+  int edges = 0;
+  double edge_at[2][3] = {}, edge_n[2][3] = {};
 };
+
+// A chain's links placed (client/chain.hpp): the links from `from` to `to` (map units) into `out`,
+// numbered down from `entity`.
+void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge::core::Rng& roll,
+                 int& entity, std::vector<Placed>& out);
+// The own beam turned to the aim each frame: client/own_beam.hpp (cl_fakeshaft).
+
+// A beam entity the rules show this frame (Quake II's beam render bit: a laser): from its origin
+// to its far end in map units, its width in units and four palette indices, low byte first.
+struct SceneBeam {
+  int entity = 0;
+  sh::Vec3f from, to;
+  int width = 4;
+  uint32_t colours = 0;
+};
+// The beam rows the rules show (world_lasers.cpp), and each drawn as a held beam this frame.
+void scene_lasers(const Listen& l, std::vector<SceneBeam>& out);
+void laser_beams(const std::vector<SceneBeam>& beams, uint32_t seed,
+                 const std::vector<uint8_t>& palette, double t, std::vector<HeldBeam>& out);
 
 // THE MARKS (ce_decals, the modern look): engine/detail's decals pressed onto the map's own faces
 // (the world model's, sky and liquids left out, made into receivers once a map): a blast's scorch
@@ -166,7 +231,23 @@ struct Wound {
   float a = 0, b = 0;  // its place on it (barycentric, from its first corner)
   uint32_t seed = 0;   // its splatter
   float size = 1;      // the splatter's spread: a burst of drops, a share more
-};  // boxes: the hole about half
+  // Its blood on the skin (ce_blood, render/morph.hpp's MorphWound): where it sits in the body's
+  // rest frame (body_rest), the soaked patch's radius and how far its blood runs down at most (m),
+  // when it was struck, and whether it is where a round came out (bigger, more blood).
+  float rest[3] = {0, 0, 0};
+  bool has_rest = false;
+  float stain = 0.06f, run = 0.3f;
+  double born = 0;
+  bool exit = false;
+};
+// How a blow wounds (`wound`): through the body (a nail: an exit wound where it came out), and
+// its wounds' soaked patch and run (m).
+struct WoundCut {
+  bool through = false;
+  float stain = 0.06f, run = 0.3f;
+};
+inline constexpr double kExitMinM =
+    0.08;  // a line through less body than this has no way out  // boxes: the hole about half
 // The faces the marks are pressed onto: the mesh and its receivers (which point into it), kept
 // together.
 struct MarkFaces {
@@ -184,6 +265,9 @@ struct LitGlow {
 
 struct FxState {
   FxSwitches on;  // set by the caller each frame
+  // The map's place points (`loc_draw` stands a marker at each within reach of where the player
+  // is, place_names.hpp); null: none. Set by the caller.
+  const PlaceNames* places = nullptr;
   // The effects the game's files define (`particles/*.fx`, load_effects); null or without the
   // name: the game's own. Set by the caller.
   const ge::particles::Book* book = nullptr;
@@ -196,7 +280,11 @@ struct FxState {
   const ge::brush::Map* marked = nullptr;
   std::shared_ptr<const MarkFaces> receivers;
   ge::detail::DecalPool marks;
-  std::vector<std::array<float, 3>> mark_light;    // each slot's light, whites, as it was pressed
+  ge::detail::ReceiverScratch receiver_scratch;  // the receivers' queries' (the cases' flight)
+  Cases cases;                                   // the guns' spent cases (ce_shells, shells.hpp)
+  std::vector<std::array<float, 3>> mark_light;  // each slot's light, whites, as it was pressed
+  ge::render::MarkFire
+      mark_fire;  // the hot marks' flames and smoke as they cool (render/mark_fire.hpp)
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
   std::vector<ge::render::HazeTrail> haze;         // the flights' hot air still warm, oldest first
@@ -224,8 +312,41 @@ struct FxState {
     ge::camera::Vec3 at;
     int modelindex = 0;
     double carry = 0;
+    int count = effects::kSqTrailStart;  // Quake II's piece: its thinning trail's count
   };
   std::unordered_map<int, Bleeding> bleeding, bleeding_next;
+  // Quake II's thinning trails on its rockets and grenades (effects::q2_trail), by entity; and
+  // when the flies round each corpse began their cycle (the picture's clock, s).
+  std::unordered_map<int, int> q2_trails;
+  std::unordered_map<int, double> flies_from;
+  // Quake II's widow beam-outs growing: each one's id, its centre (engine m) and when it began.
+  struct BeamOut {
+    int id = 0;
+    double at[3] = {0, 0, 0};
+    double born = 0;
+  };
+  std::vector<BeamOut> beam_outs;
+  // QUAKE II'S MODEL EFFECTS in the classic look (q2_model_fx.hpp): the explosions' balls, the
+  // bolts' flares, the bullets' smoke and flashes, the BFG's bursts, at most kQ2ModelFx (the
+  // oldest taken by a new one); its cables (a monster's drain or line, the grapple) by their
+  // source, each until `until` (the picture's clock); the BFG's lasers until theirs.
+  static constexpr size_t kQ2ModelFx = 256;
+  std::vector<Q2ModelFx> q2_models;
+  size_t q2_models_next = 0;
+  struct Q2Cable {
+    int entity = 0;
+    sh::Vec3f from, to;  // map units
+    sh::Vec3f offset;    // the grapple's start off its holder (the player's own drawn origin)
+    bool ctf = false;    // the grapple's segment, else a monster's
+    double until = 0;
+  };
+  std::vector<Q2Cable> q2_cables;
+  struct Q2Laser {
+    sh::Vec3f from, to;
+    float rgb[3] = {0, 1, 0};
+    double born = 0;
+  };
+  std::vector<Q2Laser> q2_lasers;
   // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
   // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
   // its classic trail's side; those gone this frame (where their spit lands); the splashes whose
@@ -247,7 +368,7 @@ struct FxState {
   std::vector<MonsterSplash> monster_splashes;
   // A monster's gun's flash (its muzzle-flash effect bit): when each began, by entity.
   std::unordered_map<int, double> monster_fired;
-  // The sequel's monsters' shots leaving (`te_monster_flash.<kind>`), their light and fire held
+  // Quake II's monsters' shots leaving (`te_monster_flash.<kind>`), their light and fire held
   // while they last.
   struct MonsterFlash {
     double at[3], dir[3];  // the shooter's eye and aim; the fire is drawn at its gun's tip
@@ -261,14 +382,31 @@ struct FxState {
   std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
   std::vector<Wound> wounds;
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago
-  std::size_t explosions_seen = 0;              // of Listen::explosions
-  std::vector<Blast> lit;                       // the explosions whose light still fades
-  std::vector<Blast> sparked;                   // a nail's sparks off metal, their flick fading
-  double hurt = 0;                              // the hit's flash now (effects::Screen::hurt)
-  double armour = 0;                            // the armour's share of it (Screen::armour)
-  std::size_t blows_seen = 0;                   // of Listen::blows
-  std::size_t effects_seen = 0;                 // of Listen::effects
-  float health = 0;                             // the last frame's
+  // THE BODY'S BLEEDING (ce_blood, body_blood): drops let fall from fresh wounds, each where it
+  // lands on the floor and when (a drop on the floor when it gets there); and each body that
+  // stepped in wet blood, the prints it has left to make and where it made the last.
+  struct Dropping {
+    ge::detail::Vec3 at{0, 0, 0}, n{0, 1, 0};
+    double land_s = 0;
+  };
+  std::vector<Dropping> dropping;
+  struct Tread {
+    int left = 0;                // prints still to make
+    double from[3] = {0, 0, 0};  // the last print's place (or the pool's edge), world m
+    bool right = false;          // the next print's foot
+  };
+  std::unordered_map<int, Tread> treads;
+  std::size_t explosions_seen = 0;   // of Listen::explosions
+  std::vector<Blast> lit;            // the explosions whose light still fades
+  std::vector<Blast> sparked;        // a nail's sparks off metal, their flick fading
+  double hurt = 0;                   // the hit's flash now (effects::Screen::hurt)
+  double armour = 0;                 // the armour's share of it (Screen::armour)
+  std::size_t blows_seen = 0;        // of Listen::blows
+  double hurt_rgb[3] = {255, 0, 0};  // the classic damage tint's colour (Screen)
+  double bonus = 0;                  // the pickup's flash now (Screen::bonus)
+  int64_t bonuses_seen = 0;          // of FxScene::bonuses
+  std::size_t effects_seen = 0;      // of Listen::effects
+  float health = 0;                  // the last frame's
   uint32_t seed = 1;
   WarpWatch warps;                       // the players' arrivals and departures (warps.hpp)
   std::unordered_map<int, Placed> seen;  // each player as drawn last frame, by entity
@@ -287,9 +425,19 @@ struct FxState {
   std::vector<Warp> began;  // scratch: the warps that began this frame
 };
 
+// A fresh state with the map's place points (`loc_draw`'s markers) to read.
+inline FxState fx_state_for(const PlaceNames* places) {
+  FxState s;
+  s.places = places;
+  return s;
+}
+
 // One frame's effects for the world pass.
 struct FxFrame {
   effects::Particles births;
+  std::vector<uint8_t> areas;  // the areas the world draws (FxScene::areas); empty, all
+  // Each light style's pattern the world plays (FxScene::light_styles); "" steady.
+  std::array<std::string, kDemoLightStyles> light_styles;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
@@ -297,7 +445,15 @@ struct FxFrame {
   // What `blend` and `blend_dry` were made of, for a window that lets the player tone each layer
   // (look::Picture's v_ cvars, world_draw.cpp).
   effects::Screen screen, screen_dry;
+  // Quake II's: the rules' own tint (`rules_blend`), drawn as it is in place of `screen`'s: the
+  // whole of it in `blend`, and where the damage flash came apart (`damage`'s share above 0) the
+  // rest in `apart`, for a window that draws the flash as a frame round the view.
+  bool rules_blend = false;
+  double apart[4] = {0, 0, 0, 0}, damage[4] = {0, 0, 0, 0};
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
+  // The blood on each wounded body's skin this frame (ce_blood), by entity: its wounds' soaked
+  // patches and the runs down from them (render/morph.hpp's MorphBlood).
+  std::vector<std::pair<int, ge::render::MorphBlood>> bloodied;
   // The local player's own arrival (ce_warps): s into it (below 0: none), and the colour of its
   // flash, the pack's teleport fog's brightest (sRGB-encoded), for the post pass's warp of the
   // whole view (render/post.hpp's `arrival_warp`, at FxSwitches::arrival).
@@ -309,8 +465,13 @@ struct FxFrame {
   std::vector<ge::render::MuzzleFire> flames;
   // The arc guns' beams to draw this frame (ce_beams), their look app/weapon_fx.hpp's bolt.
   std::vector<HeldBeam> beams;
+  // The effects' own sounds this frame (the cases landing: shells.hpp), for the window's sounds.
+  std::vector<DemoSound> sounds;
   // The marks on the walls this frame (ce_decals), three vertices a triangle, for the beams' pass.
   std::vector<ge::render::BurnVertex> burns;
+  // The small flames burning on the hot marks this frame (ce_decals, render/mark_fire.hpp), for
+  // the flames' pass.
+  std::vector<ge::render::Flame> fires;
   // The hot air a nail's or a rocket's flight left (ce_trails), a stretch a frame, for the haze.
   std::vector<ge::render::HazeTrail> haze;
   // The local player as the world would place him (never drawn in his own eyes, still casting his
@@ -333,24 +494,51 @@ effects::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int 
 void warp_dust(const Warp& w, const effects::Dust& d, double was, double age, uint32_t seed,
                effects::Particles* out);
 
+// `name`'s place in a model list (index 0 is no model), or -1.
+inline int listed_model(std::span<const std::string> names, std::string_view name) {
+  for (size_t m = 1; m < names.size(); m++)
+    if (names[m] == name) return static_cast<int>(m);
+  return -1;
+}
+
 // WHAT THE EFFECTS READ, wherever the game comes from: the listen server (`fx_scene`, off the
 // server's state and the view), or a demo or a server joined (demo_fx.hpp, off what was sent).
 struct FxScene {
+  // Quake II's areas the eye sees, a bit each (a recording's frame, the listen server's open
+  // portals); empty, every area. Passed on in FxFrame::areas for the world's draw.
+  std::vector<uint8_t> areas;
+  // The level's light styles (demo.hpp's DemoState::light_styles, the rules' world): passed on in
+  // FxFrame::light_styles for the world's draw. Empty: every style steady.
+  std::span<const std::string> light_styles;
   const LoadedMap* map = nullptr;         // the map's faces (marks, floors, what a blast hit)
   const sh::Server* server = nullptr;     // the brush entities an explosion's floor is traced
                                           // through too (null: the map's world alone)
   ge::camera::Pose pose;                  // the eye this frame
   std::span<const Missile> missiles;      // in flight now
   std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
+  // Quake II's: each one's kind byte (q2_model_fx.hpp: its ball, light and specks; 0 not Quake
+  // II's), by index; shorter than `explosions` (or empty) where it is not known.
+  std::span<const uint8_t> explosion_codes;
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
+  int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)
+  double air_tint[4] = {130, 80, 50, 0};  // v_cshift: red, green, blue, strength (0..255)
   bool campaign = false;                  // a campaign's program (its own fog and blows)
-  bool flash_bit = true;  // the effects' bit 2 is a gun's flash (the sequel's means another thing)
-  bool sequel = false;    // the sequel's game: its own arrivals, never the warp's fog
+  bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
+  bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog
   int effect_models = 0;  // where the effects' own models start (EffectModel)
+  int beam_model = -1;    // the model list's `progs/beam.mdl` (the grappling beam's), -1 none
   std::vector<Placed> models;  // every entity to draw (not the local player)
-  ModelLerpClock clock;        // the listen server's clock for drawing places between its states
-  std::vector<Body> bodies;    // the players: entity, place, alive
+  float q2_blend[4] = {};      // Quake II's tint over the view, the rules' own
+  // The same without the damage flash and the flash alone, where the rules keep it apart (our
+  // server's, an extended recording's); all 0 where they do not, the flash in `q2_blend`.
+  float q2_apart[4] = {}, q2_damage[4] = {};
+  std::vector<SceneBeam> beams;  // the lasers on
+  // The items coming back soon, where they will lie (`place_returning`), each with the seconds
+  // left until it shows on the picture's clock.
+  std::vector<Returning> returning;
+  ModelLerpClock clock;      // the listen server's clock for drawing places between its states
+  std::vector<Body> bodies;  // the players: entity, place, alive
   std::function<Placed(int)> placed_of;  // a player as placed (empty Placed: not known)
   std::function<float(int)> health_of;   // an entity's health (a wound healed by a respawn)
   // The local player (`own` 0: none, as in a demo's free view).
@@ -358,6 +546,14 @@ struct FxScene {
   PlayerState me;
   int me_effects = 0;
   float waterlevel = 0, watertype = 0;
+  // The player's item bits (the items stat: the powers' tints) and a single-player program's
+  // (`campaign`) contents at the eye (0: not known; take the water level).
+  int me_items = 0;
+  int eye_contents = 0;
+  // A staged fight's blows (a lab): every blood message taken as `by` struck from `from` (map
+  // units), whatever the nails in flight and the aims say. `any`: worked out as a match's.
+  effects::BloodBy staged_by = effects::BloodBy::any;
+  sh::Vec3f staged_from{0, 0, 0};
 };
 
 // THE BLOOD (ce_blood; client/world_fx_blood.cpp): the blood message `e` at `p` (engine m) thrown
@@ -368,6 +564,55 @@ void bleed_fx(const FxScene& l, FxState& s, const Effect& e, const double p[3],
               const sh::Vec3f& eye_map, double floor_y, double t, FxFrame& out);
 // A blast at `boom` (map units): every living player within reach of it bleeds away from it.
 void blast_blood(const FxScene& l, FxState& s, const sh::Vec3f& boom, double t, FxFrame& out);
+// A wound where a round struck `at` (map units; `p` the same in the world) on the body nearest
+// it, along the line from `from`; a blow `cut` through it wounds it again where
+// the line comes out, into `exit_at` (world, m), and says so.
+bool wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, const double p[3],
+           const ge::camera::Vec3& from, int drops, double t, const WoundCut& cut = {},
+           double exit_at[3] = nullptr);
+// The blood on every wounded body's skin this frame (ce_blood) into `out.bloodied`, the drops its
+// fresh wounds let fall, and the prints of the bodies that stepped in wet blood.
+void body_blood(const FxScene& l, FxState& s, double t, double dt, FxFrame& out);
+// A body come back to life (a respawn) is whole: its wounds healed (world_fx_wounds.cpp, as the
+// two below and the three above).
+void heal_wounds(const FxScene& sc, FxState& s);
+// Every wound of a body drawn this frame on its skin as it stands (ce_decals) into `out`.
+void draw_wounds(FxState& s, const std::vector<Placed>& placed, const ge::camera::Vec3& eye,
+                 double t, double dt, effects::Particles& out);
+// Two unit ways square to `n` and to each other.
+void tangents(const double n[3], double a[3], double b[3]);
+// A drop let go at `at` (world m): thrown, and its mark on the floor when it gets there
+// (world_fx_blood.cpp, as the rest below).
+void let_drop(FxState& s, const double at[3], double t, FxFrame& out);
+// The drops that reached the floor by `t` run into the pool there, or make one.
+void land_drops(FxState& s, double t);
+// Each body of `placed` standing in a wet pool takes blood on its soles; walking on, it leaves
+// kPrints prints a stride apart, fainter each step.
+void tread_blood(const FxScene& l, FxState& s, std::span<const Placed> placed, double t);
+// QUAKE II'S OWN (client/world_fx_q2.cpp): a named `sq_*` effect `e` at `p` (engine m; `dust`:
+// a warp's dust already covers it), a trail `sq_bubbles`/`sq_force_wall` over `from`..`to` (false
+// for any other name), and a flying entity's effect-bit mark (`Q2Look::Missile`) and spinning
+// lights at `to` (`moved`: it has a stretch from `from`) at `t` s.
+void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, double t, FxFrame& out);
+bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
+                    FxFrame& out);
+// QUAKE II'S MODEL EFFECTS in the classic look (client/world_fx_q2.cpp, q2_model_fx.hpp): the
+// pool's effects of kind `code` at `at` off a face along `way` (map units); a blast of kind `code`
+// (its specks unless `no_specks`, its ball or burst and its light; false: not one of Quake II's
+// own, drawn as any game's); a monster's or the grapple's cable held for 0.2 s by its source (false
+// for any other effect); the BFG's laser; and each frame every live one placed as a model (the
+// cables' segments, `me` the player's own origin for his own) and lit, the lasers as strips.
+void q2_model_fx(FxState& s, int code, const sh::Vec3f& at, const sh::Vec3f& way, double t);
+bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[3], bool no_specks,
+                      double t, FxFrame& out);
+bool q2_cable(FxState& s, const Effect& e, double t);
+void q2_laser(FxState& s, const Effect& e, double t);
+void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int me_entity, double t,
+                      FxFrame& out);
+// The widow beam-outs still growing at `t`: a sphere of specks each frame (client/world_fx_q2.cpp).
+void q2_sustains(FxState& s, double t, FxFrame& out);
+void q2_mark_fx(FxState& s, const Missile& m, bool moved, const double from[3], const double to[3],
+                double t, FxFrame& out);
 // A decal pressed onto the marks' faces in the light where it lies; its slot, -1 when none took it.
 int press_mark(FxState& s, const ge::detail::DecalAt& d);
 // The floor under `at` (map units) seen from `from`, world y (m) (world_fx.cpp).
@@ -375,8 +620,8 @@ double map_floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f&
 
 // The listen server's scene this frame.
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out);
-// The palette the effects' specks take their colours from: the first game's gfx/palette.lmp, else
-// the sequel's (the one pics/colormap.pcx carries); empty when the files hold neither.
+// The palette the effects' specks take their colours from: Quake's gfx/palette.lmp, else
+// Quake II's (the one pics/colormap.pcx carries); empty when the files hold neither.
 void read_fx_palette(const SearchPath& files, std::vector<uint8_t>& out);
 // Every `particles/*.fx` the files hold read into `book` in the files' order (a mod's after the
 // game's, so its effect of a name wins). A file that does not read is left out, its fault in
@@ -402,6 +647,10 @@ void scripted_lights(FxState& s, double t, FxFrame& out);
 void glow_mark(FxState& s, const double at[3], const double n[3], const ge::render::GlowMark& m,
                double t);
 void step_fx(const FxScene& scene, FxState& s, double t, double dt, FxFrame& out);
+// The screen's tints this frame into `out.blend` and `out.blend_dry` (client/world_fx_screen.cpp):
+// the classic's for a single-player program's player, ours in a match; the powers by the items
+// stat.
+void step_screen(const FxScene& scene, FxState& s, double dt, FxFrame& out);
 // The same off the listen server, after frame_view brought `v` up to date.
 void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out);
 
@@ -409,6 +658,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
 struct HeldFire {
   std::vector<ge::render::MuzzleLook> looks;
   effects::MuzzleShots shots;
+  std::vector<const Ejection*> ejects;  // each weapon's spent cases (shells.hpp; null: none)
 };
 
 // Each built weapon's fire from its row (view/weapons.hpp) at kBuiltScale; or, when `at_eye`
@@ -421,5 +671,18 @@ bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string
 // `now_s`; `on` false (ce_muzzles 0): a shot throws nothing, its light alone. The player's own
 // beam (entity 1's) is rooted on the hand's muzzle.
 void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, FxFrame& out);
+
+// The guns' spent cases this frame (shells.hpp), from step_fx: the shooters' new shots, the pool
+// stepped, the cases placed in `out.models` and their landings in `out.sounds`.
+void step_cases(const FxScene& l, FxState& s, double t, double dt, FxFrame& out);
+// The hand's shot's cases (`on`: ce_shells), owed and thrown from its gun as it is at their moment.
+void held_cases(Cases& c, const HeldFire& f, const view::HandFrame& hand, bool on, double t);
+// The frame's effects' own sounds (the cases landing) moved into `into`, at most `most` there.
+void hear_fx(FxFrame& fx, std::vector<DemoSound>& into, std::size_t most = SIZE_MAX);
+// The window's own game's hand this frame: its lit flash (`lit`: cl_muzzleflash 1), its muzzle fire
+// (`fire_held`, ce_muzzles), its spent cases (`held_cases`, ce_shells) and their landings heard
+// (`hear_fx` into `heard`, at most `most` there).
+void hand_fx(FxState& s, HeldFire& f, const view::HandFrame& hand, bool lit, double now_s, double t,
+             FxFrame& fx, std::vector<DemoSound>& heard, std::size_t most);
 
 }  // namespace shooters_edge::client

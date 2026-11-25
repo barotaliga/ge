@@ -1,5 +1,5 @@
-// THE MENU IN THE CLASSIC LOOK: the main menu's model (main_menu.hpp) drawn the way the classic
-// game drew its menu, in the pack's own pictures (classic_art.hpp), on a 320 x 200 screen scaled
+// THE MENU IN THE CLASSIC LOOK: the main menu's model (main_menu.hpp) drawn the way
+// Quake drew its menu, in the pack's own pictures (classic_art.hpp), on a 320 x 200 screen scaled
 // by a whole number and centred (an enhanced set, `ClassicArt::density` above 1, drawn at the same
 // classic sizes from its finer pixels, filtered):
 //
@@ -12,7 +12,7 @@
 // - HELP as the pack's help pages, one at a time (left and right turn them), and QUIT as its
 //   question in the text box made of the box pieces.
 //
-// THE SEQUEL'S PLATES (`ClassicArt::plates`): its pictures are drawn on a 320 x 240 screen, the
+// QUAKE II'S PLATES (`ClassicArt::plates`): its pictures are drawn on a 320 x 240 screen, the
 // 320 x 200 one above sitting in its middle (classic y 0 is the taller screen's y 20), so every
 // page but the root keeps the layout above under the page's banner (275 x 32, centred at classic
 // y -16) in place of the plaque and the title. The root is its main menu: the plaque and the logo
@@ -42,10 +42,13 @@
 namespace shooters_edge::menu {
 
 struct ClassicLayout {
-  float scale = 1;                  // screen px a classic pixel
-  float x = 0, y = 0;               // the 320 x 200 screen's top left, px (classic 0, 0)
-  bool strip = false;               // the page is drawn as the pack's strip of rows
-  bool plates = false;              // the page is the sequel's root: a plate a row
+  float scale = 1;      // screen px a classic pixel
+  float x = 0, y = 0;   // the 320 x 200 screen's top left, px (classic 0, 0)
+  bool strip = false;   // the page is drawn as the pack's strip of rows
+  bool plates = false;  // the page is Quake II's root: a plate a row
+  // Where a row's label may start at the furthest left (classic px): right of the plaque when the
+  // page draws it, so a label never runs onto it; 0 with no plaque.
+  float label_left = 0;
   std::vector<ge::ui::Rect> items;  // index for index with the page's items; empty: not drawn
   // A strip page's rows, index for index with the items: the strip's band the row shows (its
   // place in the pack's picture), or -1 for a row the picture has no words for (DEMOS on the
@@ -137,20 +140,21 @@ struct ClassicPen {
 };
 
 // A strip row's word the pack's pictures have no words for (`demos`), cut from the letters of the
-// strips it was measured on (or, on the sequel's plates, a plate of its own built from theirs),
+// strips it was measured on (or, on Quake II's plates, a plate of its own built from theirs),
 // its top left at (x, y) classic px; false on other pictures (the caller writes it in big glyphs).
-// `lit`: cut from the lit plates (`_sel`) where the art has them. `carved_width` is its width in
-// classic px, 0 when it cannot be cut.
-bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false);
+// `lit`: cut from the lit plates (`_sel`) where the art has them; `tone`: its colour kept (all,
+// half, none). `carved_width` is its width in classic px, 0 when it cannot be cut.
+bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false,
+                Tone tone = Tone::full);
 float carved_width(const ClassicArt& art, std::string_view id);
 
 // The bare classic screen (no page) on a `width` x `height` screen: scaled and centred.
 ClassicLayout classic_screen(int width, int height);
-// The same for the art's own screen: the sequel's plates' 320 x 240 (above), else 320 x 200.
+// The same for the art's own screen: Quake II's plates' 320 x 240 (above), else 320 x 200.
 ClassicLayout classic_screen(const ClassicArt& art, int width, int height);
-// The sequel's banner for a page (`m_banner_options`), or empty.
+// Quake II's banner for a page (`m_banner_options`), or empty.
 std::string_view banner_of(std::string_view page);
-// A page's title written on a banner of the sequel's (plate_letters.hpp), centred on the 320 px
+// A page's title written on a banner of Quake II's (plate_letters.hpp), centred on the 320 px
 // screen with its top at classic y `y`: in capitals, or in small letters after each word's capital
 // when the capitals would not fit the screen; a character no tag has is left out. False when the
 // art has no tag letters or the title does not fit either way (the caller writes it in glyphs).
@@ -166,9 +170,18 @@ std::vector<std::string> classic_problems(const ge::ui::Menu& menu, const Classi
                                           int width, int height);
 
 // The page drawn over a darkened game: `t` the seconds the cursor turns by, `help_page` the help
-// picture shown.
+// picture shown. `live_figure`: the setup page's figure is drawn live over it (player_view.hpp),
+// so the pack's still figure is left out.
 void draw_classic(ge::ui::DrawList& list, const ge::ui::Menu& menu, const ClassicArt& art,
-                  const ClassicLayout& layout, double t, int help_page);
+                  const ClassicLayout& layout, double t, int help_page, bool live_figure = false);
+
+// THE SETUP PAGE'S FIGURE on the classic screen (screen px): its box under the rows, and the
+// colour swatches under the box (empty when the page has no colour rows: Quake II's).
+struct SetupFigureBox {
+  ge::ui::Rect figure, swatches;
+};
+SetupFigureBox setup_figure_box(const ge::ui::Page& page, const ClassicLayout& layout,
+                                const ClassicArt& art);
 
 // How many help pictures the art has (0: HELP is drawn as words).
 int help_pages(const ClassicArt& art);

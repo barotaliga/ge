@@ -1,7 +1,7 @@
-// LAB `se-talk`: who hears a player near him? The classic server (net/classic_server.hpp) plays
+// LAB `se-talk`: who hears a player near him? The classic server (net/qw_server.hpp) plays
 // the baseline mod on a map with one client on each deathmatch spot; the first is the talker. He
 // says a line with `say_near` and talks with his voice aimed at the players near
-// (`voicetarg near`: net/classic_talk.hpp), and each other client counts the lines he read and the
+// (`voicetarg near`: net/qw_talk.hpp), and each other client counts the lines he read and the
 // voice messages he was sent. The rule: within `--earshot` map units AND inside the hearing set of
 // the talker's place (no wall sound cannot pass). By default on the fixture halls (plugins/brush,
 // a map written in code, its one spot joined by places at set distances from it); `--basedir`
@@ -18,7 +18,7 @@
 // ge:keywords lab se-talk say_near voicetarg voice-near nearby proximity earshot hearing-set
 // ge:keywords top-view talk chat voice
 // ge:skill net shooter labs
-// ge:test tests/shooters_edge_classic_talk_test.cpp
+// ge:test tests/shooters_edge_qw_talk_test.cpp
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -35,12 +35,12 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "shooter/hull.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_server.hpp"
-#include "shooters_edge/net/classic_talk.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/net/qw_talk.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
@@ -49,6 +49,7 @@ namespace {
 namespace gl = ge::lab;
 namespace gn = ge::net;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
@@ -128,13 +129,13 @@ Talk run_talk(const std::vector<uint8_t>& bytes, const std::string& name, int ea
   cn::ServerConfig sc;
   sc.voice = true;
   sc.earshot = earshot;
-  cn::ClassicServer server;
-  if (!cn::classic_start(server, rules, st, sc, r.error)) return r;
+  cn::QwServer server;
+  if (!cn::qw_start(server, rules, st, sc, r.error)) return r;
   std::vector<std::unique_ptr<gn::Transport>> ts(static_cast<size_t>(n));
-  std::vector<std::unique_ptr<cn::ClassicClientEnd>> c(static_cast<size_t>(n));
+  std::vector<std::unique_ptr<cn::QwClientEnd>> c(static_cast<size_t>(n));
   for (int i = 0; i < n; i++) {
     ts[static_cast<size_t>(i)] = std::make_unique<gn::Transport>();
-    c[static_cast<size_t>(i)] = std::make_unique<cn::ClassicClientEnd>();
+    c[static_cast<size_t>(i)] = std::make_unique<cn::QwClientEnd>();
     gn::open_sim_transport(*ts[static_cast<size_t>(i)], net,
                            gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
     cn::ClientConfig cc;
@@ -167,7 +168,7 @@ Talk run_talk(const std::vector<uint8_t>& bytes, const std::string& name, int ea
     now += kTick;
     gn::sim_advance(net, now);
     pin();
-    cn::classic_frame(server, now);
+    cn::qw_frame(server, now);
     for (auto& e : c) cn::client_tick(*e, now);
   };
   for (int f = 0; f < 1500; f++) {
@@ -190,7 +191,7 @@ Talk run_talk(const std::vector<uint8_t>& bytes, const std::string& name, int ea
   for (int f = 0; f < 160; f++) frame();
   r.talker = spots[0];
   for (int i = 1; i < n; i++) {
-    const cn::ClassicClientEnd& e = *c[static_cast<size_t>(i)];
+    const cn::QwClientEnd& e = *c[static_cast<size_t>(i)];
     Listener l;
     l.name = e.cfg.name;
     l.at = spots[static_cast<size_t>(i)];
@@ -202,7 +203,7 @@ Talk run_talk(const std::vector<uint8_t>& bytes, const std::string& name, int ea
     l.heard = e.voice_heard[me] - before[static_cast<size_t>(i)];
     r.listeners.push_back(l);
   }
-  sh::map_world(map->spec.models[0], r.world);
+  sb::map_world(map->spec.models[0], r.world);
   const ge::brush::Model& w0 = map->bsp.map.models[0];
   r.lo = {w0.mins[0], w0.mins[1], w0.mins[2]};
   r.hi = {w0.maxs[0], w0.maxs[1], w0.maxs[2]};
@@ -289,8 +290,7 @@ void run(gl::Lab& lab) {
   }
   const Talk r = run_talk(bytes, name, earshot);
   if (!r.error.empty()) {
-    lab.fail("se-talk: " + r.error,
-             "next: run tests/shooters_edge_classic_talk_test.cpp. Skill: net.");
+    lab.fail("se-talk: " + r.error, "next: run tests/shooters_edge_qw_talk_test.cpp. Skill: net.");
     return;
   }
   gl::LabTable t{
@@ -314,8 +314,8 @@ void run(gl::Lab& lab) {
     lab.fail("se-talk: " + std::to_string(wrong) +
                  " listeners got what the earshot and the hearing set say they should not (or "
                  "missed what they should get)",
-             "Read talk_near in games/shooters_edge/net/classic_talk.cpp and run "
-             "tests/shooters_edge_classic_talk_test.cpp. Skill: net.");
+             "Read talk_near in games/shooters_edge/net/qw_talk.cpp and run "
+             "tests/shooters_edge_qw_talk_test.cpp. Skill: net.");
   lab.shot({"from-above",
             "WHO HEARS THE TALKER: " + name,
             "The map from above to scale. The talker (blue) stands on the first player spot and "
@@ -333,7 +333,7 @@ const gl::LabSpec kSpec{
     "se-talk",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_talk.hpp (say_near, voicetarg near: earshot and the hearing "
+    "games/shooters_edge/net/qw_talk.hpp (say_near, voicetarg near: earshot and the hearing "
     "set) on the classic server",
     "net",
     "Does a nearby line and a nearby voice reach exactly the players within earshot with no wall "

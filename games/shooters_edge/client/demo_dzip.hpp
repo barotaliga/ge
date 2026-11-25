@@ -1,4 +1,4 @@
-// DZIP ARCHIVES (`.dz`): the archive single-player demos of the classic game are shared in, read so
+// DZIP ARCHIVES (`.dz`): the archive single-player demos of Quake are shared in, read so
 // a downloaded `.dz` plays like the `.dem` inside it. The archive: a 12-byte header ("DZ", the
 // major and minor version, the directory's offset and its count), the directory's entries (where
 // each file's bytes are, their stored and original sizes, the name, the type, a checksum of the

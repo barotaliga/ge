@@ -30,17 +30,21 @@ namespace shooters_edge::client {
 struct DemoFx {
   int levels = -1;                    // the level these are of (DemoState::levels)
   std::vector<sh::Vec3f> explosions;  // every one this level, in order
-  std::vector<Effect> effects;        // every other temporary entity this level, in order
-  std::vector<Missile> missiles;      // in flight this frame
+  std::vector<uint8_t>
+      explosion_codes;            // Quake II's: each one's kind byte (world_fx.hpp's FxScene)
+  std::vector<Effect> effects;    // every other temporary entity this level, in order
+  std::vector<Missile> missiles;  // in flight this frame
+  bool draw_own = false;          // the tracked player's figure drawn too (cam_thirdperson)
+  float own_alpha = 1;  // the share of that figure shown (cl_thirdperson's fade near a wall)
 };
 
 // The listen server's form of a demo's temporary entity (not an explosion: those are points).
 Effect effect_of(const DemoEffect& e);
 // What a model by its precache name flies as: a rocket, a grenade, a spike; false: none of them.
 bool missile_model(std::string_view name, Missile& kind);
-// What a sequel entity flies as by its effect bits (a rocket, a grenade, a bolt, the BFG's ball);
+// What a Quake II entity flies as by its effect bits (a rocket, a grenade, a bolt, the BFG's ball);
 // false: none of them.
-bool sequel_missile(int effects, Missile& kind);
+bool q2_missile(int effects, Missile& kind);
 // `s`'s frame (or frames: a joined server's step) added to `fx`.
 void demo_fx_frame(const DemoState& s, DemoFx& fx);
 

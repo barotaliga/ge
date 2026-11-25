@@ -7,15 +7,18 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 #include "classic/locs.hpp"
 #include "core/num_text.hpp"
 #include "shooter/hull.hpp"
-#include "shooter/pilot.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/bots/map_plan.hpp"
+#include "shooterbots/handles.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooterbots/map_plan.hpp"
+#include "shooterbots/pilot.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "ui/font.hpp"
@@ -26,6 +29,7 @@ namespace {
 
 namespace bt = shooters_edge::bots;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 using ge::ui::Color;
 using ge::ui::Vec2;
 
@@ -109,7 +113,7 @@ struct Projector {
 };
 
 void fit(BotCam& cam, const sn::BotTeam& t) {
-  const sh::NavGraph& g = t.nav->nav.graph;
+  const sb::NavGraph& g = t.nav->nav.graph;
   cam.cx = (g.lo.x + g.hi.x) * 0.5;
   cam.cy = (g.lo.y + g.hi.y) * 0.5;
   cam.span = std::max(static_cast<double>(g.hi.y - g.lo.y), (g.hi.x - g.lo.x) * 0.6) * 1.08 + 64;
@@ -189,7 +193,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
     }
 
   if (t.nav && areas.node_area.size() == t.nav->nav.graph.nodes.size()) {
-    const sh::NavGraph& g = t.nav->nav.graph;
+    const sb::NavGraph& g = t.nav->nav.graph;
     // The floor in its areas' colours, the lower floors first.
     std::vector<int32_t> order(g.nodes.size());
     for (size_t i = 0; i < order.size(); i++) order[i] = static_cast<int32_t>(i);
@@ -277,7 +281,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
       const sh::Edict& me = s.mirror->s.sv.edicts[static_cast<size_t>(s.c.playernum) + 1];
       Vec2 m;
       if (!pr.at(me.origin, m)) continue;
-      for (const sh::Contact& c : f.bot.senses.contacts) {
+      for (const sb::Contact& c : f.bot.senses.contacts) {
         if (c.ent < 0) continue;
         const double age = tn - c.seen.at;
         if (age < 6) {
@@ -295,7 +299,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
       // Its path: the line it means to walk, its lane off the route in (the console's `paths`).
       if (t.cfg.paths) {
         std::vector<uint8_t> breaks;
-        const std::vector<sh::Vec3f> path = sh::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
+        const std::vector<sh::Vec3f> path = sb::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
         std::vector<Vec2> run;  // drawn a stretch at a time, broken at a teleporter
         for (size_t i = 0; i <= path.size(); i++) {
           Vec2 p;
@@ -349,7 +353,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
   float y = 26;
   int ours = 0, theirs = 0;
   if (!t.seats.empty()) {
-    const sn::ClassicClientEnd& c = t.seats[0]->c;
+    const sn::QwClientEnd& c = t.seats[0]->c;
     for (int i = 0; i < 32; i++) {
       if (c.userinfos[i].empty() || !sn::info_get(c.userinfos[i], "*spectator").empty()) continue;
       (sn::info_get(c.userinfos[i], "team") == c.cfg.team ? ours : theirs) += c.frags[i];
@@ -366,14 +370,14 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
     const Color col = kBots[k++ % 8];
     const sn::BotSeat& s = *sp;
     o.rect({x0, y - 10, 9, 9}, col, 2);
-    std::string head = s.name + "  " + sh::aim_skill_name(s.skill);
+    std::string head = s.name + "  " + sb::aim_skill_name(s.skill);
     if (!s.set_up || !s.fighter) {
       o.text(font, 13, x0 + 14, y, head + "  " + sn::client_stage_name(s.c.stage), kDim);
       y += 34;
       continue;
     }
     const bt::Fighter& f = *s.fighter;
-    const sn::ClassicClientEnd& c = s.c;
+    const sn::QwClientEnd& c = s.c;
     const sh::Vec3f at = s.mirror->s.sv.edicts[static_cast<size_t>(c.playernum) + 1].origin;
     head += "   h" + std::to_string(c.stats[0]) + " a" + std::to_string(c.stats[4]) + " " +
             weapon_name(c.stats[10]) + "   frags " + std::to_string(c.frags[c.playernum]);
@@ -387,7 +391,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
                (f.locs ? ge::classic::loc_name_at(*f.locs, at) : std::string("?")),
            kDim);
     o.text(font, 12, x0 + 14, y + 28,
-           std::string("next ") + sh::pilot_mode_name(f.bot.pilot.pilot.mode) + ", " +
+           std::string("next ") + sb::pilot_mode_name(f.bot.pilot.pilot.mode) + ", " +
                std::to_string(f.bot.pilot.pilot.route.size() > f.bot.pilot.pilot.k
                                   ? f.bot.pilot.pilot.route.size() - f.bot.pilot.pilot.k
                                   : 0) +
@@ -433,6 +437,33 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
     o.text(font, 12, x0, y, clock_text(l.t) + "  " + l.who + ": " + l.text, kDim);
     y += 15;
   }
+}
+
+sn::BotTeamConfig bot_team_config(const Args& a) {
+  sn::BotTeamConfig bc;
+  bc.server = a.server;
+  bc.bots = a.bots;
+  bc.team = a.team;
+  bc.colour = a.colour;
+  bc.basedir = a.basedir;
+  bc.out = a.bots_out;
+  bc.paths = a.bots_paths;
+  bc.names = shooters_edge::bots::bot_handles(bc.seed + 1000u, bc.bots);  // people's handles
+  if (!a.bot_features.empty()) bc.features = {a.bot_features};
+  if (!a.skills.empty()) {
+    bc.skills.clear();
+    for (size_t at = 0; at <= a.skills.size();) {
+      const size_t end = std::min(a.skills.find(',', at), a.skills.size());
+      if (end > at) bc.skills.push_back(a.skills.substr(at, end - at));
+      at = end + 1;
+    }
+  }
+  sn::bot_team_locs_from(bc, "ezquake");
+  if (!bc.out.empty()) {
+    std::error_code ec;
+    std::filesystem::create_directories(bc.out, ec);
+  }
+  return bc;
 }
 
 }  // namespace shooters_edge::client

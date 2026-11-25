@@ -9,7 +9,7 @@
 // up to `kVoiceConcealMost` frames in one generation is filled with the decoder's concealment, a
 // longer one (or a new generation: the talker's stream started over) starts the talker afresh.
 // Voice is heard centred at `volume`; who may hear whom was the server's decision when it was
-// recorded (net/classic_record.hpp).
+// recorded (net/qw_record.hpp).
 //
 // A build without the codec (GE_ENCODERS=OFF) decodes silence and says so (`codec`), and the
 // counts stay the same.

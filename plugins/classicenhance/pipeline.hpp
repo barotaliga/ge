@@ -4,7 +4,7 @@
 // 1. **pack**: the pack itself, unchanged, with `source.txt` (how it was found and verified) and
 //    `NOTICE.txt`.
 // Every stage finds its assets by the source's content profile (profile.hpp): the paths below
-// are the first game's row.
+// are Quake's row.
 //
 // 2. **textures**: every texture of every map in the pack (`maps/*.bsp`), once each by name,
 //    enhanced (texture.hpp) into `textures/<name>/`, with `textures/index.txt`: the pixels the map
@@ -129,6 +129,6 @@ struct PackTexture {
 // The palette and every drawn texture of every map in `pack` (the profile's maps), once each by
 // name, in the order the maps (sorted by path) and their texture lumps give; false with the reason.
 bool pack_textures(std::span<const uint8_t> pack, Palette* palette, std::vector<PackTexture>* out,
-                   std::string* error, const Profile& profile = classic_profile());
+                   std::string* error, const Profile& profile = q1_profile());
 
 }  // namespace ge::classicenhance

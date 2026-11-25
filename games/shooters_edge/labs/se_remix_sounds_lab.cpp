@@ -1,9 +1,9 @@
 // LAB `se-remix-sounds`: CLASSIC REMIX'S SOUNDS (`cr_sounds`, profiles/remix_sounds.hpp). Every
-// row of the sound table drawn as a band: the part both sounds play, the classic game's sound on
-// the left and the sequel's on the right, each with its waveform read from the game's own packs
-// (`--game`, `--sequel`; without them the names alone, the smoke run). A second table proves
-// `cr_items` alone never changes a sound: each sound the classic rules' worn sequel arsenal names
-// is heard as the classic game's while `cr_sounds` is 0, and as the sequel's once it is 2.
+// row of the sound table drawn as a band: the part both sounds play, Quake's sound on
+// the left and Quake II's on the right, each with its waveform read from the game's own packs
+// (`--game`, `--q2`; without them the names alone, the smoke run). A second table proves
+// `cr_items` alone never changes a sound: each sound the classic rules' worn Quake II arsenal names
+// is heard as Quake's while `cr_sounds` is empty, and as Quake II's once it is q2.
 //
 // ge:summary Lab: classic remix's sound table, each pair's waveforms off the games' own packs
 // ge:keywords lab se-remix-sounds cr_sounds classic-remix sound-swap heard_as waveform
@@ -41,7 +41,7 @@ const gl::Rgba kPaper{246, 244, 238, 255};
 const gl::Rgba kInk{30, 30, 34, 255};
 const gl::Rgba kFaint{150, 150, 150, 255};
 const gl::Rgba kClassic{150, 82, 40, 255};
-const gl::Rgba kSequel{40, 96, 150, 255};
+const gl::Rgba kQ2{40, 96, 150, 255};
 
 // A game's files, or none when its install is not given or does not open.
 std::optional<cl::SearchPath> open_files(gl::Lab& lab, const std::string& dir,
@@ -100,10 +100,10 @@ void side(gl::Picture& p, int x, int y, std::string_view name,
 }
 
 void run(gl::Lab& lab) {
-  const auto q1 = open_files(lab, lab.arg("game"), "classic");
-  const auto q2 = open_files(lab, lab.arg("sequel"), "sequel");
+  const auto q1 = open_files(lab, lab.arg("game"), "q1");
+  const auto q2 = open_files(lab, lab.arg("q2"), "q2");
   const size_t n = std::size(pf::kSoundMatches);
-  int found_classic = 0, found_sequel = 0;
+  int found_classic = 0, found_q2 = 0;
   std::vector<std::vector<std::string>> rows;
   for (size_t first = 0, sheet = 1; first < n; first += kPerSheet, sheet++) {
     const size_t last = std::min(n, first + kPerSheet);
@@ -111,36 +111,36 @@ void run(gl::Lab& lab) {
         gl::create_picture(kWidth, static_cast<int>(last - first + 1) * kBand + 8, kPaper);
     const int xc = kWhat, xs = kWhat + kName + kWave + 20;
     gl::draw_text(p, 8, 14, "PART BOTH PLAY", kInk);
-    gl::draw_text(p, xc, 14, "THE CLASSIC GAME'S (cr_sounds 1)", kClassic);
-    gl::draw_text(p, xs, 14, "THE SEQUEL'S (cr_sounds 2)", kSequel);
+    gl::draw_text(p, xc, 14, "QUAKE'S (cr_sounds q1)", kClassic);
+    gl::draw_text(p, xs, 14, "QUAKE II'S (cr_sounds q2)", kQ2);
     for (size_t i = first; i < last; i++) {
       const pf::SoundMatch& m = pf::kSoundMatches[i];
       const int y = static_cast<int>(i - first + 1) * kBand;
       if ((i - first) % 2 == 0) gl::fill_rect(p, 0, y, kWidth, kBand, {236, 233, 224, 255});
       gl::draw_text(p, 8, y + 16, m.what, kInk);
       side(p, xc, y, m.classic, read_sound(q1, m.classic), q1.has_value(), kClassic, found_classic);
-      side(p, xs, y, m.sequel, read_sound(q2, m.sequel), q2.has_value(), kSequel, found_sequel);
+      side(p, xs, y, m.q2, read_sound(q2, m.q2), q2.has_value(), kQ2, found_q2);
       rows.push_back({std::string(m.what), m.classic.empty() ? "(silent)" : std::string(m.classic),
-                      std::string(m.sequel)});
+                      std::string(m.q2)});
     }
     lab.shot({"sound-pairs-" + std::to_string(sheet),
               "THE SOUND TABLE, SHEET " + std::to_string(sheet),
-              "Each multiplayer sound of the classic game (left) beside the sequel's that plays "
+              "Each multiplayer sound of Quake (left) beside Quake II's that plays "
               "the same part (right), with its first two seconds' waveform read from the game's "
               "own packs.",
               "every row's two sounds play the same part: a shot beside a shot, a blast beside a "
               "blast, a pickup beside a pickup",
-              {{"game", lab.arg("game")}, {"sequel", lab.arg("sequel")}}},
+              {{"game", lab.arg("game")}, {"q2", lab.arg("q2")}}},
              p);
   }
   lab.metric("pairs", static_cast<double>(n), "rows");
   if (q1) lab.metric("classic-found", found_classic, "sounds");
-  if (q2) lab.metric("sequel-found", found_sequel, "sounds");
-  lab.table({"the sound table", {"part", "classic game", "sequel"}, rows});
+  if (q2) lab.metric("q2-found", found_q2, "sounds");
+  lab.table({"the sound table", {"part", "classic game", "q2"}, rows});
 
-  // cr_items alone: the worn sequel arsenal's sounds heard as the classic game's.
+  // cr_items alone: the worn Quake II arsenal's sounds heard as Quake's.
   std::vector<std::vector<std::string>> worn;
-  const pf::RemixArsenal* a = pf::remix_arsenal("classic", "sequel");
+  const pf::RemixArsenal* a = pf::remix_arsenal("q1", "q2");
   std::vector<std::string_view> named;
   for (const pf::WeaponRow& w : a->arsenal.weapons)
     named.insert(named.end(), {w.fire_sound, w.land_sound, w.blast_sound});
@@ -149,14 +149,14 @@ void run(gl::Lab& lab) {
   int kept = 0;
   for (const std::string_view s : named) {
     if (s.empty() || s == "-") continue;
-    const std::string_view own = pf::heard_as(s, "classic");
+    const std::string_view own = pf::heard_as(s, "q1");
     kept += own != s;
-    worn.push_back({std::string(s), std::string(own), std::string(pf::heard_as(s, "sequel"))});
+    worn.push_back({std::string(s), std::string(own), std::string(pf::heard_as(s, "q2"))});
   }
   lab.metric("worn-heard-as-own", kept, "sounds");
   lab.metric("worn-sounds", static_cast<double>(worn.size()), "sounds");
-  lab.table({"cr_items 2 on the classic game: what the worn weapons sound like",
-             {"the worn thing names", "heard with cr_sounds 0", "heard with cr_sounds 2"},
+  lab.table({"cr_items q2 on Quake: what the worn weapons sound like",
+             {"the worn thing names", "heard with cr_sounds \"\"", "heard with cr_sounds q2"},
              worn});
 }
 
@@ -169,8 +169,8 @@ const gl::LabSpec kSpec{
     "Does every multiplayer sound of each classic game have a partner in the other that plays "
     "the same part, and does cr_items alone keep the played game's sounds?",
     {
-        {"game", "", "the classic game's install (the folder holding id1; empty: names only)"},
-        {"sequel", "", "the sequel's install (the folder holding baseq2; empty: names only)"},
+        {"game", "", "Quake's install (the folder holding id1; empty: names only)"},
+        {"q2", "", "Quake II's install (the folder holding baseq2; empty: names only)"},
     },
     "",
     run,

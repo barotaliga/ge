@@ -9,12 +9,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <fstream>
 #include <string_view>
 
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
-#include "shooter/hops.hpp"
 #include "shooter/trace.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
+#include "shooter/world.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 
 namespace shooters_edge::labs::se_team {
@@ -23,6 +27,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cn = shooters_edge::net;
 using ge::core::num::to_fixed;
 
@@ -30,7 +35,9 @@ using ge::core::num::to_fixed;
 
 // What took a bumped player's speed: the box swept 16 units on along its velocity before the bump
 // meets the world (`wall`), another player (`player`) or a brush entity (`mover`: a door, a plat);
-// nothing there is `open` (a landing, water, a push). A bump in a command that took health is put
+// a wall the same sweep clears raised one or two stair steps (18, 36 units) is a stair's riser
+// (`step`: a run jumped into stairs going up, where it sticks); nothing there is `open` (a
+// landing, water, a push). A bump in a command that took health is put
 // down to the hit's knockback (`hit`) before this is asked.
 const char* bump_by(const sh::Server& sv, int ent, sh::Vec3f origin, sh::Vec3f vel) {
   const float len = std::sqrt(vel.x * vel.x + vel.y * vel.y);
@@ -48,12 +55,21 @@ const char* bump_by(const sh::Server& sv, int ent, sh::Vec3f origin, sh::Vec3f v
     if (std::fabs(dx) < 40 && std::fabs(dy) < 40 && std::fabs(dz) < 64) return "player";
   }
   if (tr.fraction >= 1 && !tr.startsolid) return "open";
-  if (tr.ent <= 0) return tr.plane.normal.z >= 0.7f ? "open" : "wall";
+  if (tr.ent <= 0) {
+    if (tr.plane.normal.z >= 0.7f) return "open";
+    for (const float up : {18.f, 36.f}) {
+      const sh::Vec3f o{origin.x, origin.y, origin.z + up};
+      const sh::HullTrace high = sh::trace_move(sv, o, {-16, -16, -24}, {16, 16, 32},
+                                                {to.x, to.y, to.z + up}, sh::kTraceNormal, ent);
+      if (!high.startsolid && high.fraction > tr.fraction + 0.25f) return "step";
+    }
+    return "wall";
+  }
   if (tr.ent <= static_cast<int>(sv.clients.size())) return "player";
   return "mover";
 }
 
-void watch_hop(Watch& w, int k, sh::AimSkill skill, bool alive, bool hop, const char* because,
+void watch_hop(Watch& w, int k, sb::AimSkill skill, bool alive, bool hop, const char* because,
                float speed) {
   HopSkill& s = w.skill[static_cast<size_t>(skill)];
   if (alive) {
@@ -92,7 +108,7 @@ float median(std::vector<float> v) {
   return v[v.size() / 2];
 }
 
-void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilot& p, float speed,
+void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sb::Pilot& p, float speed,
                  float x, float y, float z) {
   w.commands++;
   const std::string_view why = p.because != nullptr ? p.because : "";
@@ -101,7 +117,7 @@ void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilo
     kind = 0;
   else if (why == "no route")
     kind = 1;
-  else if (p.mode == sh::PilotMode::walk && speed < 20)
+  else if (p.mode == sb::PilotMode::walk && speed < 20)
     kind = 2;
   if (kind < 0) return;
   w.still[static_cast<size_t>(kind)]++;
@@ -115,7 +131,12 @@ void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilo
                                       shooters_edge::bots::fight_mode_name(f.mode)}]++;
 }
 
-void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
+void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx, float vy) {
+  {
+    auto& vl = w.views[static_cast<size_t>(k)];
+    const char* name = by != nullptr ? by : "-";
+    if (vl.empty() || std::strcmp(vl.back().second, name) != 0) vl.push_back({t, name});
+  }
   Watch::View& v = w.view[static_cast<size_t>(k)];
   const double dt = t - v.t;
   if (v.t < 0 || dt <= 0 || dt > 0.05) {
@@ -130,6 +151,47 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
   wr.first += dt;
   if (std::fabs(rate) > 60 && std::fabs(v.rate) > 60 && rate * v.rate < 0) wr.second++;
   v = {t, yaw, rate};
+  // se-people's rule: a 40 Hz read (kHandEvery), the rate over the read's step.
+  Watch::View& u = w.view40[static_cast<size_t>(k)];
+  const char* by40 = by != nullptr ? by : "-";
+  if (u.t < 0 || t - u.t > 0.1) {
+    u = {t, yaw, 0, by40, by40};
+    return;
+  }
+  if (t - u.t < 0.025) return;
+  float d40 = yaw - u.yaw;
+  while (d40 > 180) d40 -= 360;
+  while (d40 < -180) d40 += 360;
+  const auto rate40 = static_cast<float>(-d40 / (t - u.t));
+  auto& wr40 = w.writers40[by40];
+  wr40.first += t - u.t;
+  if (std::fabs(rate40) > 60 && std::fabs(u.rate) > 60 && rate40 * u.rate < 0) {
+    wr40.second++;
+    const char* from = u.by2 != nullptr ? u.by2 : by40;
+    if (std::strcmp(from, by40) != 0 || std::strcmp(u.by != nullptr ? u.by : by40, by40) != 0)
+      w.seams40[{from, by40}]++;
+  }
+  // The hop's swap (swap_read.hpp's rule): the ring's middle read the crossing.
+  Watch::SwapRing& sr = w.swap40[static_cast<size_t>(k)];
+  if (std::sqrt(vx * vx + vy * vy) <= 340) {
+    sr.n = 0;
+  } else {
+    w.hop40 += t - u.t;
+    float lean = yaw - static_cast<float>(ge::core::libm::atan2(vy, vx) * 180 / 3.14159265358979);
+    while (lean > 180) lean -= 360;
+    while (lean < -180) lean += 360;
+    for (size_t i = 0; i + 1 < sr.lean.size(); i++) {
+      sr.lean[i] = sr.lean[i + 1];
+      sr.by[i] = sr.by[i + 1];
+    }
+    sr.lean[6] = lean;
+    sr.by[6] = by;
+    sr.n = std::min(sr.n + 1, 7);
+    if (sr.n == 7 && sr.lean[2] * sr.lean[3] < 0 && std::fabs(sr.lean[0]) > 5 &&
+        std::fabs(sr.lean[6]) > 5 && sr.lean[0] * sr.lean[6] < 0)
+      w.swaps40[sr.by[3] != nullptr ? sr.by[3] : "-"]++;
+  }
+  u = {t, yaw, rate40, by40, u.by};
 }
 
 void facing_metrics(gl::Lab& lab, const Watch& w) {
@@ -266,14 +328,65 @@ void still_view_metrics(gl::Lab& lab, const Watch& w) {
   lab.table(vt);
   lab.metric("team.view.reversals-per-s", all_t > 0 ? static_cast<double>(all_r) / all_t : 0,
              "per-s");
+  double t40 = 0;
+  int64_t r40 = 0;
+  for (const auto& [by, tr] : w.writers40) {
+    t40 += tr.first;
+    r40 += tr.second;
+  }
+  for (const auto& [by, tr] : w.writers40) {
+    lab.metric("team.view40." + by + ".share", t40 > 0 ? tr.first / t40 : 0, "share");
+    lab.metric("team.view40." + by + ".reversals-per-s",
+               tr.first > 0 ? static_cast<double>(tr.second) / tr.first : 0, "per-s");
+  }
+  lab.metric("team.view40.reversals-per-s", t40 > 0 ? static_cast<double>(r40) / t40 : 0, "per-s");
+  {
+    // The reversals at a seam (the writer changed across the reads): a hand-over's, by pair.
+    int64_t seam = 0;
+    std::map<std::string, int64_t> into;
+    std::vector<std::pair<int64_t, std::string>> pairs;
+    for (const auto& [ft, c] : w.seams40) {
+      seam += c;
+      into[ft.second] += c;
+      pairs.push_back({c, ft.first + ">" + ft.second});
+    }
+    lab.metric("team.view40.seam-share",
+               r40 > 0 ? static_cast<double>(seam) / static_cast<double>(r40) : 0, "share");
+    for (const auto& [wb, wt] : w.writers40)
+      lab.metric("team.view40." + wb + ".seam-share",
+                 wt.second > 0 ? static_cast<double>(into[wb]) / static_cast<double>(wt.second) : 0,
+                 "share");
+    std::sort(pairs.begin(), pairs.end(), [](const auto& pa, const auto& pb) {
+      return pa.first != pb.first ? pa.first > pb.first : pa.second < pb.second;
+    });
+    gl::LabTable seams{
+        "the view's reversals at a seam (the writer changed across the 25 ms reads), "
+        "by the writer before > after",
+        {"seam", "reversals", "% of all", "a second of live time"},
+        {}};
+    for (size_t i = 0; i < pairs.size() && i < 12; i++)
+      seams.rows.push_back(
+          {pairs[i].second, std::to_string(pairs[i].first),
+           to_fixed(
+               r40 > 0 ? 100.0 * static_cast<double>(pairs[i].first) / static_cast<double>(r40) : 0,
+               1),
+           to_fixed(t40 > 0 ? static_cast<double>(pairs[i].first) / t40 : 0, 3)});
+    lab.table(seams);
+  }
+  int64_t swaps = 0;
+  for (const auto& [who, c] : w.swaps40) swaps += c;
+  lab.metric("team.swap.per-s", w.hop40 > 0 ? static_cast<double>(swaps) / w.hop40 : 0, "per-s");
+  for (const auto& [who, c] : w.swaps40)
+    lab.metric("team.swap." + who + ".share",
+               swaps > 0 ? static_cast<double>(c) / static_cast<double>(swaps) : 0, "share");
 }
 
 void hop_metrics(gl::Lab& lab, const Watch& w) {
-  for (const sh::AimSkill k :
-       {sh::AimSkill::expert, sh::AimSkill::average, sh::AimSkill::novice, sh::AimSkill::perfect}) {
+  for (const sb::AimSkill k :
+       {sb::AimSkill::expert, sb::AimSkill::average, sb::AimSkill::novice, sb::AimSkill::perfect}) {
     const HopSkill& s = w.skill[static_cast<size_t>(k)];
     if (s.alive == 0) continue;
-    const std::string key = std::string("team.hop.") + sh::aim_skill_name(k) + ".";
+    const std::string key = std::string("team.hop.") + sb::aim_skill_name(k) + ".";
     const auto share = [](int64_t n, int64_t of) {
       return of > 0 ? static_cast<double>(n) / static_cast<double>(of) : 0.0;
     };
@@ -289,14 +402,14 @@ void hop_metrics(gl::Lab& lab, const Watch& w) {
 }
 
 // EVERY FLIGHT BY WHAT FLEW IT (`team.air.s380.<mode>.*`, a real map's match only): the match's
-// own recording read as se-moves reads people's (move_study.hpp, shooter/hops.hpp: each player's
-// track off the server's frames, its hops traced on the map's hulls), each flight of 0.3-1 s
-// taking off at 380-460 u/s put down to its bot's pilot mode at the takeoff: how many, the air's
+// own recording read as se-moves reads people's (move_study.hpp, shooterbots/hops.hpp: each
+// player's track off the server's frames, its hops traced on the map's hulls), each flight of 0.3-1
+// s taking off at 380-460 u/s put down to its bot's pilot mode at the takeoff: how many, the air's
 // gain (landing less takeoff speed) and the crashes (80 u/s or more lost). People hold their
 // speed there (gain -1 to +5 on dm2); the mode says which of the bots' ways loses it.
 void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
                      const std::string& basedir, const std::string& game, const std::string& map,
-                     bool packed) {
+                     bool packed, const std::string& flights) {
   if (basedir.empty() || r.mvd.empty() || packed) return;
   namespace la = shooters_edge::labs;
   std::string error;
@@ -310,17 +423,27 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
   // The recording's clock against the fighters' (the server's): both end with the match.
   const double offset = w.t_last - dt.seconds;
   lab.note("flights by mode: the recording's clock + " + to_fixed(offset, 2) + " s = the server's");
-  std::map<std::string, std::vector<float>> gain;
-  const sh::HopSettings hs;
+  std::map<std::string, std::vector<float>> gain, by_view;
+  const sb::HopSettings hs;
+  std::ofstream rows;
+  if (!flights.empty()) {
+    rows.open(flights);
+    if (!rows)
+      lab.note("flights: cannot write --flights=" + flights + "; next: a folder that exists");
+    else
+      rows << "bot\tt\tx\ty\tz\tspeed\theading\tyaw\tair_s\tgain\tturned\tcrash\tcrash_x"
+              "\tcrash_y\tcrash_s\thigh\tcrash_z\tmode\tview\tlink\tbecause\tgoal\tpress\ttight"
+              "\tair_mode\tair_view\n";
+  }
   for (size_t slot = 0; slot < dt.tracks.size(); slot++) {
     size_t k = r.players.size();
     for (size_t j = 0; j < r.players.size(); j++)
       if (r.players[j].name == dt.names[slot]) k = j;
     if (k >= r.players.size() || k >= w.modes.size() || dt.tracks[slot].size() < 3) continue;
-    sh::HopReading hr;
-    sh::read_hops(dt.tracks[slot], *m.world, hs, hr);
+    sb::HopReading hr;
+    sb::read_hops(dt.tracks[slot], *m.world, hs, hr);
     const auto& ml = w.modes[k];
-    for (const sh::Hop& h : hr.hops) {
+    for (const sb::Hop& h : hr.hops) {
       if (h.air_s < 0.3f || h.air_s > 1.0f || h.speed_off < 380 || h.speed_off >= 460) continue;
       const double t = hr.frames[static_cast<size_t>(h.takeoff)].t + offset;
       const char* mode = "-";
@@ -329,6 +452,92 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
         mode = name;
       }
       gain[mode].push_back(h.speed_land - h.speed_off);
+      const char* view = "-";
+      for (const auto& [at, name] : w.views[k]) {
+        if (at > t) break;
+        view = name;
+      }
+      if (std::string_view(mode) == "hop") by_view[view].push_back(h.speed_land - h.speed_off);
+      if (!rows) continue;
+      Watch::Doing d;
+      for (const Watch::Doing& x : w.doing[k]) {
+        if (x.t > t) break;
+        d = x;
+      }
+      int32_t at = -1;
+      const int cause = la::crash_cause(hr, h, &at);
+      const sb::HopFrame& f0 = hr.frames[static_cast<size_t>(h.takeoff)];
+      const sb::HopFrame& fc = hr.frames[static_cast<size_t>(at >= 0 ? at : h.land)];
+      // `high`: a mid-air hit the flat look-ahead cannot see (arc_clear traces at the takeoff's
+      // height and a step): from the frame before the hit, 24 units on along its velocity at that
+      // height meets no wall, so only the arc's height met it (a lintel, a beam, a riser up, a
+      // ledge's lip). The map's world alone: a door, a button or a plat hit reads high too.
+      int high = -1;
+      if (cause == 0 && at > h.takeoff + 1) {
+        const sb::HopFrame& fb = hr.frames[static_cast<size_t>(at - 1)];
+        const float vx = fb.velocity.x, vy = fb.velocity.y;
+        const float len = std::sqrt(vx * vx + vy * vy);
+        if (len > 1) {
+          const float z = f0.origin.z + 18;  // arc_clear's step up
+          const sh::Vec3f a{fb.origin.x, fb.origin.y, z};
+          const sh::HullTrace tr =
+              sh::player_trace(*m.world, a, {a.x + vx / len * 24, a.y + vy / len * 24, z});
+          high = tr.startsolid || (tr.fraction < 1 && tr.plane.normal.z < 0.7f) ? 0 : 1;
+        }
+      }
+      // In the air (the takeoff to the crash, or the landing): the first change of the pilot's
+      // mode (`air_mode`: `walk@0.02`, the mode and the seconds after the takeoff; `-` none: the
+      // mode at the takeoff flew it all) and the view's writer that held most of it (`air_view`).
+      const double t_end = t + (fc.t - f0.t);
+      std::string air_mode = "-";
+      for (const auto& [at_s, name] : ml)
+        if (at_s > t + 1e-3 && at_s < t_end && std::string_view(name) != mode) {
+          air_mode = std::string(name) + "@" + to_fixed(at_s - t, 2);
+          // Out of the hop: why it ended (`end/climb`: the stretch ran out at a climb).
+          if (std::string_view(mode) == "hop") {
+            Watch::Doing e;
+            for (const Watch::Doing& x : w.doing[k]) {
+              if (x.t > at_s + 1e-3) break;
+              e = x;
+            }
+            if (e.hend[0])
+              air_mode += std::string(":") + e.hend + (e.hend_at[0] ? "/" : "") + e.hend_at;
+          }
+          break;
+        }
+      std::map<std::string, double> held;
+      {
+        const char* by = view;
+        double from = t;
+        for (const auto& [at_s, name] : w.views[k]) {
+          if (at_s <= t) continue;
+          if (at_s >= t_end) break;
+          held[by] += at_s - from;
+          by = name;
+          from = at_s;
+        }
+        held[by] += t_end - from;
+      }
+      std::string air_view = "-";
+      double most = -1;
+      for (const auto& [by, s_held] : held)
+        if (s_held > most) {
+          most = s_held;
+          air_view = by;
+        }
+      rows << r.players[k].name << '\t' << to_fixed(t, 2) << '\t' << to_fixed(f0.origin.x, 0)
+           << '\t' << to_fixed(f0.origin.y, 0) << '\t' << to_fixed(f0.origin.z - 24, 0) << '\t'
+           << to_fixed(h.speed_off, 0) << '\t' << to_fixed(f0.heading, 0) << '\t'
+           << to_fixed(f0.yaw, 0) << '\t' << to_fixed(h.air_s, 2) << '\t'
+           << to_fixed(h.speed_land - h.speed_off, 0) << '\t' << to_fixed(h.turned, 0) << '\t'
+           << (cause >= 0 ? la::kCrashCauses[cause] : "-") << '\t' << to_fixed(fc.origin.x, 0)
+           << '\t' << to_fixed(fc.origin.y, 0) << '\t' << to_fixed(fc.t - f0.t, 2) << '\t'
+           << (high < 0 ? "-"
+               : high   ? "1"
+                        : "0")
+           << '\t' << to_fixed(fc.origin.z - 24, 0) << '\t' << mode << '\t' << view << '\t'
+           << d.link << '\t' << d.because << '\t' << d.goal << '\t' << d.press << '\t' << d.tight
+           << '\t' << air_mode << '\t' << air_view << '\n';
     }
   }
   gl::LabTable at{"flights taking off at 380-460 u/s (0.3-1 s up), by the pilot's mode then",
@@ -345,38 +554,53 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
     lab.metric("team.air.s380." + mode + ".crash-share", crash, "share");
   }
   lab.table(at);
+  // The hop's flights by who wrote the view as it took off: a look or an aim holds the view, and
+  // the hop's air cannot turn the flight away from a wall under it.
+  gl::LabTable vt{"the hop's flights at 380-460 u/s by the view's writer at the takeoff",
+                  {"view", "flights", "gain p50", "crash %"},
+                  {}};
+  for (const auto& [view, g] : by_view) {
+    int crashes = 0;
+    for (const float x : g) crashes += x < -80 ? 1 : 0;
+    const double crash = static_cast<double>(crashes) / static_cast<double>(g.size());
+    vt.rows.push_back(
+        {view, std::to_string(g.size()), to_fixed(median(g), 1), to_fixed(100 * crash, 1)});
+    lab.metric("team.air.s380.view." + view + ".flights", static_cast<double>(g.size()), "count");
+    lab.metric("team.air.s380.view." + view + ".crash-share", crash, "share");
+  }
+  lab.table(vt);
 }
 
 // The pilot's link toward its route's next node, by kind ("walk", "jump"...), or "-".
-const char* link_of(const sh::Pilot& p) {
+const char* link_of(const sb::Pilot& p) {
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
-  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  const sb::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
   for (int32_t q = 0; q < a.links; q++) {
-    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
-    if (l.to == p.route[p.k + 1]) return sh::nav_kind_name(l.kind);
+    const sb::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 1]) return sb::nav_kind_name(l.kind);
   }
   return "-";
 }
 
 // The link walked: '!' along a lip (`brink`), '?' a side step off into the harm (`brink_side`).
-char link_brink(const sh::Pilot& p) {
+char link_brink(const sb::Pilot& p) {
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return 0;
-  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  const sb::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
   for (int32_t q = 0; q < a.links; q++) {
-    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    const sb::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
     if (l.to == p.route[p.k + 1]) return l.brink ? '!' : l.brink_side ? '?' : 0;
   }
   return 0;
 }
 
 // The kind of the link after the current one (`end`: the next node is the route's last).
-const char* link2_of(const sh::Pilot& p) {
+const char* link2_of(const sb::Pilot& p) {
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
   if (p.k + 2 >= p.route.size()) return "end";
-  const sh::NavNode& b = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])];
+  const sb::NavNode& b = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])];
   for (int32_t q = 0; q < b.links; q++) {
-    const sh::NavLink& l = p.g->links[static_cast<size_t>(b.first_link) + static_cast<size_t>(q)];
-    if (l.to == p.route[p.k + 2]) return sh::nav_kind_name(l.kind);
+    const sb::NavLink& l = p.g->links[static_cast<size_t>(b.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 2]) return sb::nav_kind_name(l.kind);
   }
   return "-";
 }

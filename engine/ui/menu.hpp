@@ -32,7 +32,8 @@
 // ge:summary Menus as a model: pages, items (action toggle choice slider label back), focus, events
 // ge:keywords ui menu main-menu front-door title page item button action toggle choice slider
 // ge:keywords label back focus navigation cursor keyboard gamepad pointer mouse event options
-// ge:keywords pause settings menu-sound menu-cue click navigate-sound
+// ge:keywords pause settings menu-sound menu-cue click navigate-sound recipe menu_press
+// ge:keywords menu_list scripted-presses describe-page
 // ge:skill ui
 // ge:test tests/ui_menu_test.cpp
 #pragma once
@@ -86,7 +87,8 @@ struct MenuInput {
   bool refresh = false;  // the refresh key (R, F5): a page that lists what it found asks again
   char letter = 0;  // a letter key tapped ('a'..'z') that a page reads as its own key (a filter)
   bool pointer_moved = false;
-  bool click = false;  // the pointer's primary button released over where it was pressed
+  bool click = false;         // the pointer's primary button released over where it was pressed
+  bool pointer_held = false;  // the pointer's primary button down (a drag: a figure turned)
   float pointer_x = 0, pointer_y = 0;
 };
 
@@ -143,5 +145,13 @@ MenuCue menu_cue(const std::vector<MenuEvent>& events, bool moved);
 
 // The value an item shows on its right: "ON"/"OFF", the choice, the slider's number with its unit.
 std::string item_value(const Item& item, std::string_view on = "ON", std::string_view off = "OFF");
+
+// SCRIPTED PRESSES (a recipe's `menu_press`, docs/console.md § Recipes): a key's name added to one
+// frame's input. The names: up, down, left, right, enter (or accept), escape (or back), del,
+// refresh, or one letter a..z. False for any other word, `in` untouched.
+bool menu_key(std::string_view name, MenuInput& in);
+// The page up as lines an agent reads (a recipe's `menu_list`): the page's id and title, then one
+// line an item: '>' for the focus, '-' for a disabled item, its id, its text, and its value.
+std::string describe_page(const Menu& menu);
 
 }  // namespace ge::ui

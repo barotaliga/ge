@@ -19,13 +19,19 @@
 // `vip_addip <pattern> [level]` (1 when left out), `vip_removeip`, `vip_listip`, `vip_writeip`;
 // `ban_match` finds the entry whose level an address gets.
 //
+// A BLACKHOLE LIST is the same list again, for addresses a server never hears: every datagram from
+// one is dropped before it is read, an out-of-band query too (`blackhole_command`):
+// `blackhole_addip <pattern> [+<seconds>|<unix time>]`, `blackhole_removeip`, `blackhole_listip`,
+// `blackhole_writeip`; `blackholed` is the test a game's receive loop makes.
+//
 // The clock is the caller's (`now`, Unix seconds), so a list never reads one itself. A simulated
 // address counts as the IPv4 address net/address.hpp maps it to.
 //
 // ge:summary A server's ban list by address: patterns, ban or safe, times, the mode, the words
 // ge:keywords ban banlist addip removeip listip writeip filterban sv_banmode ban-mode safe-entry
 // ge:keywords address-filter subnet ip-ban banned ban_command ban_refuses vip vip_addip vip-list
-// ge:keywords vip_command vip-level ban_file_read ban_file_write listip-cfg
+// ge:keywords vip_command vip-level ban_file_read ban_file_write listip-cfg blackhole
+// ge:keywords blackhole_addip blackhole_removeip blackhole_listip blackholed ignored-address
 // ge:skill net
 // ge:test tests/server_bans_test.cpp
 #pragma once
@@ -63,10 +69,15 @@ bool ban_refuses(const BanList& list, int ban_mode, const net::Address& a, int64
 bool ban_command(BanList& list, std::string_view line, int64_t now, std::string& out);
 // The same for a VIP list's words (above).
 bool vip_command(BanList& list, std::string_view line, int64_t now, std::string& out);
+// The same for a blackhole list's words (above).
+bool blackhole_command(BanList& list, std::string_view line, int64_t now, std::string& out);
+// Whether every datagram from `a` is to be dropped unread: a blackhole entry matches it at `now`.
+bool blackholed(const BanList& list, const net::Address& a, int64_t now);
 // THE LIST'S FILE, for a game whose endpoint answers its own words: the `addip` lines `writeip`
-// saved read back into `list` (a line the words do not take is left out; no file: nothing), and
+// saved read back into `list` (a classic game's `sv addip` lines too; a line the words do not take
+// is left out; no file: nothing), with `mode` given, a `set filterban <n>` line setting it; and
 // `writeip`'s lines (`text`) saved to `path`, its answer the line an administrator reads.
-void ban_file_read(BanList& list, const std::string& path, int64_t now);
+void ban_file_read(BanList& list, const std::string& path, int64_t now, int* mode = nullptr);
 std::string ban_file_write(const BanList& list, const std::string& path, const std::string& text);
 
 }  // namespace ge::server

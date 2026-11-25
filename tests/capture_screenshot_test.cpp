@@ -58,7 +58,7 @@ std::vector<fs::path> pngs(const fs::path& dir, const char* ext = ".png") {
   return out;
 }
 
-const gc::ScreenshotSettings kPng{"png", 90, 444};
+const gc::ScreenshotSettings kPng{"png", 90, 444, "", "", 6};
 
 }  // namespace
 
@@ -130,7 +130,7 @@ TEST(the_defaults_write_a_jpeg_and_the_cvars_reach_the_writer) {
   CHECK(pngs(dir, ".jpg").size() == 2 && pngs(dir, ".png").size() == 1);
   CHECK_MSG(lines.size() == 3 && lines[0].find("jpg quality 90 4:4:4") != std::string::npos,
             lines.empty() ? "" : lines[0]);
-  CHECK_MSG(lines.size() == 3 && lines[2].find("scr_format `bmp`") != std::string::npos,
+  CHECK_MSG(lines.size() == 3 && lines[2].find("format bmp isn't") != std::string::npos,
             lines.size() == 3 ? lines[2] : "");
 }
 
@@ -173,4 +173,125 @@ TEST(a_packed_frame_is_far_smaller_than_a_stored_one) {
   const std::vector<uint8_t> stored = ge::lab::encode_png(p);
   CHECK_MSG(packed.size() * 4 < stored.size(),
             std::to_string(packed.size()) + " against " + std::to_string(stored.size()));
+}
+
+TEST(a_named_screenshot_keeps_its_name_and_never_overwrites) {
+  const fs::path dir = fresh_dir("ge_screenshot_named") / "screenshots";
+  gc::ScreenshotSettings set = kPng;
+  gc::Screenshots shots(dir.string(), "game", &set);
+  std::string why;
+  CHECK(!shots.request("../out", &why) && !why.empty());
+  CHECK(!shots.request("", &why));
+  CHECK(!shots.due());
+  const std::vector<uint8_t> rgba = frame(8, 8);
+  for (int i = 0; i < 2; i++) {
+    CHECK(shots.request("duel/a_vs_b", &why) && shots.due());
+    CHECK(shots.write(8, 8, rgba));
+  }
+  shots.flush();
+  CHECK(fs::exists(dir / "duel" / "a_vs_b.png") && fs::exists(dir / "duel" / "a_vs_b-2.png"));
+  // Another folder beside it; one leaving the game's folder is passed over.
+  set.folder = "shots";
+  CHECK(shots.request("x", &why) && shots.due() && shots.write(8, 8, rgba));
+  set.folder = "../../escape";
+  CHECK(shots.request("y", &why) && shots.due() && shots.write(8, 8, rgba));
+  shots.flush();
+  CHECK(fs::exists(dir.parent_path() / "shots" / "x.png") && fs::exists(dir / "y.png"));
+  // A whole path is the player's own folder, taken as it is.
+  const fs::path own = dir.parent_path() / "elsewhere";
+  set.folder = own.string();
+  CHECK(shots.request("z", &why) && shots.due() && shots.write(8, 8, rgba));
+  shots.flush();
+  CHECK(fs::exists(own / "z.png"));
+  // The old formats' words: tga and pcx are png, jpeg is jpg.
+  std::string note;
+  set.format = "tga";
+  CHECK(gc::still_options(set, note).format == gc::StillFormat::kPng && note.empty());
+  set.format = "jpeg";
+  CHECK(gc::still_options(set, note).format == gc::StillFormat::kJpg && note.empty());
+}
+
+// A template (`scr_template`) names each screenshot by the first free number in its X's; one with
+// no X is a plain name; one leaving the folder is passed over for the time's name. Compression 0
+// stores a png's rows unpacked.
+TEST(a_template_numbers_its_xs_and_compression_zero_stores_the_rows) {
+  CHECK(gc::screenshot_template_name("quakeXXX", 7) == "quake007");
+  CHECK(gc::screenshot_template_name("aXXb", 42) == "a42b");
+  CHECK(gc::screenshot_template_name("quakeXXX", 1000).empty());
+  CHECK(gc::screenshot_template_name("shot", 3) == "shot");
+  const fs::path dir = fresh_dir("ge_screenshot_template") / "screenshots";
+  gc::ScreenshotSettings set = kPng;
+  set.name_template = "quakeXXX";
+  gc::Screenshots shots(dir.string(), "game", &set);
+  const std::vector<uint8_t> rgba = frame(8, 8);
+  for (int i = 0; i < 2; i++) {
+    shots.request();
+    CHECK(shots.due() && shots.write(8, 8, rgba));
+  }
+  set.name_template = "../out";
+  shots.request();
+  CHECK(shots.due() && shots.write(8, 8, rgba));
+  shots.flush();
+  CHECK(fs::exists(dir / "quake000.png") && fs::exists(dir / "quake001.png"));
+  CHECK(!fs::exists(dir.parent_path() / "out.png"));
+  std::string note;
+  set.compression = 0;
+  CHECK(gc::still_options(set, note).stored);
+  set.compression = 6;
+  CHECK(!gc::still_options(set, note).stored);
+  gc::StillOptions o;
+  o.format = gc::StillFormat::kPng;
+  std::vector<uint8_t> packed, stored;
+  gc::StillFormat used;
+  const std::vector<uint8_t> big = frame(64, 64);
+  CHECK(gc::encode_still(o, 64, 64, big, packed, used, note));
+  o.stored = true;
+  CHECK(gc::encode_still(o, 64, 64, big, stored, used, note));
+  CHECK_MSG(stored.size() > packed.size(), std::to_string(stored.size()));
+  auto back = gc::decode_still(stored, note);
+  CHECK(back && back->width == 64 && back->rgba == big);
+}
+
+TEST(a_grab_is_kept_in_memory_scaled_and_packed_as_jpeg_with_no_file) {
+  const fs::path dir = fresh_dir("ge_screenshot_grab");
+  gc::Screenshots shots(dir.string(), "game", &kPng);
+  std::vector<uint8_t> out;
+  CHECK(!shots.take_grab(out));  // none asked
+  CHECK(shots.grab(32, 24, 70));
+  CHECK(!shots.grab(32, 24, 70));  // one at a time
+  CHECK(shots.due());
+  CHECK(shots.write(64, 48, frame(64, 48)));
+  shots.flush();
+  CHECK(shots.take_grab(out));
+  CHECK(out.size() > 2 && out[0] == 0xff && out[1] == 0xd8);
+  std::string error;
+  const auto back = gc::decode_still(out, error);
+  CHECK_MSG(back.has_value() && back->width == 32 && back->height == 24, error);
+  CHECK(!fs::exists(dir) || pngs(dir).empty());  // the player's folder untouched
+  CHECK(!shots.take_grab(out));                  // taken once
+  // A grab and the key on the same frame: both.
+  CHECK(shots.grab(16, 12, 70));
+  shots.request();
+  CHECK(shots.write(64, 48, frame(64, 48)));
+  shots.flush();
+  CHECK(shots.take_grab(out) && !out.empty());
+  CHECK(pngs(dir).size() == 1);
+}
+
+TEST(screenshotjpg_png_and_tga_write_the_next_frame_in_their_format_by_name) {
+  // Whatever scr_format says (png here): screenshotjpg writes a jpg, screenshotpng a png,
+  // screenshottga a png too (no TGA writer: the old word's picture is a png).
+  const fs::path dir = fresh_dir("ge_screenshot_formats") / "screenshots";
+  gc::ScreenshotSettings set = kPng;
+  gc::Screenshots shots(dir.string(), "game", &set);
+  ge::console::Console con(false);
+  gc::add_screenshot_format_commands(con, shots);
+  const std::vector<uint8_t> rgba = frame(8, 8);
+  for (const char* line : {"screenshotjpg a 80", "screenshotpng b 9", "screenshottga c"}) {
+    con.execute(line);
+    CHECK_MSG(shots.due(), line);
+    CHECK(shots.write(8, 8, rgba));
+    shots.flush();
+  }
+  CHECK(fs::exists(dir / "a.jpg") && fs::exists(dir / "b.png") && fs::exists(dir / "c.png"));
 }

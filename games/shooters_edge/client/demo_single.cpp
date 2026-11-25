@@ -55,7 +55,7 @@ enum : uint8_t {
   kClientData = 15,
   kStopSound = 16,
   kUpdateColors = 17,
-  kParticle = 18,
+  kParticle = 18,  // a program's burst: a point, a way, a count and a colour
   kDamage = 19,
   kSpawnStatic = 20,
   kSpawnBinary = 21,
@@ -298,6 +298,7 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
     s.sounds.push_back(name);
   s.map = s.models.size() > 1 ? map_of_model(s.models[1]) : "";
   s.levels++;
+  s.light_styles = {};
   s.intermission = false;
   s.stats[kStatMonsters] = s.stats[kStatSecrets] = 0;  // the new level's counts start over
   s.entities.clear();
@@ -328,6 +329,9 @@ void sound(DemoState& s, DemoMsg& m) {
   e.origin = {x, y, z};
   if (!m.bad) s.started.push_back(e);
 }
+
+// The palette's blood colours a program's burst is thrown in: a body's, and the beam's.
+constexpr int kBloodColour = 73, kBeamBloodColour = 225;
 
 bool temp_entity(DemoMsg& m, DemoState& s, std::string& error) {
   DemoEffect e;
@@ -372,7 +376,10 @@ bool temp_entity(DemoMsg& m, DemoState& s, std::string& error) {
   }
   e.at = point();
   e.end = e.kind == DemoEffectKind::beam ? point() : e.at;
-  if (e.code == 12) m.skip(2);  // its colour range
+  if (e.code == 12) {  // its colours: the first and the run's length
+    e.colour = m.u8();
+    e.count = m.u8();
+  }
   if (!m.bad) s.effects.push_back(e);
   return true;
 }
@@ -427,7 +434,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           s.centre = m.str();
           break;
         case kStuffText:
-          m.str();
+          s.bonuses += bonus_lines(m.str());
           break;
         case kSetAngle:
           s.angles = {angle(m), angle(m), angle(m)};
@@ -435,7 +442,12 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kServerInfo:
           ok = server_info(d, m, error);
           break;
-        case kLightStyle:
+        case kLightStyle: {  // the style, its pattern
+          const size_t style = m.u8();
+          std::string pattern = m.str();
+          if (style < kDemoLightStyles) s.light_styles[style] = std::move(pattern);
+          break;
+        }
         case kUpdateName:
           m.u8();
           m.str();
@@ -460,12 +472,29 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           }
           break;
         }
-        case kParticle:
-          coord(m);
-          coord(m);
-          coord(m);
-          m.skip(3 + 2);
+        case kParticle: {
+          // A program's burst: blood's colour (73) is a body's blood, its drops thrown along its
+          // way (sixteenths a byte); the beam's blood (225) is a burst of its own; any other colour
+          // is a burst of that colour's shades; a count of 255 is an explosion.
+          const float x = coord(m), y = coord(m), z = coord(m);
+          float way[3];
+          for (float& v : way) v = static_cast<float>(static_cast<int8_t>(m.u8())) / 16;
+          const int count = m.u8(), colour = m.u8();
+          if (!m.bad) {
+            DemoEffect e;
+            const bool blood = colour == kBloodColour || colour == kBeamBloodColour;
+            e.kind = count == 255 ? DemoEffectKind::explosion
+                     : blood      ? DemoEffectKind::blood
+                                  : DemoEffectKind::burst;
+            e.code = count == 255 ? 3 : colour == kBeamBloodColour ? 13 : -1;  // -1: a burst
+            e.count = count;
+            e.colour = colour;
+            e.at = e.end = {x, y, z};
+            e.way = {way[0], way[1], way[2]};
+            s.effects.push_back(e);
+          }
           break;
+        }
         case kDamage: {  // the armour, the blood, where it came from
           DemoBlow b;
           b.armor = m.u8();
@@ -532,6 +561,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           m.str();
           break;
         case kBonusFlash:
+          ++s.bonuses;
           break;
         case kFog:  // density, red, green, blue, the fade's time
           m.skip(4 + 2);

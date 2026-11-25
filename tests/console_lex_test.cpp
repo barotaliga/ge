@@ -46,3 +46,23 @@ TEST(alias_arguments) {
   CHECK(substitute_args("echo $3 $$x", {"a"}) == "echo  $$x");
   CHECK(quote("a b") == "\"a b\"" && quote("ab") == "ab" && quote("") == "\"\"");
 }
+
+TEST(alias_arguments_in_every_classic_form) {
+  const std::vector<std::string> args = {"go", "a", "b", "c", "d"};
+  CHECK(substitute_args("echo $0 $@", args) == "echo go a b c d");
+  CHECK(substitute_args("echo ${2-3} ${3-} ${9-}.", args) == "echo b c c d .");
+  CHECK(substitute_args("echo ${x} ${2-", args) == "echo ${x} ${2-");  // not a run: kept
+  CHECK(substitute_args("say_team %2 %1 %h %%5 %0", args) == "say_team b a %h %5 a b c d");
+  CHECK(substitute_args("say_team %h $1", args) == "say_team %h a");  // no %digit: kept
+  CHECK(substitute_args("echo 100% sure %7", {"x"}) == "echo 100% sure ");
+}
+
+TEST(a_value_fitted_to_its_width) {
+  CHECK(ge::console::fit_width("75", 4, 'l') == "75  ");
+  CHECK(ge::console::fit_width("75", 4, 'r') == "  75");
+  CHECK(ge::console::fit_width("75", 5, 'c') == " 75  ");
+  CHECK(ge::console::fit_width("rocket", 3, 'l') == "roc");
+  // Colour codes and braces take no room, and stay.
+  CHECK(ge::console::fit_width("&cf00ra&r", 3, 'l') == "&cf00ra&r ");
+  CHECK(ge::console::fit_width("{quad}", 2, 'l') == "{qu}");
+}

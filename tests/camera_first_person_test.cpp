@@ -9,6 +9,7 @@
 // ge:keywords test camera first-person bob roll kick punch dip stairs crouch comfort
 // ge:skill camera testing
 // ge:test tests/camera_first_person_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -98,6 +99,12 @@ TEST(the_eyes_stand_at_the_view_height_and_crouch) {
   const cam::FirstPersonRow row;
   CHECK(std::fabs(eye_over(frames[100]) - row.eye_stand_m) < 1e-6);   // 0.83 s
   CHECK(std::fabs(eye_over(frames[360]) - row.eye_crouch_m) < 1e-3);  // 3 s
+  // The player's own lift raises (or drops) the eye over both heights.
+  cam::FirstPersonRow lifted;
+  lifted.eye_lift_m = 0.1;
+  const auto up = run("crouch", 120, 0, lifted);
+  CHECK(std::fabs(eye_over(up[100]) - (row.eye_stand_m + 0.1)) < 1e-6);
+  CHECK(std::fabs(eye_over(up[360]) - (row.eye_crouch_m + 0.1)) < 1e-3);
 }
 
 TEST(a_hit_kicks_away_from_the_blow_and_a_shot_punches_up) {
@@ -170,4 +177,29 @@ TEST(the_classic_row_kicks_toward_the_blow) {
   CHECK(frames[301].p.roll < -0.005);
   // The blow travelling backward (from the front) pitches the view down, toward it.
   CHECK(frames[421].p.pitch - frames[421].s.look_pitch < -0.005);
+}
+
+TEST(the_eye_carries_its_share_of_the_bob_and_the_state_keeps_it_whole) {
+  cam::FirstPersonRow none, twice;
+  none.bob_eye = 0;
+  twice.bob_eye = 2;
+  const std::vector<Frame> one = run("walk", 60), zero = run("walk", 60, 1, none),
+                           two = run("walk", 60, 1, twice);
+  bool bobbed = false;
+  for (size_t i = 0; i < one.size(); ++i) {
+    const double bob = eye_over(one[i]) - eye_over(zero[i]);
+    bobbed = bobbed || std::fabs(bob) > 1e-3;
+    CHECK(std::fabs(eye_over(two[i]) - eye_over(zero[i]) - 2 * bob) < 1e-9);
+  }
+  CHECK(bobbed);
+  // The state keeps the frame's bob whatever the eye's share (a held weapon rides it).
+  const cam::Scenario* sc = cam::find_camera_scenario("walk");
+  cam::ScriptRun r = cam::start_script(*sc);
+  cam::FirstPersonState st;
+  double most = 0;
+  for (int i = 1; i <= 60; ++i) {
+    cam::frame_first_person(none, cam::advance_to(r, i / 60.0), st, 1.0 / 60, 1);
+    most = std::max(most, std::fabs(st.bob));
+  }
+  CHECK(most > 1e-3);
 }

@@ -6,9 +6,9 @@
 //
 // ge:summary The movement labs' loaders: a map as the move's world, a demo as players' tracks
 // ge:keywords lab map-load bsp basedir fixture demo tracks players names frags move-world
-// ge:keywords is_recording ged replay-v2 recording-scan
+// ge:keywords is_recording ged replay-v2 recording-scan crash-cause flight-crash
 // ge:skill shooter labs
-// ge:test tests/shooter_hops_test.cpp
+// ge:test tests/shooterbots_hops_test.cpp
 #pragma once
 
 #include <array>
@@ -23,14 +23,16 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "shooter/bsp_world.hpp"
-#include "shooter/hops.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/hops.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 
 namespace shooters_edge::labs {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace cl = shooters_edge::client;
 
 // A file a folder's scan takes for a recording: a multiview recording (`.mvd`) or the replay file
@@ -90,7 +92,7 @@ inline bool load_study_map(const std::string& path, const std::string& basedir,
   }
   if (!ge::brush::read_bsp(bytes, &out.map, &error)) return false;
   if (!sh::bsp_world(out.map, &out.bsp, &error)) return false;
-  sh::map_world(out.bsp.models[0], *out.world);
+  sb::map_world(out.bsp.models[0], *out.world);
   return true;
 }
 
@@ -98,7 +100,7 @@ struct DemoTracks {
   std::string map;
   double seconds = 0;
   int64_t frames = 0;
-  std::array<std::vector<sh::TrackPoint>, 32> tracks;
+  std::array<std::vector<sb::TrackPoint>, 32> tracks;
   std::array<std::string, 32> names;
   std::array<std::string, 32> teams;  // "" none
   std::array<int32_t, 32> frags{};
@@ -128,5 +130,23 @@ inline bool read_demo_tracks(std::vector<uint8_t> bytes, DemoTracks& out, std::s
   out.frags = d.state.frags;
   return true;
 }
+
+// A FLIGHT'S CRASH (se-moves' `fast.*.crash.*`, se-team's `--flights`): 80 u/s or more lost over
+// the hop; its cause the largest one-frame drop: 40 or more before the landing frame is a mid-air
+// hit (`air`: a wall, a player), at the landing `land` (a step, a slope, a wall at the feet), none
+// that large `slow` (the keys or the turn). -1 when the hop is no crash; `at` the drop's frame.
+inline int crash_cause(const sb::HopReading& r, const sb::Hop& h, int32_t* at = nullptr) {
+  if (h.speed_land - h.speed_off >= -80) return -1;
+  float drop = 0;
+  int32_t where = -1;
+  for (int32_t i = h.takeoff + 1; i <= h.land; i++) {
+    const float d =
+        r.frames[static_cast<size_t>(i - 1)].speed - r.frames[static_cast<size_t>(i)].speed;
+    if (d > drop) drop = d, where = i;
+  }
+  if (at != nullptr) *at = where;
+  return drop < 40 ? 2 : where >= h.land - 1 ? 1 : 0;
+}
+inline constexpr const char* kCrashCauses[3] = {"air", "land", "slow"};
 
 }  // namespace shooters_edge::labs

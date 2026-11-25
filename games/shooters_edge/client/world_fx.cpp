@@ -12,6 +12,7 @@
 
 #include "brush/light_probe.hpp"
 #include "brush/map.hpp"
+#include "camera/pose.hpp"
 #include "classicenhance/replace.hpp"
 #include "classicenhance/weapons.hpp"
 #include "core/math.hpp"
@@ -23,6 +24,7 @@
 #include "shooter/trace.hpp"
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
+#include "shooters_edge/client/face_hit.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -33,6 +35,51 @@ namespace {
 
 constexpr double kUpWay[3] = {0, 1, 0};  // a scripted burst's way where nothing else gives one
 
+// The specks thrown from here on taken back when this goes out of scope while `on` (a trail
+// Quake II's cl_disable_particles leaves out).
+struct BirthsCut {
+  fx::Particles& births;
+  size_t keep = 0;
+  bool on = false;
+  BirthsCut(fx::Particles& b, bool cut) : births(b), keep(b.size()), on(cut) {}
+  BirthsCut(const BirthsCut&) = delete;
+  BirthsCut& operator=(const BirthsCut&) = delete;
+  ~BirthsCut() {
+    // Shrinking never allocates; erase, unlike resize, is not one that may grow.
+    if (on && births.size() > keep)
+      births.erase(births.begin() + static_cast<std::ptrdiff_t>(keep), births.end());
+  }
+};
+
+// An explosion's light under Quake II's cl_dlight_hacks: 2 reaches half as far.
+fx::Light q2_blast_light(const FxState& s, fx::Light light) {
+  if ((s.on.q2.light_hacks & 2) != 0) light.radius *= 0.5;
+  return light;
+}
+
+// Quake II's rail trail as `cl_railtrail_type` asks (1 the core, 2 the core and its spiral),
+// from `from` to `to` (engine metres), fading over `cl_railtrail_time`.
+void q2_rail_trail(FxState& s, int entity, const double from[3], const double to[3], double t) {
+  const ge::classic::Q2FxSwitches& q = s.on.q2;
+  HeldBeam b;
+  b.entity = entity;
+  b.q2_trail = true;
+  b.shot.born_s = t;
+  b.shot.end_s = t;  // let go at once: the whole of its life its fade
+  b.shot.seed = s.seed++;
+  for (int k = 0; k < 3; ++k) b.shot.from[k] = from[k], b.shot.to[k] = to[k];
+  b.seen = t;
+  b.trail_fade_s = static_cast<float>(q.rail_time);
+  b.trail_m = static_cast<float>(q.core_width * ge::brush::kUnitM);
+  ge::classic::q2_colour(q.core_colour, b.trail_rgb);  // an unknown name keeps red
+  s.beams.push_back(b);
+  if (q.rail_type < 2) return;
+  b.trail_radius_m = static_cast<float>(q.spiral_radius * ge::brush::kUnitM);
+  b.trail_rgb[0] = 0, b.trail_rgb[1] = 0, b.trail_rgb[2] = 1;
+  ge::classic::q2_colour(q.spiral_colour, b.trail_rgb);  // an unknown name keeps blue
+  if (b.trail_radius_m > 0) s.beams.push_back(b);
+}
+
 // The unit way from `p` toward the eye (engine metres): a scripted hit's `along`.
 std::array<double, 3> toward(const double p[3], const ge::camera::Vec3& eye) {
   const double d[3] = {eye.x - p[0], eye.y - p[1], eye.z - p[2]};
@@ -41,20 +88,17 @@ std::array<double, 3> toward(const double p[3], const ge::camera::Vec3& eye) {
   return {d[0] / len, d[1] / len, d[2] / len};
 }
 
-// The classic explosion sprite's frames and their rate, and the classic bolt's segment, units.
+// The classic explosion sprite's frames and their rate.
 constexpr int kSpriteFrames = 6;
 constexpr double kSpriteFps = 10;
-constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
-constexpr int kArcEntity = -(1 << 22);  // the arc across the player's gun's prongs
+constexpr int kPlaceEntities = -(1 << 22);  // loc_draw's markers
+constexpr int kArcEntity = -(1 << 22);      // the arc across the player's gun's prongs
 // The hot air a nail's flight and a rocket's motor leave (render/haze.hpp's presets).
 const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
 const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
 
-// The mod's contents codes for the liquids (games/shooters_edge/rules/common_decl.hpp's CONTENT_*).
-constexpr float kWater = -3, kSlime = -4, kLava = -5;
-constexpr float kEyesUnder = 3;  // waterlevel: the eyes under the surface
 // A departing figure's entity in the models drawn: its own, moved out of every real one's way.
 constexpr int kLeavingBase = -1000000;
 
@@ -73,91 +117,36 @@ bool near_warp(const WarpWatch& w, const sh::Vec3f& at, double t) {
   return false;
 }
 
+// `loc_draw`'s heads (place_names.hpp's `place_markers`), the nearest under a white light of
+// 200 units.
+void place_markers(const FxScene& l, const FxState& s, double t, FxFrame& out) {
+  if (s.places == nullptr) return;
+  thread_local std::vector<PlaceMarker> marks;
+  if (!place_markers(*s.places, t, marks)) return;
+  int n = 0;
+  for (const PlaceMarker& k : marks) {
+    for (const EffectModel head : {EffectModel::place_q1, EffectModel::place_q2}) {
+      Placed m;
+      m.entity = kPlaceEntities - n++;
+      m.modelindex = l.effect_models + static_cast<int>(head);
+      m.origin = k.at;
+      out.models.push_back(m);
+    }
+    if (!k.nearest) continue;
+    fx::Light light;
+    put(engine_point(k.light), light.pos);
+    light.radius = 200 * ge::brush::kUnitM;
+    light.colour[0] = light.colour[1] = light.colour[2] = 1;
+    out.lights.push_back(light);
+  }
+}
+
 // A direction in the map's axes as a unit one in the engine's.
 void engine_dir(const sh::Vec3f& d, double out[3]) {
   put(engine_point(d), out);
   const double n = ge::core::hypot3(out[0], out[1], out[2]);
   for (int k = 0; k < 3; ++k) out[k] = n > 0 ? out[k] / n : 0;
   if (n == 0) out[1] = 1;
-}
-
-// THE FACE A ROUND HIT: the map's triangle the line from `from` through `at` (map units) crosses
-// within a few units of `at`, among the surfaces marked in the leaf just before it: its normal
-// toward `from` (map axes, unit), its texture's surface class and its baked light there (its own
-// lightmap's first style, 0..1 a channel; all -1 when it has none) and its texture coordinates
-// there (Vertex::st's kind). False when no triangle is near.
-bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& at,
-              uint32_t* texture, sh::Vec3f* n, ge::detail::SurfaceClass* surface, float light[3],
-              float st[2]) {
-  const double d[3] = {at.x - from.x, at.y - from.y, at.z - from.z};
-  const double len = ge::core::hypot3(d[0], d[1], d[2]);
-  if (len < 1e-3 || m.leaves.empty()) return false;
-  const double u[3] = {d[0] / len, d[1] / len, d[2] / len};
-  const float before[3] = {static_cast<float>(at.x - u[0] * 2), static_cast<float>(at.y - u[1] * 2),
-                           static_cast<float>(at.z - u[2] * 2)};
-  const uint32_t leaf = ge::brush::leaf_at(m, before);
-  if (leaf >= m.leaves.size()) return false;
-  const ge::brush::Leaf& lf = m.leaves[leaf];
-  const double o[3] = {from.x, from.y, from.z};
-  constexpr double kNear = 12;  // units either side of the point the server reported
-  double best = kNear;
-  bool found = false;
-  for (uint32_t i = 0; i < lf.marks; ++i) {
-    const uint32_t si = m.marks[lf.first_mark + i];
-    if (si >= m.surfaces.size()) continue;
-    const ge::brush::Surface& sf = m.surfaces[si];
-    for (uint32_t t = 0; t + 2 < sf.count; t += 3) {
-      const float* a = m.vertices[m.indices[sf.first + t]].pos;
-      const float* b = m.vertices[m.indices[sf.first + t + 1]].pos;
-      const float* c = m.vertices[m.indices[sf.first + t + 2]].pos;
-      const double e1[3] = {b[0] - a[0], b[1] - a[1], b[2] - a[2]};
-      const double e2[3] = {c[0] - a[0], c[1] - a[1], c[2] - a[2]};
-      const double p[3] = {u[1] * e2[2] - u[2] * e2[1], u[2] * e2[0] - u[0] * e2[2],
-                           u[0] * e2[1] - u[1] * e2[0]};
-      const double det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
-      if (std::abs(det) < 1e-9) continue;
-      const double tv[3] = {o[0] - a[0], o[1] - a[1], o[2] - a[2]};
-      const double bu = (tv[0] * p[0] + tv[1] * p[1] + tv[2] * p[2]) / det;
-      if (bu < -1e-4 || bu > 1 + 1e-4) continue;
-      const double q[3] = {tv[1] * e1[2] - tv[2] * e1[1], tv[2] * e1[0] - tv[0] * e1[2],
-                           tv[0] * e1[1] - tv[1] * e1[0]};
-      const double bv = (u[0] * q[0] + u[1] * q[1] + u[2] * q[2]) / det;
-      if (bv < -1e-4 || bu + bv > 1 + 1e-4) continue;
-      const double dist = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) / det;
-      if (std::abs(dist - len) >= best) continue;
-      best = std::abs(dist - len);
-      found = true;
-      double nn[3] = {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
-                      e1[0] * e2[1] - e1[1] * e2[0]};
-      const double nl = ge::core::hypot3(nn[0], nn[1], nn[2]);
-      const double facing = nn[0] * u[0] + nn[1] * u[1] + nn[2] * u[2];
-      const double sign = facing > 0 ? -1.0 : 1.0;  // toward `from`
-      *n = {static_cast<float>(sign * nn[0] / nl), static_cast<float>(sign * nn[1] / nl),
-            static_cast<float>(sign * nn[2] / nl)};
-      *texture = sf.texture;
-      // The face's own baked light where the line crossed it (first style; -1: none).
-      const float* la = m.vertices[m.indices[sf.first + t]].lm;
-      const float* lb = m.vertices[m.indices[sf.first + t + 1]].lm;
-      const float* lc = m.vertices[m.indices[sf.first + t + 2]].lm;
-      const float wa = static_cast<float>(1 - bu - bv), wb = static_cast<float>(bu),
-                  wc = static_cast<float>(bv);
-      const float uv[2] = {wa * la[0] + wb * lb[0] + wc * lc[0],
-                           wa * la[1] + wb * lb[1] + wc * lc[1]};
-      if (!ge::brush::lightmap_at(m, sf.lightmap, uv, light)) light[0] = light[1] = light[2] = -1;
-      // And where on its texture (texels where the family stores them so, else whole textures).
-      const float* ta = m.vertices[m.indices[sf.first + t]].st;
-      const float* tb = m.vertices[m.indices[sf.first + t + 1]].st;
-      const float* tc = m.vertices[m.indices[sf.first + t + 2]].st;
-      for (int k = 0; k < 2; ++k) st[k] = wa * ta[k] + wb * tb[k] + wc * tc[k];
-      const ge::brush::Texture* tex =
-          sf.texture < m.textures.size() ? &m.textures[sf.texture] : nullptr;
-      *surface = tex == nullptr                           ? ge::detail::SurfaceClass::unknown
-                 : tex->sky                               ? ge::detail::SurfaceClass::sky
-                 : tex->liquid != ge::brush::Liquid::none ? ge::detail::SurfaceClass::liquid
-                                                          : ge::detail::classify_name(tex->name);
-    }
-  }
-  return found;
 }
 
 // The surface nearest `at` (map units) within kNearSurfaceU along the six axes: its normal (out of
@@ -309,42 +298,6 @@ void hole_colour(FxState& s, const ge::brush::Map& m, uint32_t index, const floa
   for (int k = 0; k < 3; ++k) out[k] = static_cast<float>(sum[k] / (kHolePatch * kHolePatch));
 }
 
-// Two unit ways square to `n` and to each other.
-void tangents(const double n[3], double a[3], double b[3]) {
-  const double up[3] = {std::abs(n[1]) < 0.9 ? 0.0 : 1.0, std::abs(n[1]) < 0.9 ? 1.0 : 0.0, 0};
-  a[0] = up[1] * n[2] - up[2] * n[1];
-  a[1] = up[2] * n[0] - up[0] * n[2];
-  a[2] = up[0] * n[1] - up[1] * n[0];
-  const double al = std::max(ge::core::hypot3(a[0], a[1], a[2]), 1e-9);
-  for (int k = 0; k < 3; ++k) a[k] /= al;
-  b[0] = n[1] * a[2] - n[2] * a[1];
-  b[1] = n[2] * a[0] - n[0] * a[2];
-  b[2] = n[0] * a[1] - n[1] * a[0];
-}
-
-// `v` (a model's own frame) turned by the model's rotation `q` (x, y, z, w) into the world's.
-void turn_by(const float q[4], const double v[3], double out[3]) {
-  const double x = q[0], y = q[1], z = q[2], w = q[3];
-  const double t[3] = {2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
-                       2 * (x * v[1] - y * v[0])};
-  out[0] = v[0] + w * t[0] + (y * t[2] - z * t[1]);
-  out[1] = v[1] + w * t[1] + (z * t[0] - x * t[2]);
-  out[2] = v[2] + w * t[2] + (x * t[1] - y * t[0]);
-}
-
-// Triangle `k` of a body's skin (nine floats a triangle, its model's frame) in the world: its
-// corners into `c`.
-void skin_corners(const std::vector<float>& skin, size_t k, const double at[3], const float q[4],
-                  double c[3][3]) {
-  for (int i = 0; i < 3; ++i) {
-    const double local[3] = {skin[k * 9 + size_t(i) * 3], skin[k * 9 + size_t(i) * 3 + 1],
-                             skin[k * 9 + size_t(i) * 3 + 2]};
-    double o[3];
-    turn_by(q, local, o);
-    for (int j = 0; j < 3; ++j) c[i][j] = at[j] + o[j];
-  }
-}
-
 // The map's world faces (no sky, no liquid) as the marks' receivers, in engine metres, each
 // triangle wound to face the way its face's normal does.
 std::shared_ptr<const MarkFaces> receivers_of(const ge::brush::Map& m) {
@@ -377,7 +330,8 @@ std::shared_ptr<const MarkFaces> receivers_of(const ge::brush::Map& m) {
         mesh.idx.push_back(static_cast<uint32_t>(mesh.pos.size()));
         mesh.pos.push_back(v);
       }
-      mesh.tag.push_back(0);
+      mesh.tag.push_back(
+          static_cast<uint16_t>(std::min<uint32_t>(sf.texture, 0xffff)));  // its texture
     }
   }
   faces->receivers = gd::bin_receivers(mesh, 1);  // points into faces->mesh, kept beside it
@@ -514,8 +468,10 @@ FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   s.lerp.frames = picture.lerp_models;
   s.lerp.moves = picture.lerp_move;
-  s.gibs_hidden = picture.gib_filter;
+  s.gibs_hidden = picture.gib_filter;  // cl_gibfilter (Quake II's cl_gibs 0)
   s.muzzle_flash = picture.muzzle_flash;
+  s.q2 = picture.q2fx;  // Quake II's cl_disable_particles, cl_dlight_hacks ...
+  s.fake_shaft = std::clamp(picture.fake_shaft, 0.0, 1.0);
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
   const ge::classicenhance::Replacement* blast =
@@ -531,209 +487,14 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.bubbles = picture.ce.bubbles;
   s.monsters = picture.ce.monsters;
   s.blood = picture.ce.blood;
+  s.blood_life_s = picture.blood_time > 0 ? picture.blood_time : -1;
+  s.blood_amount = std::clamp(picture.blood_amount, 0.0, 3.0);
+  s.respawns = picture.ce.respawns;
+  s.shells = picture.ce.shells;
   return s;
 }
 
 namespace {
-
-// The point on triangle `c` nearest `p`, as its place from the first corner (a, b).
-void nearest_on(const double c[3][3], const double p[3], float* a, float* b, double* d2) {
-  double e1[3], e2[3], w[3];
-  for (int k = 0; k < 3; ++k) {
-    e1[k] = c[1][k] - c[0][k];
-    e2[k] = c[2][k] - c[0][k];
-    w[k] = p[k] - c[0][k];
-  }
-  const double d11 = e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2];
-  const double d12 = e1[0] * e2[0] + e1[1] * e2[1] + e1[2] * e2[2];
-  const double d22 = e2[0] * e2[0] + e2[1] * e2[1] + e2[2] * e2[2];
-  const double w1 = w[0] * e1[0] + w[1] * e1[1] + w[2] * e1[2];
-  const double w2 = w[0] * e2[0] + w[1] * e2[1] + w[2] * e2[2];
-  const double det = d11 * d22 - d12 * d12;
-  double u = det > 1e-12 ? (d22 * w1 - d12 * w2) / det : 0.0;
-  double v = det > 1e-12 ? (d11 * w2 - d12 * w1) / det : 0.0;
-  u = std::clamp(u, 0.0, 1.0);
-  v = std::clamp(v, 0.0, 1.0 - u);
-  double q[3];
-  for (int k = 0; k < 3; ++k) q[k] = c[0][k] + u * e1[k] + v * e2[k] - p[k];
-  *a = static_cast<float>(u);
-  *b = static_cast<float>(v);
-  *d2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2];
-}
-
-// A wound where a round struck `at` (map units; `p` the same in the world), on the body standing
-// nearest it: the triangle of its skin nearest the point.
-void wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, const double p[3],
-           const ge::camera::Vec3& from, int drops, double t) {
-  if (s.models == nullptr) return;
-  const Placed* body = nullptr;
-  float nearest = kWoundReachU * kWoundReachU;
-  for (const Placed& m : placed) {
-    if (m.entity < 1) continue;
-    const float dx = m.origin.x - at.x, dy = m.origin.y - at.y, dz = m.origin.z - at.z;
-    const float d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 < nearest) {
-      nearest = d2;
-      body = &m;
-    }
-  }
-  if (body == nullptr || !body_triangles(*s.models, *body, t, s.skin) || s.skin.empty()) return;
-  double origin[3];
-  put(engine_point(body->origin), origin);
-  float q[4];
-  const float ang[3] = {body->angles.x, body->angles.y, body->angles.z};
-  models::rotation_of(ang, true, q);
-  Wound w;
-  w.entity = body->entity;
-  w.seed = s.seed++;
-  w.size = 1 + 0.15f * static_cast<float>(drops - 1);
-  // The round's own line, from the shooter through where it struck the body's box, onto the
-  // skin: the first triangle it crosses; else the triangle nearest the point.
-  double dir[3] = {p[0] - from.x, p[1] - from.y, p[2] - from.z};
-  const double dl = std::max(ge::core::hypot3(dir[0], dir[1], dir[2]), 1e-9);
-  for (double& k : dir) k /= dl;
-  const double start[3] = {from.x, from.y, from.z};
-  double first = 1e18, best = 1e18;
-  bool crossed = false;
-  for (size_t k = 0; k < s.skin.size() / 9; ++k) {
-    double c[3][3];
-    skin_corners(s.skin, k, origin, q, c);
-    double e1[3], e2[3], tv[3];
-    for (int j = 0; j < 3; ++j) {
-      e1[j] = c[1][j] - c[0][j];
-      e2[j] = c[2][j] - c[0][j];
-      tv[j] = start[j] - c[0][j];
-    }
-    const double pv[3] = {dir[1] * e2[2] - dir[2] * e2[1], dir[2] * e2[0] - dir[0] * e2[2],
-                          dir[0] * e2[1] - dir[1] * e2[0]};
-    const double det = e1[0] * pv[0] + e1[1] * pv[1] + e1[2] * pv[2];
-    if (std::abs(det) > 1e-12) {
-      const double u = (tv[0] * pv[0] + tv[1] * pv[1] + tv[2] * pv[2]) / det;
-      const double qv[3] = {tv[1] * e1[2] - tv[2] * e1[1], tv[2] * e1[0] - tv[0] * e1[2],
-                            tv[0] * e1[1] - tv[1] * e1[0]};
-      const double v = (dir[0] * qv[0] + dir[1] * qv[1] + dir[2] * qv[2]) / det;
-      const double d = (e2[0] * qv[0] + e2[1] * qv[1] + e2[2] * qv[2]) / det;
-      if (u >= 0 && v >= 0 && u + v <= 1 && d > 0 && d < first) {
-        first = d;
-        crossed = true;
-        w.tri = static_cast<uint32_t>(k);
-        w.a = static_cast<float>(u);
-        w.b = static_cast<float>(v);
-      }
-    }
-    if (crossed) continue;
-    float a = 0, b = 0;
-    double d2 = 0;
-    nearest_on(c, p, &a, &b, &d2);
-    if (d2 < best) {
-      best = d2;
-      w.tri = static_cast<uint32_t>(k);
-      w.a = a;
-      w.b = b;
-    }
-  }
-  s.wounds.push_back(w);
-  // At most kWoundsEach a body and kWoundsAll in all, the oldest let go.
-  size_t on_body = 0;
-  for (const Wound& o : s.wounds) on_body += o.entity == w.entity ? 1 : 0;
-  if (on_body > kWoundsEach) {
-    const auto oldest = std::find_if(s.wounds.begin(), s.wounds.end(),
-                                     [&](const Wound& o) { return o.entity == w.entity; });
-    s.wounds.erase(oldest);
-  }
-  if (s.wounds.size() > kWoundsAll) s.wounds.erase(s.wounds.begin());
-}
-
-constexpr double kWoundLift = 0.07;  // m toward the eye: past the particles' soft band
-
-// A speck of a wound this frame: still, lit by the room (its `grow`, world_draw's rule for the
-// smoke), alive until the next frame's takes its place.
-ge::render::Particle wound_speck(const double at[3], double size, float albedo, float r, float g,
-                                 float b, double dt) {
-  ge::render::Particle q{};
-  for (int k = 0; k < 3; ++k) q.p[k] = static_cast<float>(at[k]);
-  q.life = static_cast<float>(std::max(dt, 1.0 / 240) * 1.5 + 0.004);
-  q.age = q.life * 0.2f;  // past its fade-in
-  q.size = static_cast<float>(size);
-  q.grow = 1e-6f;  // lit by the room
-  q.albedo = albedo;
-  q.opacity = 1;
-  q.tint[0] = r, q.tint[1] = g, q.tint[2] = b;
-  return q;
-}
-
-// Every wound of a body drawn this frame on its skin as it stands: a dark hole, drops round it.
-void draw_wounds(const FxScene& sc, FxState& s, const std::vector<Placed>& placed,
-                 const ge::camera::Vec3& eye, double t, double dt, effects::Particles& out) {
-  if (s.wounds.empty()) return;
-  // A body come back to life (its health above nothing again, a respawn) is whole.
-  for (auto it = s.wound_health.begin(); it != s.wound_health.end();) {
-    const float h = sc.health_of ? sc.health_of(it->first) : 0;
-    if (it->second <= 0 && h > 0) {
-      std::erase_if(s.wounds, [&](const Wound& w) { return w.entity == it->first; });
-      it = s.wound_health.erase(it);
-    } else {
-      it->second = h;
-      ++it;
-    }
-  }
-  for (const Wound& w : s.wounds)
-    if (!s.wound_health.contains(w.entity))
-      s.wound_health[w.entity] = sc.health_of ? sc.health_of(w.entity) : 0;
-  if (s.models == nullptr) return;
-  int skinned = -1;  // the body whose skin s.skin holds
-  for (const Placed& m : placed) {
-    if (m.entity < 1) continue;
-    bool any = false;
-    for (const Wound& w : s.wounds) any = any || w.entity == m.entity;
-    if (!any) continue;
-    if (!body_triangles(*s.models, m, t, s.skin)) continue;
-    skinned = m.entity;
-    double origin[3];
-    put(engine_point(m.origin), origin);
-    float q[4];
-    const float ang[3] = {m.angles.x, m.angles.y, m.angles.z};
-    models::rotation_of(ang, true, q);
-    for (const Wound& w : s.wounds) {
-      if (w.entity != skinned || size_t(w.tri) * 9 + 9 > s.skin.size()) continue;
-      double c[3][3];
-      skin_corners(s.skin, w.tri, origin, q, c);
-      double e1[3], e2[3], n[3], at[3];
-      for (int k = 0; k < 3; ++k) {
-        e1[k] = c[1][k] - c[0][k];
-        e2[k] = c[2][k] - c[0][k];
-        at[k] = c[0][k] + w.a * e1[k] + w.b * e2[k];
-      }
-      n[0] = e1[1] * e2[2] - e1[2] * e2[1];
-      n[1] = e1[2] * e2[0] - e1[0] * e2[2];
-      n[2] = e1[0] * e2[1] - e1[1] * e2[0];
-      const double nl = std::max(ge::core::hypot3(n[0], n[1], n[2]), 1e-9);
-      for (double& k : n) k /= nl;
-      double ta[3], tb[3];
-      tangents(n, ta, tb);
-      // Seen only on the side of the body toward the eye; lifted kWoundLift toward it, so the
-      // particles' softening against the skin behind them leaves them whole.
-      double to_eye[3] = {eye.x - at[0], eye.y - at[1], eye.z - at[2]};
-      const double el = std::max(ge::core::hypot3(to_eye[0], to_eye[1], to_eye[2]), 1e-6);
-      for (double& k : to_eye) k /= el;
-      if (n[0] * to_eye[0] + n[1] * to_eye[1] + n[2] * to_eye[2] < 0) continue;
-      // The hole on the skin; the drops round it, the same each frame (its seed).
-      const double hole[3] = {at[0] + to_eye[0] * kWoundLift, at[1] + to_eye[1] * kWoundLift,
-                              at[2] + to_eye[2] * kWoundLift};
-      out.push_back(wound_speck(hole, 0.03, 0.05f, 0.6f, 0.12f, 0.1f, dt));
-      ge::core::Rng r = ge::core::make_rng(w.seed);
-      for (int i = 0; i < 6; ++i) {
-        const double u = ge::core::range(r, -1, 1), v = ge::core::range(r, -1, 1);
-        const double spread = 0.06 * w.size;
-        const double d[3] = {hole[0] + (ta[0] * u + tb[0] * v) * spread,
-                             hole[1] + (ta[1] * u + tb[1] * v) * spread,
-                             hole[2] + (ta[2] * u + tb[2] * v) * spread};
-        out.push_back(
-            wound_speck(d, ge::core::range(r, 0.01, 0.025), 0.3f, 0.75f, 0.04f, 0.03f, dt));
-      }
-    }
-  }
-}
 
 // THE MONSTERS' MISSILES (app/monster_fx.hpp): every drawn model the replacement table or its
 // trail flags name a monster's shot lays its trail over the stretch it flew since the last frame
@@ -930,16 +691,39 @@ bool monster_spit_hit(const FxScene& l, FxState& s, const Effect& e, const doubl
 
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.map = l.map.get();
+  listen_area_bits(l, out.areas);
+  out.light_styles = {};
+  if (l.server != nullptr) out.light_styles = l.server->world.lightstyles;
   out.server = l.server ? &l.server->sv : nullptr;
   out.pose = v.pose;
   out.missiles = v.missiles;
   out.explosions = l.explosions;
+  out.explosion_codes = l.explosion_codes;
   out.effects = l.effects;
   out.blows = l.blows;
+  out.bonuses = l.bonuses;
+  for (int k = 0; k < 4; k++) out.air_tint[k] = l.cshift[k];
   out.campaign = l.campaign_host != nullptr;
-  out.sequel = listen_is_sequel(l);  // its own arrivals, never the warp's fog
+  out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
+  const auto* rules = out.q2 && l.server != nullptr ? &l.server->world.clients[0].numbers : nullptr;
+  for (int k = 0; k < 4; k++) {
+    out.q2_blend[k] = rules != nullptr ? rules->blend[k] : 0;
+    out.q2_apart[k] = rules != nullptr ? rules->blend_apart[k] : 0;
+    out.q2_damage[k] = rules != nullptr ? rules->damage_blend[k] : 0;
+  }
   out.effect_models = effect_model(l, EffectModel::explosion);
+  if (l.server != nullptr) out.beam_model = listed_model(l.server->models, "progs/beam.mdl");
   place_models(l, out.models);
+  if (out.q2)
+    scene_lasers(l, out.beams);
+  else
+    out.beams.clear();
+  // The items coming back, each one's time left as the picture will see it: the real item shows
+  // with the first state past its time, which the window reaches `owed` sooner than the state's
+  // clock says.
+  const double tic = l.server != nullptr ? listen_tic(l) : 0;
+  place_returning(l, ge::classicenhance::kHologramLeadS + tic, out.returning);
+  for (Returning& r : out.returning) r.in_s -= std::min(l.owed, tic);
   // The picture one server frame behind the newest state, as far past it as the wall clock is.
   out.clock = {};
   if (l.server != nullptr) {
@@ -963,6 +747,13 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.me_effects = int(field_named(l, out.own, "effects"));
   out.waterlevel = field_named(l, out.own, "waterlevel");
   out.watertype = field_named(l, out.own, "watertype");
+  out.me_items = int(field_named(l, out.own, "items"));
+  out.eye_contents = 0;
+  if (l.map != nullptr && l.map->from_file && !l.map->bsp.world.models.empty()) {
+    const sh::Edict& ed = l.server->sv.edicts[size_t(out.own)];
+    out.eye_contents =
+        sh::point_contents(l.map->bsp.world.models[0].hulls[0], ed.origin + out.me.view_ofs);
+  }
   const Listen* lp = &l;
   out.placed_of = [lp](int e) {
     Placed m;
@@ -984,6 +775,61 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   fx_scene(l, v, scene);
   step_fx(scene, s, t, dt, out);
 }
+
+namespace {
+
+// The player's own arc gun's beam, turned to the aim (cl_fakeshaft): not the grappling beam, not
+// a rail's or a bolt's streak, and only with a map to trace and a player to be.
+bool turned_own(const FxScene& l, const FxState& s, const HeldBeam& b) {
+  return s.on.fake_shaft > 0 && l.own > 0 && b.entity == l.me.entity && l.map != nullptr &&
+         !b.grapple && !b.rail && !b.plasma && !b.q2_trail && !b.laser && !b.across;
+}
+
+// A map point (units) from an engine one (metres), and a map direction from an engine one.
+sh::Vec3f map_point(const ge::camera::Vec3& e) {
+  const double u = 1 / ge::brush::kUnitM;
+  return {static_cast<float>(e.x * u), static_cast<float>(e.z * u), static_cast<float>(e.y * u)};
+}
+
+// The edge `b` crossed since last frame, now pointing along `dir` from `from` (map units): kept in
+// `b.edges` for its burns (own_beam.hpp's `beam_edge`).
+void cross_edge(const FxScene& l, HeldBeam& b, const sh::Vec3f& from, const sh::Vec3f& dir) {
+  b.edges = 0;
+  sh::Vec3f at[2], n[2];
+  if (b.was && l.map != nullptr &&
+      beam_edge(l.map, from, b.was_dir, dir, l.bodies, b.entity, at, n) == 2) {
+    for (int i = 0; i < 2; ++i) {
+      put(engine_point(at[i]), b.edge_at[i]);
+      engine_dir(n[i], b.edge_n[i]);
+    }
+    b.edges = 2;
+  }
+  b.was_dir = dir;
+  b.was = true;
+}
+
+// `b` traced again from this frame's eye along its aim (`own_beam`), its sparks thrown at the new
+// end when the server's message owed them.
+void turn_own(const FxScene& l, FxState& s, HeldBeam& b, FxFrame& out) {
+  const ge::camera::Vec3 f = ge::camera::look_forward(l.pose.yaw, l.pose.pitch);
+  const sh::Vec3f view = {static_cast<float>(f.x), static_cast<float>(f.z),
+                          static_cast<float>(f.y)};
+  sh::Vec3f from, to, n;
+  if (!own_beam(l.map, map_point(l.pose.eye), view, b.server_from, b.server_to, s.on.fake_shaft,
+                l.bodies, l.own, from, to, n))
+    return;
+  cross_edge(l, b, from, {to.x - from.x, to.y - from.y, to.z - from.z});
+  b.map_from = from;
+  b.map_to = to;
+  put(engine_point(from), b.shot.from);
+  put(engine_point(to), b.shot.to);
+  engine_dir(n, b.shot.normal);
+  if (!b.sparks_due) return;
+  b.sparks_due = false;
+  if (s.on.beams) fx::bolt_hit(b.shot.to, b.shot.normal, s.seed++, &out.births);
+}
+
+}  // namespace
 
 void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   out.models = l.models;
@@ -1020,6 +866,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       c.lerp = h.lerp;
     }
   }
+  // ce_respawns: each item about to come back, a blue hologram filling in where it will lie.
+  if (s.on.respawns)
+    for (const Returning& r : l.returning) {
+      const ge::classicenhance::HologramLook h = ge::classicenhance::hologram_look(r.in_s, t);
+      if (h.shown) out.models.push_back(hologram_of(r.item, h));
+    }
   // The missiles where their models are drawn, so a trail and a glow ride the drawn rocket.
   thread_local std::vector<Missile> missiles;
   missiles.assign(l.missiles.begin(), l.missiles.end());
@@ -1031,22 +883,28 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           break;
         }
   out.births.clear();
+  out.areas = l.areas;
+  for (size_t k = 0; k < out.light_styles.size();
+       k++)  // assigned in place: no allocation once warm
+    out.light_styles[k] = k < l.light_styles.size() ? std::string_view(l.light_styles[k]) : "";
   out.lights.clear();
   out.puffs.clear();
   out.flames.clear();
   out.beams.clear();
+  out.sounds.clear();
   // The marks' receivers, made once a map (ce_decals).
   const ge::brush::Map* faces = l.map ? &l.map->bsp.map : nullptr;
-  if ((s.on.decals || s.on.blood) && faces != s.marked) {
+  if ((s.on.decals || s.on.blood || s.on.shells) && faces != s.marked) {
     s.marked = faces;
     s.receivers = faces != nullptr ? receivers_of(*faces) : nullptr;
     s.marks = ge::detail::make_pool(kMarks);
     s.mark_light.assign(kMarks, {1, 1, 1});
   }
-  if (!s.on.decals && !s.on.blood) {
+  if (!s.on.decals && !s.on.blood && !s.on.shells) {
     s.marked = nullptr;
     s.receivers.reset();
   }
+  ge::detail::expire(s.marks, t);  // blood past ce_blood_time gives its slot back
 
   monster_missiles(l, s, t, dt, out, missiles);
 
@@ -1070,7 +928,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (m.entity <= 0 || m.modelindex <= 0 ||
           m.modelindex >= static_cast<int>(s.models->kinds.size()))
         continue;
-      // The sequel's pieces bleed by their gib bit; its model files name no trail.
+      // Quake II's pieces bleed by their gib bit; its model files name no trail.
       const uint32_t flags =
           s.models->kinds[size_t(m.modelindex)].flags | (m.bleeds ? fx::kTrailGib : 0u);
       if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
@@ -1084,9 +942,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const double from[3] = {a.x, a.y, a.z}, to[3] = {now.at.x, now.at.y, now.at.z};
         const double far = ge::core::hypot3(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
         now.carry = was->second.carry;
-        if (far < kBleedJumpM && m.bleeds)  // the sequel's piece: its own reds
-          now.carry = fx::sequel_blood_trail(from, to, fx::kBloodStep, now.carry, s.seed++,
-                                             s.palette, &out.births);
+        now.count = was->second.count;
+        if (far < kBleedJumpM && m.bleeds)  // Quake II's piece: its own reds, thinning as it flies
+          fx::q2_trail(from, to, m.green_blood ? fx::Q2Trail::green_blood : fx::Q2Trail::blood,
+                       now.count, s.seed++, s.palette, &out.births);
         else if (far < kBleedJumpM)
           now.carry = fx::blood_trail(
               from, to, (flags & fx::kTrailGib) != 0 ? fx::kBloodStep : fx::kThinBloodStep,
@@ -1096,10 +955,26 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     }
   }
   s.bleeding.swap(s.bleeding_next);
+  q2_sustains(s, t, out);  // Quake II's widow beam-outs growing
+  // Quake II's flies round a corpse, a cycle from when they are first seen; thrown every frame.
+  for (const Placed& m : l.models) {
+    if (!m.flies) continue;
+    auto [it, fresh] = s.flies_from.try_emplace(m.entity, t);
+    if (t >= it->second + fx::kSqFliesCycleS) it->second = t;  // a cycle ended: another starts
+    double at[3];
+    put(engine_point(m.origin), at);
+    fx::q2_flies(at, t, t - it->second, std::clamp(dt, 1.0 / 240, 0.1), s.palette, &out.births);
+  }
 
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
   for (const Missile& m : missiles) {
+    // Quake II's cl_disable_particles: a grenade's (2), a rocket's (8) or a blaster bolt's (32)
+    // trail left out.
+    const int np = s.on.q2.no_particles;
+    const BirthsCut cut{out.births, (m.grenade && (np & 2) != 0) ||
+                                        (m.rocket && !m.grenade && (np & 8) != 0) ||
+                                        (m.streak && (np & 32) != 0)};
     ge::camera::Vec3 at = engine_point(m.origin);
     // A rocket's launch as it looks (ce_trails): off its true place while it leaves the tube, the
     // shooter's sway on it when it is the eye's own; its model, flame, trail, light and haze there.
@@ -1153,7 +1028,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     put(at, to);
     const auto was = s.last.find(m.entity);
     // The hot air behind a nail and a rocket's motor (a grenade is not hot), a stretch a frame.
-    if (was != s.last.end() && s.on.trails && !m.grenade && lit) {
+    if (was != s.last.end() && s.on.trails && !m.grenade && lit && m.q2_mark == 0 && !m.q2_spin) {
       ge::render::HazeTrail h;
       put(was->second, h.a);
       put(at, h.b);
@@ -1162,7 +1037,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       h.seed = static_cast<uint32_t>(m.entity);
       s.haze.push_back(h);
     }
-    // The sequel's glowing shots (a blaster's bolt, the BFG's ball): a light riding each, and in
+    // Quake II's other marks by their bits (client/world_fx_q2.cpp).
+    if (m.q2_mark != 0 || m.q2_spin) {
+      double from[3] = {0, 0, 0};
+      if (was != s.last.end()) put(was->second, from);
+      q2_mark_fx(s, m, was != s.last.end(), from, to, t, out);
+    }
+    // Quake II's glowing shots (a blaster's bolt, the BFG's ball): a light riding each, and in
     // the modern look a trail of shining specks behind it.
     if (m.bolt || m.bfg) {
       const float* rgb = m.bfg ? fx::kBfgRgb : fx::kBoltRgb;
@@ -1204,6 +1085,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           fx::glow_trail(from, to, rgb, m.bfg ? 0.12 : 0.035, m.bfg ? 0.05 : 0.04, s.seed++,
                          &out.births);
         }
+      } else if (l.q2 && m.streak && was != s.last.end()) {  // Quake II's blaster: orange specks
+        double from[3];
+        put(was->second, from);
+        fx::q2_bolt_trail(from, to, s.seed++, s.palette, &out.births);
       }
       out.lights.push_back(fx::shot_glow(to, rgb, m.bfg ? fx::kBfgGlowM : fx::kBoltGlowM,
                                          m.bfg ? fx::kBfgGlowLevel : fx::kBoltGlowLevel, m.entity));
@@ -1213,7 +1098,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (was != s.last.end()) {
       double from[3];
       put(was->second, from);
-      if (!s.on.trails) {
+      if (!s.on.trails && l.q2) {  // Quake II's own: thinning smoke, a rocket's fire beside it
+        auto [it, fresh] = s.q2_trails.try_emplace(m.entity, fx::kSqTrailStart);
+        fx::q2_trail(from, to, fx::Q2Trail::smoke, it->second, s.seed++, s.palette, &out.births);
+        if (!m.grenade) fx::q2_rocket_fire(from, to, s.seed++, s.palette, &out.births);
+      } else if (!s.on.trails) {
         if (trail_scripted(s, m.grenade ? "grenade_trail" : "rocket_trail", from, to, out)) {
         } else if (m.grenade) {
           fx::grenade_trail(from, to, s.seed++, s.palette, &out.births);
@@ -1261,6 +1150,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   }
   std::swap(s.last, s.next);
   std::erase_if(s.launched, [&](const auto& kv) { return !s.last.contains(kv.first); });
+  std::erase_if(s.q2_trails, [&](const auto& kv) { return !s.last.contains(kv.first); });
   std::erase_if(s.haze,
                 [&](const ge::render::HazeTrail& h) { return ge::render::haze_cold(h, t); });
   if (!s.on.trails) s.haze.clear();
@@ -1280,13 +1170,25 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.wall_colours.clear();
     s.wounds.clear();
     s.wound_health.clear();
+    s.dropping.clear();
+    s.treads.clear();
     s.marked = nullptr;
     s.beams.clear();
+    s.q2_models.clear();
+    s.q2_models_next = 0;
+    s.q2_cables.clear();
+    s.q2_lasers.clear();
   }
   for (; s.explosions_seen < l.explosions.size(); s.explosions_seen++) {
     const ge::camera::Vec3 at = engine_point(l.explosions[s.explosions_seen]);
     double p[3];
     put(at, p);
+    // Quake II's cl_disable_particles and cl_disable_explosions by the kind it is.
+    const uint8_t code =
+        s.explosions_seen < l.explosion_codes.size() ? l.explosion_codes[s.explosions_seen] : 0;
+    const uint8_t kind = q2_blast_kind(code);
+    const bool no_specks = ge::classic::q2_no_blast_specks(s.on.q2, kind);
+    const bool no_ball = ge::classic::q2_no_blast_ball(s.on.q2, kind);
     if (s.on.explosions) {
       // The surface it went off against, if one is within a ball's reach of it: the nearest hit
       // of six lines out of it.
@@ -1297,6 +1199,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       const size_t first = s.blasts.size();
       const size_t thrown = out.births.size();
       fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
+      if (no_specks) out.births.resize(thrown);
       // What it throws that falls meets what the frame draws (the pool collides); one flung out of
       // the view has the floor under the blast to come down on, and hops there.
       if (l.map) {
@@ -1325,10 +1228,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                               p[2] - normal[2] * off};
         mark(s, ge::detail::DecalKind::scorch, on, normal, sc.size_m, sc.spin_rad, sc.variant, t);
       }
-      s.mains.push_back(s.blasts[first]);
-    } else if (!throw_scripted(s, "explosion", p, kUpWay, 1, -1e9, t, out)) {
-      fx::explosion(p, s.seed++, s.palette, &out.births);
-      s.lit.push_back({at, t, l.explosions[s.explosions_seen]});  // its light, and its sprite
+      s.mains.push_back(s.blasts[first]);   // its light
+      if (no_ball) s.blasts.resize(first);  // and no ball of fire
+    } else if (q2_classic_blast(s, code, l.explosions[s.explosions_seen], p, no_specks, t, out)) {
+      // Quake II's own: its specks, its ball or burst and its light (q2_model_fx.hpp)
+    } else if (no_specks || !throw_scripted(s, "explosion", p, kUpWay, 1, -1e9, t, out)) {
+      if (!no_specks) fx::explosion(p, s.seed++, s.palette, &out.births);
+      s.lit.push_back({at, t, l.explosions[s.explosions_seen], no_ball});  // its light, its sprite
     }
     if (s.on.blood) blast_blood(l, s, l.explosions[s.explosions_seen], t, out);
   }
@@ -1348,8 +1254,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   // ce_warps off (or the classic look): the original. The figure is there or gone at once, and
   // each end of the warp flashes the teleport's fog, the campaign's program throwing its own.
   if (!s.on.warps) {
-    if (!l.campaign &&
-        !l.sequel) {  // the sequel throws its own (its events: sequel_teleport_burst)
+    if (!l.campaign && !l.q2) {  // Quake II throws its own (its events: q2_teleport_burst)
       for (const Warp& w : s.began) {
         double p[3];
         put(engine_point(w.at), p);
@@ -1382,7 +1287,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       m.warp = player_dust(m.origin, m.angles, m.entity).warp;
       m.warp.shown = float(shown);
     }
-    out.held_shown = own > 0 ? float(arrival_shown(s.warps, own, t)) : 1;
+    out.held_shown = 1;  // his own weapon is never warped: he fights on at once
     // His own arrival's warp of the whole view, in the colour of the pack's teleport fog (its
     // specks' brightest, 7..14), made as bright as a colour goes.
     out.arrival_s = -1;
@@ -1400,14 +1305,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     for (const Warp& w : s.warps.live) {
       const double age = t - w.t0, was = w.t0 >= t ? -1 : std::max(t - dt - w.t0, 0.0);
       if (w.arriving) {
+        // His own arrival throws no ash: it would gather before his eyes as he must aim.
+        if (w.entity == own) continue;
         // Onto his body as it stands now.
         const Placed m = placed_of(w.entity);
         fx::Dust d = player_dust(m.origin, m.angles, w.entity);
         if (s.models != nullptr && body_triangles(*s.models, m, t, s.skin)) d.skin = s.skin;
-        if (w.entity == own) {
-          d.keep_off_eye = true;
-          put(l.pose.eye, d.eye);
-        }
         warp_dust(w, d, was, age, s.seed++, &out.births);
         continue;
       }
@@ -1519,6 +1422,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                                    p[2] + normal[2] * 0.1};
             s.sparked.push_back({{off[0], off[1], off[2]}, t, e.at});
           }
+        } else if (e.q2_specks > 0) {  // Quake II's puff off the face (q2_temp_fx.hpp)
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
+                        &out.births);
+          if (l.q2) q2_model_fx(s, e.code, e.at, e.way, t);  // its smoke and flash
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
@@ -1535,8 +1443,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const bool burst = e.code == -1;
         const ge::camera::Vec3 way = engine_point(e.way * 15);
         const double v[3] = {way.x, way.y, way.z};
+        if ((s.on.q2.no_particles & 16) != 0) break;  // Quake II's cl_disable_particles 16
         if (s.on.blood) {
           bleed_fx(l, s, e, p, eye_map, l.map ? floor_under(*l.map, e.at, eye_map) : -1e9, t, out);
+        } else if (e.q2_specks > 0) {  // Quake II's puff of blood off the hit (q2_temp_fx.hpp)
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
+                        &out.births);
         } else if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t,
                                    out)) {
           fx::blood(p,
@@ -1545,7 +1458,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                             : 20 * e.count,
                     arc, s.seed++, s.palette, &out.births, burst ? v : nullptr);
         }
-        if (s.on.decals && !arc) wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
+        // Under ce_blood the blow's own wound (bleed_fx, along the striker's line).
+        if (s.on.decals && !arc && !s.on.blood)
+          wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
         break;
       }
       case EffectKind::teleport:
@@ -1559,6 +1474,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           fx::lava_splash(p, s.seed++, s.palette, &out.births);
         break;
       case EffectKind::beam: {
+        if (l.q2 && e.code == 23) {  // the BFG's laser: a strip for a tenth of a second
+          q2_laser(s, e, t);
+          break;
+        }
         double normal[3], dir[3];
         face(e.at, normal, dir);
         const ge::camera::Vec3 root = engine_point(e.at);
@@ -1572,6 +1491,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           b.model = e.code == 5   ? EffectModel::bolt
                     : e.code == 9 ? EffectModel::bolt3
                                   : EffectModel::bolt2;
+          // The grappling beam (13) is its game's own model, in the model list when it has one.
+          if (e.code == 13) b.listed = l.beam_model;
           b.shot.born_s = t;
           b.shot.seed = s.seed++;
           s.beams.push_back(b);
@@ -1584,38 +1505,54 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         // The classic roots the player's own bolt at his origin, under the gun.
         held->map_from = e.entity == me.entity ? me.origin : e.at;
         held->map_to = e.end;
-        if (s.on.beams) fx::bolt_hit(p, normal, s.seed++, &out.births);
+        held->server_from = e.at;
+        held->server_to = e.end;
+        held->grapple = e.code == 13;
+        // The own beam turned to the aim (cl_fakeshaft) sparks where it is drawn, below.
+        if (turned_own(l, s, *held)) {
+          held->sparks_due = true;
+        } else {
+          cross_edge(l, *held, e.at, {e.end.x - e.at.x, e.end.y - e.at.y, e.end.z - e.at.z});
+          if (s.on.beams) fx::bolt_hit(p, normal, s.seed++, &out.births);
+        }
         break;
       }
-      case EffectKind::explosion:
+      case EffectKind::explosion:  // the mission packs' blast in its colours (12); the rest above
+        if (e.code == 12) {
+          if (!throw_scripted(s, "explosion2", p, kUpWay, 1, -1e9, t, out))
+            fx::explosion2(p, e.colour, e.count, s.seed++, s.palette, &out.births);
+          s.lit.push_back({at, t, e.at, true});  // its light, no sprite
+        }
         break;
+      case EffectKind::burst: {  // a program's burst of a colour's shades
+        const ge::camera::Vec3 way = engine_point(e.way * 15);
+        const double v[3] = {way.x, way.y, way.z};
+        if (!throw_scripted(s, "particle", p, toward(p, eye).data(), e.count, -1e9, t, out))
+          fx::burst(p, e.count, e.colour, v, s.seed++, s.palette, &out.births);
+        break;
+      }
       case EffectKind::named: {  // a mod's own effect: the files' of its name, or nothing
-        // The sequel's arrivals (effects.hpp): a player's own warp is the dust's when it is on,
+        // Quake II's arrivals (effects.hpp): a player's own warp is the dust's when it is on,
         // so his teleport's or entry's burst is not thrown over it.
         if (e.name.starts_with("sq_")) {
-          const bool dust = s.on.warps && near_warp(s.warps, e.at, t);
-          if (e.name == "sq_teleport" && !dust)
-            fx::sequel_teleport_burst(p, s.seed++, s.palette, &out.births);
-          else if (e.name == "sq_item_back")
-            fx::sequel_item_back(p, s.seed++, s.palette, &out.births);
-          else if (e.name == "sq_fountain")
-            fx::sequel_fountain(p, s.seed++, s.palette, &out.births);
-          else if (e.name == "sq_logout")
-            fx::sequel_player_flash(p, fx::kSqLogout, s.seed++, s.palette, &out.births);
-          else if ((e.name == "sq_login" || e.name == "sq_respawn") && !dust)
-            fx::sequel_player_flash(p, e.name == "sq_login" ? fx::kSqLogin : fx::kSqRespawn,
-                                    s.seed++, s.palette, &out.births);
-          // The flash's light, for the one frame it is thrown in.
-          if (e.name == "sq_login" || e.name == "sq_logout" || e.name == "sq_respawn") {
-            const fx::SequelArrival kind = e.name == "sq_login"    ? fx::kSqLogin
-                                           : e.name == "sq_logout" ? fx::kSqLogout
-                                                                   : fx::kSqRespawn;
-            out.lights.push_back(fx::sequel_arrival_light(p, kind, s.seed++));
-          }
+          q2_named_fx(s, e, p, s.on.warps && near_warp(s.warps, e.at, t), t, out);
           break;
         }
-        if (e.name == "te_blaster") {  // the sequel's bolt landing: yellow sparks
-          fx::blaster_hit(p, s.seed++, &out.births);
+        if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
+          q2_model_fx(s, 2, e.at, e.way, t);
+          break;
+        }
+        if (e.name == "te_blaster" || e.name == "te_blaster2") {
+          // Quake II's bolt landing: yellow sparks; Ground Zero's green bolt's are green.
+          fx::blaster_hit(p, s.seed++, &out.births, e.name == "te_blaster2");
+          // On a wall: a small glowing mark, the bolt's heat left in it.
+          double normal[3], dir[3];
+          const ge::detail::SurfaceClass sc = face(eye_map, normal, dir);
+          if (on_face && sc != ge::detail::SurfaceClass::sky &&
+              sc != ge::detail::SurfaceClass::liquid)
+            glow_mark(s, p, normal, fx::kBoltMark, t);
           break;
         }
         if (e.name == "te_bfg_bigexplosion") {  // the BFG's burst (its blast is an explosion's)
@@ -1637,7 +1574,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         double from[3], to[3];
         put(engine_point(e.at), from);
         put(engine_point(e.end), to);
-        // The sequel's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
+        // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
+        if (q2_named_trail(s, e, from, to, out)) break;
+        // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
+        if (l.q2 && !s.on.monsters && q2_cable(s, e, t)) break;
+        // Quake II's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
         if (const fx::Cable c = fx::cable_of(e.name); c != fx::Cable::none) {
           if (s.on.monsters) {
             fx::monster_cable(c, from, to, s.seed++, t, &out.births);
@@ -1664,8 +1605,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           s.monster_flashes.push_back(m);
           break;
         }
-        if (e.name == "te_railtrail") {  // the sequel's rail: a beam, a line circling it (ce_beams)
-          if (s.on.beams) {
+        if (e.name == "te_railtrail") {  // Quake II's rail: a beam, a line circling it (ce_beams)
+          if (s.on.q2.rail_type > 0) {   // cl_railtrail_type: its own core, and spiral at 2
+            q2_rail_trail(s, e.entity, from, to, t);
+          } else if (s.on.beams) {
             HeldBeam b;
             b.entity = e.entity;
             b.rail = true;
@@ -1707,7 +1650,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
     }
   }
-  // The sequel's monsters' flashes: a light each look draws, the fire the modern look's.
+  // Quake II's monsters' flashes: a light each look draws, the fire the modern look's.
   // The shot leaves from the shooter's eye; the flash sits at its gun's tip as this frame holds
   // the model (the vertex furthest along the aim), or at the eye when it has no model drawn.
   std::erase_if(s.monster_flashes, [&](FxState::MonsterFlash& f) {
@@ -1730,39 +1673,59 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (s.on.monsters && !f.sparked) fx::flash_sparks(f.kind, at, dir, f.seed, &out.births);
     f.sparked = true;
     fx::Light light;
-    const bool lit = fx::flash_light(f.kind, at, t - f.t, &light);
+    // Quake II's cl_muzzlelight_time stretches the light's fade; cl_dlight_hacks 4 drops a
+    // machine gun's or a chain gun's.
+    const bool lit =
+        fx::flash_light(f.kind, at, ge::classic::q2_muzzle_age(s.on.q2, t - f.t), &light) &&
+        !(f.kind == fx::Flash::gun && (s.on.q2.light_hacks & 4) != 0);
     if (lit) out.lights.push_back(light);
     ge::render::MuzzleFire fire;
-    if (s.on.monsters && t - f.t < fx::kMonsterMuzzleS &&
+    if (s.on.monsters && s.on.q2.muzzle_models && t - f.t < fx::kMonsterMuzzleS &&
         fx::flash_fire(f.kind, at, dir, f.seed, f.t, &fire))
       out.flames.push_back(fire);
-    return !lit && t >= f.t;
+    return !lit && t - f.t >= fx::kMonsterMuzzleS * 1.5;  // its fire's time over too
   });
   // The enhanced blasts and puffs while they are seen, their main balls' light while it lasts.
   std::erase_if(s.blasts, [&](const ge::render::Blast& b) {
     return t - b.born_s > ge::render::blast_life(b) || t < b.born_s - 1;
   });
+  const size_t puffs_from = out.puffs.size();
   out.puffs.insert(out.puffs.end(), s.blasts.begin(), s.blasts.end());
+  // cl_smooth_explosions 0: each drawn at its age in whole tenths, so it moves on by steps.
+  const bool stepped = !s.on.q2.smooth_explosions;
+  for (size_t i = puffs_from; stepped && i < out.puffs.size(); ++i)
+    out.puffs[i].born_s = t - ge::classic::q2_blast_age(s.on.q2, t - out.puffs[i].born_s);
   std::erase_if(s.mains, [&](const ge::render::Blast& b) {
     fx::Light light;
-    if (!fx::blast_light(b, t, &light)) return t - b.born_s > 0.1;
-    out.lights.push_back(light);
+    const double at = stepped ? b.born_s + ge::classic::q2_blast_age(s.on.q2, t - b.born_s) : t;
+    if (!fx::blast_light(b, at, &light)) return t - b.born_s > 0.1;
+    out.lights.push_back(q2_blast_light(s, light));
     return false;
   });
   // The beams: let go once the program stops sending one, gone once faded; their lights.
   for (HeldBeam& b : s.beams)
     if (b.shot.end_s < 0 && t - b.seen > kBeamHoldS) b.shot.end_s = b.seen + kBeamHoldS;
   std::erase_if(s.beams, [&](const HeldBeam& b) {
-    const double release = !s.on.beams ? 0
-                           : b.coil    ? fx::rail_coil_look().release_s
-                           : b.rail    ? fx::rail_look().release_s
-                           : b.plasma  ? fx::plasma_look().release_s
-                                       : fx::bolt_look().release_s;
+    const double release = b.q2_trail    ? b.trail_fade_s
+                           : !s.on.beams ? 0
+                           : b.coil      ? fx::rail_coil_look().release_s
+                           : b.rail      ? fx::rail_look().release_s
+                           : b.plasma    ? fx::plasma_look().release_s
+                                         : fx::bolt_look().release_s;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
-  ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
-  int segment = 0;
+  // The own beam turned to the aim, traced again from this frame's eye (cl_fakeshaft).
+  for (HeldBeam& b : s.beams)
+    if (b.shot.end_s < 0 && turned_own(l, s, b)) turn_own(l, s, b, out);
+  if (!l.beams.empty())
+    laser_beams(l.beams, s.seed++, s.palette, t, out.beams);  // seed: lasers only
+  ge::core::Rng roll = ge::core::make_rng(s.seed++);          // the classic bolt's segments' roll
+  int segment = kBoltEntities;
   for (HeldBeam& b : s.beams) {
+    if (b.q2_trail) {  // Quake II's cl_railtrail_type beam: drawn in either look
+      out.beams.push_back(b);
+      continue;
+    }
     if (b.rail || b.plasma) {  // a rail's or a bolt's streak: drawn, no burns
       if (!s.on.beams) continue;
       out.beams.push_back(b);
@@ -1776,7 +1739,17 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (s.on.beams) {
       // Its burns where it lands: the line it traces, a few pieces to fill a fast sweep, and the
       // melt where it stays.
+      // An edge crossed first: the line laid up to it on the face it left, then started just past
+      // it on the next.
       ge::render::BeamBurn burn;
+      for (int k = 0; s.on.decals && k < b.edges; ++k) {
+        ge::render::BeamShot edge = b.shot;
+        for (int c = 0; c < 3; ++c) edge.to[c] = b.edge_at[k][c], edge.normal[c] = b.edge_n[k][c];
+        for (int i = 0;
+             i < 6 && ge::render::beam_burns(fx::bolt_look(), edge, t, b.trail, burn, k == 0); ++i)
+          beam_mark(s, b, burn);
+      }
+      b.edges = 0;
       for (int i = 0; s.on.decals && i < 6 &&
                       ge::render::beam_burns(fx::bolt_look(), b.shot, t, b.trail, burn);
            ++i)
@@ -1787,24 +1760,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       out.lights.insert(out.lights.end(), ll, ll + n);
       continue;
     }
-    // The classic bolt: its model every kBoltSegment units from the root to the end, each turned
-    // to a fresh roll every frame (the bolt's crackle).
-    const sh::Vec3f d = {b.map_to.x - b.map_from.x, b.map_to.y - b.map_from.y,
-                         b.map_to.z - b.map_from.z};
-    const double len = ge::core::hypot3(d.x, d.y, d.z);
-    if (len < 1) continue;
-    const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
-    const float pitch =
-        static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
-    for (int i = 0; i * kBoltSegment < len; ++i) {
-      Placed seg;
-      seg.entity = kBoltEntities - segment++;
-      seg.modelindex = l.effect_models + static_cast<int>(b.model);
-      const float k = static_cast<float>(i * kBoltSegment / len);
-      seg.origin = {b.map_from.x + d.x * k, b.map_from.y + d.y * k, b.map_from.z + d.z * k};
-      seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
-      out.models.push_back(seg);
-    }
+    // The classic bolt: its model every 30 units from the root while short of the end, each
+    // turned to a fresh roll every frame (the bolt's crackle).
+    Chain c;
+    c.modelindex = b.listed >= 0 ? b.listed : l.effect_models + static_cast<int>(b.model);
+    place_chain(b.map_from, b.map_to, c, roll, segment, out.models);
   }
   burns_of(s, t, out.burns);
   // The marks still glowing light the room round them (render/marks.hpp's mark_glows).
@@ -1821,10 +1781,17 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       out.lights.push_back(g);
     }
   }
-  if (s.on.decals)
-    draw_wounds(l, s, out.models, l.pose.eye, t, dt, out.births);
-  else
-    s.wounds.clear();
+  // The hot marks burn a little and then smoke as they cool (render/mark_fire.hpp).
+  out.fires.clear();
+  if (s.on.decals && s.receivers) {
+    ge::render::mark_flames(ge::render::mark_fire_look(), s.marks, t, out.fires);
+    ge::render::mark_fire_births(s.mark_fire, ge::render::mark_fire_look(), s.marks, t, dt,
+                                 out.births);
+  }
+  heal_wounds(l, s);
+  if (s.on.decals) draw_wounds(s, out.models, l.pose.eye, t, dt, out.births);
+  body_blood(l, s, t, dt, out);
+  if (!s.on.decals && !s.on.blood) s.wounds.clear();
   std::erase_if(s.sparked, [&](const Blast& b) { return t - b.t >= fx::kSparkLightS; });
   for (const Blast& b : s.sparked) {
     double p[3];
@@ -1841,10 +1808,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     double p[3];
     put(b.at, p);
     fx::Light light;
-    if (fx::explosion_light(p, t - b.t, &light)) out.lights.push_back(light);
+    if (fx::explosion_light(p, ge::classic::q2_blast_age(s.on.q2, t - b.t), &light))
+      out.lights.push_back(q2_blast_light(s, light));
     // The pack's explosion sprite, its frames at ten a second.
     const int frame = static_cast<int>((t - b.t) * kSpriteFps);
-    if (frame >= kSpriteFrames) continue;
+    if (frame >= kSpriteFrames || b.no_sprite) continue;
     Placed spr;
     spr.entity = kSpriteEntities - sprite++;
     spr.modelindex = l.effect_models + static_cast<int>(EffectModel::explosion);
@@ -1852,6 +1820,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     spr.origin = b.map_at;
     out.models.push_back(spr);
   }
+  q2_draw_model_fx(s, l.effect_models, l.me, l.own > 0 ? l.me.entity : 0, t, out);
+  step_cases(l, s, t, dt, out);  // the guns' spent cases (ce_shells)
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.
@@ -1869,45 +1839,21 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     out.lights.push_back(light);
   };
   for (const Placed& m : out.models) glow(m.effects, m.origin);
+  place_markers(l, s, t, out);
   const int mine = l.own > 0 ? l.me_effects : 0;
   if (l.own > 0) glow(mine, p.origin);
 
-  // The screen: the liquid round the eye, and a hit's flash from the blows reported (a campaign)
-  // or the health lost (a match).
-  s.hurt = fx::fade_hurt(s.hurt, dt);
-  s.armour = fx::fade_hurt(s.armour, dt);
-  if (l.blows.size() < s.blows_seen) s.blows_seen = 0;  // a new map
-  if (l.campaign) {
-    for (; s.blows_seen < l.blows.size(); s.blows_seen++) {
-      s.hurt = fx::take_hurt(s.hurt, l.blows[s.blows_seen].blood);
-      s.armour = fx::take_hurt(s.armour, l.blows[s.blows_seen].armor);
-    }
-  } else if (l.own > 0 && !p.dead && p.health < s.health) {
-    s.hurt = fx::take_hurt(s.hurt, s.health - p.health);
-  }
-  s.health = p.health;
-  fx::Screen screen;
-  screen.hurt = s.hurt;
-  screen.armour = s.armour;
-  screen.power = (mine & kGlowBlue) != 0;
-  screen.shield = (mine & kGlowRed) != 0;
-  if (l.own > 0 && l.waterlevel >= kEyesUnder) {
-    const float type = l.watertype;
-    screen.medium = type == kLava    ? fx::Medium::lava
-                    : type == kSlime ? fx::Medium::slime
-                    : type == kWater ? fx::Medium::water
-                                     : fx::Medium::air;
-  }
-  fx::screen_blend(screen, out.blend);
-  out.screen = screen;
-  if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
-    screen.medium = fx::Medium::air;
-  fx::screen_blend(screen, out.blend_dry);
-  out.screen_dry = screen;
+  step_screen(l, s, dt, out);
 }
 
 bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {
   std::vector<fx::FireRow> rows;
+  f.ejects.clear();
+  if (!at_eye.empty()) {
+    for (const std::string_view name : at_eye) f.ejects.push_back(held_ejection(name));
+  } else {
+    for (int w = 0; w < view::kWeapons; ++w) f.ejects.push_back(own_set_ejection(w));
+  }
   if (!at_eye.empty()) {
     for (const std::string_view name : at_eye) {
       const ge::classicenhance::ClassicFire* c = ge::classicenhance::classic_fire_of(name);
@@ -1952,6 +1898,27 @@ void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, 
     }
     out.beams.push_back(across);
     return;
+  }
+}
+
+void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge::core::Rng& roll,
+                 int& entity, std::vector<Placed>& out) {
+  const sh::Vec3f d = {to.x - from.x, to.y - from.y, to.z - from.z};
+  const double len = ge::core::hypot3(d.x, d.y, d.z);
+  if (len < (c.fit ? 1e-6 : 1)) return;
+  const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
+  const float pitch =
+      static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
+  const int n = chain_links(len);
+  for (int i = 0; i < n; ++i) {
+    Placed seg;
+    seg.entity = entity--;
+    seg.modelindex = c.modelindex;
+    const auto k = static_cast<float>(chain_share(i, n, len, c.fit));
+    seg.origin = {from.x + d.x * k, from.y + d.y * k, from.z + d.z * k};
+    seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
+    seg.no_shadow = c.no_shadow;
+    out.push_back(seg);
   }
 }
 

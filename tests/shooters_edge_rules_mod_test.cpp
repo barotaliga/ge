@@ -1,7 +1,7 @@
 // Tests: C++ mods on the real server (games/shooters_edge/server/rules_runner.hpp § C++ mods on
 // top, docs/mods.md § On the server). The sample mod `rocket-bounce`, stacked on a QC runner,
 // speeds its rockets by half again and is in the runner's digest, and the same modded run replays
-// to the bit; the sample mod `vampire`, stacked on the sequel's rules (which keep their own
+// to the bit; the sample mod `vampire`, stacked on Quake II's rules (which keep their own
 // entities), feeds a shooter by her blows, sees the kill, replays to the bit, and is refused what
 // those rules keep themselves; the playable server takes a package from `sv_mod`, plays and replays
 // to the bit with it, and refuses a package built against another ABI with the version named. Each
@@ -9,7 +9,7 @@
 //
 // ge:summary Tests: C++ mods stacked on the server's rules runners and taken from sv_mod
 // ge:keywords test mod mods rules-runner start_mods rules_hash rocket-bounce sv_mod mod-package
-// ge:keywords sequel-mods vampire dedicated-server replay
+// ge:keywords q2-mods vampire dedicated-server replay
 // ge:skill mod shooter testing
 #include <cstdio>
 #include <memory>
@@ -18,17 +18,17 @@
 #include <vector>
 
 #include "check.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "mod/loader.hpp"
 #include "server/server.hpp"
 #include "shooter/server.hpp"
 #include "shooter/vec.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/q2_mod_duel.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
-#include "shooters_edge/server/sequel_mod_duel.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "shooters_edge/sim/mod_host.hpp"
 
@@ -174,25 +174,25 @@ TEST(a_modules_stack_plays_the_native_librarys_frames) {
   CHECK(store.rocket_speed == native.rocket_speed);
 }
 
-TEST(a_module_on_the_sequels_rules_plays_the_native_librarys_duel) {
+TEST(a_module_on_q2_rules_plays_the_native_librarys_duel) {
   const gm::LoadedMod* module = module_of("vampire");
   if (!module || !vampire().table) return;
-  const sv::SequelDuel native = sv::run_sequel_duel(vampire().table, 600);
-  const sv::SequelDuel store = sv::run_sequel_duel(*module, 600);
+  const sv::Q2Duel native = sv::run_q2_duel(vampire().table, 600);
+  const sv::Q2Duel store = sv::run_q2_duel(*module, 600);
   CHECK_MSG(store.started, store.error);
   CHECK(!store.hashes.empty() && store.hashes == native.hashes);
   CHECK(store.hook_calls == native.hook_calls);
   CHECK(store.mod_lines == native.mod_lines);
 }
 
-TEST(a_mod_stacked_on_the_sequels_rules_changes_its_match_and_replays) {
+TEST(a_mod_stacked_on_q2_rules_changes_its_match_and_replays) {
   if (!vampire().table) return;
-  const sv::SequelDuel plain = sv::run_sequel_duel(nullptr, 600);
-  const sv::SequelDuel modded = sv::run_sequel_duel(vampire().table, 600);
-  const sv::SequelDuel again = sv::run_sequel_duel(vampire().table, 600);
+  const sv::Q2Duel plain = sv::run_q2_duel(nullptr, 600);
+  const sv::Q2Duel modded = sv::run_q2_duel(vampire().table, 600);
+  const sv::Q2Duel again = sv::run_q2_duel(vampire().table, 600);
   CHECK_MSG(plain.started && modded.started, plain.error + modded.error);
   if (!plain.started || !modded.started) return;
-  const auto most = [](const sv::SequelDuel& d) {
+  const auto most = [](const sv::Q2Duel& d) {
     float m = 0;
     for (float h : d.health) m = h > m ? h : m;
     return m;
@@ -209,14 +209,14 @@ TEST(a_mod_stacked_on_the_sequels_rules_changes_its_match_and_replays) {
   CHECK(modded.hashes != plain.hashes);
 }
 
-TEST(the_sequels_rules_refuse_what_they_keep_themselves) {
+TEST(q2_rules_refuse_what_they_keep_themselves) {
   if (!vampire().table) return;
-  const sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server({}));
+  const sv::RulesRunner r = sv::q2_runner(sv::make_q2_server({}));
   r.console("deathmatch 1");
   r->mods.tables.push_back(vampire().table);
   r->mods.names.push_back("vampire");
   std::string error;
-  CHECK_MSG(r.start(sv::sequel_duel_hall(), error), error);
+  CHECK_MSG(r.start(sv::q2_duel_hall(), error), error);
   CHECK(r->mods.hosts.size() == 1u);
   if (r->mods.hosts.empty()) return;
   r.connect(0, "Ana", false, false);
@@ -245,7 +245,7 @@ TEST(the_playable_server_takes_a_package_from_sv_mod) {
     c.maxclients = 4;
     c.bots = 1;  // a bot plays, so the mod's post-think runs
     c.mod = mod;
-    return gs::server_open(s, shooters_edge::net::classic_game(), c, nullptr, nullptr, error);
+    return gs::server_open(s, shooters_edge::net::qw_game(), c, nullptr, nullptr, error);
   };
   const std::string pkg = std::string(GE_MOD_DIR) + "/rocket-bounce";
   gs::Server plain, modded, again;

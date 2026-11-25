@@ -8,8 +8,11 @@
 #include "console/console.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 #include "console/cfg.hpp"
 #include "console/lex.hpp"
@@ -27,6 +30,7 @@ Console::Console(bool is_server) : cvars_(is_server) {
   register_builtin_commands(*this);
   register_script(*this);
   register_pattern_commands(*this);
+  register_more_commands(*this);
   register_bind_commands(*this);
 }
 
@@ -34,7 +38,7 @@ Console::~Console() = default;
 
 void Console::add_command(std::string_view name, std::string_view help, CommandFn fn,
                           uint32_t flags) {
-  commands_[lower(name)] = Command{std::string(help), std::move(fn), flags};
+  commands_[lower(name)] = Command{std::string(help), std::move(fn), flags, cvars_.layer()};
 }
 
 bool Console::has_command(std::string_view name) const {
@@ -43,8 +47,40 @@ bool Console::has_command(std::string_view name) const {
 
 bool Console::remove_command(std::string_view name) { return commands_.erase(lower(name)) != 0; }
 
-void Console::add_macro(std::string_view name, std::function<std::string()> fn) {
-  macros_[lower(name)] = std::move(fn);
+void Console::add_macro(std::string_view name, std::function<std::string()> fn, MacroKind kind) {
+  std::string key = lower(name);
+  if (kind == MacroKind::team)
+    team_macros_.insert(key);
+  else
+    team_macros_.erase(key);
+  macros_[std::move(key)] = std::move(fn);
+}
+
+bool Console::is_team_macro(std::string_view name) const {
+  return team_macros_.count(lower(name)) != 0;
+}
+
+void Console::limit_team_macros(TeamMacroLimit limit) {
+  for (std::string& a : limit.allowed) a = lower(a);
+  macro_limit_ = std::move(limit);
+}
+
+const TeamMacroLimit* Console::team_macro_limit() const {
+  if (!macro_limit_) return nullptr;
+  return !macro_limit_->when || macro_limit_->when() ? &*macro_limit_ : nullptr;
+}
+
+void Console::quiet_triggers(TriggerQuiet quiet) { trigger_quiet_ = std::move(quiet); }
+
+bool Console::triggers_quiet() const {
+  return trigger_quiet_ && (!trigger_quiet_->when || trigger_quiet_->when());
+}
+
+void Console::limit_waits(std::string owner, int n, std::string why) {
+  wait_owner_ = std::move(owner);
+  wait_limit_ = n;
+  wait_why_ = std::move(why);
+  waits_in_row_ = 0;
 }
 
 std::vector<std::string> Console::macro_names() const {
@@ -63,9 +99,14 @@ Button& Console::add_button(std::string_view name, std::string_view help) {
     ++b->held;
     b->pressed = true;
   });
-  add_command("-" + n, help, [b](Console&, const Args&) {
-    if (b->held > 0) --b->held;
-  });
+  // A server may let go of a button for the player (a classic program does at a respawn or an
+  // intermission), never press one.
+  add_command(
+      "-" + n, help,
+      [b](Console&, const Args&) {
+        if (b->held > 0) --b->held;
+      },
+      kStuffable);
   return *b;
 }
 
@@ -100,7 +141,7 @@ void Console::queue_front(std::string_view text, Source source, const Origin& wh
   for (auto it = lines.rbegin(); it != lines.rend(); ++it) {
     Origin o = where;
     if (keep_lines) o.line = it->line;
-    buffer_.push_front({std::move(it->text), source, std::move(o), depth, via});
+    buffer_.push_front({std::move(it->text), source, std::move(o), depth, via, held_by_team()});
   }
 }
 
@@ -108,8 +149,14 @@ void Console::insert(std::string_view text, Source source, const Origin& where) 
   queue_front(text, source, where, current_depth_, current_via_, false);
 }
 
+void Console::sleep(double seconds) {
+  waiting_ = true;
+  if (clock_) wake_s_ = clock_() + (seconds > 0 ? seconds : 0);
+}
+
 int Console::run() {
   int n = 0;
+  if (sleeping()) return 0;  // a recipe's `sleep`: nothing runs until the host's time passes it
   waiting_ = false;
   for (Entry& e : buffer_) e.depth = 0;  // a loop across frames waits, so it is not runaway
   while (!buffer_.empty() && !waiting_) {
@@ -128,10 +175,30 @@ int Console::run() {
     cvars_.set_reading_config(false);
     ++n;
   }
+  // A ruleset's wait limit: a script may not spread itself over frames past it.
+  waits_in_row_ = waiting_ && !buffer_.empty() ? waits_in_row_ + 1 : 0;
+  if (wait_limit_ > 0 && waits_in_row_ > wait_limit_) {
+    buffer_.clear();
+    waits_in_row_ = 0;
+    print(wait_why_);
+  }
   return n;
 }
 
+void Console::past_sleep(const std::function<void()>& work) {
+  std::deque<Entry> held = std::exchange(buffer_, {});
+  const double wake = std::exchange(wake_s_, -1e300);
+  work();
+  for (Entry& e : held) buffer_.push_back(std::move(e));  // after what the work left, if any
+  wake_s_ = std::max(wake, wake_s_);
+}
+
 int Console::execute(std::string_view text, Source source) {
+  if (sleeping()) {  // a recipe's `sleep` holds the buffer: the host's line runs now, past it
+    int n = 0;
+    past_sleep([&] { n = execute(text, source); });
+    return n;
+  }
   append(text, source);
   int n = 0;
   int frames = 0;
@@ -147,6 +214,7 @@ void Console::run_now(std::string_view command, Source source) {
   e.source = source;
   e.depth = current_depth_;
   e.via = current_via_;
+  e.team = held_by_team();
   dispatch(e);
 }
 
@@ -156,13 +224,58 @@ std::string Console::expand_text(std::string_view text) const {
     const auto m = macros_.find(key);
     if (m != macros_.end()) {
       out = m->second();
-      return true;
+      if (team_macros_.count(key) != 0) expanded_team_ = true;
+    } else if (const Cvar* c = cvars_.find(key); c != nullptr) {
+      out = c->value;
+    } else {
+      return false;
     }
-    const Cvar* c = cvars_.find(key);
-    if (c == nullptr) return false;
-    out = c->value;
+    const Cvar* width = width_prefix_.empty() ? nullptr : cvars_.find(width_prefix_ + key);
+    if (width != nullptr) {  // a column the player set: `tp_length_health 3`
+      const int n = std::clamp(std::atoi(width->value.c_str()), 0, 40);
+      const Cvar* align = cvars_.find(align_prefix_ + key);
+      const char a =
+          align == nullptr || align->value.empty()
+              ? 'l'
+              : static_cast<char>(std::tolower(static_cast<unsigned char>(align->value[0])));
+      if (n > 0) out = fit_width(out, n, a);
+    }
     return true;
   });
+}
+
+void Console::gate_command(std::string_view name, CommandGate gate) {
+  gates_[lower(name)] = std::move(gate);
+}
+
+int Console::ungate(std::string_view owner) {
+  int n = 0;
+  if (macro_limit_ && macro_limit_->owner == owner) {
+    macro_limit_.reset();
+    ++n;
+  }
+  if (trigger_quiet_ && trigger_quiet_->owner == owner) {
+    trigger_quiet_.reset();
+    ++n;
+  }
+  if (wait_limit_ != 0 && wait_owner_ == owner) {
+    limit_waits({}, 0, {});
+    ++n;
+  }
+  for (auto it = gates_.begin(); it != gates_.end();)
+    if (it->second.owner == owner) {
+      it = gates_.erase(it);
+      ++n;
+    } else {
+      ++it;
+    }
+  return n;
+}
+
+const CommandGate* Console::gate_of(std::string_view name) const {
+  const auto g = gates_.find(lower(name));
+  if (g == gates_.end()) return nullptr;
+  return !g->second.when || g->second.when() ? &g->second : nullptr;
 }
 
 void Console::dispatch(Entry& e) {
@@ -199,23 +312,38 @@ void Console::dispatch(Entry& e) {
   const bool expand_it = cmd == commands_.end() || (cmd->second.flags & kNoExpand) == 0;
 
   Args args;
+  const bool outer_expanded = expanded_team_;
+  expanded_team_ = false;
   args.raw = expand_it ? expand_text(e.text) : e.text;
+  const bool used_team = expanded_team_ || e.team;
   args.words = expand_it ? tokenize(args.raw) : std::move(first);
-  if (args.words.empty()) return;
+  if (args.words.empty()) {
+    expanded_team_ = outer_expanded;
+    return;
+  }
   args.source = e.source;
   args.where = e.where;
 
   const Args* outer = current_;
   const int outer_depth = current_depth_;
   const std::string outer_via = current_via_;
+  const bool outer_team = current_team_;
   current_ = &args;
   current_depth_ = e.depth;
   current_via_ = e.via;
 
-  if (cmd != commands_.end()) {
+  const TeamMacroLimit* limit =
+      used_team && e.source != Source::server ? team_macro_limit() : nullptr;
+  if (limit != nullptr) current_team_ = true;  // what it runs (`if`'s branch) is held too
+  if (limit != nullptr &&
+      std::find(limit->allowed.begin(), limit->allowed.end(), name) == limit->allowed.end()) {
+    print(name + limit->why);  // a ruleset's refusal reads as the game's words
+  } else if (cmd != commands_.end()) {
     if (e.source == Source::server && (cmd->second.flags & kStuffable) == 0) {
       error("the server may not run '" + name + "' here",
             "nothing to do: a server's stuffed text runs only the commands a game allows");
+    } else if (const CommandGate* g = e.source != Source::server ? gate_of(name) : nullptr; g) {
+      print(g->why);  // a ruleset's refusal reads as the game's words
     } else {
       cmd->second.fn(*this, args);
     }
@@ -237,8 +365,25 @@ void Console::dispatch(Entry& e) {
       const SetResult r = cvars_.set(name, args[1], e.source);
       if (r == SetResult::latched)
         print(c->name + " will be \"" + c->latched + "\" after a restart (it is latched)");
-      const std::string why = set_result_text(r, c->name);
+      const std::string why = set_result_text(r, *c);
       if (!why.empty()) error(why, "");
+    }
+  } else if (const Synonym* mapped = cvars_.synonym(name);
+             mapped != nullptr && !mapped->values.empty()) {
+    // A game's spelling with values of its own: what it sets in ours said beside it, typed or
+    // asked, so the player sees the setting it reaches ("r_drawhud 1 (scr_draw2d: 2)").
+    if (args.size() == 1) {
+      print("\"" + mapped->name + "\" is \"" + cvars_.synonym_value(*mapped) + "\" (" +
+            mapped->target->name + ": " + mapped->target->value + "); it takes " +
+            Cvars::mapped_words(*mapped));
+    } else {
+      const SetResult r = cvars_.set(name, args[1], e.source);
+      const std::string why = set_result_text(r, mapped->name);
+      if (!why.empty())
+        error(why, "its values: " + Cvars::mapped_words(*mapped));
+      else if (e.where.file.empty())
+        print(mapped->name + " " + args[1] + " (" + mapped->target->name + ": " +
+              cvars_.mapped_value(*mapped, args[1]) + ")");
     }
   } else if (const Synonym* syn = cvars_.synonym(name)) {  // a part of another setting
     if (args.size() == 1) {
@@ -276,6 +421,14 @@ void Console::dispatch(Entry& e) {
   current_ = outer;
   current_depth_ = outer_depth;
   current_via_ = outer_via;
+  current_team_ = outer_team;
+  expanded_team_ = outer_expanded;
+}
+
+bool Console::held_by_team() const {
+  // A command that expands its own words (`if`) and met a team macro holds what it runs too.
+  return current_team_ || (current_ != nullptr && expanded_team_ &&
+                           current_->source != Source::server && team_macro_limit() != nullptr);
 }
 
 // ---- files ----
@@ -326,8 +479,9 @@ bool Console::write_file(std::string_view name, std::string_view text) const {
   if (writer_) return writer_(name, text);
   const std::filesystem::path dir = search_.empty() ? std::filesystem::path(".") : search_[0];
   std::error_code ec;
-  std::filesystem::create_directories(dir, ec);
-  std::ofstream out(dir / std::filesystem::path(std::string(name)), std::ios::binary);
+  const std::filesystem::path path = dir / std::filesystem::path(std::string(name));
+  std::filesystem::create_directories(path.parent_path(), ec);  // a folder in the name made too
+  std::ofstream out(path, std::ios::binary);
   if (!out) return false;
   out << text;
   return static_cast<bool>(out);
@@ -377,6 +531,13 @@ void Console::add_command_synonym(std::string_view name, std::string_view target
   command_synonyms_[lower(name)] = {lower(target), cvars_.layer()};
 }
 
+std::vector<std::pair<std::string, std::string>> Console::command_synonyms() const {
+  std::vector<std::pair<std::string, std::string>> out;
+  out.reserve(command_synonyms_.size());
+  for (const auto& [name, s] : command_synonyms_) out.emplace_back(name, s.target);
+  return out;
+}
+
 int Console::drop_layer(std::string_view layer) {
   const std::string key = lower(layer);
   const size_t names = command_synonyms_.size();
@@ -413,6 +574,7 @@ int Console::append_command_line(const std::vector<std::string>& args) {
 void Console::set_sink(std::function<void(std::string_view)> sink) { sink_ = std::move(sink); }
 
 void Console::print(std::string_view line) {
+  if (tap_) tap_(line);
   if (sink_) {
     sink_(line);
   } else {
@@ -425,9 +587,21 @@ void Console::message(std::string_view line) {
   fire_triggers(line);
 }
 
-void Console::fire_triggers(std::string_view line) {
+void Console::fire_triggers(std::string_view line) { fire_triggers(line, -1, false); }
+
+void Console::fire_triggers(std::string_view line, int level, bool team) {
+  if (triggers_quiet()) return;  // a ruleset's match: no line runs a player's script
+  // The newest trigger first, as each queues its alias at the front.
   for (const Trigger& t : triggers_) {
-    if (line.find(t.match) == std::string_view::npos) continue;
+    if (t.match.empty() || line.find(t.match) == std::string_view::npos) continue;
+    if (level >= 0 && t.level != level &&
+        !(t.level == kTriggerTeam && level == kTriggerChat && team))
+      continue;
+    if (aliases_.count(t.alias) == 0 && level >= 0) {
+      print("trigger \"" + t.alias + "\" has no matching alias");
+      continue;
+    }
+    trigger_match_ = std::string(line.substr(0, 255));
     queue_front(t.alias, Source::local, {}, current_depth_ + 1, t.alias, false);
   }
 }
@@ -511,6 +685,22 @@ size_t edit_distance(std::string_view a, std::string_view b) {
 }
 
 }  // namespace
+
+void Console::set_arg_values(std::string_view word, ArgValues values) {
+  if (values)
+    arg_values_[lower(word)] = std::move(values);
+  else
+    arg_values_.erase(lower(word));
+}
+
+std::vector<std::string> Console::arg_values(std::string_view word) const {
+  auto it = arg_values_.find(lower(word));
+  if (it == arg_values_.end()) {  // a game's spelling of a command completes as the command does
+    const auto syn = command_synonyms_.find(lower(word));
+    if (syn != command_synonyms_.end()) it = arg_values_.find(syn->second.target);
+  }
+  return it != arg_values_.end() ? it->second() : std::vector<std::string>();
+}
 
 std::string Console::suggest(std::string_view name) const {
   const std::string n = lower(name);

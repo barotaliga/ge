@@ -30,6 +30,7 @@
 
 #include "shooter/predict.hpp"
 #include "shooter/server.hpp"
+#include "shooter/teleport_ahead.hpp"
 
 namespace ge::classic {
 
@@ -41,15 +42,21 @@ using ge::shooter::Server;
 using ge::shooter::ServerSettings;
 using ge::shooter::Vec3f;
 
-// A brush model by its index among the level's models (`*k`: 0 the world), where it stands.
+// A brush model by its index among the level's models (`*k`: 0 the world), where it stands, and
+// its velocity there (units/s; 0 standing still).
 struct ModelAt {
   int model = 0;
   Vec3f origin;
+  Vec3f velocity;
+  float reach = 1e30f;  // units it runs on before it stops (shooter/predict.hpp, `mover_reach`)
 };
 
 struct OriginalPrediction {
   Server sv;
-  int placed = 0;  // entities after the player in use: movers, then players
+  int placed = 0;            // entities after the player in use: movers, then players
+  int movers = 0;            // of them, the movers (entities 2..)
+  Vec3f mover_velocity[64];  // each mover's, run on before each command by the server's push
+  float mover_reach[64] = {};
 };
 
 // The stand-in for a level: `models[k]` is `*k` (0 the world); `set` the server's settings as the
@@ -57,13 +64,23 @@ struct OriginalPrediction {
 void original_prediction_level(OriginalPrediction& p, const std::vector<BrushModel>& models,
                                const ServerSettings& set);
 
-// The movers and the other players where the client last saw them (at most 64 of each).
+// The movers and the other players where the client last saw them (at most 64 of each). A mover
+// with a velocity runs on before each replayed command by the server's own push (shooter/push.hpp:
+// carrying what stands on it, shoving what it moves into), as `advance_movers` does for the float
+// move.
 void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int mover_count,
                                const Vec3f* players, int player_count);
 
 // Its own player: the acknowledged state with `count` later commands run through the original
-// step on the stand-in. The returned state's origin, velocity and ground are the predicted ones.
+// step on the stand-in. The returned state's origin, velocity and ground are the predicted ones;
+// `each` (when given, `count` of them) the same after each command, in order. `tele` (when given):
+// a teleporter the player's box reaches is taken as the server takes it (`skip` left out), the
+// first such command in `hit` (shooter/teleport_ahead.hpp). `mover_at` (when given): the seconds
+// after their frame the movers have run on to before each command, as for the float move.
 MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
-                                  const MoveCmd* cmds, int count);
+                                  const MoveCmd* cmds, int count, MoveState* each = nullptr,
+                                  const ge::shooter::Teleporters* tele = nullptr, int skip = -1,
+                                  ge::shooter::TeleHit* hit = nullptr,
+                                  const float* mover_at = nullptr);
 
 }  // namespace ge::classic

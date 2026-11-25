@@ -16,27 +16,36 @@
 // ge:keywords server-browser join-a-game menu_servers servers connect demos menu_demos take_demo
 // ge:skill ui testing
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
+#include "classic/rulesets.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
+#include "forward/routes.hpp"
 #include "lab/png.hpp"
 #include "net/sim_network.hpp"
+#include "net/tcp_socket.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/menu/carved_letters.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
+#include "shooters_edge/menu/episodes.hpp"
+#include "shooters_edge/menu/figures.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
 #include "shooters_edge/menu/plate_letters.hpp"
 #include "ui/raster.hpp"
+#include "vfs/pak.hpp"
+#include "vfs/search.hpp"
 
 namespace sm = shooters_edge::menu;
 using namespace ge::ui;
@@ -130,6 +139,68 @@ TEST(rows_dim_until_the_console_knows_what_they_need) {
   CHECK(!item(m, "host", "fraglimit")->disabled);
   CHECK(item(m, "host", "fraglimit")
             ->choices[static_cast<size_t>(item(m, "host", "fraglimit")->choice)] == "20");
+  // HOST NAME shows the server's name beside it once the server has one.
+  CHECK(item(m, "host", "hostname")->disabled);
+  server.add({.name = "hostname", .fallback = "Frag Hall", .kind = ge::console::CvarKind::text});
+  sm::refresh(m, host);
+  CHECK_MSG(!item(m, "host", "hostname")->disabled &&
+                item(m, "host", "hostname")->text == "HOST NAME  Frag Hall",
+            item(m, "host", "hostname")->text);
+}
+
+TEST(quakes_episodes_follow_the_maps_the_packs_hold) {
+  std::vector<std::string> shareware = {"start"};
+  for (int i = 1; i <= 8; i++) shareware.push_back("e1m" + std::to_string(i));
+  std::vector<sm::Episode> eps = sm::episodes_for(shareware);
+  CHECK(eps.size() == 2 && eps[0].name == "Welcome to Quake" && eps[1].name == "Doomed Dimension");
+  CHECK(eps[1].levels.size() == 8 && eps[1].levels[0].name == "Slipgate Complex");
+  std::vector<std::string> full = shareware;
+  for (const char* m : {"e2m1", "e3m1", "e4m1", "end", "dm1"}) full.emplace_back(m);
+  eps = sm::episodes_for(full);
+  CHECK(eps.size() == 7 && eps[6].name == "Deathmatch Arena" && eps[6].levels.size() == 6);
+  int e = -1, l = -1;
+  CHECK(sm::level_of(eps, "e3m4", &e, &l) && e == 3 && l == 3);
+  CHECK(eps[3].levels[3].name == "Satan's Dark Delight");
+  CHECK(!sm::level_of(eps, "aerowalk", &e, &l));
+  eps = sm::episodes_for(std::vector<std::string>{"start", "hip1m1", "hip2m1", "hipdm1"});
+  CHECK(eps.size() == 4 && eps[0].name == "Scourge of Armagon" &&
+        eps[0].levels[0].name == "Command HQ");
+  eps = sm::episodes_for(std::vector<std::string>{"start", "r1m1", "ctf1"});
+  CHECK(eps.size() == 3 && eps[2].levels[0].map == "ctf1");
+  CHECK(sm::episodes_for(std::vector<std::string>{"q2dm1"}).empty());
+}
+
+TEST(the_host_page_keeps_episode_level_and_map_together) {
+  World w;
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con, .maps = {"start", "e1m1", "e1m2", "e2m1", "aerowalk"}};
+  sm::refresh(m, host);
+  CHECK(!item(m, "host", "episode")->disabled);
+  CHECK(item(m, "host", "episode")->choices.size() == 3);  // its first three episodes
+  m.open("host");
+  CHECK(m.focus("episode"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  const Item* map = item(m, "host", "map");
+  CHECK(map->choices[static_cast<size_t>(map->choice)] == "e1m1");
+  CHECK(item(m, "host", "level")->choices[0] == "Slipgate Complex");
+  CHECK(m.focus("level"));
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(map->choices[static_cast<size_t>(map->choice)] == "e1m2");
+  // A map picked that a list holds sets its episode and level; another keeps them.
+  CHECK(m.focus("map"));
+  MenuInput left;
+  left.left = true;
+  for (const MenuEvent& e : m.input(left)) sm::apply_event(e, m, host);
+  CHECK(map->choices[static_cast<size_t>(map->choice)] == "e1m1");
+  CHECK(item(m, "host", "level")->choice == 0);
+}
+
+TEST(quakes_quit_box_holds_eight_jokes_of_four_lines_of_24) {
+  for (size_t i = 0; i < sm::kQuitJokes; i++)
+    for (const std::string_view line : sm::quit_joke(i)) CHECK(line.size() == 24);
+  CHECK(sm::quit_joke(4)[0] == " Press Y to quit like a ");
 }
 
 TEST(a_setting_is_its_cvar_read_and_written) {
@@ -174,6 +245,40 @@ TEST(new_game_start_runs_the_rules_then_the_map) {
   CHECK(!w.ran.empty() && w.ran.back() == "map dm1");
 }
 
+TEST(dissolution_offers_its_team_games_on_the_teamplay_row) {
+  World w;
+  Menu m = sm::build_menu();
+  ge::console::Cvars server(true);
+  for (const char* c : {"deathmatch", "fraglimit", "timelimit", "teamplay"})
+    server.add({.name = c, .fallback = "0"});
+  // The base game's packs: off, no friendly fire, friendly fire.
+  sm::Host base{.console = &w.con, .server = &server, .maps = {"start", "dm1"}};
+  sm::refresh(m, base);
+  CHECK(item(m, "host", "teamplay")->choices.size() == 3);
+  // Dissolution of Eternity's: its tag and flag games too, left of off wrapping to the last.
+  sm::Host rogue{.console = &w.con, .server = &server, .maps = {"start", "r1m1", "ctf1"}};
+  sm::refresh(m, rogue);
+  const std::vector<std::string> want = {"OFF",           "NO FRIENDLY FIRE", "FRIENDLY FIRE",
+                                         "TAG",           "CAPTURE THE FLAG", "ONE FLAG CTF",
+                                         "THREE TEAM CTF"};
+  CHECK(item(m, "host", "teamplay")->choices == want);
+  m.open("multi");
+  for (const MenuEvent& e : press(m, "host")) sm::apply_event(e, m, rogue);
+  CHECK(m.focus("teamplay"));
+  MenuInput left;
+  left.left = true;
+  for (const MenuEvent& e : m.input(left)) sm::apply_event(e, m, rogue);
+  for (const MenuEvent& e : press(m, "start")) sm::apply_event(e, m, rogue);
+  CHECK_MSG(std::find(w.ran.begin(), w.ran.end(), "sv teamplay 6") != w.ran.end(),
+            w.ran.empty() ? std::string() : w.ran.front());
+  // Set to capture the flag, the row shows it; the base game's packs show it as off.
+  server.set("teamplay", "4", ge::console::Source::local);
+  sm::refresh(m, rogue);
+  CHECK(item(m, "host", "teamplay")->choice == 4);
+  sm::refresh(m, base);
+  CHECK(item(m, "host", "teamplay")->choice == 0 && sm::teamplay_choices(rogue.maps) == 7);
+}
+
 TEST(ranked_game_looks_for_a_duel_once_the_console_can) {
   World w;
   Menu m = sm::build_menu();
@@ -199,6 +304,31 @@ TEST(ranked_game_looks_for_a_duel_once_the_console_can) {
 
 // GAME TYPE COOPERATIVE with a campaign to play starts a coop game on the map, so bots may join;
 // DEATHMATCH starts the map as a match.
+TEST(new_game_asks_first_while_a_game_runs) {
+  World w;
+  w.con.add_command("newgame", "", [&w](ge::console::Console&, const ge::console::Args&) {
+    w.ran.push_back("newgame");
+  });
+  Menu m = sm::build_menu();
+  sm::Host idle{.console = &w.con};
+  sm::refresh(m, idle);
+  m.open("single");
+  for (const MenuEvent& e : press(m, "new")) sm::apply_event(e, m, idle);
+  CHECK(w.ran.size() == 1);  // no game running: started at once
+  // A game running: the question, then its YES starts the new game.
+  w.ran.clear();
+  ge::console::Cvars server(true);
+  sm::Host host{.console = &w.con, .server = &server};
+  m.reset();
+  sm::refresh(m, host);
+  m.open("single");
+  for (const MenuEvent& e : press(m, "new")) sm::apply_event(e, m, host);
+  CHECK(w.ran.empty());
+  CHECK(m.top().id == "newgame");
+  for (const MenuEvent& e : press(m, "yes")) sm::apply_event(e, m, host);
+  CHECK(w.ran.size() == 1 && w.ran.back() == "newgame");
+}
+
 TEST(new_game_start_cooperative_starts_a_coop_game) {
   World w;
   w.con.add_command("coopgame", "", [&w](ge::console::Console&, const ge::console::Args& a) {
@@ -263,6 +393,58 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(!w.ran.empty() && w.ran.back() == "quit");
 }
 
+TEST(a_recipe_drives_the_menu_only_in_a_window_started_for_recipes) {
+  World plain;  // a player's window: none of a recipe's commands
+  sm::GameMenu p;
+  p.add_cvars(plain.con);
+  for (const char* word : {"menu_press", "menu_select", "menu_list", "sleep"})
+    CHECK_MSG(plain.con.commands().count(word) == 0, word);
+  World w;  // -recipes
+  sm::GameMenu g;
+  g.add_cvars(w.con, true);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  w.con.execute("menu_press down");  // a closed menu with nothing opening it: refused
+  CHECK(!w.con.problems().empty());
+  w.con.clear_problems();
+  g.update({}, false, host, 0.016);
+  CHECK(!g.open());
+  w.con.execute("menu_list");
+  CHECK(w.con.output().back() == "menu closed");
+  w.con.execute("menu_press escape");  // a closed menu opened, as the key does
+  g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.main().top().id == "main");
+  w.con.execute("menu_select options");
+  g.update({}, false, host, 0.016);
+  CHECK(g.main().top().id == "options");
+  w.con.execute("menu_press down down");  // one key a frame
+  g.update({}, false, host, 0.016);
+  g.update({}, false, host, 0.016);
+  CHECK(g.main().focused() != nullptr);
+  const std::string focused = g.main().focused()->id;
+  w.con.execute("menu_list");
+  CHECK(w.con.output().back().find("\n> " + focused + " ") != std::string::npos);
+  w.con.execute("menu_select nowhere");
+  CHECK(!w.con.problems().empty());
+}
+
+TEST(quakes_menu_words_open_each_page) {
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  const struct {
+    const char* word;
+    const char* page;
+  } words[] = {{"menu_singleplayer", "single"}, {"menu_load", "load"},   {"menu_save", "save"},
+               {"menu_multiplayer", "multi"},   {"menu_setup", "setup"}, {"menu_keys", "controls"},
+               {"menu_video", "video"}};
+  for (const auto& wp : words) {
+    w.con.execute(wp.word);
+    g.update({}, false, host, 0.016);
+    CHECK_MSG(g.open() && g.main().top().id == wp.page, wp.word);
+  }
+}
+
 TEST(every_press_leaves_the_sound_it_makes) {
   using ge::ui::MenuCue;
   World w;
@@ -320,6 +502,10 @@ TEST(customize_controls_shows_the_binds_and_binds_the_next_key) {
   CHECK(item(g.main(), "controls", "c1")->choices[0] == "UP, W");  // MOVE FORWARD
   CHECK(item(g.main(), "controls", "c0")->disabled);               // no +attack button here
   CHECK(g.main().focus("c5"));                                     // JUMP
+  // The look keys close the page: look up and down, center view, mouse and keyboard look.
+  CHECK(item(g.main(), "controls", "c19")->text == "LOOK UP");
+  CHECK(item(g.main(), "controls", "c21")->text == "CENTER VIEW");
+  CHECK(item(g.main(), "controls", "c23")->text == "KEYBOARD LOOK");
   MenuInput accept;
   accept.accept = true;
   g.update(accept, false, host, 0.016);
@@ -409,16 +595,16 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
   g.games().set_lister([&listed] {
     listed++;
     return std::vector<sm::GameRow>{
-        {.id = "classic", .install = "/a/game", .edition = "Shareware", .playing = true},
-        {.id = "sequel", .install = "/b/game", .edition = "Full game", .playing = false},
+        {.id = "q1", .install = "/a/game", .playing = true},
+        {.id = "q2", .install = "/b/game", .playing = false},
     };
   });
   w.con.execute("menu_games");
   g.update({}, false, host, 0.016);
   CHECK(g.open() && g.in_games() && listed == 1);
   // The names are pictures, never words: each game's decodes, an unknown id's is empty.
-  CHECK(!sm::game_name_picture("classic").rgba.empty());
-  CHECK(!sm::game_name_picture("sequel").rgba.empty());
+  CHECK(!sm::game_name_picture("q1").rgba.empty());
+  CHECK(!sm::game_name_picture("q2").rgba.empty());
   CHECK(sm::game_name_picture("other").rgba.empty());
   // The cursor starts on the game playing; ENTER on it goes back to the root.
   MenuInput accept;
@@ -433,20 +619,13 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
   g.update(down, false, host, 0.016);
   g.update(accept, false, host, 0.016);
   sm::GameMenu::GameAsk ask = g.take_game();
-  CHECK(ask.asked && !ask.browse && ask.id == "sequel" && ask.install == "/b/game");
+  CHECK(ask.asked && !ask.browse && ask.id == "q2" && ask.install == "/b/game");
   CHECK(!g.take_game().asked);  // once
-  // FIND ANOTHER INSTALL, the last row: the folder chooser.
+  // ADD GAME, the last row: the folder chooser.
   g.update(down, false, host, 0.016);
   g.update(accept, false, host, 0.016);
   ask = g.take_game();
   CHECK(ask.asked && ask.browse && ask.id.empty());
-  // A game never found: its folder is asked for.
-  g.games().set_lister(
-      [] { return std::vector<sm::GameRow>{{.id = "classic", .install = "", .edition = ""}}; });
-  g.show(host, "games");
-  g.update(accept, false, host, 0.016);
-  ask = g.take_game();
-  CHECK(ask.asked && ask.browse && ask.id == "classic");
 }
 
 TEST(load_game_asks_the_window_for_a_folder_and_says_why_one_was_refused) {
@@ -511,6 +690,24 @@ TEST(a_classic_game_s_console_is_in_its_letters_over_its_background) {
   int backs = 0;
   for (const auto& c : dl.cmds()) backs += c.box.image == look.back ? 1 : 0;
   CHECK(backs == 1);
+  // con_background: another picture, read once and drawn in its place; one that does not read
+  // leaves the game's own.
+  int reads = 0;
+  look.read_back = [&reads](std::string_view name, ge::ui::Image* out) {
+    ++reads;
+    if (name != "inter") return false;
+    out->width = out->height = 2;
+    out->rgba.assign(16, 255);
+    return true;
+  };
+  look.back_name = "inter";
+  const ge::ui::Image* other = look.background();
+  CHECK(other != nullptr && other != look.back && other->width == 2);
+  CHECK(look.background() == other && reads == 1);
+  look.back_name = "missing";
+  CHECK(look.background() == look.back && reads == 2);
+  look.back_name = "conback";
+  CHECK(look.background() == look.back && reads == 2);
   // No pictures read: the engine's own look, no background.
   sm::ClassicConsole none;
   sm::classic_console(sm::ClassicArt{}, none);
@@ -539,7 +736,7 @@ TEST(load_and_save_show_the_slots_and_run_their_lines) {
   CHECK(item(m, "single", "save")->opens == "save");
   CHECK(m.page("load")->items.size() == sm::kSaveSlots + 1);  // the slots and BACK
   CHECK(item(m, "load", "s0")->disabled);                     // an empty slot loads nothing
-  CHECK(item(m, "load", "s0")->text == sm::kEmptySlot);
+  CHECK(item(m, "load", "s0")->text == sm::kUnusedSlot);
   CHECK(!item(m, "load", "s3")->disabled);
   CHECK(item(m, "load", "s3")->text == "the hall, kills 3/12");
   CHECK(!item(m, "save", "s0")->disabled);  // any slot takes a save
@@ -558,6 +755,40 @@ TEST(load_and_save_show_the_slots_and_run_their_lines) {
   none.saves = host.saves;
   sm::refresh(m, none);
   CHECK(item(m, "load", "s3")->disabled && item(m, "save", "s0")->disabled);
+}
+
+TEST(setup_shows_the_hostname_beside_its_row) {
+  World w;
+  w.con.cvars().add({"sv_hostname", "Shooter's Edge", 0, "", ge::console::CvarKind::text});
+  w.con.cvars().set("sv_hostname", "Den", ge::console::Source::local);
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  g.show(host, "setup");
+  const auto* row = item(g.main(), "setup", "hostname");
+  CHECK(row != nullptr && row->text == "HOSTNAME  Den");
+  CHECK(g.main().page("setup")->items[0].id == "hostname");  // the first row, as Quake's
+}
+
+TEST(a_classic_page_longer_than_the_screen_scrolls_to_its_focus) {
+  const auto files = sm::fixture_files();
+  World w;
+  for (const char* b : {"forward", "lookup", "klook"}) w.con.add_button(b, "");
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  sm::ClassicArt art;
+  std::string error;
+  CHECK(sm::load_classic_art(fixture_find(files), &art, &error));
+  g.set_art(art);
+  g.show(host, "controls");
+  for (const char* row : {"c1", "c23", "c19", "c1"}) {
+    CHECK(g.main().focus(row));
+    DrawList dl;
+    dl.begin(640, 400);
+    g.draw(dl, 640, 400, 0.25);
+    CHECK_MSG(g.problems().empty(), row);
+  }
 }
 
 TEST(both_looks_lay_every_page_out_clean) {
@@ -605,8 +836,10 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(art.strip_print != 0 && art.letters.empty());
   const auto letters = [](const sm::ClassicArt& a, const DrawList& dl) {
     int n = 0;
+    // The carved letters at every tone (SELECT GAME greys the games not playing).
     for (const auto& c : dl.cmds())
-      for (const auto& [ch, img] : a.letters) n += c.box.image == &img ? 1 : 0;
+      for (const sm::Tone tone : {sm::Tone::full, sm::Tone::half, sm::Tone::grey})
+        for (const auto& [ch, img] : sm::toned(a.letters, tone)) n += c.box.image == &img ? 1 : 0;
     return n;
   };
   const auto root = [&](const sm::ClassicArt& a, const ge::ui::Image* img) {
@@ -631,12 +864,11 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(root(pack, &pack.glyphs).first < root(art, &art.glyphs).first);
   CHECK(sm::carved_text_width(pack, "Demos") > 0 && sm::carved_text_width(pack, "Demos!") == 0);
 
-  // SELECT GAME's title and the games' names: a picture a letter, five for the first game and
-  // seven for the sequel's (its numeral); the stand-in's draw none and fall back to the pictures.
+  // SELECT GAME's title and the games' names: a picture a letter, five for Quake and
+  // seven for Quake II's (its numeral); the stand-in's draw none and fall back to the pictures.
   const auto names = [&](const sm::ClassicArt& a) {
     sm::GamesPage page;
-    page.set_games({{.id = "classic", .install = "", .edition = ""},
-                    {.id = "sequel", .install = "", .edition = ""}});
+    page.set_games({{.id = "q1", .install = "/a"}, {.id = "q2", .install = "/b"}});
     DrawList dl;
     dl.begin(1280, 720);
     page.draw_classic(dl, a, 1280, 720, 0);
@@ -664,8 +896,8 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(specks.letters.count('i') == 0);  // Quit's i box holds nothing here
 }
 
-TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
-  // The sequel's pictures at their sizes, painted flat: the plates, their lit copies, the plaque,
+TEST(q2_s_menu_is_drawn_in_its_plates_and_banners) {
+  // Quake II's pictures at their sizes, painted flat: the plates, their lit copies, the plaque,
   // the logo, the cursor's frames and the banners.
   sm::ClassicArt art;
   art.glyphs = make_image(128, 128, hex(0xffffff));
@@ -717,7 +949,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   const sm::ClassicLayout l = sm::layout_classic(g.main(), art, 1280, 720);
   CHECK(l.plates && !l.strip && l.scale == 3);
   CHECK(l.items[1].y - l.items[0].y == 108);
-  CHECK(l.items[1].w == 99 * 3);  // SINGLE PLAYER is the sequel's GAME plate
+  CHECK(l.items[1].w == 99 * 3);  // SINGLE PLAYER is Quake II's GAME plate
   for (const Rect& r : l.items) CHECK(r.w <= 0 || (r.y >= 0 && r.bottom() <= 720));
 
   // SELECT GAME and DEMOS built from the plates only where they were measured: elsewhere in
@@ -785,8 +1017,8 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   CHECK(sm::banner_layout(art, "DEMOS", nullptr) == 0);  // no letters cut
 
   // A page under the root takes its banner; SELECT GAME's title is on a banner and the names on
-  // tags: the title's 10 letters over 2 strips of metal, the first game's 5 letters, its ends and
-  // a strip, the sequel's 7 letters, its ends and 2 strips (a space draws nothing).
+  // tags: the title's 10 letters over 2 strips of metal, Quake's 5 letters, its ends and
+  // a strip, Quake II's 7 letters, its ends and 2 strips (a space draws nothing).
   g.show(host, "options");
   {
     DrawList dl;
@@ -797,15 +1029,15 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
     CHECK(n == 1);
   }
   sm::GamesPage page;
-  page.set_games({{.id = "classic", .install = "", .edition = ""},
-                  {.id = "sequel", .install = "", .edition = ""}});
+  page.set_games({{.id = "q1", .install = "/a"}, {.id = "q2", .install = "/b"}});
   DrawList dl;
   dl.begin(1280, 720);
   page.draw_classic(dl, pack, 1280, 720, 0);
   int pieces = 0;
   for (const auto& c : dl.cmds())
     for (const auto* set : {&pack.letters, &pack.letters_lit})
-      for (const auto& [ch, img] : *set) pieces += c.box.image == &img ? 1 : 0;
+      for (const sm::Tone tone : {sm::Tone::full, sm::Tone::half, sm::Tone::grey})
+        for (const auto& [ch, img] : sm::toned(*set, tone)) pieces += c.box.image == &img ? 1 : 0;
   CHECK(pieces == 12 + 8 + 11);
 }
 
@@ -915,6 +1147,7 @@ bool toy_reply(const uint8_t* data, size_t size, ge::net::ServerInfo& out) {
   out.mode = out.name == "empty" || out.name == "far" ? "team" : "coop";
   out.players = out.name == "full" ? 8 : out.name == "empty" ? 0 : 1;
   out.max_players = 8;
+  out.keys = {{"hostname", out.name}, {"*gamedir", out.name == "far" ? "fortress" : "qw"}};
   return true;
 }
 
@@ -959,6 +1192,29 @@ TEST(join_a_game_lists_a_server_and_connects_to_it) {
   menu.update(accept, false, host, 0.016);
   CHECK(joined == "sim:5:27500");
   CHECK(!menu.open());
+}
+
+TEST(join_a_game_s_colours_grey_a_locked_server_and_green_a_near_one) {
+  ge::net::ServerInfo in;
+  ge::ui::Color c;
+  CHECK(!sm::ServersPage::row_colour(in, 80, c));  // far and open: the usual colour
+  CHECK(sm::ServersPage::row_colour(in, 12, c) && c.g == 1.0f && c.r == 0.0f);
+  CHECK(!sm::ServersPage::row_colour(in, -1, c));  // never answered
+  in.keys = {{"NoFake", "enabled"}};
+  CHECK(sm::ServersPage::row_colour(in, 12, c) && c.r == c.g && c.r < 0.6f);  // grey wins
+  in.keys = {{"anticheat", "1"}};
+  CHECK(sm::ServersPage::row_colour(in, 80, c) == false);
+  in.keys = {{"AntiCheat", "2"}};
+  CHECK(sm::ServersPage::row_colour(in, 80, c) && c.r == c.b);
+  in.keys = {{"needpass", "1"}};
+  CHECK(sm::ServersPage::row_colour(in, 80, c));
+  in.keys.clear();
+  in.locked = true;
+  CHECK(sm::ServersPage::row_colour(in, 80, c));
+  ge::console::Console con;
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  CHECK(con.cvars().find("sb_colorservers")->value == "0");
 }
 
 TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as_cvars) {
@@ -1032,6 +1288,68 @@ TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as
   CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
   for (int i = 0; i < 4; i++) key('p');  // 100, 150, 250, then any
   CHECK(con.cvars().find("sb_maxping")->value == "0" && page.rows().size() == 3);
+  // The other filters, from the console: only the empty, the ping limit, the info filter.
+  con.execute("sb_hidenotempty 1");
+  run({});
+  CHECK(shown() == (std::vector<std::string>{"empty"}) && page.filter_words() == "EMPTY ONLY");
+  con.execute("sb_hidenotempty 0; sb_hidehighping 1; sb_pinglimit 80");
+  run({});
+  CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
+  CHECK(page.filter_words() == "PING UNDER 80");
+  con.execute("sb_hidehighping 0; sb_info_filter \"-*gamedir=FORT\"");
+  run({});
+  CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
+  con.execute("sb_info_filter \"\"");
+  // The sort: by codes; RIGHT puts the next column first, D turns it round.
+  con.execute("sb_sortservers 6");
+  run({});
+  CHECK(page.sort_words() == "players");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "empty");
+  key('d');
+  CHECK(con.cvars().find("sb_sortservers")->value == "-6" &&
+        page.sort_words() == "players (high to low)");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "full");
+  {
+    ge::ui::MenuInput right;
+    right.right = true;
+    run(right);
+  }
+  CHECK_MSG(con.cvars().find("sb_sortservers")->value == "16",
+            con.cvars().find("sb_sortservers")->value);
+  con.execute(
+      "sb_sortservers 32; sb_showaddress 1; sb_showgamedir 1; sb_showfraglimit 1; "
+      "sb_showtimelimit 1; sb_status 0");
+  run({});
+  CHECK(page.sort_words() == "ping, then address" && page.hide_on_join());
+  // Quake II's ui_sortservers in its place: one column, the players most first; D and RIGHT
+  // move its sort and leave both settings as they are.
+  menu.servers().game_sort = 4;
+  run({});
+  CHECK(page.sort_words() == "players (high to low), then name");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "full");
+  key('d');
+  CHECK(page.game_sort == -4 && con.cvars().find("sb_sortservers")->value == "32");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "empty");
+  {
+    ge::ui::MenuInput right;
+    right.right = true;
+    run(right);
+  }
+  CHECK(page.game_sort == 5 && page.sort_words() == "ping, then name");
+  menu.servers().game_sort = 0;
+  run({});
+  CHECK(page.sort_words() == "as found");
+  menu.servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
+  run({});
+  CHECK(page.sort_words() == "ping, then address");
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
+    ge::ui::DrawList dl;
+    dl.begin(w, h);
+    menu.draw(dl, w, h, 0);
+    for (const std::string& p : menu.problems()) CHECK_MSG(false, p);
+  }
+  con.execute("sb_autohide 0");
+  CHECK(!page.hide_on_join());
   // Set from the console, as a config does; every server hidden says so and draws in bounds.
   con.execute("sb_mode duel");
   run({});
@@ -1042,6 +1360,100 @@ TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as
     menu.draw(dl, w, h, 0);
     for (const std::string& p : menu.problems()) CHECK_MSG(false, p);
   }
+}
+
+namespace {
+
+// The routes test's world: "far" (60 ms each way) and "hop", a forwarder that reaches far in 15.
+bool route_reply(const uint8_t* data, size_t size, ge::net::ServerInfo& out) {
+  if (!toy_reply(data, size, out)) return false;
+  if (out.name == "hop") out.mode = "forward";
+  return true;
+}
+bool route_is_forwarder(const ge::net::ServerInfo& info) { return info.mode == "forward"; }
+size_t route_ask(uint8_t* out, size_t cap) {
+  if (cap < 1) return 0;
+  out[0] = 'A';
+  return 1;
+}
+bool route_read(const uint8_t* data, size_t size, ge::forward::Reach& out) {
+  if (size != 1 || data[0] != 'R') return false;
+  out.emplace_back(ge::net::sim_address(7, 27500), 15);
+  return true;
+}
+
+}  // namespace
+
+TEST(join_a_game_finds_a_route_through_a_forwarder_and_joins_by_it) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  gn::Transport far, hop, browser, routes;
+  gn::open_sim_transport(far, net, gn::sim_address(7, 27500));
+  gn::open_sim_transport(hop, net, gn::sim_address(6, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  gn::open_sim_transport(routes, net, gn::sim_address(1, 27002));
+  gn::LinkConditions slow;
+  slow.latency_ms = 60;
+  gn::sim_set_path(net, 1, 7, slow);
+  ge::console::Console con;
+  std::string joined, chain;
+  con.add_command("connect", "", [&](ge::console::Console&, const ge::console::Args& a) {
+    joined = a.size() > 1 ? a[1] : "";
+  });
+  con.cvars().bind({.name = "cl_proxyaddr", .fallback = "", .kind = ge::console::CvarKind::text},
+                   &chain);
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  con.execute("sb_findroutes 1");
+  sm::Host host{.console = &con};
+  menu.servers().set_query({toy_status, route_reply, nullptr, nullptr});
+  menu.servers().set_routes({route_is_forwarder, route_ask, route_read});
+  menu.servers().use_transport(&browser);
+  menu.servers().use_route_transport(&routes);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("menu_servers");
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  const auto run = [&](const ge::ui::MenuInput& in) {
+    now += 16000;
+    gn::sim_advance(net, now);
+    while (gn::transport_receive(far, buf, sizeof buf, from, now) >= 0)
+      gn::transport_send(far, from, reinterpret_cast<const uint8_t*>("!far"), 4, now);
+    while (gn::transport_receive(hop, buf, sizeof buf, from, now) >= 0) {
+      if (buf[0] == '?')
+        gn::transport_send(hop, from, reinterpret_cast<const uint8_t*>("!hop"), 4, now);
+      else if (buf[0] == 'A')
+        gn::transport_send(hop, from, reinterpret_cast<const uint8_t*>("R"), 1, now);
+    }
+    menu.update(in, false, host, 0.016);
+  };
+  for (int i = 0; i < 400 && !menu.servers().routes_ready(); i++) run({});
+  const sm::ServersPage& page = menu.servers();
+  CHECK(page.routes_ready());
+  int far_index = -1, far_row = -1;
+  for (size_t i = 0; i < page.list().entries.size(); i++)
+    if (page.list().entries[i].info.name == "far") far_index = static_cast<int>(i);
+  for (size_t r = 0; r < page.rows().size(); r++)
+    if (page.rows()[r] == far_index) far_row = static_cast<int>(r);
+  CHECK(far_index >= 0 && far_row >= 0 && page.rows().size() == 2);
+  const ge::forward::Route r = page.route_to(far_index);
+  CHECK(r.found && r.forwarders.size() == 1 && r.forwarders[0] == gn::sim_address(6, 27500));
+  CHECK(r.ping_ms < r.direct_ms);
+  // A join from the page goes through the forwarder: cl_proxyaddr names it, connect the server.
+  ge::ui::MenuInput down;
+  down.down = true;
+  while (page.selected() != far_row) run(down);
+  ge::ui::MenuInput accept;
+  accept.accept = true;
+  run(accept);
+  CHECK(joined == "sim:7:27500");
+  CHECK(chain == "sim:6:27500");
+  // sb_showproxies 0 hides the forwarder; 2 lists it alone.
+  con.execute("sb_showproxies 0");
+  con.execute("menu_servers");
+  for (int i = 0; i < 60; i++) run({});
+  CHECK(menu.servers().rows().size() == 1);
 }
 
 TEST(join_a_game_without_a_protocol_says_so) {
@@ -1149,4 +1561,440 @@ TEST(demos_lists_a_folder_s_recordings_and_plays_one_that_checks) {
   g.update(back, false, host, 0.016);
   CHECK(!g.in_demos() && g.open() && g.main().top().id == "main");
   fs::remove_all(dir, ec);
+}
+
+TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
+  World w;
+  w.con.add_command("newgame", "", [&w](ge::console::Console&, const ge::console::Args&) {
+    w.ran.push_back("newgame");
+  });
+  w.con.add_command("weapnext", "", [](ge::console::Console&, const ge::console::Args&) {});
+  w.con.add_command("use", "", [](ge::console::Console&, const ge::console::Args&) {});
+  w.con.cvars().add({.name = "dmflags", .fallback = "0"});
+  w.con.cvars().add({.name = "cl_disable_explosions", .fallback = "0"});
+  w.con.cvars().add({.name = "cl_noglow", .fallback = "0"});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu()};
+  g.set_table(sm::q2_menu());
+  for (const char* page : {"gameflags", "input", "keys", "legacykeys", "weapons", "sound",
+                           "effects", "railtrail", "screen", "crosshair", "downloads", "game"})
+    CHECK(g.main().page(page) != nullptr);
+  // The game page: a skill, then a new game.
+  g.show(host, "single");
+  CHECK(item(g.main(), "single", "nightmare") != nullptr);
+  CHECK(sm::apply_event({.kind = EventKind::activated, .page = "single", .item = "hard"}, g.main(),
+                        host) == sm::Outcome::close);
+  CHECK(w.ran.size() >= 2 && w.ran[w.ran.size() - 2] == "sv skill 2" && w.ran.back() == "newgame");
+  // A flag row toggles one bit; "allow health" is bit 0 cleared.
+  g.show(host, "gameflags");
+  CHECK(item(g.main(), "gameflags", "health")->on);
+  g.main().page("gameflags")->find("weaponsstay")->on = true;
+  sm::apply_event({.kind = EventKind::changed, .page = "gameflags", .item = "weaponsstay"},
+                  g.main(), host);
+  g.main().page("gameflags")->find("health")->on = false;
+  sm::apply_event({.kind = EventKind::changed, .page = "gameflags", .item = "health"}, g.main(),
+                  host);
+  CHECK(w.ran.back() == "sv dmflags 1");  // the flags go to the server, read from here
+  // An inverted client toggle and a bit of a client cvar.
+  g.show(host, "effects");
+  CHECK(item(g.main(), "effects", "cl_noglow")->on);  // glowing: yes while cl_noglow is 0
+  g.main().page("effects")->find("rockets")->on = false;
+  sm::apply_event({.kind = EventKind::changed, .page = "effects", .item = "rockets"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("cl_disable_explosions")->value == "2");
+  // A key row shows its keys and binds the next one.
+  w.con.execute("bind q weapnext; bind mwheelup weapnext");
+  g.show(host, "keys");
+  CHECK(item(g.main(), "keys", "weapnext")->choices[0] == "mwheelup or q");
+  CHECK(item(g.main(), "keys", "inven")->choices[0] == "???");
+  CHECK(item(g.main(), "keys", "inven")->disabled);  // no `inven` in this console
+  g.show(host, "weapons");
+  CHECK(g.main().focus("railgun"));
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);
+  CHECK(g.waiting_key());
+  g.update({}, false, host, 0.016);
+  g.press_key("r", host);
+  CHECK(w.con.binds().get(ge::console::BindMode::game, "r") == "use Railgun");
+  // ESCAPE in a level opens the in-game page.
+  g.hide();
+  host.in_level = true;
+  g.update({}, true, host, 0.016);
+  CHECK(g.open() && g.main().top().id == "game");
+  // With the help computer up, ESCAPE puts it away and opens nothing.
+  g.hide();
+  w.con.add_command("putaway", "", [&w](ge::console::Console&, const ge::console::Args&) {
+    w.ran.push_back("putaway");
+  });
+  host.screen_up = true;
+  g.update({}, true, host, 0.016);
+  CHECK(!g.open() && !w.ran.empty() && w.ran.back() == "putaway");
+  // Held on to its first repeat, the in-game page opens after all; let go before, nothing.
+  host.escape_held = true;
+  for (int i = 0; i < 20; i++) g.update({}, false, host, 0.016);
+  CHECK(!g.open());
+  for (int i = 0; i < 20; i++) g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.main().top().id == "game");
+  g.hide();
+  g.update({}, true, host, 0.016);
+  host.escape_held = false;
+  for (int i = 0; i < 40; i++) g.update({}, false, host, 0.016);
+  CHECK(!g.open());
+}
+
+// Quake II's LOAD lists the autosave, a gap, then fifteen slots; SAVE the fifteen; a slot runs
+// `load save<n>` or `save save<n>`.
+TEST(q2_load_and_save_list_the_autosave_and_fifteen_slots) {
+  World w;
+  for (const char* c : {"load", "save"})
+    w.con.add_command(c, "", [&w, c](ge::console::Console&, const ge::console::Args& a) {
+      w.ran.push_back(std::string(c) + " " + a.rest(0));
+    });
+  const sm::MenuTable& t = sm::q2_menu();
+  Menu m = sm::build_menu(t);
+  CHECK(m.page("load")->items.size() == 18);  // the autosave, the gap, 15 and BACK
+  CHECK(m.page("save")->items.size() == 16);
+  CHECK(m.page("load")->items[0].id == "save0");
+  CHECK(m.page("load")->items[1].kind == ge::ui::ItemKind::label);
+  CHECK(m.page("save")->items[0].id == "save1" && m.page("save")->items[14].id == "save15");
+  const std::vector<std::string> names = sm::slot_names(t);
+  CHECK(names.size() == 16 && names[0] == "save0" && names[15] == "save15");
+  CHECK(sm::slot_names(sm::classic_menu()).size() == sm::kSaveSlots);
+  sm::Host host{.console = &w.con, .table = &t};
+  host.saves.assign(names.size(), {});
+  host.saves[0] = "the outer base";
+  sm::refresh(m, host);
+  CHECK(!item(m, "load", "save0")->disabled && item(m, "load", "save0")->text == "the outer base");
+  CHECK(item(m, "load", "save1")->disabled);
+  m.open("load");
+  for (const MenuEvent& e : press(m, "save0")) sm::apply_event(e, m, host);
+  m.reset();
+  m.open("save");
+  for (const MenuEvent& e : press(m, "save15")) sm::apply_event(e, m, host);
+  CHECK(w.ran.size() == 2 && w.ran[0] == "load save0" && w.ran[1] == "save save15");
+}
+
+// The video mode row: windowed, then each mode vid_modelist offers; a mode picked writes its
+// number.
+TEST(q2_video_mode_lists_the_modes_and_writes_the_number) {
+  World w;
+  w.con.cvars().add({.name = "vid_fullscreen", .fallback = "0"});
+  w.con.cvars().add({.name = "vid_modelist",
+                     .fallback = "desktop 1280x720@60 1920x1080@144",
+                     .kind = ge::console::CvarKind::text});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu()};
+  g.set_table(sm::q2_menu());
+  w.con.execute("vid_fullscreen 2");
+  g.show(host, "video");
+  const ge::ui::Item* row = item(g.main(), "video", "vid_fullscreen");
+  CHECK(row != nullptr);
+  if (row == nullptr) return;
+  CHECK(row->choices.size() == 4);
+  CHECK(row->choices[0] == "windowed" && row->choices[1] == "desktop" &&
+        row->choices[3] == "1920x1080@144");
+  CHECK(row->choice == 2);
+  g.main().page("video")->find("vid_fullscreen")->choice = 3;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "3");
+  g.main().page("video")->find("vid_fullscreen")->choice = 0;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "0");
+}
+
+TEST(q2_player_page_lists_figures_and_writes_the_skin) {
+  // Figures as Quake II's packs hold them: a skin counts only with its icon beside it.
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+      {"players/cyborg/tris.md2", {1}},     {"players/cyborg/oni911.pcx", {1}},
+      {"players/cyborg/oni911_i.pcx", {1}}, {"players/female/tris.md2", {1}},
+      {"players/female/athena.pcx", {1}},   {"players/female/athena_i.pcx", {1}},
+      {"players/male/tris.md2", {1}},       {"players/male/grunt.pcx", {1}},
+      {"players/male/grunt_i.pcx", {1}},    {"players/male/viper.pcx", {1}},
+      {"players/male/viper_i.pcx", {1}},    {"players/male/noicon.pcx", {1}},
+      {"players/empty/tris.md2", {1}},      {"players/empty/skin.pcx", {1}}};
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(files, &pak, &error), error);
+  ge::vfs::SearchPath sp;
+  CHECK_MSG(ge::vfs::add_archive(&sp, "pak0.pak", pak, "baseq2", &error), error);
+  const std::vector<sm::Figure> figures = sm::player_figures(sp);
+  CHECK(figures.size() == 3);
+  CHECK(figures[0].model == "male" && figures[1].model == "female" && figures[2].model == "cyborg");
+  CHECK(figures[0].skins == std::vector<std::string>({"grunt", "viper"}));
+  CHECK(sm::split_look("female/athena").second == "athena");
+  CHECK(sm::split_look("nothing").first == "male");
+
+  World w;
+  std::string skin = "male/viper";
+  w.con.cvars().bind(
+      {.name = "skin", .fallback = "male/viper", .kind = ge::console::CvarKind::text}, &skin);
+  w.con.cvars().add({.name = "name", .fallback = "player"});
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu(), .files = &sp};
+  Menu m = sm::build_menu(sm::q2_menu());
+  sm::refresh(m, host);
+  CHECK(item(m, "setup", "model")->choices.size() == 3);
+  CHECK(item(m, "setup", "figskin")
+            ->choices[static_cast<size_t>(item(m, "setup", "figskin")->choice)] == "viper");
+  m.open("setup");
+  CHECK(m.focus("model"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(skin == "female/athena");  // a new model at its first skin
+}
+
+// Quake II's player page with no figure in the packs: said, and the page does not open.
+TEST(q2_player_page_without_figures_does_not_open) {
+  ge::vfs::SearchPath sp;
+  World w;
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu(), .files = &sp};
+  Menu m = sm::build_menu(sm::q2_menu());
+  sm::refresh(m, host);
+  m.open("multi");
+  std::vector<MenuEvent> events;
+  m.open("setup", &events);
+  for (const MenuEvent& e : events) sm::apply_event(e, m, host);
+  CHECK(m.top().id == "multi");
+  CHECK(!w.con.output().empty() && w.con.output().back() == "No player models found.");
+}
+
+// Quake's setup page shows its figure (menuplyr) in the shirt and pants its rows hold: the shirt's
+// shades take the chosen row's (a row from 128 up runs the other way), the rest stay.
+TEST(setup_shows_the_figure_in_the_chosen_colours) {
+  const auto files = sm::fixture_files();
+  sm::ClassicArt art;
+  std::string error;
+  CHECK_MSG(sm::load_classic_art(fixture_find(files), &art, &error), error);
+  const ge::ui::Image* fig = art.player_in(4, 12);
+  CHECK(fig != nullptr);
+  if (fig == nullptr) return;
+  const auto px = [&](int x, int y) {
+    const uint8_t* p = &fig->rgba[static_cast<size_t>(y * fig->width + x) * 4];
+    return std::array<int, 4>{p[0], p[1], p[2], p[3]};
+  };
+  const auto pal = [&](int k) {
+    const ge::ui::Color c = art.colour(k);
+    return std::array<int, 4>{static_cast<int>(std::lround(c.r * 255)),
+                              static_cast<int>(std::lround(c.g * 255)),
+                              static_cast<int>(std::lround(c.b * 255)), 255};
+  };
+  CHECK(px(0, 0)[3] == 0);      // see-through
+  CHECK(px(8, 10) == pal(64));  // the shirt's first shade: row 4's first
+  CHECK(px(38, 10) == pal(64 + 15));
+  CHECK(px(8, 40) == pal(192 + 15));  // the pants' first shade: row 12, from its far end
+  CHECK(px(38, 40) == pal(192));
+  CHECK(art.player_in(4, 12) == fig);  // kept while the colours stay
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  g.set_art(art);
+  g.show(host, "setup");
+  DrawList dl;
+  dl.begin(640, 400);
+  g.draw(dl, 640, 400, 0.25);
+  CHECK(g.problems().empty());
+}
+
+// A web list of servers in sb_masters: the binary list's 6-byte records and the text list's lines
+// read into the browser's list; one that fails said in the game's words.
+TEST(servers_page_reads_web_lists) {
+  namespace gn = ge::net;
+  gn::TcpListener web;
+  std::string err;
+  if (!gn::tcp_listen(web, gn::loopback_v4(0), &err)) {
+    ge::test::skip("no loopback TCP socket here: " + err);
+    return;
+  }
+  const std::string base = "http://127.0.0.1:" + std::to_string(web.local.port);
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  gn::Transport browser;
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  ge::console::Console con;
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  sm::Host host{.console = &con};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("sb_lan 0");
+  con.execute("sb_masters \"+" + base + "/bin " + base + "/text " + base + "/gone +3" + base +
+              "/bad\"");
+  con.execute("menu_servers");
+  const auto printed = [&con](const std::string& line) {
+    return std::find(con.output().begin(), con.output().end(), line) != con.output().end();
+  };
+  std::vector<gn::TcpStream> streams;
+  std::vector<std::string> asked;
+  const std::string bin("\x0a\x00\x00\x01\x6d\x46\x0a\x00\x00\x02\x6d\x47\x0a", 13);
+  int64_t now = 0;
+  for (int i = 0; i < 2000; i++) {
+    for (gn::TcpStream in; gn::tcp_accept(web, in); in = {}) streams.push_back(in);
+    for (gn::TcpStream& t : streams) {
+      if (t.handle == -1) continue;
+      gn::tcp_pump(t);
+      std::vector<uint8_t> got;
+      gn::tcp_take_bytes(t, got);
+      const std::string req(got.begin(), got.end());
+      if (req.find("\r\n\r\n") == std::string::npos) continue;
+      const std::string path = req.substr(4, req.find(' ', 4) - 4);
+      asked.push_back(path);
+      const std::string body = path == "/bin" ? bin : path == "/text" ? "10.0.0.3:27910\n\n" : "";
+      const std::string reply = (path == "/gone" ? std::string("HTTP/1.1 404 Not Found\r\n")
+                                                 : std::string("HTTP/1.1 200 OK\r\n")) +
+                                "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
+                                body;
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(reply.data()), reply.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+    }
+    now += 16000;
+    gn::sim_advance(net, now);
+    menu.update({}, false, host, 0.016);
+  }
+  CHECK(asked.size() == 3);
+  std::vector<std::string> listed;
+  for (const gn::ServerEntry& e : menu.servers().list().entries)
+    listed.push_back(gn::to_string(e.address));
+  std::sort(listed.begin(), listed.end());
+  CHECK(listed == (std::vector<std::string>{"10.0.0.1:27974", "10.0.0.2:27975", "10.0.0.3:27910"}));
+  CHECK(printed("[HTTP] Failed to fetch '" + base + "/gone': 404 Not Found"));
+  CHECK(printed("Ignoring invalid master URL: +3" + base + "/bad"));
+  for (gn::TcpStream& t : streams) gn::tcp_close(t);
+  gn::tcp_close_listener(web);
+}
+
+TEST(the_game_sets_the_menus_size) {
+  sm::ClassicArt art;  // by the window: the largest whole number that fits 1920 x 1080
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 5);
+  art.scale = 2;  // Quake II's ui_scale 2: twice the game's own size, centred
+  const sm::ClassicLayout l = sm::classic_screen(art, 1920, 1080);
+  CHECK(l.scale == 2 && l.x == 640 && l.y == 340);
+  art.scale = 0.5f;  // never smaller than the game's own
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 1);
+  sm::GameMenu menu;  // the setting outlives the game's pictures
+  menu.menu_scale() = 3;
+  menu.set_art(sm::ClassicArt{});
+  CHECK(menu.menu_scale() == 3);
+}
+
+TEST(q2_browse_rows_open_the_browser_on_their_own_sources) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  // Three servers: one in the address book, one in the game's servers.lst, one only in sb_servers.
+  gn::Transport server[3], browser;
+  for (uint32_t k = 0; k < 3; k++)
+    gn::open_sim_transport(server[k], net, gn::sim_address(5 + k, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  const std::string listed = gn::to_string(gn::sim_address(6, 27500)) + "\n";
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+      {"servers.lst", std::vector<uint8_t>(listed.begin(), listed.end())}};
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(files, &pak, &error), error);
+  ge::vfs::SearchPath sp;
+  CHECK_MSG(ge::vfs::add_archive(&sp, "pak0.pak", pak, "baseq2", &error), error);
+
+  ge::console::Console con;
+  con.add_command("connect", "", [](ge::console::Console&, const ge::console::Args&) {});
+  con.cvars().add({.name = "adr0",
+                   .fallback = gn::to_string(gn::sim_address(5, 27500)),
+                   .kind = ge::console::CvarKind::text});
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  const sm::MenuTable& table = menu.set_table(sm::q2_menu(), &sp);
+  sm::Host host{.console = &con, .table = &table};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("sb_servers " + gn::to_string(gn::sim_address(7, 27500)));
+  con.run();
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  const auto run = [&] {
+    now += 16000;
+    gn::sim_advance(net, now);
+    for (int k = 0; k < 3; k++)
+      while (gn::transport_receive(server[k], buf, sizeof buf, from, now) >= 0) {
+        const char* names[] = {"!book", "!listed", "!mine"};
+        gn::transport_send(server[k], from, reinterpret_cast<const uint8_t*>(names[k]),
+                           std::strlen(names[k]), now);
+      }
+    menu.update({}, false, host, 0.016);
+  };
+  const auto shown = [&] {
+    std::vector<std::string> out;
+    for (int r : menu.servers().rows())
+      out.push_back(menu.servers().list().entries[static_cast<size_t>(r)].info.name);
+    std::sort(out.begin(), out.end());
+    return out;
+  };
+  // The page's rows: the web list, and the address book, servers.lst and the LAN.
+  const sm::Entry* book = sm::find_entry("multi", "book", table);
+  CHECK(book != nullptr && sm::find_entry("multi", "q2servers", table) != nullptr &&
+        sm::find_entry("game", "q2servers", table) != nullptr);
+  if (book == nullptr) return;
+  CHECK(book->line == R"(pushmenu servers "favorites://" "file:///servers.lst" "broadcast://")");
+  // Those sources without the LAN (every server here would answer it), and a word it cannot use.
+  con.execute("sb_lan 0");
+  con.execute(R"(pushmenu servers "favorites://" "file:///servers.lst" nowhere)");
+  con.run();
+  for (int i = 0; i < 90; i++) run();
+  CHECK(shown() == (std::vector<std::string>{"book", "listed"}));
+  CHECK(std::find(con.output().begin(), con.output().end(),
+                  "Ignoring invalid master URL: nowhere") != con.output().end());
+  // The menu's own row afterwards: the configured places again.
+  menu.hide();
+  con.execute("menu_servers");
+  con.run();
+  for (int i = 0; i < 90; i++) run();
+  CHECK(shown() == (std::vector<std::string>{"book", "mine"}));
+}
+
+// The RULESET row on OPTIONS offers exactly the loaded game's book, in its order.
+TEST(the_ruleset_row_offers_the_games_book) {
+  const auto check = [](const shooters_edge::menu::MenuTable& table,
+                        std::span<const ge::console::Ruleset> book) {
+    const shooters_edge::menu::Entry* row = nullptr;
+    for (const shooters_edge::menu::Entry& e : table.entries)
+      if (e.page == "options" && e.id == "ruleset") row = &e;
+    CHECK(row != nullptr && row->needs == "ruleset");
+    if (row == nullptr) return;
+    CHECK(row->choices.size() == book.size());
+    for (size_t i = 0; i < book.size() && i < row->choices.size(); ++i)
+      CHECK(row->choices[i].value == book[i].name);
+  };
+  check(shooters_edge::menu::classic_menu(), ge::classic::qw_rulesets());
+  check(shooters_edge::menu::q2_menu(), ge::classic::q2_rulesets());
+}
+
+TEST(classic_remix_is_one_page_of_the_cr_settings) {
+  World w;
+  using K = ge::console::CvarKind;
+  w.con.cvars().add({"cr_enabled", "0", 0, "", K::boolean});
+  w.con.cvars().add({"cr_expansions", "1", 0, "", K::boolean});
+  w.con.cvars().add({"cr_items", "", 0, "", K::text});
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con};
+  sm::refresh(m, host);
+  CHECK(!item(m, "options", "remix")->disabled);
+  CHECK(item(m, "remix", "cr_expansions")->choice == 1);  // ON
+  CHECK(!item(m, "remix", "cr_items")->disabled);
+  m.open("remix");
+  CHECK(m.focus("cr_items"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value == "q1");
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value == "q2");
+  // Past QUAKE II it wraps back to the game's own: the cvar set to nothing, not shown.
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value.empty());
 }

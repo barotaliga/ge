@@ -21,6 +21,7 @@
 
 #include "check.hpp"
 #include "golden.hpp"
+#include "shooter/client.hpp"
 #include "shooter/physics.hpp"
 #include "shooter_loop_bench.hpp"
 
@@ -291,6 +292,39 @@ TEST(noclip_moves_through_everything) {
   CHECK_BITS(b.ent(e).angles.y, 90 * static_cast<float>(0.1));
 }
 
+TEST(a_player_flying_slides_along_walls_and_one_in_noclip_still_sets_off_triggers) {
+  // The cheats' movetypes on the single-player clock: `fly` thinks, then slides along what it
+  // meets without gravity; `noclip` goes through walls yet touches the triggers it passes.
+  Bench b;
+  int touched = 0;
+  const sh::Func touch = b.add([&](sh::Server&) { touched++; });
+  sh::ServerSettings set;
+  set.single_player_clock = true;
+  set.playermove = sh::PlayerMove::original;
+  b.start({box({-1024, -1024, -64}, {1024, 1024, 0}), box({200, -1024, 0}, {264, 1024, 256})}, {},
+          set);
+  b.sv.clients[0].active = true;
+  sh::Edict& p = b.ent(1);
+  p.free = false;
+  p.solid = sh::kSolidSlidebox;
+  p.movetype = sh::kMovetypeFly;
+  sh::set_size(b.sv, 1, {-16, -16, -24}, {16, 16, 32});
+  sh::set_origin(b.sv, 1, {150, 0, 100});
+  p.velocity = {400, 400, 0};  // into the wall at 45 degrees
+  sh::run_player_frame(b.sv, 1, 0.1);
+  CHECK_MSG(b.ent(1).origin.x <= 184.1f && b.ent(1).origin.y > 30,
+            std::to_string(b.ent(1).origin.x) + " " + std::to_string(b.ent(1).origin.y));
+  CHECK(b.ent(1).origin.z == 100);  // no gravity
+  const int trig =
+      b.spawn_box({0, 0, 100}, {-32, -32, -32}, {32, 32, 32}, sh::kSolidTrigger, sh::kMovetypeNone);
+  b.ent(trig).touch = touch;
+  b.ent(1).movetype = sh::kMovetypeNoclip;
+  sh::set_origin(b.sv, 1, {-200, 0, 100});
+  b.ent(1).velocity = {2000, 0, 0};
+  sh::run_player_frame(b.sv, 1, 0.1);  // through the trigger's box
+  CHECK_MSG(touched == 1, std::to_string(touched));
+}
+
 TEST(the_water_check_is_silent_first_then_splashes_both_ways) {
   Bench b;
   sh::Brush water = box({-1024, -1024, 0}, {0, 1024, 64});
@@ -321,6 +355,57 @@ TEST(the_velocity_is_bounded_by_its_length_and_cleared_of_nans) {
   b.ent(e).velocity = {std::nanf(""), 10, 0};
   sh::bound_velocity(b.sv, e);
   CHECK(b.ent(e).velocity.x == 0 && b.ent(e).velocity.y == 10);
+}
+
+// ON THE SINGLE-PLAYER CLOCK each axis is bounded on its own.
+TEST(on_the_single_player_clock_the_velocity_is_bounded_axis_by_axis) {
+  Bench b;
+  sh::ServerSettings set;
+  set.single_player_clock = true;
+  b.start({box({-1024, -1024, -64}, {1024, 1024, 0})}, {}, set);
+  const int e = b.spawn_box({0, 0, 100}, kZero, kZero, sh::kSolidBbox, sh::kMovetypeToss);
+  b.ent(e).velocity = {1000, 1000, 3000};
+  sh::bound_velocity(b.sv, e);
+  CHECK(b.ent(e).velocity.x == 1000 && b.ent(e).velocity.y == 1000);
+  CHECK(b.ent(e).velocity.z == 2000);
+}
+
+// ON THE SINGLE-PLAYER CLOCK a resting thing given upward speed stays put.
+TEST(on_the_single_player_clock_a_resting_toss_given_upward_speed_stays_put) {
+  for (const bool sp : {false, true}) {
+    Bench b;
+    sh::ServerSettings set;
+    set.single_player_clock = sp;
+    b.start({box({-1024, -1024, -64}, {1024, 1024, 0})}, {}, set);
+    const int e =
+        b.spawn_box({0, 0, 4}, {-4, -4, -4}, {4, 4, 4}, sh::kSolidBbox, sh::kMovetypeToss);
+    b.ent(e).flags = sh::kFlagOnGround;
+    b.ent(e).velocity = {0, 0, 100};
+    for (int i = 0; i < 10; i++) {
+      b.sv.time += 0.013;
+      sh::run_entity(b.sv, e, 0.013);
+    }
+    CHECK(sp ? b.ent(e).origin.z == 4 : b.ent(e).origin.z > 4);
+  }
+}
+
+// ON THE SINGLE-PLAYER CLOCK a falling corpse (a step that is not solid) lands on a monster.
+TEST(on_the_single_player_clock_a_falling_corpse_lands_on_a_monster) {
+  for (const bool sp : {false, true}) {
+    Bench b;
+    sh::ServerSettings set;
+    set.single_player_clock = sp;
+    b.start({box({-1024, -1024, -64}, {1024, 1024, 0})}, {}, set);
+    b.spawn_box({0, 0, 24}, {-16, -16, -24}, {16, 16, 32}, sh::kSolidSlidebox, sh::kMovetypeStep);
+    const int corpse =
+        b.spawn_box({0, 0, 120}, {-16, -16, -24}, {16, 16, 8}, sh::kSolidNot, sh::kMovetypeStep);
+    for (int i = 0; i < 60; i++) {
+      b.sv.time += 0.013;
+      sh::run_entity(b.sv, corpse, 0.013);
+    }
+    const float z = b.ent(corpse).origin.z;
+    CHECK(sp ? z > 79 : z < 30);  // on the monster's head (56 + 24), or through it to the floor
+  }
 }
 
 TEST(the_frame_starts_the_program_skips_players_and_runs_what_it_spawns) {

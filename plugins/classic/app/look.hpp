@@ -37,6 +37,7 @@
 // ge:test tests/classic_look_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -47,6 +48,8 @@
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_weather.hpp"
 #include "brush/map.hpp"
+#include "classic/q2_fx_switches.hpp"
+#include "classic/sky_typed.hpp"
 #include "classicenhance/switches.hpp"
 #include "console/console.hpp"
 #include "render/post.hpp"
@@ -80,14 +83,38 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   double fire_pace = ge::brush::app::kFirePace;   // r_fire_speed: the flames' pace, 1 a real fire's
   double water_pace = ge::brush::app::kPoolPace;  // r_water_speed: the pools' pace, 1 real water's
   double gamma = 1;  // gamma: the picture's brightness, below 1 brighter
+  // The maps' light (Quake II's `intensity` and `gl_brightness`, Quake leaving them at these, and
+  // every game's `gl_modulate`): a face shows its painted colour times its luxel / 255 plus
+  // `light_lift`, times `light_modulate` times `light_intensity` (`light_scale`). 2, 1 and 0: a
+  // luxel of 128 shows the colour as painted, 255 twice as bright.
+  double light_intensity = 2, light_modulate = 1, light_lift = 0;
+  // gl_anisotropy: the filtered textures' taps (0: the renderer's own 4; 1 none; up to 16).
+  double anisotropy = 0;
   // r_fill_shadows: 1 lets every map light throw a figure's shadow and dims the bounce round him,
   // 0 (the default) only the lights whose source shows (brush/app/bsp_draw.hpp's fill_shadows)
   double fill_shadows = 0;
   // r_reflect: how strongly shiny floors mirror the room under ce_reflections, 1 the whole of what
   // the gloss and the angle give; 0.1 by default, a hint of the room (Niclas's pick, 2026-11-19)
   double reflect = 0.1;
-  // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
+  // ce_ao_radius: how far, in map units, a wall or a figure still shades a surface beside it under
+  // ce_ao; ce_ao_strength: how much of the light the closed corners lose (0..1).
+  double ao_radius = 48;
+  double ao_strength = 0.8;
+  // ce_blood_time: how long blood stays on the walls and floors under ce_blood, s; its drying and
+  // its fading shortened to fit a short one; 0 until its place is needed for a newer mark.
+  double blood_time = 120;
+  // ce_blood_reflect: how strongly a wet pool of blood mirrors the room under ce_blood and
+  // ce_reflections, 1 the whole of what its gloss and the angle give; 0 none.
+  double blood_reflect = 1;
+  // ce_blood_amount: how much a body bleeds under ce_blood, 1 as drawn: the drops thrown, the
+  // splashes and pools, the wounds' stains and runs and their drips; 0 none.
+  double blood_amount = 1;
+  // The ce_ switches: each enhancement the modern look draws over the pack, on or off; with
+  // ce_enabled 0 every one reads off (`apply_ce_enabled`), the ce_ cvars keeping the player's.
   ge::classicenhance::Switches ce;
+  // ce_enabled: classic enhance as a whole, 0 the pack as it is whatever each ce_ switch says.
+  bool ce_enabled = true;
+  bool ce_applied = true;  // ce_enabled as `apply_ce_enabled` last applied it
   // ce_shadows_quality, ce_water_quality, ce_skies_quality: low, medium or high, each its
   // switch's level when on (Stops).
   std::string shadows_quality = "high", water_quality = "high", skies_quality = "high";
@@ -102,6 +129,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
   // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
   std::string sky_name;
+  // `sky <name> [rotate] [axis x y z]`: the sky box typed for one map (classic/sky_typed.hpp).
+  SkyTyped sky_typed;
   // gl_texturemode: how the map's textures are sampled, either look: empty the look's own (the
   // classic crisp, the modern filtered); a mode whose first filter is nearest (GL_NEAREST,
   // GL_NEAREST_MIPMAP_NEAREST, ...) crisp, each texel a square; one that starts linear filtered
@@ -117,9 +146,13 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // rocket's glow in flight, an explosion's, a power's round its carrier); off, that kind lights
   // nothing (`kept_lights`). Either look.
   bool rocket_light = true, explosion_light = true, power_glow = true;
+  // gl_flashblend (Quake's own, classic/flash_blend.hpp): each of the moment's lights drawn as a
+  // glowing disc turned to the eye, the walls, doors and lifts left unlit by it (the figures still
+  // take it). Either look.
+  bool flash_blend = false;
   // r_powershells: a power's carrier wears a coloured shell (quad damage blue, the pentagram or
-  // invulnerability red); r_itempulse: an item's light pulses as it lies. The sequel's own look:
-  // on in it, off in the first game, which never drew them (each game's default its own: the
+  // invulnerability red); r_itempulse: an item's light pulses as it lies. Quake II's own look:
+  // on in it, off in Quake, which never drew them (each game's default its own: the
   // window's cvar layers). Either look.
   bool power_shells = false, item_pulse = false;
   // cl_muzzleflash: the light a gun throws on the walls as it fires: 1 every gun's (the default),
@@ -132,12 +165,20 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool draw_entities = true;
   // cl_gibfilter: the pieces a body bursts into (each model flagged to bleed as it flies) not
   // drawn; cl_deadbodyfilter: a player's body not drawn once it lies still on the last frame of a
-  // death. The game decides which models those are; the switches are here. Either look.
+  // death (Quake II's cl_gibs 0 is cl_gibfilter 1). The game decides which models those are; the
+  // switches are here. Either look.
   bool gib_filter = false, dead_body_filter = false;
+  // cl_noglow (Quake II's own, over r_itempulse): 1 the items' light never pulses. Either look.
+  bool no_glow = false;
+  // Quake II's own effect switches (classic/q2_fx_switches.hpp). Either look.
+  ge::classic::Q2FxSwitches q2fx;
+  // The 3D view's share of the screen, percent, centred (Quake II's viewsize under 100: the
+  // border is the 2D layer's to tile); 100 all of it.
+  int view_size = 100;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
-  // r_drawvweps (the sequel's spelling cl_vwep): a player drawn with the weapon he carries, where
-  // the server names them (classic/vweps.hpp; the sequel's carried weapons); 0 each figure with
+  // r_drawvweps (Quake II's spelling cl_vwep): a player drawn with the weapon he carries, where
+  // the server names them (classic/vweps.hpp; Quake II's carried weapons); 0 each figure with
   // its own plain gun. Either look, on in both games (the server decides whether there are any).
   bool draw_vweps = true;
   // r_particles: the specks the effects throw (sparks, blood, smoke, trails, splashes); 0 none
@@ -171,6 +212,12 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // each, how much of it shows; gl_cshiftpercent (0..100) all of them together. Either look.
   double content_blend = 1, damage_blend = 1, quad_blend = 1, pent_blend = 1, suit_blend = 1,
          ring_blend = 1, cshift_percent = 100;
+  // gl_damageblend_frac: a hit's flash drawn as a frame round the view's edge this deep (a share
+  // of its shorter side, 0..0.5), fading to nothing inward, so the middle stays clear; 0 flat over
+  // the whole view, as Quake drew it (each game's own default: 0, Quake II's 0.2). Either look.
+  double damage_frac = 0;
+  // cl_bonusflash: whether an item taken flashes the view gold. Either look.
+  bool bonus_flash = true;
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
   // say (0..1, either look).
   double sky_fog = 0.5;
@@ -189,9 +236,14 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // one skin on every player ("": each their own); all_figures: the folder of the one figure
   // every player is drawn as (classic remix's `cr_models`, "": each their own).
   int noskins = 0;
-  // The sequel's `cl_noskins`: 0 each their own figure, 1 every player the default figure, 2 the
+  // Quake II's `cl_noskins`: 0 each their own figure, 1 every player the default figure, 2 the
   // default figure of each one's sex (a female figure's, else the male).
   int stock_figures = 0;
+  // Quake II's `cl_nobob`: items the game marks to float stay still (no 5-unit rise and fall).
+  bool items_still = false;
+  // The models' ground shadows (Quake II's `gl_shadows`): 0 none, 1 under each animated model, 2
+  // fading as it rises (the client's model_shadow.hpp).
+  int model_shadows = 0;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
   std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
@@ -200,8 +252,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   std::string team_skin, enemy_skin;
   int team_top = -1, team_bottom = -1, enemy_top = -1, enemy_bottom = -1;
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
-  // r_arrival: how strongly your own arrival (a spawn, a teleport's far end) warps the whole view
-  // in the modern look with ce_warps on (render/post.hpp's arrival), 0 none.
+  // r_arrival: how strongly your own arrival (a spawn, a teleport's far end) touches the view's
+  // edges in the modern look with ce_warps on (render/post.hpp's arrival), 0 none.
   double arrival = 1;
   // ce_bubbles_share: the share of the bubbles the game blows under water that is drawn, either
   // look (a map's air vents blow one a second each, a column of ten in the water at once).
@@ -212,16 +264,25 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
   bool lerp_models = true, lerp_move = true;
+  // cl_fakeshaft: how far the player's own lightning beam is turned from the server's line toward
+  // where the view looks this frame (0: the server's line; 1: the view's, traced every frame, so
+  // the beam and the marks it burns sweep with the mouse; shooters_edge's client/own_beam.hpp).
+  // Either look.
+  double fake_shaft = 1;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
 // r_fastsky, r_skycolor, r_lightmap, r_fullbright, r_dynamic, r_rocketlight, r_explosionlight,
-// r_powerupglow, r_waterwarp, r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_gibfilter,
-// cl_deadbodyfilter, ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the
-// three ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars
-// over `picture` (it must outlive `con`), and the `fog` and `allskins` commands. Each cvar's
-// default is the value `picture` holds now (a game's own; above).
+// r_powerupglow, r_waterwarp, r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_fakeshaft,
+// cl_gibfilter, cl_deadbodyfilter, ce_bubbles_share, ce_water_specks, r_quality, r_budget, every
+// ce_ switch, the three ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the
+// weather's cvars over `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
+// Each cvar's default is the value `picture` holds now (a game's own; above).
 void add_cvars(ge::console::Console& con, Picture& picture);
+// CE_ENABLED, once a frame: off, every ce_ switch in `picture.ce` reads off; turned on again,
+// each reads its ce_ cvar in `cvars` again (what the player set meanwhile too). The ce_ cvars
+// themselves never change, so a saved config keeps every switch as the player set it.
+void apply_ce_enabled(Picture& picture, const ge::console::Cvars& cvars);
 // The models a frame draws: `placed` itself, or none with r_drawentities 0.
 template <class T>
 std::span<const T> drawn_models(const Picture& picture, std::span<const T> placed) {
@@ -282,6 +343,17 @@ constexpr bool far_land_at(Stop skies) { return skies == Stop::high; }
 double effects_glow(Look look, const Picture& picture = {});
 // The post pass's settings in `look`.
 ge::render::PostSettings post_settings(Look look, const Picture& picture = {});
+// The maps' light's scale over the default (`light_intensity` x `light_modulate` / 2): 1 at the
+// defaults.
+double light_scale(const Picture& picture);
+// The walls' light's scale: `light_scale` times Quake II's gl_modulate_world (1 in every other
+// game).
+double world_light_scale(const Picture& picture);
+// The models' light over the brightness the world's options give them in `look`: Quake II's
+// gl_modulate times gl_modulate_entities, laid on twice under gl_doublelight_entities; in the
+// modern look, whose models already take the world's brightness, over the world's modulate. 1 at
+// the defaults and in every other game.
+double model_light(const Picture& picture, Look look);
 // The classic grade: every entry the nearest (in sRGB) of `palette`'s colours (768 bytes, RGB), in
 // render/post.hpp's `identity_grade` layout. An empty palette gives the identity.
 std::vector<float> palette_grade(std::span<const uint8_t> palette);

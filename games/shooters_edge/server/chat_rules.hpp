@@ -1,5 +1,5 @@
 // THE SERVER'S OWN CHAT, for every runner whose mod leaves a `say` or `say_team` to the server (the
-// classic rules in QC when the program names no chat hook, a compiled module that answers 0): the
+// Quake's rules in QC when the program names no chat hook, a compiled module that answers 0): the
 // engine's route (engine/server/chat.hpp: who reads a line, the spectators' prefix, `sv_spectalk`,
 // `sv_sayteam_to_spec`) fed from the runner's clients. This file only wires it:
 //

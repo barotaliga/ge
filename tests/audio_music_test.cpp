@@ -17,8 +17,10 @@
 
 #include "audio/flac.hpp"
 #include "audio/music.hpp"
+#include "audio/music_console.hpp"
 #include "audio/synth.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 
 namespace audio = ge::audio;
 namespace fs = std::filesystem;
@@ -112,4 +114,137 @@ TEST(music_from_flac_spreads_a_mono_file_on_both_sides) {
   CHECK(t.left.samples[0] == 0.5f);
   CHECK(!audio::music_from_flac(std::vector<uint8_t>{1, 2, 3}, "bad.flac", &t, &error));
   CHECK(error.rfind("bad.flac: ", 0) == 0);
+}
+
+TEST(the_music_switch_off_stops_the_track_and_on_plays_it_again) {
+  // `enabled` (cd on|off, a game's own switch bound to it) followed by music_frame.
+  const std::string path = write_track();
+  audio::Synth synth;
+  ge::console::Console con;
+  audio::MusicConsole m;
+  audio::add_music_commands(con, m);
+  m.track_of = [&path](int track) { return track == 3 ? path : std::string{}; };
+  audio::play_level_music(m, 3);
+  audio::music_frame(m, synth, con);
+  CHECK(m.track == 3 && !m.player.playing().empty());
+  m.enabled = false;  // switched off: stopped, the track kept
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.playing().empty() && m.track == 3);
+  audio::play_level_music(m, 3);  // a level starting while off: nothing
+  CHECK(m.player.playing().empty());
+  m.enabled = true;  // on again: the same track
+  audio::music_frame(m, synth, con);
+  CHECK(!m.player.playing().empty());
+  m.player.stop();
+  audio::music_frame(m, synth, con);
+}
+
+TEST(shuffled_music_plays_the_games_tracks_and_the_menu_has_its_own) {
+  const std::string path = write_track();
+  audio::MusicConsole m;
+  m.track_of = [&path](int track) { return track == 2 || track == 5 ? path : std::string{}; };
+  m.shuffle = true;  // a level's own track 9 is passed over for one the game has
+  audio::play_level_music(m, 9);
+  CHECK(m.track == 2 || m.track == 5);
+  CHECK(!m.player.playing().empty() && !m.player.loops());  // once through, then the next
+  m.player.stop();
+  m.shuffle = false;
+  m.menu_track = 5;  // no game running: the menu's track, started once
+  audio::play_menu_music(m);
+  CHECK(m.track == 5 && m.player.loops());
+  audio::play_level_music(m, 2);
+  CHECK(m.track == 2);
+  audio::play_menu_music(m);  // back at the menu: its track again
+  CHECK(m.track == 5);
+  m.player.stop();
+  m.track = 0;
+  audio::play_menu_music(m);  // asked already: the music left as it is
+  CHECK(m.track == 0);
+}
+
+// `music` (Quake II's `ogg`): a track played by hand once through, then the level's again; info,
+// pause and toggle, next, stop and the refusals.
+TEST(the_music_command_plays_a_track_by_hand_then_the_levels_again) {
+  const std::string path = write_track();
+  audio::Synth synth;
+  ge::console::Console con;
+  audio::MusicConsole m;
+  audio::add_music_commands(con, m);
+  m.track_of = [&path](int track) { return track == 3 || track == 4 ? path : std::string{}; };
+  con.execute("music info");
+  CHECK(con.output().back() == "Playback stopped.");
+  con.execute("music pause");
+  CHECK(con.output().back() == "Playback stopped.");
+  con.execute("music");
+  CHECK(con.output().back() == "Usage: music <info|play|stop|next|pause>");
+  con.execute("music play");
+  CHECK(con.output().back() == "Usage: music play <track>");
+  con.execute("music play 9");
+  CHECK(con.output().back() == "No such track: 9");
+  con.execute("music play foo");
+  CHECK(con.output().back() == "No such track: foo");
+  m.held = true;  // a game's movie plays
+  con.execute("music play 4");
+  CHECK(con.output().back() == "Can't play music in cinematic mode." && m.manual == 0);
+  m.held = false;
+  audio::play_level_music(m, 3);
+  con.execute("music play 4");
+  CHECK(m.manual == 4 && m.track == 3 && !m.player.loops());
+  con.execute("music info");
+  CHECK(con.output().back().rfind("Playing track 4 (", 0) == 0);
+  con.execute("music toggle");
+  CHECK(m.player.paused());
+  con.execute("music pause 0");
+  CHECK(!m.player.paused());
+  m.player.stop();  // the hand's track ended: the level's own again, looping
+  audio::music_frame(m, synth, con);
+  CHECK(m.manual == 0 && m.track == 3 && m.player.loops());
+  con.execute("music next");  // the level's track from its start
+  CHECK(m.track == 3 && !m.player.playing().empty());
+  con.execute("music stop");
+  CHECK(m.player.playing().empty() && m.track == 3);
+  audio::music_frame(m, synth, con);
+}
+
+// A track by NAME (`file_of`): `music play <name>`, a level's music named by its server; a game
+// whose switch off pauses its music (`off_pauses`); a movie stops the music and forgets it.
+TEST(music_by_name_a_switch_that_pauses_and_a_movie_that_stops_it) {
+  const std::string path = write_track();
+  audio::Synth synth;
+  ge::console::Console con;
+  audio::MusicConsole m;
+  audio::add_music_commands(con, m);
+  m.track_of = [&path](int track) { return track == 3 ? path : std::string{}; };
+  m.file_of = [&path](const std::string& name) {
+    return name == "Theme" || name == "theme" ? path : std::string{};
+  };
+  con.execute("music play Theme");
+  CHECK(m.manual == -1 && !m.player.playing().empty() && !m.player.loops());
+  con.execute("music info");
+  CHECK(con.output().back().rfind("Playing Theme (", 0) == 0);
+  con.execute("music play nothere");
+  CHECK(con.output().back() == "No such track: nothere");
+  con.execute("music stop");
+  audio::play_level_named(m, "theme");  // a server names its level's track
+  CHECK(m.named == "theme" && m.track == 0 && m.player.loops());
+  audio::play_level_named(m, "THEME");  // the same name without case: plays on
+  CHECK(m.named == "theme");
+  m.off_pauses = true;  // the switch off pauses where it is, on resumes it there
+  m.enabled = false;
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.paused() && !m.player.playing().empty());
+  m.enabled = true;
+  audio::music_frame(m, synth, con);
+  CHECK(!m.player.paused() && !m.player.playing().empty());
+  m.held = true;  // a movie: the music stopped and forgotten
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.playing().empty() && m.named.empty() && m.track == 0);
+  m.held = false;
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.playing().empty());  // the next level's track starts it again
+  audio::play_level_named(m, "theme");
+  CHECK(!m.player.playing().empty());
+  audio::play_level_named(m, "");  // none named: stopped
+  CHECK(m.player.playing().empty());
+  audio::music_frame(m, synth, con);
 }

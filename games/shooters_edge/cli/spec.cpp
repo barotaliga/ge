@@ -38,8 +38,8 @@
 #include "shooters_edge/client/take_in.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
-#include "shooters_edge/net/classic_browse.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_browse.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 #include "vfs/unpack.hpp"
@@ -64,21 +64,16 @@ cl::Args folders(const gc::Ctx& ctx) {
     a.basedir = cl::expand_home(ctx.flag("basedir"));
     a.basedir_set = true;
   }
-  // `--game=N`: the Nth classic game's kept install, as the window's `-game N`; `--mod=<folder>`
-  // the game folder over it, as its `-mod` (a `--game` that is no number reads as that folder).
-  if (ctx.has("game")) {
-    const std::string g = ctx.flag("game");
-    const int n = std::atoi(g.c_str());
-    if (n >= 1 && n <= static_cast<int>(std::size(ge::classicenhance::kProfiles)) &&
-        std::to_string(n) == g) {
-      a.game_number = n;
-    } else {
-      a.game = g;
-      a.game_set = true;
-    }
+  // `--classic=<id>`: that classic game's kept install, as the window's `-classic <id>`;
+  // `--game=<folder>` the game folder over it, as its `-game`.
+  if (ctx.has("classic")) {
+    const std::string id = ctx.flag("classic");
+    const auto& games = ge::classicenhance::kProfiles;
+    for (size_t i = 0; i < std::size(games); ++i)
+      if (games[i].id == id) a.game_number = static_cast<int>(i) + 1;
   }
-  if (ctx.has("mod")) {
-    a.game = ctx.flag("mod");
+  if (ctx.has("game")) {
+    a.game = ctx.flag("game");
     a.game_set = true;
   }
   cl::choose_folder(a, gc::prefs_dir("gameengine2", "shooters_edge"));
@@ -128,20 +123,20 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
       cl::series_settings_file(cl::data_root(cl::placed_folder(ctx.self_dir),
                                              gc::prefs_dir("gameengine2", "shooters_edge")))
           .string();
-  out.masters = shooters_edge::net::classic_install_masters(a.basedir);
+  out.masters = shooters_edge::net::qw_install_masters(a.basedir);
   return true;
 }
 
 void join_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "+connect", address});
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+connect", address});
 }
 
 // A hub's Spectate link: the window joins as a spectator (the `spectator` setting it sends).
 void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   w.insert(w.end(),
-           {"-basedir", a.basedir, "-mod", a.game, "+set", "spectator", "1", "+connect", address});
+           {"-basedir", a.basedir, "-game", a.game, "+set", "spectator", "1", "+connect", address});
 }
 
 // A hub's Watch link ("Open in the game"): the window plays the TV node's live broadcast
@@ -149,7 +144,7 @@ void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<
 void tv_words(const gc::Ctx& ctx, const std::string& node, uint32_t /*stream*/,
               std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-tv", node});
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-tv", node});
 }
 
 // A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
@@ -181,18 +176,18 @@ bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::st
     return false;
   }
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-playdemo", out.string()});
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-playdemo", out.string()});
   return true;
 }
 
 void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   // As HOST GAME's START does it: the server's lines (`sv <name> <value>`), then the map.
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "+sv_port", std::to_string(ask.port),
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+sv_port", std::to_string(ask.port),
                      "+sv", "deathmatch", "1"});
   if (ask.maxclients > 0) w.insert(w.end(), {"+sv", "maxclients", std::to_string(ask.maxclients)});
   const std::string map =
-      ask.map.empty() ? std::string(ge::classicenhance::classic_profile().start_map) : ask.map;
+      ask.map.empty() ? std::string(ge::classicenhance::q1_profile().start_map) : ask.map;
   w.insert(w.end(), {"+map", map});
 }
 
@@ -204,12 +199,71 @@ std::vector<fs::path> demo_files(const cl::Args& a) {
     std::error_code ec;
     for (const auto& e : fs::directory_iterator(dir, ec)) {
       const std::string ext = e.path().extension().string();
-      for (std::string_view known : profiles::kClassicDemos)
+      for (std::string_view known : profiles::kQ1Demos)
         if (ext == known) out.push_back(e.path());
     }
   }
   std::sort(out.begin(), out.end());
   return out;
+}
+
+// `import <source>`: a game, its mission packs, or the packs alone taken into the data folder
+// (classic/content/import.hpp), as the window takes them in.
+int cmd_import(gc::Ctx& ctx) {
+  if (ctx.words.size() > 1)
+    return gc::refuse(ctx, 2, "import takes one folder, disc image or release archive",
+                      "secli import <folder, .iso, .cue, .mdf, .zip or .7z>");
+  const auto data = ctx.flags.find("data");
+  const std::string root = data != ctx.flags.end()
+                               ? data->second
+                               : cl::data_root(cl::placed_folder(ctx.self_dir),
+                                               gc::prefs_dir("gameengine2", "shooters_edge"));
+  if (ctx.words.empty()) {  // the packs on this machine not yet taken in, as the window offers
+    const auto from = ctx.flags.find("from");
+    const std::vector<std::string> roots = from != ctx.flags.end()
+                                               ? std::vector<std::string>{from->second}
+                                               : ge::classic::content::store_folders();
+    std::vector<std::string> rows;
+    std::string text;
+    for (const ge::classic::content::Offer& o : ge::classic::content::find_offers(roots, root)) {
+      rows.push_back(json_obj({{"game", json_str(o.game->id)},
+                               {"folder", json_str(o.pack->folder)},
+                               {"name", json_str(o.pack->name)},
+                               {"source", json_str(o.source)}}));
+      text += cl::offer_words(o) + "\n";
+    }
+    return gc::answer(ctx, json_obj({{"offers", json_arr(rows)}}), text,
+                      std::to_string(rows.size()) + " mission packs found and not yet taken in",
+                      rows.empty() ? "" : "secli import <source>");
+  }
+  ge::classic::content::ImportReport r;
+  std::string why;
+  if (!ge::classic::content::import_game(ctx.words[0], root, &r, &why))
+    return gc::refuse(ctx, 1, why, "secli import <your game's folder, disc image or archive>");
+  std::vector<std::string> packs;
+  packs.reserve(r.packs.size());
+  for (const auto* m : r.packs)
+    packs.push_back(json_obj({{"folder", json_str(m->folder)}, {"name", json_str(m->name)}}));
+  std::vector<std::string> notes;
+  notes.reserve(r.notes.size());
+  for (const std::string& n : r.notes) notes.push_back(json_str(n));
+  const std::string words = cl::take_in_words(r, ctx.words[0]);
+  std::string notes_text;  // what was found and left, a line each
+  for (const std::string& n : r.notes) notes_text += n + "\n";
+  return gc::answer(
+      ctx,
+      json_obj({{"game", json_str(r.game->id)},
+                {"base", ge::core::json_bool(r.base)},
+                {"packs", json_arr(packs)},
+                {"game_dir", json_str(r.game_dir)},
+                {"copied", json_num(static_cast<long long>(r.copied.size()))},
+                {"same", json_num(static_cast<long long>(r.same.size()))},
+                {"tracks", json_num(static_cast<long long>(r.tracks.size()))},
+                {"unchanged", ge::core::json_bool(r.unchanged)},
+                {"notes", json_arr(notes)}}),
+      notes_text, words,
+      "se -basedir " + r.game_dir +
+          (r.packs.empty() ? std::string() : " -game " + std::string(r.packs[0]->folder)));
 }
 
 int cmd_demos(gc::Ctx& ctx) {
@@ -245,7 +299,7 @@ int cmd_demos_play(gc::Ctx& ctx) {
       ge::server::program_path(ctx.flag("bin", ctx.self_dir), "se"),
       "-basedir",
       a.basedir,
-      "-mod",
+      "-game",
       a.game,
       "-playdemo",
       file.string()};
@@ -458,11 +512,11 @@ gc::Spec make() {
   s.lan_first = shooters_edge::net::kLanFirstPort;
   s.lan_last = shooters_edge::net::kLanLastPort;
   s.master_port = 27000;
-  s.query = shooters_edge::net::classic_query();
-  s.routes = shooters_edge::net::classic_route_query();
-  s.server_game = &shooters_edge::net::classic_game();
-  s.rcon = shooters_edge::net::classic_rcon;
-  s.read_rcon = shooters_edge::net::classic_read_print;
+  s.query = shooters_edge::net::qw_query();
+  s.routes = shooters_edge::net::qw_route_query();
+  s.server_game = &shooters_edge::net::qw_game();
+  s.rcon = shooters_edge::net::qw_rcon;
+  s.read_rcon = shooters_edge::net::qw_read_print;
   s.add_cvars = add_cvars;
   s.locate = locate;
   s.join_words = join_words;
@@ -483,6 +537,17 @@ gc::Spec make() {
     return name == "brush" ? ge::brush::cli::run_tool(program, name, args)
                            : ge::progs::cli::run_tool(program, name, args);
   };
+  s.commands.push_back({"import", "[source]",
+                        "a game, its mission packs or a pack alone copied into the data folder "
+                        "from a folder, disc image (.iso, .cue, .mdf), .zip or .7z; none: the "
+                        "packs found on this machine",
+                        "import ~/Downloads/reckoning.cue", "shooters_edge", cmd_import});
+  s.command_flags.push_back(
+      {"import",
+       {{"data", "<dir>", "the data folder to copy into (default: the game's own)"},
+        {"from", "<dir>",
+         "with no source: the folder to look for packs in (default: the stores' "
+         "libraries and the mounted volumes)"}}});
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",
@@ -498,9 +563,9 @@ gc::Spec make() {
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
   s.commands.push_back(mod_run_command());
   s.command_flags.push_back(mod_run_flags());
-  s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
-             {"game", "1|2", "the classic game or its sequel, from the install kept for it"},
-             {"mod", "<folder>", "the game folder over it (default: the multiplayer one)"}};
+  s.flags = {{"basedir", "<dir>", "Quake's install (default: the one loaded last)"},
+             {"classic", "q1|q2", "Quake or Quake II, from the install kept for it"},
+             {"game", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
       "Shooter's Edge plays the player's own classic packs: `--basedir` is their install (the "
       "game remembers the last one loaded, so it is rarely needed), and `content` says which game "

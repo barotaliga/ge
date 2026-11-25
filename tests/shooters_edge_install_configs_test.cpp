@@ -3,7 +3,7 @@
 // and the client folder's configs/config.cfg, autoexec.cfg again, the window's own saved config,
 // the command line's +set pairs, then its other + commands; `exec configs/config.cfg` reaching the
 // client folder; the settings this game lacks passed over and counted; and the engine's order
-// (default, the window's config, autoexec) when the install has no main config. The sequel's:
+// (default, the window's config, autoexec) when the install has no main config. Quake II's:
 // its config.cfg (q2config.cfg on Windows), autoexec.cfg of the base folder then the mod's,
 // postexec.cfg, the window's config, the command line, then postinit.cfg.
 //
@@ -82,7 +82,7 @@ TEST(an_install_s_configs_run_in_its_bundled_client_s_order) {
   CHECK_MSG(joined(again.seen) == "default,preset,main,preset,own", joined(again.seen));
 }
 
-TEST(the_sequel_s_install_runs_its_client_s_order) {
+TEST(q2_s_install_runs_its_client_s_order) {
   const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
   const std::string base(two.base_dir);
   const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_two";
@@ -112,7 +112,57 @@ TEST(the_sequel_s_install_runs_its_client_s_order) {
   CHECK_MSG(joined(mod.seen) == "modmain,autoexec,mod,postexec,postinit", joined(mod.seen));
 }
 
-TEST(the_sequel_s_default_cfg_comes_from_its_pack_keeping_the_console_keys) {
+TEST(a_game_change_runs_quake_ii_s_autoexecs_after_its_settings_when_fs_autoexec_is_on) {
+  const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
+  const std::string base(two.base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_change";
+  fs::remove_all(root);
+  write(root / base / "pak0.pak", "");
+  write(root / base / "default.cfg", "mark default\n");
+  write(root / base / "autoexec.cfg", "mark autoexec\n");
+  write(root / base / "postexec.cfg", "mark postexec\n");
+  write(root / "ctf" / "autoexec.cfg", "mark mod\n");
+  write(cl::settings_dir(root.string(), "ctf") / "config.cfg", "mark own\n");
+  // A game without `fs_autoexec` (Quake's): its default.cfg and its own settings.
+  Marks q1;
+  q1.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  CHECK(cl::run_game_settings(q1.con, root.string(), "ctf", two));
+  CHECK_MSG(joined(q1.seen) == "default,own", joined(q1.seen));
+  // Quake II's, on: its settings, the base folder's autoexec then the mod's, postexec.
+  Marks on;
+  on.con.cvars().add({.name = "fs_autoexec", .fallback = "1"});
+  on.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  cl::run_game_settings(on.con, root.string(), "ctf", two);
+  CHECK_MSG(joined(on.seen) == "default,own,autoexec,mod,postexec", joined(on.seen));
+  // Off: its settings alone again.
+  Marks off;
+  off.con.cvars().add({.name = "fs_autoexec", .fallback = "0"});
+  off.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  cl::run_game_settings(off.con, root.string(), "ctf", two);
+  CHECK_MSG(joined(off.seen) == "default,own", joined(off.seen));
+  // fs_default 0: no default.cfg, on a game change and at start-up.
+  Marks bare;
+  bare.con.cvars().add({.name = "fs_default", .fallback = "0"});
+  bare.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  cl::run_game_settings(bare.con, root.string(), "ctf", two);
+  CHECK_MSG(joined(bare.seen) == "own", joined(bare.seen));
+}
+
+TEST(fs_default_on_the_command_line_keeps_default_cfg_from_the_start) {
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_nodefault";
+  fs::remove_all(root);
+  write(root / "id1" / "pak0.pak", "");
+  write(root / kGame / "default.cfg", "mark default\n");
+  write(root / kGame / "autoexec.cfg", "mark autoexec\n");
+  write(root / kClient / "configs" / "config.cfg", "mark main\n");
+  Marks m;
+  m.con.cvars().add({.name = "fs_default", .fallback = "1"});
+  m.con.set_search_path(cl::config_dirs(root.string(), kGame, first()));
+  cl::start_configs(m.con, root.string(), kGame, first(), {"+set", "fs_default", "0"});
+  CHECK_MSG(joined(m.seen) == "autoexec,main,autoexec", joined(m.seen));
+}
+
+TEST(q2_s_default_cfg_comes_from_its_pack_keeping_the_console_keys) {
   const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
   const std::string base(two.base_dir);
   const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_pack";
@@ -138,8 +188,8 @@ TEST(the_sequel_s_default_cfg_comes_from_its_pack_keeping_the_console_keys) {
 }
 
 // A pack's default.cfg that moves on the arrows (A looks up, the right button sidesteps) leaves
-// the window's move keys as they were; its other keys and its mouse speed stand.
-TEST(the_sequel_s_pack_defaults_keep_the_window_s_move_keys) {
+// the window's move keys and its lookspring as they were; its other keys and its mouse speed stand.
+TEST(q2_s_pack_defaults_keep_the_window_s_move_keys) {
   const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
   const std::string base(two.base_dir);
   const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_moves";
@@ -147,7 +197,8 @@ TEST(the_sequel_s_pack_defaults_keep_the_window_s_move_keys) {
   std::vector<uint8_t> pack;
   std::string error;
   const std::string defaults =
-      "unbindall\nbind a +lookup\nbind mouse2 +strafe\nbind up +forward\nset sensitivity 3\n";
+      "unbindall\nbind a +lookup\nbind mouse2 +strafe\nbind up +forward\nset sensitivity 3\n"
+      "set lookspring 1\n";
   CHECK_MSG(
       ge::vfs::write_pak({{"default.cfg", {defaults.begin(), defaults.end()}}}, &pack, &error),
       error);
@@ -164,6 +215,7 @@ TEST(the_sequel_s_pack_defaults_keep_the_window_s_move_keys) {
   CHECK(con.binds().get(ge::console::BindMode::game, "a") == "+moveleft");
   CHECK(con.binds().get(ge::console::BindMode::game, "mouse2") == "+jump");
   CHECK(con.binds().get(ge::console::BindMode::game, "up") == "+forward");
+  CHECK(!c.lookspring);  // the window's own default kept over the pack's lookspring 1
   // Its mouse speed is a classic config's number: 3 times 0.022 degrees a count.
   CHECK(std::fabs(ge::shooter::yaw_per_count(c) - 0.066) < 1e-9);
   ge::input::InputState in;
@@ -201,4 +253,73 @@ TEST(the_host_s_own_words_come_back_after_the_configs_run) {
   CHECK(ran.passed_over == 1 && host == 0);  // counted while the files ran
   m.con.execute("another_word");
   CHECK(host == 1);  // the host's handler is back
+}
+
+namespace {
+
+void write_pack(const fs::path& file,
+                const std::vector<std::pair<std::string, std::string>>& files) {
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> in;
+  in.reserve(files.size());
+  for (const auto& [name, text] : files)
+    in.emplace_back(name, std::vector<uint8_t>(text.begin(), text.end()));
+  std::vector<uint8_t> pack;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(in, &pack, &error), error);
+  fs::create_directories(file.parent_path());
+  std::ofstream(file, std::ios::binary)
+      .write(reinterpret_cast<const char*>(pack.data()), std::streamsize(pack.size()));
+}
+
+}  // namespace
+
+// A Quake mission pack's own default.cfg, inside its pack, runs as what it adds to the base game's
+// (its keys for the new weapons, its aliases); the lines both share do not run again, and the
+// window's own layout stands.
+TEST(a_quake_mod_s_pack_default_cfg_runs_what_it_adds_to_the_base_s) {
+  const std::string base(first().base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_mod";
+  fs::remove_all(root);
+  write_pack(root / base / "pak0.pak",
+             {{"default.cfg", "unbindall\nmark base\nbind 0 \"impulse 0\"\n"}});
+  write_pack(root / "hipnotic" / "pak0.pak",
+             {{"default.cfg",
+               "unbindall\nmark  base\nbind 9 \"impulse 225\"\nbind 0 \"impulse "
+               "226\"\nalias zoom \"fov 10\"\n"}});
+  Marks m;
+  m.con.binds().set(ge::console::BindMode::game, "w", "+forward");
+  m.con.set_search_path(cl::config_dirs(root.string(), "hipnotic", first()));
+  cl::start_configs(m.con, root.string(), "hipnotic", first(), {});
+  CHECK_MSG(m.seen.empty(), joined(m.seen));  // the shared lines did not run
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "9") == "impulse 225");
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "0") == "impulse 226");
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "w") == "+forward");  // no unbindall
+  // The base folder played: nothing of the mod's.
+  Marks b;
+  b.con.set_search_path(cl::config_dirs(root.string(), base, first()));
+  cl::start_configs(b.con, root.string(), base, first(), {});
+  CHECK(b.con.binds().get(ge::console::BindMode::game, "9").empty());
+  fs::remove_all(root);
+}
+
+// A mission pack's own quake.rc names the recordings its title plays; the base folder's list is
+// the game's own.
+TEST(a_mod_s_quake_rc_names_the_title_s_demos) {
+  const std::string base(first().base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_demos";
+  fs::remove_all(root);
+  write_pack(root / base / "pak0.pak", {{"quake.rc", "startdemos demo1 demo2 demo3\n"}});
+  write_pack(root / "hipnotic" / "pak0.pak",
+             {{"quake.rc",
+               "// Included\nteamplay 0?Hipnotic\nexec default.cfg\n"
+               "startdemos hipdemo1 hipdemo2 hipdemo3 hipdemo4\n"}});
+  fs::create_directories(root / "plain");
+  CHECK_MSG(cl::mod_startdemos(root.string(), "hipnotic", first()) ==
+                "hipdemo1 hipdemo2 hipdemo3 hipdemo4",
+            cl::mod_startdemos(root.string(), "hipnotic", first()));
+  CHECK(cl::mod_startdemos(root.string(), base, first()).empty());
+  CHECK(cl::mod_startdemos(root.string(), "plain", first()).empty());
+  write(root / "plain" / "quake.rc", "startdemos own1\n");
+  CHECK(cl::mod_startdemos(root.string(), "plain", first()) == "own1");
+  fs::remove_all(root);
 }

@@ -1,6 +1,6 @@
 // LAB `se-tv-netgame`: A RECORDING WATCHED BY A SINGLE-PLAYER CLIENT THROUGH THE TV
-// (games/shooters_edge/net/classic_tv_netgame.hpp). `setv`'s netgame face serves a recording on
-// the single-player protocol (version 15); the scripted client of net/classic_netgame_watcher.hpp,
+// (games/shooters_edge/net/q1_tv_netgame.hpp). `setv`'s netgame face serves a recording on
+// the single-player protocol (version 15); the scripted client of net/q1_netgame_watcher.hpp,
 // written from the transport's facts, connects over the simulated network under each link's
 // conditions, signs on and watches; partway through a multiview recording it presses fire to
 // follow the next player. It answers how long the sign-on and the switch take, how many frames and
@@ -11,7 +11,7 @@
 // ge:keywords lab netgame single-player protocol-15 tv sign-on frames-per-second resend loop
 // ge:keywords follow switch-player multiview
 // ge:skill net shooter labs
-// ge:test tests/shooters_edge_classic_tv_netgame_test.cpp
+// ge:test tests/shooters_edge_q1_tv_netgame_test.cpp
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -25,8 +25,8 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "shooters_edge/client/demo_write.hpp"
-#include "shooters_edge/net/classic_netgame_watcher.hpp"
-#include "shooters_edge/net/classic_tv_netgame.hpp"
+#include "shooters_edge/net/q1_netgame_watcher.hpp"
+#include "shooters_edge/net/q1_tv_netgame.hpp"
 
 namespace {
 
@@ -105,7 +105,7 @@ void run(gl::Lab& lab) {
     std::string error;
     if (!cn::udp_tv_netgame_open(w->tv, bytes, true, error))
       return lab.fail("the recording did not open as a netgame: " + error,
-                      "next: run tests/shooters_edge_classic_tv_netgame_test.cpp; skill: net.");
+                      "next: run tests/shooters_edge_q1_tv_netgame_test.cpp; skill: net.");
     cn::udp_tv_netgame_start(w->tv, w->face_t, {});
     cn::netgame_watch(w->c, w->client_t, gn::sim_address(0, kPortTv));
     w->line.label = link;
@@ -179,25 +179,25 @@ void run(gl::Lab& lab) {
            gl::to_picture(gl::line_chart({frame, lines, {}, {}, {}, false, false, false}).plot));
   if (!all_seated)
     lab.fail("a client did not sign on to the netgame",
-             "next: run tests/shooters_edge_classic_tv_netgame_test.cpp; read the signon in "
-             "games/shooters_edge/net/classic_tv_netgame.cpp; skill: net.");
+             "next: run tests/shooters_edge_q1_tv_netgame_test.cpp; read the signon in "
+             "games/shooters_edge/net/q1_tv_netgame.cpp; skill: net.");
   if (!all_read)
     lab.fail("a message the face sent did not read with the game's reader",
              "next: read the table's read column; skill: net.");
   if (!switched)
     lab.fail("fire did not take a client to the next player's view",
-             "next: run tests/shooters_edge_classic_tv_netgame_test.cpp (picks who it follows); "
-             "read follow in games/shooters_edge/net/classic_tv_netgame.cpp.");
+             "next: run tests/shooters_edge_q1_tv_netgame_test.cpp (picks who it follows); "
+             "read follow in games/shooters_edge/net/q1_tv_netgame.cpp.");
   if (!looped)
     lab.fail("the recording looped and a client was not sent back to its start",
-             "next: read the level change in games/shooters_edge/net/classic_tv_netgame.cpp.");
+             "next: read the level change in games/shooters_edge/net/q1_tv_netgame.cpp.");
 }
 
 const gl::LabSpec kSpec{
     "se-tv-netgame",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_tv_netgame: a recording served as a netgame on the "
+    "games/shooters_edge/net/q1_tv_netgame: a recording served as a netgame on the "
     "single-player protocol, signed on and watched by a scripted client",
     "net",
     "Watched by a single-player client over each kind of link, how long do the sign-on and a "

@@ -256,6 +256,60 @@ void run(ge::lab::Lab& lab) {
              "run tests/console_view_test.cpp; skill: console");
   }
 
+  // A setting of a few values offers them once its name is typed; a game's spelling says whose.
+  c.cvars().add({.name = "r_look",
+                 .fallback = "modern",
+                 .help = "How the world is drawn.",
+                 .kind = con::CvarKind::text,
+                 .values = "classic: the original look; modern: lit and shaded (the default)"});
+  c.cvars().add_synonym("gl_look", "r_look");
+  for (v.key(con::EditKey::end); !v.input().empty();) v.key(con::EditKey::backspace);
+  v.type("/r_look ");
+  Picture choices = backdrop(w, h);
+  draw(choices, v);
+  lab.shot({"choices",
+            "AUTOCOMPLETE: A SETTING'S VALUES",
+            "A setting with a few values, typed with a blank after it: its values are the list, "
+            "each with what it does, the one it has now marked; Tab or Enter takes one.",
+            "classic and modern under the blank, modern's row ending (now)",
+            {{"typed", "/r_look "}}},
+           choices);
+  for (v.key(con::EditKey::end); !v.input().empty();) v.key(con::EditKey::backspace);
+  v.type("/gl_l");
+  Picture spelling = backdrop(w, h);
+  draw(spelling, v);
+  lab.shot({"spelling",
+            "AUTOCOMPLETE: A GAME'S SPELLING",
+            "A game's own name for one of the engine's settings is listed too, with the setting's "
+            "value, its few values and the name it stands for; the engine's name lists the "
+            "game's.",
+            "gl_look = modern (classic, modern) alias of r_look",
+            {{"typed", "/gl_l"}}},
+           spelling);
+  lab.metric("suggest.choices", static_cast<double>(v.suggestions().size()), "names");
+
+  // Joining a game in remote mode: the foot shows the file coming over the input line's `#`.
+  c.add_command("rcon", "rcon <line>: a line for the server's console",
+                [](con::Console&, const con::Args&) {});
+  c.execute("remotemode");
+  c.run();
+  for (v.key(con::EditKey::end); !v.input().empty();) v.key(con::EditKey::backspace);
+  v.type("status");
+  v.set_foot("maps/dm2.bsp", 0.4);
+  Picture joining = backdrop(w, h);
+  draw(joining, v);
+  lab.shot({"joining",
+            "JOINING: THE FOOT AND REMOTE MODE",
+            "A game being joined shows the file coming on the console's foot, a bar and its "
+            "share; remotemode sends what is typed to the server's console, its prompt #.",
+            "maps/dm2.bsp, a bar 40% full and 40% over the input line, which reads # status",
+            {{"remotemode", "on"}, {"foot", "maps/dm2.bsp"}}},
+           joining);
+  v.set_foot("");
+  c.execute("remotemode");
+  c.run();
+  for (v.key(con::EditKey::end); !v.input().empty();) v.key(con::EditKey::backspace);
+
   // Only a button takes a `+`: a command typed bare, then with a `+` (dropped, so it runs the
   // same), a button pressed, and a `+` on a name nothing knows.
   {

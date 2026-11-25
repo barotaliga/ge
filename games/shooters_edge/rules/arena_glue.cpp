@@ -114,7 +114,14 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
   const bool gib = q.f(targ, q.L.f.health) < -40;
   auto say = [&](St key) { return q.words(q.s(key), v, k, hv, hk); };
   auto pick = [&](St stem) { return game_variant(q, q.s(stem), v, k, hv, hk); };
+  // Quake's telefrags against the pentagram come first: the one deflected, and both shielded.
+  if (quake_rules(q)) {
+    if (q.is(how, "deflected")) return say(s_pent_deflect);
+    if (q.is(how, "satans power")) return say(s_pent_both);
+  }
   if (attacker == targ) {
+    // Quake's deathmatch 4 and 5: the arc gun under water that kills only its firer.
+    if (quake_rules(q) & q.is(how, "discharged")) return say(s_self_electrocute);
     if (q.is(how, "gibbed by a grenade")) return say(s_self_gl);
     if (q.is(how, "blown apart")) return pick(s_self_rl);
     if (q.is(how, "electrocuted")) {
@@ -156,6 +163,12 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
       return say(s_obit_gl);
     }
     if (q.is(how, "blown apart")) {
+      if (gib & quad & quake_rules(q)) {  // Quake's: 30%, 30% and 40%
+        const float r = q.random();
+        if (r < 0.3f) return say(s_obit_rl_quad_1);
+        if (r < 0.6f) return say(s_obit_rl_quad_2);
+        return say(s_obit_rl_quad_3);
+      }
       if (gib & quad) return pick(s_obit_rl_quad);
       if (gib) return say(s_obit_rl_gib);
       return say(s_obit_rl);
@@ -168,6 +181,22 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
     if (q.is(how, "telefragged")) return say(s_obit_tele);
     if (q.is(how, "squished")) return say(s_obit_squish);
     return say(s_obit_other);
+  }
+  if (quake_rules(q)) {
+    // Quake's: the liquid the body lies in first, whatever the cause; then the trap or the box.
+    const float in = q.f(targ, q.L.f.watertype);
+    if (in == kContentWater) return pick(s_world_drown);
+    if (in == kContentSlime) return pick(s_world_slime);
+    if (in == kContentLava) {
+      const int32_t key = pick(s_world_lava);
+      if (q.f(targ, q.L.f.health) < -15) return say(s_world_lava_gib);
+      return key;
+    }
+    if (q.is(how, "blew up")) return say(s_world_blew_up);
+    if (q.is(how, "nailed")) return say(s_world_spiked);
+    if (q.is(how, "lasered")) return say(s_world_zapped);
+    if (q.is(how, "lavaball")) return say(s_world_lavaball);
+    if (q.is(how, "tried to leave")) return say(s_world_left);
   }
   if (q.is(how, "drowned")) return pick(s_world_drown);
   if (q.is(how, "falling")) return pick(s_world_fall);
@@ -186,17 +215,25 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
 // (sv_dropquad, sv_dropring, sv_dropsuit, off by default).
 void drop_on_death(A& q) {
   if (on(q.cvar(q.s(s_sv_droppack)))) backpack_drop(q);
+  if (quake_rules(q)) {  // Quake's: the server's (or local) info keys `dq` and `dr`
+    if (on(number_of(q, q.infokey(q.world(), q.s(s_dq))))) power_drop(q, kItQuad);
+    if (on(number_of(q, q.infokey(q.world(), q.s(s_dr))))) power_drop(q, kItInvisibility);
+    if (on(q.cvar(q.s(s_sv_dropsuit)))) power_drop(q, kItSuit);
+    return;
+  }
   if (on(q.cvar(q.s(s_sv_dropquad)))) power_drop(q, kItQuad);
   if (on(q.cvar(q.s(s_sv_dropring)))) power_drop(q, kItInvisibility);
   if (on(q.cvar(q.s(s_sv_dropsuit)))) power_drop(q, kItSuit);
 }
 
 // A taken item comes back after its wait: the arena is always a deathmatch.
-bool items_come_back(A&) { return true; }
+// Every item comes back; under Quake's rules, not one whose mode keeps it away (`quake_respawn`).
+bool items_come_back(A& q) { return !quake_rules(q) || q.f(q.self(), f_respawn_time) >= 0; }
 
-// A weapon is taken and goes as any item: the arena has no coop.
-bool weapon_may_take(A&, bool) { return true; }
-bool weapon_stays(A&) { return false; }
+// A weapon is taken and goes as any item: the arena has no coop. In Quake's modes 2, 3 and 5 it
+// stays, taken only by those who have not got one.
+bool weapon_may_take(A& q, bool held) { return !(quake_rules(q) && quake_weapons_stay(q) && held); }
+bool weapon_stays(A& q) { return quake_rules(q) && quake_weapons_stay(q); }
 
 // A plat rises when it is stepped on.
 bool plat_waits(A&) { return false; }
@@ -218,9 +255,16 @@ void player_jump(A& q) {
   jump_sound(q);
 }
 
-// void() SetNewParms, SetChangeParms: deathmatch starts everyone fresh.
+// void() SetNewParms, SetChangeParms: deathmatch starts everyone fresh; under Quake's rules a
+// player alive at the change carries the kit over (quake_change_parms).
 void SetNewParms(A& q) { q.set_gf(q.parm(1), 0); }
-void SetChangeParms(A& q) { q.set_gf(q.parm(1), 0); }
+void SetChangeParms(A& q) {
+  if (quake_rules(q)) {
+    quake_change_parms(q);
+    return;
+  }
+  q.set_gf(q.parm(1), 0);
+}
 
 // The next deathmatch spawn point after the last one used whose spot is clear of players, round
 // the map's list; any one when all are taken; the start point on a map without any.
@@ -257,6 +301,24 @@ void give_inventory(A& q) {
     return;
   }
   const int32_t me = q.self();
+  if (quake_rules(q) && quake_carried_kit(q)) return;
+  if (quake_rules(q) & (q.g(g_deathmatch) == 5)) {
+    // Quake's mode 5: 200 health, the red armour, every weapon, some of each ammunition, and the
+    // shield for 3 s.
+    q.set_f(me, q.L.f.items,
+            kWBlade | kWScatter | kWDouble | kWSpiker | kWHeavySpiker | kWGrenades | kWRockets |
+                kWArc | kItArmor3 | kItInvulnerability);
+    q.set_f(me, q.L.f.health, 200);
+    q.set_f(me, q.L.f.armortype, 0.8f);
+    q.set_f(me, q.L.f.armorvalue, 200);
+    q.set_f(me, q.L.f.ammo_shells, 30);
+    q.set_f(me, q.L.f.ammo_nails, 80);
+    q.set_f(me, q.L.f.ammo_rockets, 10);
+    q.set_f(me, q.L.f.ammo_cells, 30);
+    q.set_f(me, f_invincible_finished, q.time() + 3);
+    weapon_set(q, kWRockets);
+    return;
+  }
   q.set_f(me, q.L.f.items, kWBlade | kWScatter);
   q.set_f(me, q.L.f.ammo_shells, 25);
   q.set_f(me, q.L.f.ammo_nails, 0);
@@ -268,6 +330,10 @@ void give_inventory(A& q) {
 }
 
 void player_respawn(A& q) {
+  if (quake_rules(q)) {
+    quake_corpse(q);         // the body stays where it lies
+    q.set_gf(q.parm(1), 0);  // and the kit is the default one
+  }
   q.set_f(q.self(), q.L.f.deadflag, kDeadRespawnable);
   PutClientInServer(q);
 }

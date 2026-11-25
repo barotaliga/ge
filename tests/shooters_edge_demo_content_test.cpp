@@ -1,7 +1,7 @@
 // games/shooters_edge/client/demo_content.hpp: the files a demo draws from: its map, the models
 // and sounds its lists name (the map's inline models left out), the basics every picture needs,
 // lower case and sorted; the same names from the recording and from its replay file; a file that
-// is not a demo refused; the sequel's: its maps, models' folders and pictures, and a map's
+// is not a demo refused; Quake II's: its maps, models' folders and pictures, and a map's
 // textures.
 //
 // ge:summary Test: a demo's content names: map, precached models and sounds, basics, refusals
@@ -18,7 +18,7 @@
 #include "check.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/demo_write.hpp"
-#include "shooters_edge/client/sequel_demo.hpp"
+#include "shooters_edge/client/q2_demo.hpp"
 
 namespace se = shooters_edge::client;
 
@@ -68,8 +68,8 @@ TEST(a_file_that_is_no_demo_is_refused) {
   CHECK(!error.empty());
 }
 
-TEST(a_sequel_demo_names_its_map_model_folders_and_pictures) {
-  const std::vector<uint8_t> rec = se::sequel_fixture(2, 4);
+TEST(a_q2_demo_names_its_map_model_folders_and_pictures) {
+  const std::vector<uint8_t> rec = se::q2_fixture(2, 4);
   std::vector<std::string> names;
   std::string error;
   CHECK_MSG(se::demo_files(rec, names, error), error);
@@ -79,7 +79,7 @@ TEST(a_sequel_demo_names_its_map_model_folders_and_pictures) {
   for (const std::string& n : names) CHECK(n.find("tris.md2") == std::string::npos);
 }
 
-TEST(a_sequel_map_names_its_texture_files) {
+TEST(a_q2_map_names_its_texture_files) {
   // A version 38 map (the brush plugin's fixture).
   std::vector<uint8_t> bsp;
   std::string error;

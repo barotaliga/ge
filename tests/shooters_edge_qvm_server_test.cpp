@@ -94,7 +94,7 @@ TEST(the_map_starts_in_the_modules_order) {
   CHECK(s->world.map_name == "arena");
 }
 
-// A version 38 map (classic remix: the sequel's map under a classic mod's module) has brushes and
+// A version 38 map (classic remix: Quake II's map under a classic mod's module) has brushes and
 // no hulls: the module's server plays on its models' bounds and traces them through the brushes.
 TEST(a_module_plays_on_a_map_of_brushes) {
   namespace br = ge::brush;

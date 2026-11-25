@@ -106,6 +106,13 @@ uint32_t all_clients(const QcServer& s);
 // 1024 units of the eye for hearing. A spectator tracking a player (its `trackent`) is judged
 // from that player's eye.
 uint32_t clients_reaching(const QcServer& s, sh::Vec3f where, bool see);
+// The sounds the physics frame started itself (a splash crossing a water surface, a walker's
+// landing thud: `sh::SoundEvent::engine`) sent to the clients as a program's sound is, from the
+// entity's place (its box's middle for a brush model); a sound not precached is skipped.
+void send_engine_sounds(QcServer& s);
+// Where entity `e`'s sound starts (its box's centre for a brush entity, and for every entity in
+// the campaign).
+sh::Vec3f sound_at(const QcServer& s, int e);
 // Whether a point is in the visibility (or hearing) set of another. The map's sets come with
 // M18b; until then every point is in every set, as on a map compiled without visibility.
 bool sees(const QcServer& s, sh::Vec3f from, sh::Vec3f to);

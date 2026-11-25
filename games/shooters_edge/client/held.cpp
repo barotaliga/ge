@@ -9,23 +9,41 @@
 #include <cmath>
 
 #include "brush/map.hpp"
+#include "classic/weapon_predict.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
 namespace {
 
 constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock runs above
+constexpr double kDegRad = 0.017453292519943295;
 
-// The frame of a held model of `count` frames the sequel's hand on `frame` of weapon `w` shows.
-// The sequel's own model has every frame its hand runs through. Another game's (classic remix's
+}  // namespace
+
+void q2_gun_sway(ge::shooter::Vec3f gun_angles, ge::shooter::Vec3f gun_offset,
+                 ge::shooter::Vec3f view_angles, view::HandInput& in) {
+  in.game_sway = true;
+  in.place.game_turn[0] = -gun_angles.y * kDegRad;  // its yaw is to the left, ours to the right
+  in.place.game_turn[1] = -gun_angles.x * kDegRad;  // its pitch is down, ours up
+  in.place.game_turn[2] = gun_angles.z * kDegRad;
+  const ge::shooter::ViewAxes ax = ge::shooter::angle_vectors(view_angles);
+  in.place.game_shift_m[0] = ge::shooter::dot(gun_offset, ax.right) * ge::brush::kUnitM;
+  in.place.game_shift_m[1] = ge::shooter::dot(gun_offset, ax.up) * ge::brush::kUnitM;
+  in.place.game_shift_m[2] = ge::shooter::dot(gun_offset, ax.forward) * ge::brush::kUnitM;
+}
+
+namespace {
+
+// The frame of a held model of `count` frames Quake II's hand on `frame` of weapon `w` shows.
+// Quake II's own model has every frame its hand runs through. Another game's (classic remix's
 // `sv_wear`) has a rest frame and its firing frames after it: the hand's firing frames are spread
 // over those, and every other frame (raising, idling, lowering) is the rest.
-int sequel_frame(int w, int frame, int count) {
+int q2_frame(int w, int frame, int count) {
   const server::SqWeaponRow& row = server::kSqWeapons[size_t(w)];
   if (count > row.last_deactivate) return frame >= 0 && frame < count ? frame : 0;
   const int firing = row.last_fire - row.last_activate;
@@ -33,31 +51,42 @@ int sequel_frame(int w, int frame, int count) {
   return 1 + (frame - row.last_activate - 1) * (count - 1) / firing;
 }
 
-// The sequel's hand: the weapon its rules hold and the frame its hand is on (activate, fire, idle,
+// Quake II's hand: the weapon its rules hold and the frame its hand is on (activate, fire, idle,
 // deactivate, all the model's own), drawn from the last over the time its frames last; the hand's
 // place (look, stride, sinking at death) as any game's; a shot (its kick, light and fire) each
 // time it steps onto a frame that fires.
-view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerState& p,
-                                 const ViewState& v, HeldState& s,
-                                 const view::ViewSettings& settings,
-                                 std::span<const ge::viewmodel::HeldModel> models, double t,
-                                 double dt) {
+view::HandFrame step_q2_held(const server::Q2Server& sq, const PlayerState& p, const ViewState& v,
+                             HeldState& s, const view::ViewSettings& settings,
+                             std::span<const ge::viewmodel::HeldModel> models, double t,
+                             double dt) {
   const server::SqHand& hand = sq.players[0].hand;
   view::HandInput in;
   const int w = hand.weapon;
   in.weapon = static_cast<view::Weapon>(w);
-  in.sequel = true;
+  in.q2 = true;
   in.dead = p.dead;
-  // A shot each time the hand steps onto a frame that fires (the held-fire guns loop in their
-  // range, a shot a frame).
-  if (w >= 0 && w < server::kSqWeaponCount) {
+  // A shot each time the hand passes a frame that fires since the last step. The server fires a
+  // frame and steps past it at once, so a gun that fires on its first frame (the shotguns, the
+  // blaster) is never seen on it: the step that starts firing counts from the first fire frame,
+  // and a held-fire gun's loop back to the start of its range is a shot too.
+  const bool firing = hand.state == server::SqHandState::firing;
+  if (w >= 0 && w < server::kSqWeaponCount && firing && !p.dead) {
     const server::SqWeaponRow& row = server::kSqWeapons[static_cast<size_t>(w)];
-    in.fired = !p.dead && hand.state == server::SqHandState::firing &&
-               hand.frame >= row.fire_from && hand.frame <= row.fire_to &&
-               (hand.frame != s.sequel_frame || w != s.recorded_weapon);
+    const bool began = !s.q2_firing || w != s.q2_weapon;
+    int from = hand.frame;  // the frames passed since the last step: from..hand.frame
+    if (began)
+      from = row.last_activate + 1;
+    else if (hand.frame > s.q2_frame)
+      from = s.q2_frame + 1;
+    else if (hand.frame == s.q2_frame)
+      from = hand.frame + 1;  // none
+    in.fired = std::max(from, row.fire_from) <= std::min(hand.frame, row.fire_to);
   }
-  s.sequel_frame = hand.frame;
+  s.q2_frame = hand.frame;
+  s.q2_firing = firing;
+  s.q2_weapon = w;
   if (in.fired) ++s.shots;
+  q2_gun_sway(sq.players[0].seen.gun_angles, sq.players[0].seen.gun_offset, p.v_angle, in);
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
   const double vx = p.velocity.x, vy = p.velocity.y;
@@ -68,12 +97,12 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
   view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
   const auto held = static_cast<size_t>(f.weapon);
   if (held < models.size() && static_cast<int>(held) == w) {
-    int wf = sequel_frame(w, hand.frame, static_cast<int>(models[held].frames.size()));
+    int wf = q2_frame(w, hand.frame, static_cast<int>(models[held].frames.size()));
     if (s.recorded_weapon != w) s.recorded = FrameTrack{};
     s.recorded_weapon = w;
     int from = -1;
     float g = 1;
-    track_frame(s.recorded, wf, t, from, g);
+    track_frame(s.recorded, wf, t, from, g, kFrameSpan);
     f.frame_b = wf;
     f.frame_a = settings.lerp && from >= 0 ? from : wf;
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
@@ -81,10 +110,19 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
   return f;
 }
 
-// A hosted game library's hand: the weapon whose view model it names (the sequel's set, by the
-// sequel's names, read from the mod's folder first) on the frame it names. The library's frames
+// The developer's look (`gun_next`, `gun_prev`): the frame asked shown still, held to the model's.
+void gun_look(const view::ViewSettings& s, std::span<const ge::viewmodel::HeldModel> models,
+              view::HandFrame& f) {
+  const auto w = static_cast<size_t>(f.weapon);
+  if (s.gun_frame <= 0 || w >= models.size() || models[w].frames.empty()) return;
+  f.frame_a = f.frame_b = std::min(s.gun_frame, static_cast<int>(models[w].frames.size()) - 1);
+  f.frame_t = 0;
+}
+
+// A hosted game library's hand: the weapon whose view model it names (Quake II's set, by the
+// Quake II's names, read from the mod's folder first) on the frame it names. The library's frames
 // carry its own firing; the hand adds no kick or flash of its own.
-view::HandFrame step_native_held(const server::NativeSequel& ns, const PlayerState& p,
+view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& p,
                                  const ViewState& v, HeldState& s,
                                  const view::ViewSettings& settings,
                                  std::span<const ge::viewmodel::HeldModel> models, double t,
@@ -98,8 +136,10 @@ view::HandFrame step_native_held(const server::NativeSequel& ns, const PlayerSta
     if (name == server::kSqWeapons[static_cast<size_t>(k)].view_model) w = k;
   const int frame = static_cast<int>(nb.weapon_frame);
   view::HandInput in;
-  in.weapon = static_cast<view::Weapon>(w < 0 ? 0 : w);
-  in.sequel = true;
+  in.weapon = static_cast<view::Weapon>(settings.gun_model >= 0 ? settings.gun_model
+                                        : w < 0                 ? 0
+                                                                : w);
+  in.q2 = true;
   in.dead = p.dead || w < 0;
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
@@ -116,12 +156,13 @@ view::HandFrame step_native_held(const server::NativeSequel& ns, const PlayerSta
     if (s.recorded_weapon != w) s.recorded = FrameTrack{};
     int from = -1;
     float g = 1;
-    track_frame(s.recorded, wf, t, from, g);
+    track_frame(s.recorded, wf, t, from, g, kFrameSpan);
     f.frame_b = wf;
     f.frame_a = settings.lerp && from >= 0 ? from : wf;
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
   }
   s.recorded_weapon = w;
+  gun_look(settings, models, f);
   return f;
 }
 
@@ -155,10 +196,10 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           std::span<const ge::viewmodel::HeldModel> models, double t, double dt) {
   const PlayerState p = player_state(l);
   view::HandInput in;
-  // The sequel's rules keep the hand themselves: its weapon and the frame it is on.
-  if (const server::SequelServer* sq = l.rules ? server::sequel_of(*l.rules) : nullptr)
-    return step_sequel_held(*sq, p, v, s, settings, models, t, dt);
-  if (const server::NativeSequel* ns = l.rules ? server::native_sequel_of(*l.rules) : nullptr)
+  // Quake II's rules keep the hand themselves: its weapon and the frame it is on.
+  if (const server::Q2Server* sq = l.rules ? server::q2_of(*l.rules) : nullptr)
+    return step_q2_held(*sq, p, v, s, settings, models, t, dt);
+  if (const server::NativeQ2* ns = l.rules ? server::native_q2_of(*l.rules) : nullptr)
     return step_native_held(*ns, p, v, s, settings, models, t, dt);
   const auto game = static_cast<view::Weapon>(status_of(l, t).weapon);
   in.weapon = s.show >= 0 ? static_cast<view::Weapon>(s.show) : game;
@@ -180,7 +221,12 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   in.place.grounded = p.on_ground;
   if (p.on_ground && in.place.ground_speed > kWalking) s.stride_s += dt;
   in.place.stride_s = s.stride_s;
-  return view::step_hand(s.hand, in, settings, models, v.pose, dt);
+  in.place.bob_m = v.eyes.bob;  // the stride's bob, the weapon pushed forward by its share
+  view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
+  // A single-player program's player: the weapon is gone at once when he dies, and is not drawn
+  // over the intermission's camera.
+  if (l.campaign_host != nullptr && (p.dead || l.campaign.end != LevelEnd::none)) f.drawn = false;
+  return f;
 }
 
 view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::ViewSettings& settings,
@@ -193,34 +239,71 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   pose.fov_y = frame.fov_y;
   pose.near_m = frame.near_m;
   view::HandInput in;
-  const auto game = static_cast<view::Weapon>(demo_status(s, t).weapon);
-  in.weapon = h.show >= 0 ? static_cast<view::Weapon>(h.show) : game;
+  const auto slot = static_cast<size_t>(s.player);
+  const int now_frame = s.format == DemoFormat::single             ? s.weapon_frame
+                        : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
+                                                                   : 0;
+  auto game = static_cast<view::Weapon>(demo_status(s, t).weapon);
+  // r_viewmodellastfired, played back: the weapon that last fired stays drawn while the player
+  // flicks through others, until another one fires (or the watched player changes).
+  if (!settings.last_fired || !h.recording || s.stats[kStatWeapon] == 0 ||
+      h.last_fired_player != s.player)
+    h.last_fired = -1;
+  if (settings.last_fired && h.recording && s.stats[kStatWeapon] != 0) {
+    if (now_frame != 0) {
+      h.last_fired = static_cast<int>(game);
+      h.last_fired_player = s.player;
+    } else if (h.last_fired >= 0) {
+      game = static_cast<view::Weapon>(h.last_fired);
+    }
+  }
+  in.weapon = settings.gun_model >= 0 ? static_cast<view::Weapon>(settings.gun_model)
+              : h.show >= 0           ? static_cast<view::Weapon>(h.show)
+                                      : game;
   in.place.look_yaw = pose.yaw;
   in.place.look_pitch = pose.pitch;
   in.place.grounded = true;
   // Dead, the recorder's weapon sinks out of view (the recording clears the weapon at once: the
   // one shown goes on being drawn as it sinks).
   in.dead = s.stats[kStatHealth] <= 0;
+  // A joined server's weapon predicted: each shot it fired fires the hand (net/qw_weapon.hpp).
+  if (h.own_shots >= 0 && s.own_shots > h.own_shots && !in.dead && in.weapon == game) {
+    in.fired = true;
+    in.fire_frame = s.own_shot_frame;
+  }
+  h.own_shots = s.own_shots;
+  if (now_frame != 0) h.frames_live = true;
+  // Rules that never animate the weapon frame (our arena's), unpredicted: the shot the server's
+  // weapon sound on the player says, once per frame read (any game, a demo or a joined server).
+  if (!in.fired && !h.frames_live && s.frames != h.frames_read && !in.dead && in.weapon == game) {
+    for (const DemoSound& snd : s.started) {
+      if (snd.entity != s.player + 1 || snd.channel != 1 || snd.name != nullptr) continue;
+      if (snd.sound <= 0 || static_cast<size_t>(snd.sound) >= s.sounds.size()) continue;
+      if (ge::classic::weapon_sound_bit_of_sample(s.sounds[static_cast<size_t>(snd.sound)]) != 0 &&
+          s.sounds[static_cast<size_t>(snd.sound)] != "weapons/lhit.wav")
+        in.fired = true;
+    }
+  }
+  h.frames_read = s.frames;
+  if (s.format == DemoFormat::q2) q2_gun_sway(s.gun_angles, s.gun_offset, s.angles, in);
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
   // A classic set's frame as the server sent it: its fire animations played as recorded.
   const auto w = static_cast<size_t>(f.weapon);
-  if (h.hand.at_eye && w < models.size() && f.weapon == game) {
-    const auto slot = static_cast<size_t>(s.player);
-    int wf = s.format == DemoFormat::single             ? s.weapon_frame
-             : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
-                                                        : 0;
+  if (h.hand.at_eye && w < models.size() && f.weapon == game && h.frames_live) {
+    int wf = now_frame;
     if (wf < 0 || static_cast<size_t>(wf) >= models[w].frames.size()) wf = 0;
     if (h.recorded_weapon != static_cast<int>(w)) h.recorded = FrameTrack{};
     h.recorded_weapon = static_cast<int>(w);
     int from = -1;
     float g = 1;
-    track_frame(h.recorded, wf, t, from, g);
+    track_frame(h.recorded, wf, t, from, g, kFrameSpan);
     f.frame_b = wf;
     f.frame_a = settings.lerp && from >= 0 ? from : wf;
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
   }
   f.drawn = f.drawn && !s.intermission && (s.stats[kStatWeapon] != 0 || (in.dead && h.shown));
   h.shown = f.drawn;
+  gun_look(settings, models, f);
   return f;
 }
 

@@ -5,6 +5,8 @@
 // ge:skill audio shooter
 #include "shooters_edge/client/room_ear.hpp"
 
+#include <algorithm>
+
 #include "brush/survey.hpp"
 #include "core/libm/libm.hpp"
 
@@ -96,6 +98,74 @@ void hear_room(RoomEar& ear, ge::audio::Synth& synth, const ge::brush::Map* map,
   const double right[3] = {ge::core::libm::cos(heading), 0, -ge::core::libm::sin(heading)};
   synth.room(bsp_room(*map, eye, right), static_cast<float>(ear.wet ? kRoomGlideS : 0));
   ear.wet = true;
+}
+
+void add_under_cvars(ge::console::Console& c, UnderEar& s) {
+  const ge::console::CvarLayer classic(c.cvars(), "classic");
+  c.cvars().bind({.name = "s_underwater",
+                  .fallback = "0",
+                  .flags = ge::console::kArchive,
+                  .help = "Whether the world sounds muffled while your head is under water.",
+                  .kind = ge::console::CvarKind::boolean,
+                  .values = "0: as in the air (the default, Quake's); 1: muffled (Quake II's)"},
+                 &s.on);
+  c.cvars().bind({.name = "s_underwater_gain_hf",
+                  .fallback = "0.25",
+                  .flags = ge::console::kArchive,
+                  .help = "How much of the high notes you hear under water, s_underwater on.",
+                  .min = 0.001,
+                  .max = 1,
+                  .values = "0.001..1: 0.25 the default; 1 not muffled"},
+                 &s.treble);
+  c.cvars().bind({.name = "s_swapstereo",
+                  .fallback = "0",
+                  .flags = ge::console::kArchive,
+                  .help = "Whether the left and right speakers are swapped.",
+                  .kind = ge::console::CvarKind::boolean,
+                  .values = "0: as they are (the default); 1: swapped"},
+                 &s.swap);
+  c.cvars().bind({.name = "s_hrtf",
+                  .fallback = "0",
+                  .help = "Whether the game's sounds are heard as two ears hear them, for "
+                          "headphones: a sound to one side reaches the far ear a moment later, "
+                          "quieter and duller.",
+                  .kind = ge::console::CvarKind::integer,
+                  .min = 0,
+                  .max = 2,
+                  .values = "0: off (the default); 1: as the sound device chooses (off, as it "
+                            "names no headphones); 2: on"},
+                 &s.hrtf);
+  // The software mixer's lead in both games (Quake's `_snd_mixahead`, Quake II's `s_mixahead`):
+  // kept and saved for configs and Quake II's sound page; nothing reads it, as the device pulls
+  // the sound a chunk at a time (platform/audio.hpp), as Quake II's OpenAL path never reads it.
+  c.cvars().add({.name = "s_mixahead",
+                 .fallback = "0.1",
+                 .flags = ge::console::kArchive,
+                 .help = "How far ahead of time the sound is mixed, in seconds. Kept for your "
+                         "settings; this sound device keeps its own short lead.",
+                 .min = 0,
+                 .max = 1,
+                 .values = "0.1: the default; 0..1: that many seconds"});
+}
+
+void hear_under(RoomEar& ear, ge::audio::Synth& synth, const UnderEar& s, bool under) {
+  const float treble = under && s.on ? static_cast<float>(std::clamp(s.treble, 0.001, 1.0)) : 1;
+  if (treble == ear.muffled) return;
+  synth.muffle(treble, kUnderCornerHz, 0);  // at once, as the head goes in or comes out
+  ear.muffled = treble;
+}
+
+void hear_swap(ge::audio::Synth& synth, UnderEar& s) {
+  if (static_cast<int>(s.swap) == s.swap_sent) return;
+  synth.swap_stereo(s.swap);
+  s.swap_sent = static_cast<int>(s.swap);
+}
+
+void hear_ears(ge::audio::Synth& synth, UnderEar& s) {
+  const int on = hrtf_on(s) ? 1 : 0;
+  if (on == s.hrtf_sent) return;
+  synth.binaural(on != 0);
+  s.hrtf_sent = on;
 }
 
 }  // namespace shooters_edge::client

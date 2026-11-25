@@ -17,11 +17,13 @@
 // threw, the explosions and beams drawn are deterministic metrics; the pictures are measured.
 // `--mod-effects=1` adds, after the weapons, a mod's own effects by names no classic effect has
 // (the server's pointparticles and trailparticles events) drawn from the lab's book of them.
+// `--hand-lerp=0` draws the held weapon's frames stepped (r_lerpmodels 0), to film a nailgun's
+// turn both ways.
 //
 // ge:summary Lab: every weapon's muzzle, rounds, hits, blasts and bolt in the game's frame
 // ge:keywords lab se-weapon-fx weapon-effects explosion rocket-trail lightning bolt beam hits
 // ge:keywords shotgun nailgun grenade rocket arc classic-vs-enhanced before-after side-view
-// ge:keywords mod-effects pointparticles trailparticles sweep burn-line melt
+// ge:keywords mod-effects pointparticles trailparticles sweep burn-line melt spent-shells cases
 // ge:skill render shooter labs
 #include <algorithm>
 #include <cmath>
@@ -51,7 +53,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/labs/staged.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -128,6 +130,31 @@ bool place_of(const std::string& text, float out[5]) {
          5;
 }
 
+// The view moved to half a metre above where the cases lie (their middle), on the side the view
+// was on, and turned down at them: a pair dropped at the feet and a spray across a room both seen
+// close. Unchanged while there are none.
+void aim_at_cases(const ge::detail::DebrisPool& pool, ge::render::FrameView& v) {
+  double mid[3] = {0, 0, 0};
+  int n = 0;
+  for (const ge::detail::Debris& d : pool.pieces) {
+    if (d.serial == 0) continue;
+    mid[0] += d.at.x, mid[1] += d.at.y, mid[2] += d.at.z;
+    ++n;
+  }
+  if (n == 0) return;
+  for (double& m : mid) m /= n;
+  double ax = v.eye[0] - mid[0], az = v.eye[2] - mid[2];
+  double len = std::sqrt(ax * ax + az * az);
+  if (len < 0.2)
+    ax = -ge::core::libm::sin(v.heading), az = -ge::core::libm::cos(v.heading), len = 1;
+  v.eye[0] = mid[0] + ax / len * 0.55;
+  v.eye[2] = mid[2] + az / len * 0.55;
+  v.eye[1] = mid[1] + 0.5;
+  const double dx = mid[0] - v.eye[0], dy = mid[1] - v.eye[1], dz = mid[2] - v.eye[2];
+  v.heading = ge::core::libm::atan2(dx, dz);
+  v.pitch = ge::core::libm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+}
+
 void run(gl::Lab& lab) {
   const auto size = lab.arg_nums("size");
   const uint32_t w = size.size() > 0 ? static_cast<uint32_t>(size[0]) : 960;
@@ -182,7 +209,7 @@ void run(gl::Lab& lab) {
   std::vector<ge::viewmodel::HeldModel> weapons;
   bool at_eye = false;
   if (!folder.empty())
-    at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+    at_eye = cl::load_held_set(cl::qw_adapter(), files, {}, weapons);
   else if (!shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
     lab.note("no weapon is drawn: " + error);
   // The two looks: classic (or --before's cvars) and modern with --cvars on it.
@@ -224,9 +251,9 @@ void run(gl::Lab& lab) {
   cl::FxFrame fx[2];
   cl::HeldFire held_fire[2];
   for (cl::HeldFire& f : held_fire)
-    if (!cl::load_held_fire(f, &error,
-                            at_eye ? cl::classic_adapter().game->held_weapons
-                                   : std::span<const std::string_view>{}))
+    if (!cl::load_held_fire(
+            f, &error,
+            at_eye ? cl::qw_adapter().game->held_weapons : std::span<const std::string_view>{}))
       lab.note("no muzzle fire: " + error);
   cl::HeldState held;
   held.hand.at_eye = at_eye;
@@ -235,16 +262,20 @@ void run(gl::Lab& lab) {
     const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
     for (cl::FxState& f : fx_state) f.palette.assign(pal.begin(), pal.end());
   }
-  const shooters_edge::view::ViewSettings view_settings;
+  shooters_edge::view::ViewSettings view_settings;
+  view_settings.lerp = lab.arg("hand-lerp") != "0";  // r_lerpmodels: the held weapon's frames
   shooters_edge::view::HandFrame hand;
   double t = 0;
   double births[2] = {0, 0}, blasts[2] = {0, 0}, beams[2] = {0, 0};
+  size_t cases_most[2] = {0, 0};  // the most spent shells out at once (they fade by the end)
 
   float at[5] = {0, 0, 0, 0, 0}, side[5] = {0, 0, 0, 0, 0};
   // The halls' spot, looking down the hall at the floor 9 m ahead, by default.
   bool placed =
       place_of(lab.arg("at").empty() && folder.empty() ? "128,192,24,0,8" : lab.arg("at"), at);
   bool has_side = place_of(lab.arg("side"), side);
+  // The spent shells' camera: placed below, then turned on the cases at each picture.
+  const bool shells_side = lab.arg("side") == "shells";
   auto& player = l.server->sv.edicts[1];
   // The aim's turn off `at` while a held weapon fires (`--sweep`), degrees.
   float turn_yaw = 0, turn_pitch = 0;
@@ -315,6 +346,8 @@ void run(gl::Lab& lab) {
       if (hand.flashing)
         fx[k].lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
       cl::fire_held(held_fire[k], hand, fx_state[k].on.muzzles, t, fx[k]);
+      cl::held_cases(fx_state[k].cases, held_fire[k], hand, fx_state[k].on.shells, t);
+      cases_most[k] = std::max(cases_most[k], ge::detail::debris_count(fx_state[k].cases.pool));
       births[k] += static_cast<double>(fx[k].births.size());
       if (device && draw) {
         const ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
@@ -349,6 +382,7 @@ void run(gl::Lab& lab) {
         pose.fov_y = 1.2;
         ge::camera::to_frame_view(pose, view);
         view.time_s = t;
+        if (shells_side) aim_at_cases(fx_state[1].cases.pool, view);
       }
       for (int k = 0; k < 2; ++k) {
         cl::FxFrame still = fx[k];
@@ -492,6 +526,21 @@ void run(gl::Lab& lab) {
     side[4] = static_cast<float>(-ge::core::libm::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 180 /
                                  ge::core::kPi);
     has_side = close || room > 24;
+  }
+  if (shells_side) {
+    // The spent shells' camera: over the player's right shoulder, looking down at the floor
+    // ahead and to his right where his gun throws its cases (inside his own box: never a wall).
+    const double r = at[3] * ge::core::kPi / 180;
+    const float cx = static_cast<float>(ge::core::libm::cos(r)),
+                cy = static_cast<float>(ge::core::libm::sin(r));
+    const sh::Vec3f look = {at[0] + cy * 34 + cx * 30, at[1] - cx * 34 + cy * 30, at[2] - 24};
+    const sh::Vec3f cam = {at[0] + cy * 12 - cx * 8, at[1] - cx * 12 - cy * 8, at[2] + 30};
+    const double dx = look.x - cam.x, dy = look.y - cam.y, dz = look.z - cam.z;
+    side[0] = cam.x, side[1] = cam.y, side[2] = cam.z;
+    side[3] = static_cast<float>(ge::core::libm::atan2(dy, dx) * 180 / ge::core::kPi);
+    side[4] = static_cast<float>(-ge::core::libm::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 180 /
+                                 ge::core::kPi);
+    has_side = true;
   }
   if (target) {
     // Two thirds of the way to the wall the player faces, on the floor under that point.
@@ -649,6 +698,10 @@ void run(gl::Lab& lab) {
                "vertices");
     lab.metric(std::string(kLooks[k]) + ".wounds", static_cast<double>(fx_state[k].wounds.size()),
                "count");
+    // The most spent shells lying or flying at once (ce_shells): a case rests, then fades, so
+    // the count at the end can be nought though the pictures show them. Measured.
+    lab.metric(std::string(kLooks[k]) + ".cases", static_cast<double>(cases_most[k]), "count",
+               gl::Det::measured);
   }
   lab.metric("explosions", static_cast<double>(l.explosions.size()), "count");
   lab.metric("effects", static_cast<double>(l.effects.size()), "count");
@@ -675,7 +728,9 @@ const gl::LabSpec kSpec{
      {"at", "",
       "x,y,z,yaw,pitch: where the player stands (map units; pitch down positive); "
       "empty: the spawn, aimed at the wall nearest 360 units off"},
-     {"side", "", "x,y,z,yaw,pitch: a second camera; empty: beside the line of fire"},
+     {"side", "",
+      "x,y,z,yaw,pitch: a second camera; shells: low beside the player, on the floor where his "
+      "gun throws its spent shells; empty: beside the line of fire"},
      {"side-along", "0.35",
       "with no --side: how far toward the wall the side camera stands, 0..0.9"},
      {"pitch", "2",
@@ -693,7 +748,9 @@ const gl::LabSpec kSpec{
      {"target", "0", "1: a bot stood in the line of fire, facing the player (its wounds)"},
      {"before", "", "the left side's cvars in the modern look instead of the classic look"},
      {"mod-effects", "0",
-      "1: after the weapons, a mod's own effects (pointparticles, trailparticles) by its book"}},
+      "1: after the weapons, a mod's own effects (pointparticles, trailparticles) by its book"},
+     {"hand-lerp", "1",
+      "0: the held weapon's frames shown as stepped, each held (r_lerpmodels 0); 1: blended"}},
     "--size=240,135 --weapons=shotgun,rockets,arc --times=60,400 --blast-times=60",
     run,
 };

@@ -18,11 +18,11 @@ is the family of those games and the layers they share.
 
 | Game | In prose and player text | In code, files, ids, labs |
 | --- | --- | --- |
-| The first game: its content, its campaign, its single-player protocol | Quake | `q1` |
+| Quake: its content, its campaign, its single-player protocol | Quake | `q1` |
 | Its multiplayer client, server, protocol (version 28) and demos | QuakeWorld | `qw` |
-| The second game | Quake II | `q2` |
-| The third game | Quake III Arena | `q3` |
-| The sector-based sprite shooter (M61) | Doom | `doom` |
+| Quake II: its content, campaign, client, server, protocol and demos | Quake II | `q2` |
+| Quake III Arena | Quake III Arena | `q3` |
+| Doom, the sector-based sprite shooter (M61) | Doom | `doom` |
 | The family and the layers shared by these games: `plugins/classic`, classic enhance and its `ce_` cvars, the classic look, `hud_style classic`, the `classic_arena` move preset | the classic games | `classic` |
 
 - **Names say what, never who we are.** The names are id Software's trademarks. We use them to say
@@ -30,15 +30,17 @@ is the family of those games and the layers they share.
   Our product is Shooter's Edge: no executable, target, package, app bundle, icon, logo or store
   text carries a game's name or look. `make agents-check` scans the build files for the marks
   (`tools/agents-index.mjs`, `BRANDING`). Where the window shows a game's name to a player, it says
-  once that Shooter's Edge is not made or endorsed by id Software.
-- **The command line keeps numbers.** `-game 1|2` picks a game; `q1` and `q2` are its ids.
-- **The rename is M60a.** Until it is done, older code says "the classic game" or "the first game"
-  for Quake or QuakeWorld and "the sequel" for Quake II; a change that touches those words renames
-  them.
+  once that Shooter's Edge is not made or endorsed by id Software: SELECT GAME's foot
+  (`menu/games_page.cpp`).
+- **The command line names games by id.** `-classic q1|q2` picks a game (a game added later is
+  one more id); `-game <folder>` is a mod's folder, as each classic game names one.
+- **"Classic" before a client, server or protocol is the family.** "A classic client" is any
+  client of one of these games as it shipped, or one built to it; where the text means one game's,
+  it names it ("a QuakeWorld client").
 
 ## What it is
 
-- **Functionality, never code.** The game does what the classic game does (the movement a player's
+- **Functionality, never code.** The game does what Quake does (the movement a player's
   hands know, the QC a mod runs, the packets a server sends), written fresh in this engine's
   C++ from the file formats, the protocol and the language's reference, and from measured
   behaviour. No existing implementation's source is copied, translated or paraphrased
@@ -67,7 +69,7 @@ by a lab or a test over free content (§ Content and test data).
 | Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-mod`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
 | Maps | BSP version 29, BSP2 (the larger-limits variant), the `.lit` coloured lightmaps beside them, BSPX lumps (extra data in the same file) | Every lump read: planes, nodes, leaves, the visibility (PVS, run-length coded), faces, lightmaps with up to four styles a face, textures (with animated and random sequences, liquids, sky), clip hulls (point, player, large), brush models, the entity lump |
 | Models | MDL (vertex-animated, frame groups, skin groups, 8-bit packed vertices and normals from a fixed table), SPR (sprites with orientation types) | Every frame and skin a mod names; the player model's colours (top and bottom) remapped at draw time; frame interpolation as a modern client does it |
-| Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as the classic game draws them, and also as true colour (§ The picture) |
+| Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as Quake draws them, and also as true colour (§ The picture) |
 | Sound | WAV (8 and 16 bit PCM, mono, any rate, the loop cue) | Played at their own rates, looped where the cue says, spatialized, with ambient sounds by leaf |
 | Game logic | QC bytecode: the multiplayer `progs` and the single-player one | Every opcode, the entity field layout the progs declares, the globals, the string table, the builtins by number, the server's entry points (`StartFrame`, `PlayerPreThink`, `ClientConnect`…), the engine-side fields the server reads (`origin`, `velocity`, `movetype`, `solid`, `effects`, `modelindex`…) |
 | Extended logic | The extension builtins and fields modern servers and clients share, asked for by name (`checkextension`) | The common set first (§ Modern features), each one a row of a table the VM answers from |
@@ -98,8 +100,10 @@ fixtures we write (`tests/golden/console_*.txt`):
 - **Built for team chat** (`games/shooters_edge/client/team_chat.hpp`): the percent codes from
   the player's own state, the fun characters as the classic font's glyphs, the `tp_name_*` words
   as plain words by default (a receiving client here draws no colour markup), and the `f_newmap`,
-  `f_spawn`, `f_weaponchange`, `f_death`, `f_respawn`, `f_demostart`, `f_demoend`, `f_exit`
-  and `f_cfgload` aliases run on their events. The canned `tp_msg*` messages (report, lost, need,
+  `f_spawn`, `f_weaponchange`, `f_death` (`f_flagdeath` with a flag carried), `f_respawn`,
+  `f_bonusflash`, `f_demostart`, `f_demomatchstart`, `f_demoend`, `f_trackspectate`,
+  `f_freeflyspectate`, `f_focusgained`, `f_sbrefreshdone`, `f_exit` and `f_cfgload` aliases run
+  on their events. The canned `tp_msg*` messages (report, lost, need,
   safe, help and the rest) say the player's state behind their short name; a received one shows
   that name in place of the sender's. `echo` fills in the codes too. A pickup, read from the
   state's change, feeds `%i`, `%Y`, `tp_msgtook` and `f_took`.
@@ -129,7 +133,7 @@ make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6"  # your packs' m
 
 **Or load the game from the menu**: `make run:shooters_edge`, then ESCAPE ▸ OPTIONS ▸ CLASSIC
 ENHANCED ▸ LOAD GAME and pick the folder your game is installed in (the one holding
-`id1/pak0.pak`; picking `id1` itself works too). Only an install of the classic game is taken: a
+`id1/pak0.pak`; picking `id1` itself works too). Only an install of Quake is taken: a
 folder without `id1` and its first pack is refused, and LOAD GAME's line says what it lacks. The
 game is opened in place of the arena at once (its start map), its packs are enhanced in the
 background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
@@ -145,9 +149,9 @@ is an install or lies inside one: its base folder, its multiplayer folder, the b
 folder), the game plays that install at once, ahead of the one kept. Placed in a folder ABOVE
 installs, it finds each folder right under it that is one: the folders named like a classic
 install first, in any case (the two games' own names, with or without a space or a 2, their
-multiplayer client's names, the bundles' names, the sequel's short name), then any other folder
-that holds a game. Each one's release is told by its packs' sizes (the first game's shareware or
-registered packs, the sequel's demo or full game; any other size is your own copy); the game
+multiplayer client's names, the bundles' names, Quake II's short name), then any other folder
+that holds a game. Each one's release is told by its packs' sizes (Quake's shareware or
+registered packs, Quake II's demo or full game; any other size is your own copy); the game
 loaded last is played when it is one of them, else the first full game. `games` in the console
 lists them and `games <n>` loads one.
 
@@ -158,12 +162,12 @@ saved settings (so a change made here sticks), then the command line's `+set` pa
 `+` commands. `exec` finds a file in the window's settings folder, the game folder, the bundled
 client's folder and the base folder, then in the archives, which include the bundled client's
 folder's own (its place names and fonts). Settings the window does not have are passed over and
-counted on one line. The sequel's install runs its bundled client's order: `config.cfg`
+counted on one line. Quake II's install runs its bundled client's order: `config.cfg`
 (`q2config.cfg` on Windows, each tried after the other; a mod folder's before the base folder's),
 then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window's own settings, the
 command line, and `postinit.cfg` last; its `default.cfg` is the one in its packs (the window's
 console keys kept through its `unbindall`). Each game's order lives in one table,
-`client/load_order.hpp`: its files' ranks too, so the sequel's folders rank their packs and zips
+`client/load_order.hpp`: its files' ranks too, so Quake II's folders rank their packs and zips
 over their loose files, and the rerelease's archive at the install's root goes under them all, as
 its own client loads them. In every game a folder's `pak0`, `pak1` ... come first by number, then
 every other pack or zip (`.pak`, `.pkz`, `.pk3`) by name, so a pack dropped in under any name is
@@ -175,18 +179,23 @@ it starts (`tp_loadlocs`): the file saved under the game folder first, else the 
 Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearlocs` all of them,
 `saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
-(`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
+(`locations_add` and so on) work too, and so does Quake II's spelling: `loc add <name>`,
 `loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
 `loc_dist` units from its point (500 in every classic game; 0 is no limit): farther off, `loc` says
 someplace and `removeloc` or `loc set` finds nothing. With `loc_trace 1` a point behind a wall
-from where the player stands is passed over too. The places follow the player's view on a
+from where the player stands is passed over too. `loc_draw 1` stands a marker at every point
+within reach (Quake's the player's head, Quake II's the ancient head), the nearest bobbing under a
+white light, to check a place file by eye. `pruneloc` (`locations_prune`, `loc prune`) tidies a
+file: it takes out every point whose going leaves every spot of the map (its open space every 32
+units) named the same, so a room marked by fifty points of one name keeps the few its edges need;
+`saveloc` then writes the smaller file. The places follow the player's view on a
 server joined and in a demo played as well as in the window's own game: each map's file is read as
 it starts, from the recording's game folder for a demo, and edited and saved the same way. A
 recording keeps the place names it was played with (stuffed `//loc` lines in its signon, a comment
 to any other client: `plugins/classic/locs.hpp`), and a demo that kept them is watched with those,
 no file needed. `say` and `say_team` talk on the server joined or the window's own; `%l` in the
 line becomes the place the player is in before it is sent, so the others read the place's name.
-The sequel's macros name places in any console line: `$loc_here` the place the player is in,
+Quake II's macros name places in any console line: `$loc_here` the place the player is in,
 `$loc_there` the place nearest where the view's line stops (8,192 units ahead or the first wall,
 `client/map_line.hpp`), each `unknown` with none within `loc_dist`.
 
@@ -214,15 +223,15 @@ make build PRESET=release
 build/release/se -basedir ~/games/classic +map dm6
 ```
 
-- **`-game 1`** plays the classic game and **`-game 2`** its sequel, each from the install kept
+- **`-classic q1`** plays Quake and **`-classic q2`** Quake II, each from the install kept
   for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
   the window not started inside one, the folder chooser asks for the folder the game is installed
   in, checks that it is that game's install (asking again, with the reason, when it is not) and
-  keeps it, so the next `-game 1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
+  keeps it, so the next `-classic q1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). When the install has the
   multiplayer client's folder (its player skins, its multiplayer program), that folder is
-  played over `id1` unless `-mod` names another. **`-mod <folder>`**
+  played over `id1` unless `-game` names another. **`-game <folder>`**
   plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
@@ -240,8 +249,8 @@ build/release/se -basedir ~/games/classic +map dm6
   takes it back. `in_mouse_release` names what frees it (bits: 1 the console, 2 a menu, whose
   pointer then hovers and clicks; 4 a demo's play bar; default 5), so a menu is driven by the keys
   unless it holds 2. Closing the window quits.
-- **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root): the classic
-  game's pages (§ The main menu), every row the game can do working and the rest dimmed.
+- **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root):
+  Quake's pages (§ The main menu), every row the game can do working and the rest dimmed.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
   the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
   `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1` (both cvars, saved
@@ -285,7 +294,7 @@ build/release/se -basedir ~/games/classic +map dm6
   again and the save read over it, so a loaded game plays on exactly as the one never saved did.
   Only a single-player game saves, and not at the level's end or with the player dead.
   `save <name>.sav` writes the classic text save instead, `<game folder>/<name>.sav`, where the
-  classic game keeps its own (`server/classic_save.hpp`), and `load <name>` tries ours first,
+  classic game keeps its own (`server/q1_save.hpp`), and `load <name>` tries ours first,
   then `<name>.sav`, so a game saved by another engine loads too (it plays on from the program's
   state, not bit for bit). The menu's LOAD and SAVE pages are twelve slots, `s0` to `s11`, each
   showing its save's line. On a Mac:
@@ -323,7 +332,8 @@ ammo|pairs|row`, `hud_guns_all`, `hud_ammo_all`; the weapon in hand raised over 
 while they show; drawn in the packs' own pictures when
 a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
-models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
+models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, turned
+by its angles about the map's origin (a swinging door, a fan, a rotating train: M63b), and one
 the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
 `set_movers`, fed each frame by `client/world_models.hpp`'s `place_brushes`; their shadows in the
 modern look stay where the map built them. Not yet: sounds and the network (the rest of M18h,
@@ -338,8 +348,8 @@ the modern look with `ce_flames` on, the torch's model is drawn without its pain
 engine's burning gas is the flame.
 
 **What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
-profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
-`kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
+profile has a table of names by class name (`profiles/items.hpp`'s `names`; Quake's
+`kQ1Names`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
 Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
 "nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `rules/<variant>_glue.cpp`)
 reads it under the item's class name. So "You got the rockets", "You got the Red Armor", and a
@@ -348,7 +358,7 @@ when it is new to its taker). On the built-in arena, with no packs, the mod spea
 ("You got ammunition", "You got the Spiker", "You got armor").
 
 **What the server says.** Everything else a player reads from the server comes in the loaded
-game's words too: a second table in the profile (`profiles/words.hpp`'s `kClassicServerWords`),
+game's words too: a second table in the profile (`profiles/words.hpp`'s `kQ1ServerWords`),
 each a template in plain ASCII (`server/words.hpp`: `%1` a name, `%g1` its digits in the gold
 figures, `^red text^`, `%[ %]` the gold brackets, `%>4g1` right-aligned, `%n` a newline), put in
 the server's local info beside the item names by the window and by the dedicated server when the
@@ -510,6 +520,7 @@ a marker names it.
 | Page Down, N / Page Up, P | `demo_next`, `demo_prev` | the next or last highlight (a few seconds before it) |
 | Home, End | | the start, the end |
 | | `demo_highlights [all]` | the tracked player's highlights (or everyone's) in the console |
+| SHIFT held | | free look: the mouse turns the view away from the recorded one until SHIFT is let go |
 
 A HIGHLIGHT is a moment of the tracked player's (`client/demo_highlights.hpp`): a MULTI KILL (two
 or more kills within 0.2 s: one rocket, one blast), a LONG ROCKET (a rocket kill whose rocket flew
@@ -521,8 +532,11 @@ other player whose frags went up then is the killer, the rockets are followed fr
 appear to where they go. No obituary text is read. `make lab LAB=se-highlights
 ARGS="--file=<demo>"` lists a demo's highlights and kills and pictures every player's bar.
 
-A seek back reads the demo again from its start without drawing (a 10 minute match in a fraction
-of a second); the times on the bar are the demo's TIMELINE, its frames' steps added up with a long
+A seek back starts from the last SNAPSHOT before it (the demo as read, kept every
+`demo_snapshots` seconds of the timeline, 10 by default; Quake II spells it `cl_demosnaps`) and
+reads on from there without drawing; with none kept (`demo_snapshots 0`) it reads the demo again
+from its start (a 10 minute match in a fraction of a second). A seek by a share of the demo
+(`seek 50%`) needs its length, so a demo that could not be scanned says it cannot. The times on the bar are the demo's TIMELINE, its frames' steps added up with a long
 pause in the recording counted as a quarter second, the clock `-demovideo` runs on.
 
 **A multiview recording** holds every player, so the view rides one of them: the lowest slot
@@ -553,10 +567,48 @@ your own game the places are drawn too: every model one server frame behind, bet
 states the window saw (the server's 72 or 77 frames a second fall unevenly on 50, 60 or 144
 pictures), and a walking monster, which the program moves a stride at a time, drawn over each
 stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
-gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
-frame from the last, and a played fire clip back to rest over a frame's time; in a demo or on a
-joined server a classic set's weapon plays the weapon frame the server sends, blended between its
-changes. Your own eye rides the same clock as the models: drawn one server frame behind, between
+gap over a quarter second are not drawn across. The held weapon's frames flow too: each of a nailgun's shot
+frames is turned to from the last over the frame's 0.1 s (the barrels turn every picture instead of
+ten times a second), and a played fire clip goes back to rest over a frame's time; in a demo or on a
+joined server a classic set's weapon (and Quake II's) plays the weapon frame the server sends,
+each change blended over a fixed 0.1 s however unevenly the updates bring it. The weapon's own
+flash comes out of the gun whole on a shot, never stretched across the picture
+(`viewmodel/held.hpp`'s `pose_frames`). `r_lerpframes` is `r_lerpmodels`'s other name. On a
+QuakeWorld server that sends the weapon's state (our server always does; the demo family's bit
+0x80), the window predicts its own weapon (`net/qw_weapon.hpp`, Quake's rules in
+`classic/weapon_predict.hpp`): the shot is heard, the hand fires and the bar's ammunition counts
+down when the button goes down instead of a round trip later, the weapon switched by a key shows
+at once, and each server frame corrects the prediction. `cl_nopred_weapon 1` turns it off,
+`cl_predict_weaponsound` chooses which weapons' sounds are played ahead (0 none, 1 all, above 1 a
+mask of those left to the server), `cl_predict_buffer` how many commands behind the newest the
+weapon is shown, `cl_pext_weaponprediction 0` stops asking for the state. `make lab
+LAB=se-weapon-predict` measures the press to the first shot heard, off and on. On a Quake II server, any server, the window predicts the same way from the gun the frames show (`net/q2_weapon.hpp`: the shot's flash heard, the gun's frame and the ammunition drawn at the press) under the same three settings; `make lab LAB=se-q2-weapon-predict` measures it. Through a teleporter (or at
+a spawn) the server turns the player with a `setangle` in his next datagram; under the high-lag
+teleport (the demo family's bit 0x02, `cl_pext_lagteleport`, on by default;
+`classic/protocol/lag_turn.hpp`) it carries its kind, and the moves the player made before the
+turn reached him are turned to where he now faces on the server and in the window's prediction
+alike, so he never walks the old way for a round trip and the two agree; the mouse's turning
+during that round trip is kept. `make lab LAB=se-teleport ARGS="--basedir=<base> --map=dm6"` walks
+through a teleporter and counts the frames off where he faces, on and off. The client goes further
+and FORESEES the teleport (`cl_predict_teleport`, on by default; `shooter/teleport_ahead.hpp` and
+`classic/teleporters.hpp`): the level's own teleporters (Quake's `trigger_teleport` to an
+`info_teleport_destination`, Quake II's `misc_teleporter` pad) are taken in the window's prediction
+the command the player's box reaches one, so the far end is drawn and the view turned the frame he
+walks in, on any server that runs the game's own rules. Its moves after that are made the new way,
+so the high-lag teleport is not asked for while it is on; a server that does not teleport him
+(a teleporter waiting to be switched on, a mod's own rule) is believed two commands later, the
+turn taken back and that teleporter left out while he stands in it, and a server's turn to the
+same facing is the guess's own. `make lab LAB=se-teleport` and `make lab LAB=se-q2-teleport
+ARGS="--game=<base> --map=city1"` measure it. A push trigger (a jump pad, a wind tunnel) is
+foreseen the same way (`cl_predict_push`). DOORS, PLATS AND TRAINS RUN ON in the prediction
+(`cl_predict_movers`, on by default; `shooter/predict.hpp`'s `MoverTrack`, `advance_movers`): each
+goes on at the speed its last two frames show, stops where it was seen standing (or where it was
+built), carries the player who stands on it and shoves him where it moves into him, so the lift
+under him and the door he runs through are where the server will have them when it runs his move;
+the window draws them there too. Quake II's server moves them once a 100 ms frame, so they step
+there a frame at a time. `make lab LAB=se-control ARGS="--basedir=<base> --game=<folder>
+--map=dm2 --event=plat"` (or `door`, `push`, `water`, `train`; a Quake II install's folder for its
+maps) counts the yanks both ways. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder
@@ -660,10 +712,10 @@ bit) among their messages. Without the header and the voice messages it is a pla
   own back.
 - **A client's recording (`.qwdv`)** holds what its player was sent: his team's voices, routed to
   him, and his own, spliced in as he spoke. A plain client recording leaves every voice message
-  out (`net/classic_record.hpp`).
+  out (`net/qw_record.hpp`).
 - **The server's multiview recording (`.mvdv`)** holds every voice it relayed, whoever heard it:
   all the teams.
-- **Who a voice goes to** is the talker's own choice (`net/classic_talk.hpp`): the client names
+- **Who a voice goes to** is the talker's own choice (`net/qw_talk.hpp`): the client names
   it with `voicetarg all|team|near|<slot>` (kept for the connection; a word the server does not
   know means the team), and the window does so by the key held: `+voice` (V) everyone,
   `+voice_team` (B) the team, `+voice_near` (N) the players within `sv_earshot` with no wall
@@ -673,9 +725,9 @@ bit) among their messages. Without the header and the voice messages it is a pla
 - **Chat** goes the same way: `say`, `say_team` and `say_near` (the players near, as
   `<name> (nearby): <text>`), typed on the chat line T, Y and U open (`messagemode`,
   `messagemode2`, `messagemode3`) or in the console. A `say` the rules take nothing of (the
-  sequel's have no chat) is routed by the server's own chat. `make lab LAB=se-talk ARGS="--basedir=<folder> --map=dm6"`
+  Quake II's have no chat) is routed by the server's own chat. `make lab LAB=se-talk ARGS="--basedir=<folder> --map=dm6"`
   pictures who hears a talker from above.
-- **The window joined to a server** (`connect`, `net/classic_remote.hpp`) asks for voice with
+- **The window joined to a server** (`connect`, `net/qw_remote.hpp`) asks for voice with
   `cl_voip 1` and hears what the server routes to the player through the same players, its own
   voice left out; while a voice key is held the microphone is sent. The live recording it reads
   (`ClientRecorder::live`) keeps the voices with no header; a file it records is unchanged.
@@ -695,7 +747,7 @@ game folder's, each client speaking `<dir>/<name>.wav` (red1, red2, blue1, blue2
 ### The main menu
 
 `games/shooters_edge/menu/` (M18k2) is the menu ESCAPE opens over the running game (the listen
-server's frames go on under it). Its pages are the classic game's:
+server's frames go on under it). Its pages are Quake's:
 
 | Page | Rows |
 | --- | --- |
@@ -707,11 +759,11 @@ server's frames go on under it). Its pages are the classic game's:
 | OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
-| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
+| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`), SPENT SHELLS (`ce_shells`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
-| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
-| WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `ce_skies`, `ce_clouds` |
+| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_ao`, `ce_ao_strength`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
+| WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `r_arrival`, `ce_respawns`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
 | HELP | no row: the free episode's end shows it (in the classic look, the pack's help pages) |
@@ -772,7 +824,7 @@ stays for community mods' sources.
   multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
   (`games/shooters_edge/profiles/game_profile.hpp`, looked for by the game's adapter, § The game
   adapter), and runs the first of the multiplayer form; the console's `mods` lists the mod
-  folders there are; so `-mod mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that
@@ -818,7 +870,7 @@ stays for community mods' sources.
 
 ## C++ mods
 
-Beside the classic game's mods, Shooter's Edge is the first game to offer the engine's own mod
+Beside Quake's mods, Shooter's Edge is Quake to offer the engine's own mod
 format (M52a, [`docs/mods.md`](mods.md)): a mod written in C++, built by `ge mod build` into a
 package, and loaded through `engine/mod`. Its half of the ABI is
 `games/shooters_edge/sim/mod_api.hpp` (`SE_MOD_API` 1):
@@ -848,31 +900,31 @@ weapons and armour are a fourth choice, § Weapons and armour):
 
 | Choice | What it picks | Today | Later |
 | --- | --- | --- | --- |
-| **Content** (the profile) | the packs and game directories on the search path, the map, model and sound formats, the palette and the menus' pictures, the content rules (which episodes the packs open) | the classic game (BSP 29, MDL) | its sequel (BSP 38, its models), the third (BSP 46) |
-| **Program** | the rules of the game: a QC program of a known layout, or a C++ mod (`engine/mod`) | the multiplayer layout; the single-player layout (M18s) | the sequel's rules as a C++ mod, written clean-room |
-| **Movement** | the player move: `sv_playermove arena`, `original`, or a profile's own | both (M18s) | the sequel's move |
+| **Content** (the profile) | the packs and game directories on the search path, the map, model and sound formats, the palette and the menus' pictures, the content rules (which episodes the packs open) | Quake (BSP 29, MDL) | Quake II (BSP 38, its models), the third (BSP 46) |
+| **Program** | the rules of the game: a QC program of a known layout, or a C++ mod (`engine/mod`) | the multiplayer layout; the single-player layout (M18s) | Quake II's rules as a C++ mod, written clean-room |
+| **Movement** | the player move: `sv_playermove arena`, `original`, or a profile's own | both (M18s) | Quake II's move |
 
 ```
  shell (games/shooters_edge)  window · menu · console · HUDs · net · bots · free arena
    │
    ├─ profile  (games/shooters_edge/profiles/<id>)  data: packs · dirs · formats · rules
-   │     classic game (29) ─────────── sequel (38) ───────── third (46)
+   │     classic game (29) ─────────── Quake II (38) ───────── third (46)
    │
    ├─ host     (plugins/shooter)  the loop; the host's KIND follows the program:
    │     arena host (matches: per-command move, spectators, multicast)
    │     campaign host (spawn parms, serverflags, level changes, skill, saves, autoaim)
    │
    ├─ program  (plugins/progs, engine/mod)  a LAYOUT TABLE per program form
-   │     multiplayer QC (54730) · single-player QC (5927) · C++ mod (the sequel's rules)
+   │     multiplayer QC (54730) · single-player QC (5927) · C++ mod (Quake II's rules)
    │
    └─ move     (plugins/shooter)  sv_playermove: arena · original · (a profile's own)
 ```
 
-- **A profile is data, not code**: a row naming its game directories (the classic game's base
-  directory, the sequel's), the formats it reads (each already a reader in `plugins/brush`,
-  `plugins/morph`), its default program and movement, and its **content rule** (the classic
-  game: the full game's second pack opens episodes 2–4, `campaign.md`'s `registered`). Adding the
-  sequel is adding its row and the readers and program it needs; nothing in the shell or the
+- **A profile is data, not code**: a row naming its game directories (Quake's base
+  directory, Quake II's), the formats it reads (each already a reader in `plugins/brush`,
+  `plugins/morph`), its default program and movement, and its **content rule** (
+  Quake: the full game's second pack opens episodes 2–4, `campaign.md`'s `registered`). Adding the
+  Quake II is adding its row and the readers and program it needs; nothing in the shell or the
   loop branches on a game's name.
 - **A program form is a layout table**, not a struct: the loop mirrors its `Entity` into the
   program's memory through the table, so the single-player layout (M18s) and any later one are
@@ -893,12 +945,12 @@ The profile rows hold what is only names (folders, packs, file names, extensions
 does with them differs from game to game, so each classic game has an **adapter**
 (`games/shooters_edge/client/game_adapter.hpp`): one table of calls the window, the console,
 the menus and the labs ask a game's files through, implemented once per game in a file of its
-own. The first game's is `client/classic_adapter.cpp`; a later game's is a second file with the
-same calls and nothing of the first game's in it. Below the adapters stay the readers a family of
+own. Quake's is `client/qw_adapter.cpp`; a later game's is a second file with the
+same calls and nothing of Quake's in it. Below the adapters stay the readers a family of
 files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the base) and
 `plugins/brush` (every map family into one view).
 
-| Call | The classic game | Its sequel | The third |
+| Call | Quake | Quake II | The third |
 | --- | --- | --- | --- |
 | **mods** (`list_mods`) | folders over the base with numbered packs, zips or loose files | the same folders and the same pack format | folders of zips, read in name order, with a description file each |
 | **programs** (`find_program`) | one QC program for the server (`qwprogs.dat`, then `progs.dat`) | a native library of the server's rules | up to three bytecode programs inside its zips, one a side: the server's rules, the client's half (its HUD and prediction), the menus; or native libraries |
@@ -956,30 +1008,30 @@ remix, a feature of classic-enhance (M18u), shown only when two full games are l
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
-(`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
+(`server/qc_server.hpp`) itself today. A second program form (Quake II's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
 instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
-(`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, the sequel's runner (M18t4), is
+(`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, Quake II's runner (M18t4), is
 under way. Its maps' brushes and the trace its move collides through landed first
 (`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families). Then came its player
-move (`plugins/classic/sequel_move.hpp`): packed integer state, a third of the pitch when walking,
+move (`plugins/classic/q2_move.hpp`): packed integer state, a third of the pitch when walking,
 the step slide that keeps the farther of two slides, ducking, ladders, currents and the landing
-pause, over any world's trace (`SequelBrushWorld` for a map's brushes). A player at rest stands an
+pause, over any world's trace (`Q2BrushWorld` for a map's brushes). A player at rest stands an
 eighth above a floor: resting on the plane counts as touching it, which the trace calls solid, so
-the packing nudges the origin up. Then the runner itself (`server/sequel_server.hpp`, form
-`"sequel"`): a map started from its brushes (`MapSpec::brushes`, the version 38 map read whole),
+the packing nudges the origin up. Then the runner itself (`server/q2_server.hpp`, form
+`"q2"`): a map started from its brushes (`MapSpec::brushes`, the version 38 map read whole),
 its entities spawned as data, players placed at deathmatch spots or the start and moved by every
 command as it arrives, the rules' frame every 100 ms of host time, `kill` and the respawn by
 attack, and the world filled in the shape every runner fills. Items, weapons, damage, movers and
-monsters come next; the move becomes `sv_playermove sequel` when the host can pick the runner.
+monsters come next; the move becomes `sv_playermove q2` when the host can pick the runner.
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
-groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
+groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/qw_*`) start
 maps, run frames, connect and drop players and read the model and sound lists, the static
 entities, the clients' info, the server info and the message sink. The bots (`bots/`) read each
 entity's origin, bounds, view angle and health off the loop's entities (`sv.edicts`, about 60 places)
 and a few fields straight out of the VM (`q.vm`, `q.layout`: frags, the weapon frame). The
-scoreboard and the recorder (`client/scores.cpp`, `net/classic_record.cpp`) read the frags and
+scoreboard and the recorder (`client/scores.cpp`, `net/qw_record.cpp`) read the frags and
 each entity's model, frame, skin, colours and effects through the program's layout.
 
 **The runner is a table of calls, like the adapter**, chosen by the program form `find_program`
@@ -1025,9 +1077,9 @@ the last):
    listen's field and global by name, an entity's class, the campaign's statistics, the saves'
    VM state and the lobby's team field; each is a candidate for the world when a second runner
    needs it. Every lab's digest is the same.
-5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
-   to 4 names it. **Started**: `server/sequel_server.hpp` runs the map, the spawns, the move and
-   the frame (golden `tests/golden/shooters_edge_sequel_server.txt`).
+5. Quake II's rules as a second runner (M18t4), with its own program form; nothing in steps 1
+   to 4 names it. **Started**: `server/q2_server.hpp` runs the map, the spawns, the move and
+   the frame (golden `tests/golden/shooters_edge_q2_server.txt`).
 
 **What stays QC-only**: the QC VM's own tools (`ge qc`, the profile, the fault traces), the
 extension catalogue and the C++ mods' hooks over a QC program (§ C++ mods), which are hooks on the
@@ -1037,14 +1089,14 @@ same `out::` lines.
 ### Weapons and armour: an arsenal of their own
 
 Weapons and armour are a **fourth choice**, beside content, program and movement, and they
-can be swapped one at a time. The classic campaign can be played with the sequel's weapons, its
-armour, or both, once the sequel's profile lands. The design makes that possible:
+can be swapped one at a time. The classic campaign can be played with Quake II's weapons, its
+armour, or both, once Quake II's profile lands. The design makes that possible:
 
 - **An arsenal is data.** Each weapon is a row: its pickup and view models, sounds and HUD icon
   by the content's names; its ammunition kind; its fire (hitscan, a projectile and its speed,
   spread, splash); its damage, refire and switch order. Each armour is a row: what it absorbs,
-  its amount and its pickup. A profile ships one weapon set and one armour set, so the classic
-  game's set and the sequel's set are rows in two profiles. Nothing in our programs names a
+  its amount and its pickup. A profile ships one weapon set and one armour set, so
+  Quake's set and Quake II's set are rows in two profiles. Nothing in our programs names a
   weapon by a constant.
 - **Our programs read the arsenal, never their own copies.** (Landed: the rows are
   `games/shooters_edge/profiles/arsenal.hpp`, handed to the program as the server settings
@@ -1055,7 +1107,7 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   other.
 - **A map's items are mapped, not rewritten.** A map names its items by the content's own class
   names. The arsenal maps each name to a slot (the shotgun slot, the green armour slot), and the
-  chosen set fills the slot. So the classic game's maps place the sequel's weapons where the
+  chosen set fills the slot. So Quake's maps place Quake II's weapons where the
   classic ones stood. An item with no slot in the chosen set falls back to the content's own.
 - **What a set needs is loaded with it.** The models and sounds of a borrowed set come from its
   own profile's packs, which must be on the search path. The check at load (M18t5) refuses a mix
@@ -1082,8 +1134,8 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   packs lack is found in the other game's, read from the other game's packs with the played
   game's mounted over them (`RemixFiles`: its walls and sky its own, in its own palette, every
   model, sound and picture the rules name the played game's), and its items become the played
-  game's (M18u2, M18u3). The classic rules run on a sequel map by tracing its models through
-  their brushes (`sh::Server::model_solids`); the sequel's rules run on a classic map by giving its
+  game's (M18u2, M18u3). The classic rules run on a Quake II map by tracing its models through
+  their brushes (`sh::Server::model_solids`); Quake II's rules run on a classic map by giving its
   point tree's cells brushes (`brush/cells.hpp`). An item keeps the middle of its floor where it
   was (`profiles::item_foot`), and the map's textures are read by its own game's adapter.
 - **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
@@ -1092,10 +1144,10 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   last are lowered to the best weak one the map has fewest of; and no more than `cr_strong_same`
   copies of one strong weapon (two by default: three lightning guns leave a super nailgun), the
   copy nearest a strong armour or the mega health lowered first so the power is spread out. Small pickups that the played game has no size for (the
-  sequel's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
+  Quake II's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
   played game's packs by the total they held, a lone one left out.
-- **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
-  sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
+- **Another game's items** (`cr_items`: empty the played game's, `q1` Quake's, `q2`
+  Quake II's): a game's own maps played with the other game's items, and the HUD that shows them is
   that game's (M18u4). The played game's rules keep their numbers and the map its class names;
   from the next map they wear the other game's things (`profiles/remix_arsenal.hpp`, by role as
   the item table): the server is given the other game's weapon and armour rows (view models,
@@ -1107,28 +1159,35 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   `arsenal_ammo<n>`, `arsenal_health<n>` and `arsenal_pickup`: a model drawn about its middle is
   stood in the middle of the item's box and raised as far as that game's items stand over the
   floor), and the HUD is the other game's own bar, its program run over the played game's status
-  (`client/remix_bar.hpp`). Rules that name their things in code (the sequel's) wear the other
-  game's by name instead: the server setting `sv_wear` (`cr_items 1` in the sequel sets it to
+  (`client/remix_bar.hpp`). Rules that name their things in code (Quake II's) wear the other
+  game's by name instead: the server setting `sv_wear` (`cr_items q1` in Quake II sets it to
   `classic`) renames every model and sound as the players are told it, stands each item where
   that game stands it, and the window colours the classic models through the classic palette
-  and spreads the sequel hand's firing frames over the classic view models' own.
-  The players' figure is a part of its own: `cr_models` (0 each game's own, 1 the classic
-  game's, 2 the sequel's) draws every player as that game's figure from the next map, its frames
-  played from the played game's by kind (the sequel's marine with its weapon in hand on the
-  classic game's players; the classic figure, its weapon in its own mesh, on the sequel's).
+  and spreads Quake II hand's firing frames over the classic view models' own.
+  The players' figure is a part of its own: `cr_models` (empty each game's own, `q1`
+  Quake's, `q2` Quake II's) draws every player as that game's figure from the next map, its frames
+  played from the played game's by kind (Quake II's marine with its weapon in hand on the
+  classic game's players; the classic figure, its weapon in its own mesh, on Quake II's).
   So is the body's physics: `cr_physics` gives the played game's move the other game's running
   speed, friction, air, landing pause, swimming and harm from a fall from the next map (the
   classic rules by the settings `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish`,
   `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump`, `pm_airclimb` (the
-  sequel's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
-  `sv_falldamage`; the sequel's by `sv_physics classic`), each move keeping its own code, and
+  Quake II's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
+  `sv_falldamage`; Quake II's by `sv_physics q1`), each move keeping its own code, and
   nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
   `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
+  `cr_expansions` (on by default) takes the mission packs in: the other game's installed packs
+  are mounted under its base game, so their maps load too and their own weapons and items are
+  read by role (profiles/remix.hpp's `kPackItems`); and a map remixed for a played pack gets the
+  pack's own weapon where the base game has none for a role (`kPackSpawns`: Scourge of Armagon's
+  laser cannon and Mjolnir in the two places Quake gives its lightning gun), after the balance.
+  Off, the base games stand alone and a pack's own items are left out.
   A classic mod with a compiled module (`qwprogs.qvm`) plays the window's match on it, on the
-  sequel's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
+  Quake II's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
-game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
+game's (`--game=<the folder holding id1> --q2=<the folder holding baseq2>`; `--q1-pack`,
+`--q1-to-pack` and `--expansions` take a mission pack's side); `se-client
 --remix=<install> --remix-items=1` draws a game's own map with the other game's weapons in hand
 and on the floor.
 
@@ -1150,12 +1209,12 @@ the classic behaviour each falls back to. Its achievement message (52, one strin
 
 ### Single player and multiplayer as variants of our mod
 
-The baseline mod (M18d) becomes two variants built from one source tree, and the classic game's
+The baseline mod (M18d) becomes two variants built from one source tree, and Quake's
 own programs are the same pair:
 
 | | Arena (multiplayer) | Campaign (single player) |
 | --- | --- | --- |
-| The classic game's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
+| Quake's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
 | Ours (free) | `rules/arena*.cpp`: today's deathmatch in C++ | `rules/campaign*.cpp`: monsters, the level flow, runes, skill, coop, on `rules/common_*.cpp`, in C++ |
 
 Choosing single or multiplayer is choosing a program: the menu's SINGLE PLAYER ▸ NEW GAME loads
@@ -1176,7 +1235,7 @@ is done, and a done one shuts (`sv_episodes_done`, a rune's bit each, recorded b
 host when an episode is left with its rune and archived by the window from game to game; the
 host keeps the bars of an episode not yet open shut, `server/campaign_episodes.hpp`).
 
-A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
+A COMPANION (`shooterbots/companion.hpp`) is a fighter that plays beside the player rather than for
 him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
 or itself (a monster asleep on its spot is left for him to find), holds its fire while he stands
 in the line, presses the button he stops by, catches up when left behind (past 440 units), and
@@ -1185,14 +1244,14 @@ everyone, itself among them, another weapon taken up otherwise. The exit is HIS:
 exit's box are closed to the companion's routes and goals and any step into it is turned back, and
 when he has stood a moment within 640 units of an exit it goes to stand beside it, faces him and
 jumps now and then to show him the way out. While he stands still it fidgets as a person does
-(`plugins/shooter/idle.hpp`: spins, looks at an item in sight, glances at him, hops round him,
+(`plugins/shooterbots/idle.hpp`: spins, looks at an item in sight, glances at him, hops round him,
 jumps, sways), stopping a human moment after he moves on. It reads
 only what its client is sent, like every bot here, and its personality's traits set its moves and
 its patience.
 
-THE WAY THROUGH (`bots/way_through.hpp`) is what a leader bot plays a campaign map by, as a
+THE WAY THROUGH (`shooterbots/way_through.hpp`) is what a leader bot plays a campaign map by, as a
 person does the first time through, off nothing but the map's own entities and his nav graph
-(`bots/map_nav.hpp`): the exit when a route leads there past every shut door that only something
+(`shooterbots/map_nav.hpp`): the exit when a route leads there past every shut door that only something
 else opens; else the nearest button, key or trigger that opens such a door whose opening reaches
 places he has not seen; else the nearest place he has not been; and when nothing at all is left
 where he stands (a pool let him out on a ledge whose doors open from the other side) he swims
@@ -1211,15 +1270,15 @@ single-player game seats a companion too, at any time: the game turns cooperativ
 restarting the map, and a weapon stays for the others: `coop_pickup_weapons`) and turns back to single player when the last
 companion leaves; the game saves again once it has gone. With `sv_port`
 set, others join the coop game over the classic protocol as they would a server
-(`net/classic_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
+(`net/qw_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
 client who joins enters the campaign and is carried from map to map with his parms as the player
 is (every client signs on again on each next map), and the ninth player is refused as the server
 being full.
 
 ### A third classic game: the checklist
 
-The sequel was carried in by these steps, in this order, and a third classic game follows them.
-Each step names where the sequel's work lives, so the third's is a file of its own beside it. Every
+Quake II was carried in by these steps, in this order, and a third classic game follows them.
+Each step names where Quake II's work lives, so the third's is a file of its own beside it. Every
 step lands with its test and its lab. The source of any GPL program is read only by a reader
 (the `clean-room` skill).
 
@@ -1236,27 +1295,27 @@ step lands with its test and its lab. The source of any GPL program is read only
    family is read already), the model and sprite families into `plugins/morph`'s one form, the
    picture formats into `ge::ui::Image`. A damaged file is refused with what is wrong.
 4. **The adapter** (`client/game_adapter.hpp`, a file of the game's own beside
-   `client/sequel_adapter.cpp`, the shared helpers in `client/adapter_parts.hpp`): every call in
+   `client/q2_adapter.cpp`, the shared helpers in `client/adapter_parts.hpp`): every call in
    the table above. The window, the console, the menus and the labs ask through it alone.
 5. **The window plays a map**: the map drawn with its light, the move (a profile's own or the
-   arena's), its sky, liquids and fog. Lab: the game's own, as `se-sequel` walks the sequel's maps.
+   arena's), its sky, liquids and fog. Lab: the game's own, as `se-q2` walks Quake II's maps.
 6. **Models and their animation** (`client/world_models.cpp`, `client/model_lerp.hpp`; the
-   sequel's poses in `server/sequel_poses.hpp`): items turn, players and monsters pose, the held
-   weapons fire. Labs as `se-sequel-models` and `se-sequel-weapon-fx`.
-7. **Pictures and sounds**: the status bar (the sequel's is a layout program,
-   `hud/sequel_layout.hpp` and `client/sequel_bar.hpp`), the console font and background, the
-   menus in the game's own art, its sounds by name. Lab as `se-sequel-hud`.
+   Quake II's poses in `server/q2_poses.hpp`): items turn, players and monsters pose, the held
+   weapons fire. Labs as `se-q2-models` and `se-q2-weapon-fx`.
+7. **Pictures and sounds**: the status bar (Quake II's is a layout program,
+   `hud/q2_layout.hpp` and `client/q2_bar.hpp`), the console font and background, the
+   menus in the game's own art, its sounds by name. Lab as `se-q2-hud`.
 8. **Classic-enhance on it**: every stage of `plugins/classicenhance` run on the row, each
    stage's count checked against the packs (a stage that reports zero is a gap, not a pass: the
-   sequel's textures were outside its maps, its models all shared one file name, its palette was
+   Quake II's textures were outside its maps, its models all shared one file name, its palette was
    a picture). Then the window draws every stage's output under the same `ce_` switches.
-9. **Its rules** (the sequel's in `server/sequel_*.hpp`: items, combat, the map's movers and
+9. **Its rules** (Quake II's in `server/q2_*.hpp`: items, combat, the map's movers and
    targets, monsters, the campaign, the help screens), as C++ on the rules runner, never QC of our
-   own; played by bots with a golden digest. Labs as `se-sequel-fight` and `se-sequel-coop`.
+   own; played by bots with a golden digest. Labs as `se-q2-fight` and `se-q2-coop`.
 10. **Its bots** (`plugins/shooter`'s pilot and routes on the game's map; the companion,
-    `bots/companion.hpp`). Lab as `se-sequel-bots`.
-11. **Its recordings and its network** (`client/demo_sequel.cpp`, `net/sequel_game.hpp`,
-    `net/sequel_client.hpp`, `net/sequel_net_server.hpp`): its demos played, converted (M18w) and
+    `shooterbots/companion.hpp`). Lab as `se-q2-bots`.
+11. **Its recordings and its network** (`client/demo_q2.cpp`, `net/q2_game.hpp`,
+    `net/q2_client.hpp`, `net/q2_net_server.hpp`): its demos played, converted (M18w) and
     sent to TV; our client joins its servers and its clients join ours, measured black-box
     against an unmodified client.
 12. **Remix** (§ Classic remix): its weapons, items, models and maps offered to the other games,
@@ -1308,13 +1367,13 @@ from specifications, not source:
 **Mods.** A mod a player loads keeps its own licence, GPL included: the VM executes its bytecode as
 data, which makes neither work a derivative of the other. The game never bundles a GPL mod.
 
-**Content.** The classic game's own data is not redistributable. The game never ships or
+**Content.** Quake's own data is not redistributable. The game never ships or
 fetches it; a player points the game at their own copy. Tests and labs run on
 free content (§ Content and test data).
 
 ## Content and test data
 
-- **Free game data**: a BSD-3-Clause replacement for the classic game's data (maps, models,
+- **Free game data**: a BSD-3-Clause replacement for Quake's data (maps, models,
   textures, sounds; named in `porting/shooters-edge/survey.md`), fetched at a pinned release into the labs' cache and
   checked by hash, never committed. Its maps and models are the labs' reference scenes.
 - **Free QC**: the labs need a multiplayer `progs` that is not GPL. Our own QC compiler
@@ -1380,7 +1439,7 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 
 The two protocols the owner chose: both.
 
-**The compatible protocol** (`games/shooters_edge/net/classic_*`) speaks the classic protocol,
+**The compatible protocol** (`games/shooters_edge/net/qw_*`) speaks the classic protocol,
 version 28, and the extensions today's servers and clients negotiate, over `engine/net`'s UDP sockets,
 simulated network and pcap capture (but not its packet format, channels or handshake, which are
 the engine's own):
@@ -1412,12 +1471,12 @@ the engine's own):
 
 **Built so far (M18g, the server half; `docs/goals/M18g.md`)**: the codec, the net channel, the
 server endpoint over `QcServer`, lag compensation for hitscan, a scripted client and a measured
-session (`classic_trial`):
+session (`qw_trial`):
 
 - **The codec.**
   - The quantization and the CRC are held bit-exact by vectors.
   - The move checksum uses the protocol's key table, kept as a wire constant for interop
-    (`classic_checksum_table.cpp`). Every move is verified by default.
+    (`qw_checksum_table.cpp`). Every move is verified by default.
   - Every svc and clc message is a table row or a hand-written form, decoded and described for
     the tests and the lab.
 - **The first tier.** The extension bits in the challenge are answered either in the connect or
@@ -1435,7 +1494,7 @@ session (`classic_trial`):
 `se-net` runs the session under every preset. `se-interop` is a stub until the dedicated
 server's classic flag and existing programs are at hand.
 
-**The sequel's protocol** (`games/shooters_edge/net/sequel_*`, protocol 34, M18v9) is spoken the
+**Quake II's protocol** (`games/shooters_edge/net/q2_*`, protocol 34, M18v9) is spoken the
 same way, beside the classic one and sharing its net channel:
 
 - **Out of band**: the challenge (one number per address), the connect with the protocol, qport,
@@ -1444,21 +1503,21 @@ same way, beside the classic one and sharing its net channel:
   stuffed `cmd configstrings`, each answer adds about 700 bytes and the next prompt, then the
   baselines the same way, then `precache`, answered with `begin`. Every prompt carries the
   level's count, and a wrong count starts the signon again.
-- **What a client reads** is the sequel's own recording format: each packet's payload is one
-  block, read by the recording's reader (`client/demo_sequel.cpp`), so a client records as it
+- **What a client reads** is Quake II's own recording format: each packet's payload is one
+  block, read by the recording's reader (`client/demo_q2.cpp`), so a client records as it
   plays and its state is the demo player's.
 - **Moves** carry the newest frame the client read whole, which the server deltas the next frame
   from, and three commands each delta coded against the one before. The move's checksum uses
-  the sequel's own key table, a wire constant MEASURED for interop
-  (`sequel_checksum_table.cpp`): a live server names the byte it expected for a move it refuses,
+  Quake II's own key table, a wire constant MEASURED for interop
+  (`q2_checksum_table.cpp`): a live server names the byte it expected for a move it refuses,
   so one minute of moves solved all 960 non-zero bytes, one candidate each.
-- **Our server** (`sequel_net_server.hpp`) serves the sequel's rules through the wire the
-  recordings use (`server/sequel_wire.hpp`): the prints, centred prints, stuffed lines and changed
+- **Our server** (`q2_net_server.hpp`) serves Quake II's rules through the wire the
+  recordings use (`server/q2_wire.hpp`): the prints, centred prints, stuffed lines and changed
   configstrings reliably, the frame and its sounds unreliably, whole when the client lost the frame
   it would delta from.
 
-`se-sequel-net` runs our client on our server (simulated) or on a live one (`--server=`).
-Measured on a live server of the sequel: our client got through the signon and played, every move
+`se-q2-net` runs our client on our server (simulated) or on a live one (`--server=`).
+Measured on a live server of Quake II: our client got through the signon and played, every move
 was taken, and it walked; that server ran about three frames a second in the container, with or
 without our client, so its frame rate there is the server's own.
 
@@ -1534,10 +1593,10 @@ every pass, and judged by captioned screenshots:
 - **Skins and colours by side** (M18i17): `teamskin` and `enemyskin` put one skin on every
   teammate or every enemy, and `teamcolor` and `enemycolor` (`off`, one colour, or shirt and pants,
   0 to 13) their colours. A teammate shares your team while `teamplay` is on; everyone else is an
-  enemy. `allskins` still wins over both. They apply to the first game's players, live and in
+  enemy. `allskins` still wins over both. They apply to Quake's players, live and in
   demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
-- **Player figures in the first game** (M18i18): a player's `model` names a folder
-  `players/<model>/` with a `tris.md2` (drawn as painted, so the second game's figures can be
+- **Player figures in Quake** (M18i18): a player's `model` names a folder
+  `players/<model>/` with a `tris.md2` (drawn as painted, so Quake II's figures can be
   copied in as they are) or a `tris.mdl` (its own skins in the player's colours). Its skin is the
   folder's picture of the player's skin name, else the folder's first. The server still animates
   the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
@@ -1551,14 +1610,14 @@ every pass, and judged by captioned screenshots:
   download, and the level is drawn again once it lands. `noskins 1` fetches nothing. The server
   serves those files out of its own game folder when downloads are on, read when first asked and
   kept (`ServerConfig::read_file`), and answers `listskins` (the console's `serverskins`) with the
-  skins and figures it offers (`net/classic_looks.hpp`).
+  skins and figures it offers (`net/qw_looks.hpp`).
 - **A map's extras from the server** (M18i20): after the looks, the same client asks for the
   map's coloured light (`lits/<map>.lit`) only while `r_loadlit` is 1 and it has no `.lit` of the
   map, and its place names (`locs/<map>.loc`) only while `tp_loadlocs` is 1 and it has none. Both
   are kept in the game folder; the light shows when the level is drawn again, and the place names
   are read again. A server offers them with its maps (`allow_maps`), a light asked for in `lits/`
   from beside the map too. `r_loadlit 0` draws every map in its own grey light.
-- **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
+- **Player figures in Quake II** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each
   folder with a figure is read with the map's models (at most 8, while the atlas holds them); a
@@ -1642,7 +1701,11 @@ every pass, and judged by captioned screenshots:
   (`client/world_extras.hpp`) the modern look also draws the water, the lava and the slime as
   real liquids, the torches' burning gas and the weather through the open sky, and the map's
   textures come from classic-enhance's cache when the pack was enhanced, each behind its `ce_`
-  switch; `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
+  switch. A mission pack is enhanced laid over its base game (`ge tool classicenhance -- run
+  <install>/hipnotic` finds `id1` beside it): its cache is keyed by the base game's packs then the
+  pack's, the key the window reads with the pack mounted (`content_cache`), falling back to the
+  base game's own cache until the pack's is made (M63b);
+  `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
   both looks, for private pictures only. The `se-world` lab pictures every named view in both. The player sets the picture with
   cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
   effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and
@@ -1662,7 +1725,7 @@ improves them.
 
 **The server (M18f).** One host (`games/shooters_edge/server/host`) runs a server on the
 classic loop: its slots are empty, a remote client's (its packets handed to the frame in arrival
-order) or a bot's, filled by a command source (`plugins/shooter/cmd_source.hpp`) that reads the
+order) or a bot's, filled by a command source (`plugins/shooterbots/cmd_source.hpp`) that reads the
 server and returns a usercmd; the host puts it on the protocol's grid and packs it into a packet
 like a client's, so a bot's commands run exactly as a person's. Every frame is logged (the slot
 events, the packets, the hash after it), and the log replays the run to the bit with no bot at
@@ -1670,7 +1733,7 @@ all, naming the first frame that leaves it. The host on the engine's server core
 (`server/dedicated.hpp`), its slots filled by a seeded stand-in that wanders the arena and fires
 at whoever is ahead, is what the `se-server` lab runs and replays. The headless
 `sesv` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
-over the PLAYABLE server (`net/classic_game.hpp`): the baseline mod's deathmatch served over the
+over the PLAYABLE server (`net/qw_game.hpp`): the baseline mod's deathmatch served over the
 classic protocol on the game's port, so a classic client connects and plays; it reads
 `server.cfg` in layers and its flags (the mod's rules among them: `+set fraglimit 20`, or a line
 in `server.cfg`; a map from the game folder under `--root`, loose or in a pack; at a match's end
@@ -1719,7 +1782,7 @@ the glyph sheet's two sets, the countdown in the big figures, as the ESC menu is
 keeps the modern look.
 
 **Hosting from the window (M53a).** The window's match is the dedicated server's game run in the
-window's process (`client/listen.hpp`, `net/classic_game.hpp`): the same server core, the same
+window's process (`client/listen.hpp`, `net/qw_game.hpp`): the same server core, the same
 lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <name>`, others join
 it over UDP with a classic client (`connect <address>:<port>`) as they would `sesv`;
 `sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
@@ -1737,12 +1800,12 @@ changes and goes when the player leaves; the player still turns it on with `cl_s
 the window these are console commands for the match it hosts (`sv <line>` too); on a dedicated
 server set `rcon_password` and send `rcon <password> <line>` from a joined window (`rcon secret
 speedjump 3 on`) or any classic client. Without a password the remote console is refused. The
-words and the remote console are `net/classic_admin.hpp`.
+words and the remote console are `net/qw_admin.hpp`.
 
 **The rocket jump helpers (M18e).** `+rjump` does a rocket jump for the player: one press asks
 the server, and on the first command the rocket launcher can fire the server fires a real rocket
 80 degrees down at his own yaw as he jumps (the launcher chosen for it; a press inside the refire,
-or while the sequel raises the launcher, waits up to a second with his jump held back). `+rrjump`
+or while Quake II raises the launcher, waits up to a second with his jump held back). `+rrjump`
 is the reverse rocket jump: the shot turned half round at his own pitch (look down to throw
 yourself forward). Nothing is added: the rocket, its ammo, the blast's damage and push are a
 hand-made rocket jump's, and his screen never turns. An aid for a player whose hands cannot turn,
@@ -1797,16 +1860,16 @@ menu's first row, so ENTER on a fresh start goes straight to it (`menu_games`;
 name (`menu/art/<id>.png`, embedded; the names are pictures, never words in the tree), the
 install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line a game) and that
 install's edition, read from its packs the moment it is picked (the profile's `full_game` file
-found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
+found or not: Shareware or Registered, Quake II's Demo or Full game). ENTER on a game with a
 kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
 and the folder is taken by whichever game's base folder it holds (`install_of`). Picked, a game starts as the
 classic games start (`client/game_start.hpp`): the menu goes, the console covers the screen with the
 packs added, and once the game's first recording plays (or its first map has loaded) the console
-slides up at `scr_conspeed`, the game's own name and unit for the speed (the classic game's lines a
-second of its 200-line screen, 300 by default; the sequel's screens a second, 3), turned into the
+slides up at `scr_conspeed`, the game's own name and unit for the speed (Quake's lines a
+second of its 200-line screen, 300 by default; Quake II's screens a second, 3), turned into the
 console's `con_speed`. Once a classic
 game is open, the title's night gives way to its own recordings played in turn, with no play bar,
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for Quake and q2demo1 from Quake II's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
 recording, and closes it again, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
@@ -1819,7 +1882,7 @@ the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JO
 played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
 whose recordings cannot play yet).
 
-The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` reads its
+Quake II's menu is drawn in its own pictures too (`client/q2_adapter.cpp` reads its
 `pics/*.pcx`; `ClassicArt::plates`, `menu/classic_view.hpp`). They are drawn on a 320 x 240
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
@@ -1828,7 +1891,7 @@ their own, so each is built from the other plates' letters cut out as see-throug
 missing ones pieced from them, laid on a tag of the banners' dirty metal as wide as the word
 (`menu/plate_letters.hpp`, held to the plates' print). SELECT GAME's title and the two games'
 names on it are built the same way. The lobby and the scoreboard stay
-modern in the sequel until their pictures are read.
+modern in Quake II until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
@@ -1845,18 +1908,18 @@ recorded for `ge why`, and its play is measured against people's input logs with
 so a change to a bot is shown before and after: frags, deaths, items held and humanness.
 
 **Bots as a team (M18r7).** With `teamplay 1` the bots of one team share a plan
-(`games/shooters_edge/bots/team.hpp`), redone every half second, built on how a team game is
+(`plugins/shooterbots/team.hpp`), redone every half second, built on how a team game is
 won: equipment and survival before frags, the best armour's area held, the quad timed and taken
 before the other team, the quad carried to where the enemy was last called out, items left to
 the teammate who needs them, backpacks taken to stack ammunition, and no shot fired across a
 teammate. Each player's part is a role (hold, rush, carry or free), and the rest of his choices
-stay his own fighter's. `run_team_match` (`net/classic_team.hpp`) plays eight of them as clients
+stay his own fighter's. `run_team_match` (`net/qw_team.hpp`) plays eight of them as clients
 of our server and records the match as a multiview demo; the `se-team` lab runs it and writes
 the demo with `--save`, which the game plays with `-playdemo` and turns into a video with
 `-demovideo`.
 
 **What a bot knows, and what a team says (M18r8).** A bot knows the map by its skill
-(`bots/knowledge.hpp`): the expert knows every item and times the key ones he sees taken, the
+(`shooterbots/knowledge.hpp`): the expert knows every item and times the key ones he sees taken, the
 average player knows every item but times only the small ones, and the novice learns the map by
 sight over the match. A team talks over `say_team` ("quad in 10, get quad!", "have quad!",
 "enemy at RA", "need help", "took RA"); the server sends a team's words to its own players and
@@ -1864,7 +1927,7 @@ the multiview recording keeps them, so a demo shows the team talk in each player
 
 **A mind of his own, team messages and place names (M18r9).** No two bots share anything: each
 reads the team lines his own client is sent, a person's as well as a bot's, and plans his own role
-from what he saw and read (`bots/mind.hpp`). The words are a team game's usual message keys
+from what he saw and read (`shooterbots/mind.hpp`). The words are a team game's usual message keys
 (`bots/talk.hpp`): a status report (`ra:150 h:100 rl [quad]`), `took ra`, `safe [ra]`, `lost
 [ra]`, `help [mh]`, `coming quad`, a point (`rl at [rl]`: "you take it"), `enemy at [quad-low]`,
 `have quad`, `get quad`, `quad over` and timers (`quad in 20`, `ra in 10`), read back in whatever
@@ -1880,7 +1943,7 @@ he is full on), and the best armour, the launcher and the lightning gun to a tea
 quad, pointing at it with his status; the quad's carrier sweeps the key areas.
 
 **Ears, a map of the team, and an area kept (M18r10).** A bot hears what his client is sent, by
-his skill (`plugins/shooter/hearing.hpp`, the game's samples in `bots/ears.hpp`): an expert takes in
+his skill (`plugins/shooterbots/hearing.hpp`, the game's samples in `shooterbots/ears.hpp`): an expert takes in
 every sound, knows every sample and judges the distance to a tenth; an average player takes in a
 close or unique sound (a pickup, a power, a spawn) most of the time and a far shot seldom; a novice
 hears only what is close and never what a sample means. A pickup heard is put on the item of that
@@ -1893,16 +1956,16 @@ seconds; knowing where all of them are, he knows where they are not, and a key a
 is in is likely lost, to be taken back by a strong free player (an average player goes by a
 teammate's `lost` line). An expert holding an area whose item is away and not due for a while,
 with 20 or more rockets, steps out to fire at the teleporters' exits and the powers' spawns near it
-(`bots/spam.hpp`). Each map's key items are rated by how scarce they are, by an expert only (a lone
+(`shooterbots/spam.hpp`). Each map's key items are rated by how scarce they are, by an expert only (a lone
 200 armour, the 150 where there is no 200, the grenades where there is no launcher). A map's
-buttons (`bots/buttons.hpp`) come off its own entities: a `func_button` with health over 0 is shot,
+buttons (`shooterbots/buttons.hpp`) come off its own entities: a `func_button` with health over 0 is shot,
 the rest touched, and the items within reach of the doors it opens are gone for through it by an
 average or expert player; a novice now and then shoots at, or walks into, any button he sees.
 
-**Temperaments (M18r11).** Beside his skill, a bot has a temperament (`plugins/shooter/temper.hpp`)
+**Temperaments (M18r11).** Beside his skill, a bot has a temperament (`plugins/shooterbots/temper.hpp`)
 that decides which fights he takes, sizing each up as might against might: his body (health and
 what his armour saves) times his arms (the weapon's factor, three for the quad), against what he
-believes of the enemy's (`bots/temper.hpp`). That belief is built from what he hears: the weapon an
+believes of the enemy's (`shooterbots/foe_ledger.hpp`). That belief is built from what he hears: the weapon an
 enemy fires, the armour, the mega health, a weapon or the quad he takes, his pain and his death;
 it fades back to a fresh spawn's in 30 seconds, and a novice reads none of it. An AGGRESSIVE bot
 takes every fight, goes after every sound as a novice (after arming himself as a better player),
@@ -1914,7 +1977,7 @@ goes after a sound and turns at 70. A bot outmatched by an enemy he sees turns f
 reach away from that enemy, or for his nearest teammate. An enemy in sight within 192 units is fought whatever the
 odds: turning away only shows him a back. The labs take `--tempers` (`a`, `b`, `c`).
 
-**Personalities (M18r11b).** A bot is a set of traits (`plugins/shooter/traits.hpp`), each from 1
+**Personalities (M18r11b).** A bot is a set of traits (`plugins/shooterbots/traits.hpp`), each from 1
 to 10: its aim with each kind of weapon (the scattergun, the spikers, the grenades, the rockets, the
 arc), its reaction, its timing of items, its knowledge of the map, camping, discipline, moves,
 hearing, communication, teamplay, aggression and the dodge. Novice, average, expert and perfect are presets
@@ -1930,7 +1993,7 @@ reaction are read smoothly, the hands taken up anew with each kind of weapon. Th
 `--traits` (each player's changes over his preset, `aim_rl=9/timing=3`) and print every bot's
 traits.
 
-**Reactions (M18r11c).** A reaction is drawn for each sighting (`plugins/shooter/aim.hpp`
+**Reactions (M18r11c).** A reaction is drawn for each sighting (`plugins/shooterbots/aim.hpp`
 `draw_reaction`): another enemy taken up, or the same one back after 0.3 s out of sight. Half of
 the draws lie evenly between the low and the median, the rest thin out to the high, since people's
 reaction times are skewed to the slow side: a reaction trait of 8 draws 140 to 220 ms round 160, a
@@ -1946,17 +2009,17 @@ reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) a
 it steps across the line to him, left and right, turning back at drawn times (an expert's dodge
 trait 8 every 0.2 to 0.6 s, seldom running straight; a 2 every 0.45 to 1.35 s, half the key, half
 the time straight at him), and never to a side the player's box would leave the floor, meet a wall
-or stand in a liquid on (`plugins/shooter/dodge.hpp`). Not on a jump the route proved, a lift, at a
+or stand in a liquid on (`plugins/shooterbots/dodge.hpp`). Not on a jump the route proved, a lift, at a
 door or in the water. Every bot's hit rate fell from 30 % to 27 % on e1m2 with it. Standing (on an
 item, waiting for one), or holding its area, a bot with nobody in sight watches the ways in
-(`bots/watch.hpp`): for each of the area's entries in the map plan, the first node of the way in it
+(`shooterbots/watch.hpp`): for each of the area's entries in the map plan, the first node of the way in it
 sees, one after another for 1.5 to 4 s, the one nearest a sound first; the view goes there on the
 aim's hands (`Bot::look`), so a man coming in is pre-aimed at. `se-team` prints the share of the
 fight spent dodging, the dodge's turns a minute, the share of the match spent watching and each
 weapon's share of the match.
 
 **Hit rates (M18r11d).** A team game counts every player's shots and hits by weapon
-(`games/shooters_edge/net/classic_hits.hpp`), the way a match's statistics do, and `se-team`
+(`games/shooters_edge/net/qw_hits.hpp`), the way a match's statistics do, and `se-team`
 prints them per player and per skill (`team.hits.<skill>.<weapon>`). A shot is ammunition spent on
 the weapon held (the scatterguns count pellets, 6 and 14 a shot; the arc counts cells; nothing in
 a frame its player is dead in or comes back from, when the mod empties his ammunition); a hit is
@@ -1983,14 +2046,14 @@ every match leaves data that is read here, learnt from, and played again. The se
 existing one, built beside the checkout and never in the tree; the bots are ours.
 
 - **One process, one team.** `sebots --server=<host:port>` runs a whole team: each
-  bot is its own classic client (`net/classic_client.hpp`) on its own UDP socket, one move a tick
+  bot is its own classic client (`net/qw_client.hpp`) on its own UDP socket, one move a tick
   at the server's rate, paced by the wall clock as the window's remote client is. The map is
   loaded from the player's own packs by the name serverdata carries, and its nav built as
   `run_team_match` builds it. Two processes can play the two teams of a bots-only match; each
   knows nothing of the other but what its clients are sent.
 - **A bot knows only its own client.** On our server a fighter reads the server's world; on
   someone else's there is none. So the fighter's world is rebuilt from what its client was sent
-  (`net/classic_mirror.hpp`): its own player and stats, the other players' places and dead flags,
+  (`net/qw_mirror.hpp`): its own player and stats, the other players' places and dead flags,
   the entities of the newest frame, the frame's sounds, the frags and the prints. Nothing else
   reaches it, and a fact a client is never sent (another player's health) has no field to read.
   Where the server culls by the map's visibility, an item that stops being sent counts as taken
@@ -2001,7 +2064,7 @@ existing one, built beside the checkout and never in the tree; the bots are ours
   read off its prints, and a map change is followed by the reconnect and a new nav.
 - **The bot client in the window.** `shooters_edge --bots=4 --server=<host:port> --team=<name>`
   runs the same team in the game's window, which draws the team's world as its bots believe it
-  (`net/classic_team_view.hpp`): the map from above, each bot's route, goal and the enemies it
+  (`net/qw_team_view.hpp`): the map from above, each bot's route, goal and the enemies it
   believes in, the item timers, the enemies the four clients were sent together (which no single
   bot knows), each bot's plan and the team's lines. The console drives the bots: a line no command
   names goes to every bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`); the
@@ -2107,9 +2170,9 @@ wiring), so it works in the window's own match and on any server joined.
 | `cl_weapongroups` | 0 | 1: a number key whose group is set picks from it |
 | `cl_weapongroup1` .. `cl_weapongroup9` | empty | the key's weapons, best first, by weapon key; empty: the game's own group; `0`: no group (the key picks its own weapon) |
 
-The classic game's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
+Quake's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
 beam gun), 3 `3 2` (the shotguns), 4 `5 4` (the nailguns), 5 `1` (the melee weapon); keys 6 to 8
-have none, so they still pick their own weapon. The sequel's, by its own keys, are 1 `8 7 6` (the
+have none, so they still pick their own weapon. Quake II's, by its own keys, are 1 `8 7 6` (the
 explosives), 2 `10` (the railgun), 3 `3 2` (the shotguns), 4 `9 5 4` (the rapid-fire guns), 5 `1`
 (the blaster) and 6 `11` (the BFG). A key asks for the best weapon of its group carried with a
 shot's ammunition; pressed again within 2 s it asks for the next, round to the first. The number
@@ -2137,7 +2200,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
 | `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms; `--exit=1`: the player stood in the map's exit, the level's end read as the window reads it, the attack held on to the next map; `--fire=1`: the attack held on the walk; the client data on the walk charted: the ideal pitch, the punch, the health and every blow; the effects on the walk counted by kind, and anything left unread; `--save=<s>`: the game saved after the walk, loaded into a second campaign and both walked on that long with the same commands, their digests compared every frame and charted as `save-continue`; then the classic text save written, read into a third campaign and written again (the same text?), and that game walked on beside the original: its faults, the players' distance, the entities live; on the stub always: a save after the restart run on 200 frames) (built, M18s1 to M18s5) |
-| `se-coop-episode` | drive | A co-op episode played through on the player's own pack (`--game`; without it the coop hall with an exit): a leader bot finding each map's way out (`bots/way_through.hpp`) and companions beside him, map after map; a row a map (out or not and how long, the monsters and who killed them, the deaths, the companions' share of the time near him, what his plan went for), each map from above with everyone's track, the exits and the kills, the leader's changes of plan (`--plan=1`) and a digest of every frame (`--first`, `--maps`, `--map-seconds`, `--skills`, `--leader`, `--seed`) (built, M18s6a) |
+| `se-coop-episode` | drive | A co-op episode played through on the player's own pack (`--game`; without it the coop hall with an exit): a leader bot finding each map's way out (`shooterbots/way_through.hpp`) and companions beside him, map after map; a row a map (out or not and how long, the monsters and who killed them, the deaths, the companions' share of the time near him, what his plan went for), each map from above with everyone's track, the exits and the kills, the leader's changes of plan (`--plan=1`) and a digest of every frame (`--first`, `--maps`, `--map-seconds`, `--skills`, `--leader`, `--seed`) (built, M18s6a) |
 | `se-coop` | scenario | Co-op companions beside a scripted leader on the coop hall (our campaign in coop: the arena with a button, coop starts and monsters): the trails, the monsters and where each fell from above, each companion's distance from the leader against time (his waits shaded, the button, the door and the kills marked), a ribbon of each one's mode and idle act against the leader's legs, and how near it kept, its kills, its held shots and its idle acts tabled (`--skills`, `--traits`) (built, M18s6a) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |

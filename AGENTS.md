@@ -48,7 +48,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
 | [`docs/saves.md`](docs/saves.md) | Saves: a save is the state, never the inputs; the file and its chunks, the state described once, the run saved and loaded, slots and the store, pictures, characters carried to another world, cloud saves, the content cache (M25) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
-| [`docs/porting-games.md`](docs/porting-games.md) | Porting a classic game into Shooter's Edge: which layer each piece and each console setting belongs to (engine, shooter plugin, classic enhance, the game's module, the shell), how far to generalize, remix, and the lessons from the sequel |
+| [`docs/porting-games.md`](docs/porting-games.md) | Porting a classic game into Shooter's Edge: which layer each piece and each console setting belongs to (engine, shooter plugin, classic enhance, the game's module, the shell), how far to generalize, remix, and the lessons from Quake II |
 | [`docs/porting-sprite-games.md`](docs/porting-sprite-games.md) | Porting a sector-based sprite shooter (M61): the files, the map converted to 3D and played by both moves, sprite figures and weapons, classic enhance on them, the homes and the risks |
 | [`docs/porting/`](docs/porting/README.md) | Porting a classic game system by system (content, maps, picture, models, held weapons, sound, movement, network, server, rules and mods, client, settings, demos, bots, online services, small features): what is shared and where, what each game owns, the hook points, the ledger of benefits taken and drawbacks left, the gaps |
 | [`docs/detail.md`](docs/detail.md) | Brush detail (M42): bevels on exposed brush edges and which edges stay sharp, decals clipped to surfaces that age in a pool, seeded props by rules, the labs |
@@ -253,7 +253,9 @@ make ge ARGS="new ../snow-racer"  # the ge command line (ge help): scaffold a ga
 make ge ARGS="asset build skier"  # a model rebuilt in headless Blender off the game's data (GE_BLENDER: a blender, or a python with bpy)
 make golden       # regenerate the golden tables (working area: porting/porting.mk, porting/README.md)
 make golden-libm  # the golden tables that reach a transcendental (same place)
+make ledger       # every porting ledger's counts from its rows (ARGS=--missing: the missing count); no ledger keeps a total by hand
 make libm-check   # no <cmath> transcendental in simulation code
+make manual       # the player's reference manual: build/manual/user-manual.html from every program's own registrations
 make release-check # the changeset fragments valid + tools/release.py's tests; prints the next version
 make shaders-check # every embedded WGSL shader compiled by Tint offline (needs GE_GPU)
 ```
@@ -323,6 +325,7 @@ characters.
 | `*/assets/<name>/` | Built models (`ge asset`): the manifest, the Blender builder, the committed .glb and its data | `assets` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
 | `games/*/mods/` | A game's sample mods for its mod seam (`docs/mods.md`), each built as a package by `ge_add_mod` into `build/<preset>/mods/` | `mod` |
+| `window-recipes` | Driving a game's window with no one at the keyboard: a recipe cfg (`sleep`, `menu_press`, `menu_select`, `menu_list`, screenshots, `condump`), the runner, checking menus against live or local servers |
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
 | `engine/tv/` | TV (`ge::tv`, `docs/tv.md`): a match's replay file stream from a source, held by a delay in game time, fanned out to viewers and relays; chat up, the tree's count; over engine/net; the trial | `replay`, `net` |
@@ -374,7 +377,8 @@ characters.
 | `plugins/morph/` | Classic vertex-animated models and sprites (`ge::morph`): skins, the seam split, every frame a morph target, refused when damaged; fixture writers; smooth normals and optional rounding | `morph` |
 | `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |
 | `plugins/shooter/` | The first-person shooter's simulation (`ge::shooter`): the classic player move in floats, clip hulls and their trace, hulls from brushes, the recorded scenarios | `shooter` |
-| `plugins/classic/` | Playing the classic games on the shooter kit (`ge::classic`): content layer, protocol family, place names, item and role tables, the sequel's move and view, the classic look | `shooter`, `vfs`, `net` |
+| `plugins/shooterbots/` | The shooter's bots (`ge::shooterbots`): the pilot and nav, senses, aim, dodge, the fighter and its mind, what it knows, the map's plan and nav, team talk, a game's arsenal and maps' book | `shooterbots`, `bots` |
+| `plugins/classic/` | Playing the classic games on the shooter kit (`ge::classic`): content layer, protocol family, place names, item and role tables, Quake II's move and view, the classic look | `shooter`, `vfs`, `net` |
 | `plugins/progs/` | The QC VM and compiler (`ge::progs`): the progs loader and checker, the interpreter, strings, builtins and extensions, the profiler, the assembler, the QC compiler, the `qc` tool, the compiled-module VM | `progs` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
@@ -471,6 +475,8 @@ and the directories agree.
 | `determinism` | Anything in `engine/core`, any floating-point or RNG question, a golden failure |
 | `port` | Carrying a module over from its reference source (the working area's skill: `porting/`) |
 | `clean-room` | Any answer that needs source this tree may not copy (GPL or other third-party code): porting a behaviour, verifying ours against it; a reader subagent writes the facts, you never read the source |
+| `port-from-ledger` | Building any piece of a classic game from its checklist ledger; writing the ledger first for a game that has none |
+| `gap-analysis` | The occasional audit of a ported game's ledger against its reference: rows re-checked, rows added, the missing count before and after |
 | `testing` | Writing a test, a golden table or a golden generator |
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
 | `release` | A changeset fragment, `cmake/Packaging.cmake`, a public target, cutting or dry-running a release |
@@ -489,6 +495,7 @@ and the directories agree.
 | `rooms` | `plugins/rooms`: the engine's own level format (rooms, openings, solids, materials with a texture reference and a relief), its bytes (.gelv) and text form, growing rooms from their seeds (rock, crag, stones, ashlar, tiles, planks, corrugated, dents; caves by surface nets), the `rooms` lab |
 | `progs` | `plugins/progs`: the QC VM (`call_function`, every opcode on 32-bit floats, the call convention and its guards, faults with QC stack traces, the profile), the progs loader and checker, the classic engine-side layout, strings, the builtin table and the extension registry, the assembler and the sample program, the QC compiler (`compile_qc`, `ge qc build`), `ge qc` and the `qc` lab; the standard builtins, the entity text and the mod server (`games/shooters_edge/server`: the catalogue, the hooks, a progs from a path, the `se-mod` lab); the baseline mod and the campaign in C++ (`games/shooters_edge/rules`, the `se-baseline` lab); the M18c, M18d and M18p rows |
 | `shooter` | `plugins/shooter`: the classic player move in 32-bit floats (`player_move`, `run_command`, every move type and server setting), clip hulls and the line trace, hulls from brushes, the move's solids, the recorded scenarios and the `pmove` lab; the M18o rows |
+| `shooterbots` | `plugins/shooterbots`: the bots any shooter links (the pilot, the nav, senses, aim, dodge, temper and traits, features, team talk, the command source, recipes read off people); the `bots` skill beside it |
 | `classic` | `plugins/classic`: what only an imported classic game needs on the shooter kit: the content layer (search path, load orders, open calls) and the classic protocol family (channel, info strings, wire) |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |

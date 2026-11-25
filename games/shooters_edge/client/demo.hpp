@@ -24,11 +24,11 @@
 //   recorder's own `playerinfo` form (demo_multiview.cpp). A frame ends where the next record's
 //   milliseconds are not 0. The view rides one player (`Demo::track`, the lowest one playing by
 //   default): his origin and his view's angles, his stats, the messages sent to him alone.
-// - SEQUEL (the sequel's client recording, `.dm2`): blocks of an i32 length and one server
+// - QUAKE II (Quake II's client recording, `.dm2`): blocks of an i32 length and one server
 //   packet's messages, ended by -1; a block with a `frame` is one of the game's 10 Hz frames,
-//   deltas off a ring of 16 (demo_sequel.cpp).
-// - SEQUEL MULTIVIEW (the sequel's server recording of every player, `.mvd2`, the magic `MVD2`):
-//   opened as the view of one player written as the sequel's recording (demo_mvd2.hpp), which is
+//   deltas off a ring of 16 (demo_q2.cpp).
+// - QUAKE II MULTIVIEW (Quake II's server recording of every player, `.mvd2`, the magic `MVD2`):
+//   opened as the view of one player written as Quake II's recording (demo_mvd2.hpp), which is
 //   what plays; `Demo::multiview_source` keeps the recording so `mvd2_follow` can follow another.
 //
 // THE AXES are the map's: units, z up, angles in degrees with the pitch down positive and the
@@ -46,7 +46,7 @@
 // it cannot read: an 8-byte header (`kVoiceMagic` "GEVR", the version 1, the base format 1 client
 // or 2 multiview, the codec `kVoiceOpus`), then the base format's records unchanged with the voice
 // messages among their messages. Without the header and the voice messages it is a plain
-// recording (net/classic_record.hpp writes either). `DemoState::voice_format` says which was read.
+// recording (net/qw_record.hpp writes either). `DemoState::voice_format` says which was read.
 //
 // ge:summary Recorded games read frame by frame: the single-player demo and the client recording
 // ge:keywords demo recording dem playback timedemo benchmark single-player multiplayer client
@@ -54,7 +54,7 @@
 // ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track dzip
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
 // ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
-// ge:keywords print centerprint obituary chat demo-print sequel dm2 sequel-demo configstring mvd2
+// ge:keywords print centerprint obituary chat demo-print q2 dm2 q2-demo configstring mvd2
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -64,11 +64,14 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "classic/locs.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
+#include "classic/weapon_predict.hpp"
+#include "server/sheet.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/unpack.hpp"
@@ -77,7 +80,7 @@ namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
 
-enum class DemoFormat : uint8_t { single, client, multiview, sequel, sequel_multiview };
+enum class DemoFormat : uint8_t { single, client, multiview, q2, q2_multiview };
 
 // The voice formats' header (see above).
 inline constexpr uint8_t kVoiceMagic[4] = {'G', 'E', 'V', 'R'};
@@ -114,14 +117,21 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
-  int render_fx = 0;     // the sequel's render bits (sequel_look.hpp); 0 elsewhere
+  int render_fx = 0;  // Quake II's render bits (q2_look.hpp); 0 elsewhere
+  // Quake II's other models (its second, third and fourth), drawn at its place on its frame; the
+  // second 255 on a player (model 255): the weapon he carries, his skin's high byte its place
+  // among the model list's carried names ("#...", from 1).
+  int more[3] = {0, 0, 0};
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)
   float colormod[3] = {1, 1, 1};  // its light's tint (the colour-mod bytes)
-  // The sequel's loop the entity carries: the sound list's index (0 none), and the extended
+  // Quake II's loop the entity carries: the sound list's index (0 none), and the extended
   // protocol's loop volume and attenuation bytes when sent (-1: the stock loop's).
   int loop = 0, loop_volume = -1, loop_attenuation = -1;
+  // Quake II's packed box a move collides with: its half width, depth and height over 32, in
+  // eighths of a unit's 8 (5, 5 and 6 bits); 31 a brush model; 0 not solid.
+  int solid = 0;
   bool present = false;  // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
   // Client: a player's visible weapon, an index into DemoState::vweps (0 none): his command's
@@ -139,6 +149,11 @@ struct DemoSound {
   float volume = 1;            // 0..1
   float attenuation = 1;       // the protocol's factor: 0 heard everywhere, 1 a normal sound
   sh::Vec3f origin;            // units
+  float delay = 0;             // s after the frame it starts in (a shotgun's pump after its shot)
+  bool step = false;  // a footstep: Quake II's heard by the surface under it (classic/q2_footsteps)
+  // Quake II: the player muzzle flash value it is a sound of, its silenced bit kept (-1 none), so
+  // the weapon prediction knows the server's copies of the shots it plays (net/q2_weapon.hpp).
+  int16_t flash = -1;
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
@@ -153,6 +168,17 @@ inline float byte_colormod(int b) { return static_cast<float>(b) / 32.0f; }
 // The protocol's volume byte (255 full) and attenuation byte (64 a normal sound) as factors.
 
 inline float byte_volume(int b) { return static_cast<float>(b) / 255.0f; }
+// The items taken a stuffed text tells of: its lines that are `bf` alone (the gold flash).
+inline int64_t bonus_lines(std::string_view text) {
+  int64_t n = 0;
+  for (size_t at = 0; at < text.size();) {
+    size_t end = text.find('\n', at);
+    if (end == std::string_view::npos) end = text.size();
+    if (text.substr(at, end - at) == "bf") ++n;
+    at = end + 1;
+  }
+  return n;
+}
 inline float byte_attenuation(int b) { return static_cast<float>(b) / 64.0f; }
 
 // A looping sound the level placed (spawnstaticsound).
@@ -196,7 +222,8 @@ enum class DemoEffectKind : uint8_t {
   teleport,
   blood,
   named,
-  named_trail
+  named_trail,
+  burst  // a program's burst in a colour other than blood's (`colour`, `count` specks, `way`)
 };
 // A blow the player took (the protocol's damage message, to him alone): the armour and the blood it
 // cost, and where it came from (units). What tips the classic view (demo_eyes.hpp).
@@ -206,6 +233,17 @@ struct DemoBlow {
 };
 
 inline constexpr size_t kKeptBlows = 8;
+// The light styles a level keeps (the renderer's, plugins/brush/app/draw_data.hpp's kLightStyles).
+inline constexpr size_t kDemoLightStyles = 64;
+
+// An item taken and coming back, as a live stream of our server tells it (the ge set's `item-back`,
+// svc 119): where it will lie, as what, and the demo's clock it shows at.
+struct DemoItemBack {
+  int entity = 0, model = 0, skin = 0;
+  sh::Vec3f origin;
+  float yaw = 0;
+  double at = 0;
+};
 
 struct DemoEffect {
   DemoEffectKind kind = DemoEffectKind::gunshot;
@@ -215,6 +253,12 @@ struct DemoEffect {
   sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest); a trail's
   sh::Vec3f way;      // a named effect's way
   std::string name;   // a named effect's
+  int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
+                      // first colour (`count` its run's length); a Quake II puff's run's first
+  int q2_specks = 0;  // Quake II: a hit's puff of this many specks off `way` (q2_temp_fx.hpp)
+  // Quake II: the gun's flash value a named flash is of (-1 none), and whether a monster's.
+  int flash = -1;
+  bool flash_monster = false;
 };
 
 inline constexpr double kNeverFlashed = -1e9;
@@ -224,50 +268,99 @@ inline std::array<double, 32> never_flashed() {
   return a;
 }
 
+// The troubles of a Quake II frame (`DemoState::q2_trouble`): sent whole, its base not held, its
+// base older than the frames kept, packets the server held back for the rate.
+inline constexpr uint8_t kQ2FrameNoDelta = 1, kQ2FrameBad = 2, kQ2FrameOld = 4,
+                         kQ2FrameSuppressed = 8;
+
 struct DemoState {
   DemoFormat format = DemoFormat::single;
-  bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;           // 15 single, 28 client and multiview, 34 sequel
-  std::string map;            // "e1m1" off `maps/e1m1.bsp`; "" before the first level
-  int levels = 0;             // level starts read so far (a new level: load its map)
+  bool voice_format = false;   // a `.qwdv` or `.mvdv` (the voice header)
+  int protocol = 0;            // 15 single, 28 client and multiview, 34 Quake II
+  std::string map;             // "e1m1" off `maps/e1m1.bsp`; "" before the first level
+  std::vector<uint8_t> areas;  // Quake II: the last frame's areas shown (a bit each); empty, all
+  int levels = 0;              // level starts read so far (a new level: load its map)
+  // The level's light styles as the server set them (Quake's light-style message, Quake II's
+  // settings strings from 800): letters 'a' dark .. 'm' as baked .. 'z', ten a second; "" steady.
+  std::array<std::string, kDemoLightStyles> light_styles;
   // The level's place names as the recording kept them (`//loc` lines, plugins/classic/locs.hpp);
   // empty when it kept none.
   ge::classic::Locs places;
   double time = 0;   // the demo's clock, s
   sh::Vec3f eye;     // the view's eye, units
   sh::Vec3f angles;  // the view's angles, degrees
-  sh::Vec3f kick;    // sequel: the server's kick angles on the view, degrees
+  sh::Vec3f kick;    // Quake II: the server's kick angles on the view, degrees
+  // Quake II: the server's sway on the held weapon, degrees (pitch down, yaw left, roll right side
+  // down), and its place off the hand, units along the world's axes.
+  sh::Vec3f gun_angles, gun_offset;
+  float fov = 0;    // Quake II: the field of view the server sends, degrees (0: none sent)
+  int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
+  // Quake II: the tint over the view the server sends (0..255 each: r g b a), and the damage
+  // flash where the stream keeps it apart (an extended recording's), else all 0.
+  uint8_t q2_blend[4] = {}, q2_damage[4] = {};
+  // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
+  int cdtrack = -1;
+  // Quake II's music named by text (a file under `music/`), "" when the server sends a number.
+  std::string cdname;
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
   int64_t blows_taken = 0;
-  sh::Vec3f velocity;              // client: the recording's player's, units/s (`velocity_read`)
-  bool velocity_read = false;      // client: the player's velocity came in his last player state
-  int view_entity = 1;             // single: the entity the eye rides
-  int max_clients = 1;             // single: the players, entities 1 to this
-  int player = 0;                  // the recording (client) or tracked (multiview) slot
-  float view_height = 22;          // over the origin, units
-  int weapon_frame = 0;            // single: the held weapon's frame (client data)
-  bool intermission = false;       // the level ended: the eye is the intermission's
-  int32_t stats[kStatCount] = {};  // health, ammo, items ... (DemoStat)
+  // Quake II's damage the player dealt, as the server reports it (temporary entity 128): hits
+  // counted (each with damage over 0), for the hit marker (q2_bar.hpp).
+  int64_t hits = 0;
+  // The server's kicks on the view (client, multiview: its small and big kick messages to the
+  // player): how many since the demo was opened and the last one's size (2 small, 4 big).
+  int64_t kicks_taken = 0;
+  int last_kick = 0;
+  // The items the view's player took (the server's stuffed `bf`; single: its bonus flash too),
+  // since the demo was opened: each flashes the view gold.
+  int64_t bonuses = 0;
+  // Multiview: the match server's start markers read (its stuffed `//ktx matchstart`).
+  int64_t match_starts = 0;
+  sh::Vec3f velocity;  // client: the recording's player's, units/s (`velocity_read`)
+  // Client, under weapon prediction: the player's weapon state from his last player state
+  // (`known` false when the server sent none); the client runs it forward (net/qw_weapon.hpp).
+  ge::classic::WeaponState own_weapon;
+  // Client: the shots the weapon prediction fired for the player so far, and the weapon frame the
+  // last one started on (the axe's swing); the window's hand fires on each (client/held.cpp).
+  int own_shots = 0, own_shot_frame = 0;
+  bool velocity_read = false;  // client: the player's velocity came in his last player state
+  // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
+  // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
+  uint8_t q2_trouble = 0;
+  int view_entity = 1;                      // single: the entity the eye rides
+  int max_clients = 1;                      // single: the players, entities 1 to this
+  int player = 0;                           // the recording (client) or tracked (multiview) slot
+  float view_height = 22;                   // over the origin, units
+  int weapon_frame = 0;                     // single: the held weapon's frame (client data)
+  bool intermission = false;                // the level ended: the eye is the intermission's
+  int32_t stats[kStatCount] = {};           // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   // Client: the visible weapons' list the server stuffed (`//vwep`, classic/vweps.hpp), entry 0
   // the body; emptied with each level's server data. A multiview recording names none: it is
   // drawn with the fixed list (`demo_vweps`).
   std::vector<std::string> vweps;
-  std::vector<std::string> images;  // sequel: the pictures it names (`pics/<name>.pcx`)
-  // Sequel: what its own status bar runs (client/sequel_bar.hpp): the bar's program, the item
+  std::vector<std::string> images;  // Quake II: the pictures it names (`pics/<name>.pcx`)
+  std::string sky;                  // Quake II: the sky's name (its sides `env/<sky><side>`)
+  // Quake II: what its own status bar runs (client/q2_bar.hpp): the bar's program, the item
   // names by number, the player state's 32 stats as sent, the last screen the server put up (a
   // scoreboard's or the help computer's program) and the last inventory's counts by item number.
   std::string status_bar;
   std::vector<std::string> item_names;
-  std::array<int16_t, 32> sequel_stats{};
+  std::array<int16_t, 32> q2_stats{};
   std::string layout;
   std::vector<int16_t> inventory;
-  std::array<std::string, 32> looks;    // sequel: each slot's model and skin ("male/grunt")
-  float air_accelerate = 0;             // sequel: the air acceleration the server states (0: none)
-  std::vector<DemoEntity> entities;     // by number
-  std::vector<DemoEntity> players;      // client, multiview: by slot (32)
+  std::array<std::string, 32> looks;  // Quake II: each slot's model and skin ("male/grunt")
+  std::string map_checksum;           // Quake II: the level's map checksum as stated ("" none)
+  float air_accelerate = 0;           // Quake II: the air acceleration the server states (0: none)
+  std::vector<DemoEntity> entities;   // by number
+  std::vector<DemoEntity> players;    // client, multiview: by slot (32)
+  // Client: the player's own nails, rockets and grenades the prediction threw ahead of the server
+  // (own_missiles.hpp), drawn as entities, and each one's number (kept while it flies, for its
+  // trail); empty when none fly.
+  std::vector<DemoEntity> own_missiles;
+  std::vector<int> own_missile_ids;
   std::array<int32_t, 32> frags{};      // client, multiview: each slot's frags (updatefrags)
   std::array<std::string, 32> names;    // client, multiview: each slot's name (its userinfo)
   std::array<std::string, 32> teams;    // client, multiview: each slot's team ("": none)
@@ -290,28 +383,53 @@ struct DemoState {
   std::vector<DemoVoice> voice;              // voice messages, in order
   std::vector<DemoPrint> prints;             // lines printed (a multiview: the tracked one's)
   std::vector<DemoEffect> effects;           // temporary entities, in order
-  std::string centre;       // a centre message or the finale's text (the last); empty when none
+  std::string centre;  // a centre message or the finale's text (the last); empty when none
+  // A single-player program's level end as a joiner or a recording sees it: the clock when the
+  // intermission came (-1: none this level), and the finale's text and when it came.
+  double ended_at = -1;
+  bool paused = false;  // the server paused the game (its setpause message)
+  // Quake II: the view's teleport toggle as last read (the view bit 16 in a recording of the
+  // extended protocol, else the movement flag 128): a flip since the frame before is a teleport,
+  // the view drawn at the new frame with nothing between (demo_lerp.hpp).
+  bool teleport_bit = false;
+  std::string finale;
+  double finale_at = -1;
   uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)
   int aim_bend = -1;        // a live stream's: the entity the aim help bent the player's shot onto
-  int64_t frames = 0;       // frames read
+  // A live stream's items taken and coming back (`take_item_back`), one an entity, kept a second
+  // past their time, emptied with the map.
+  std::vector<DemoItemBack> items_back;
+  int64_t frames = 0;  // frames read
 };
+
+// Whether a model index names one of the level's own brush models ("*1", "*2", ...): a door, a
+// lift, a train, never a player, a missile or an item.
+inline bool brush_model(const DemoState& st, int model) {
+  return model > 0 && static_cast<size_t>(model) < st.models.size() &&
+         st.models[static_cast<size_t>(model)].size() > 1 &&
+         st.models[static_cast<size_t>(model)][0] == '*';
+}
+
+// An item coming back told (svc 119): kept in place of what was told of the same entity; those a
+// second past their time let go.
+void take_item_back(DemoState& s, const DemoItemBack& b);
 
 // `b` taken: kept among the last `kKeptBlows`, counted.
 void take_blow(DemoState& s, const DemoBlow& b);
 
-// The sequel format's player state, as its frames carry it (whole 1/8 units, 1/4 units, angle16).
-struct SequelView {
+// Quake II format's player state, as its frames carry it (whole 1/8 units, 1/4 units, angle16).
+struct Q2View {
   int32_t frame = -1;  // the server frame it is of (-1: none kept in this slot)
   int32_t origin[3] = {}, velocity[3] = {};  // in 1/8 unit (wider than a short on 3435 on)
   int16_t delta[3] = {}, angles[3] = {};
   int8_t offset[3] = {}, kick[3] = {}, gun_offset[3] = {}, gun_angles[3] = {};
-  uint8_t blend[4] = {};
+  uint8_t blend[4] = {}, damage_blend[4] = {};  // the damage flash: an extended stream's alone
   int pm_type = 0, pm_time = 0, pm_flags = 0, gravity = 0;
   int gun_model = 0, gun_frame = 0, fov = 0, rdflags = 0;
   int16_t stats[64] = {};  // 32 before protocol 3435
 };
 
-// One message of a sequel block as the reader walked it: its id and where it lies in the block
+// One message of a Quake II block as the reader walked it: its id and where it lies in the block
 // (`at` its id byte, `end` one past its last byte). A frame's span holds its player state and
 // entities after it.
 struct DemoSpan {
@@ -325,7 +443,13 @@ struct Demo {
   std::string inner_name;                 // the recording's name inside an archive ("": none)
   bool dzip = false;                      // it came out of a Dzip archive (demo_dzip.hpp)
   bool truncated = false;                 // a packed recording cut short: plays to its last flush
-  bool replay_v2 = false;                 // it came out of a replay file version 2 (.ged)
+  // Quake II blocks of up to 32768 bytes (a joined later protocol's stream: one message longer
+  // than a block, q2_proto_in.hpp); a recording's are 1400 unless its server data says extended.
+  bool wide_blocks = false;
+  // A later protocol's server data said its landing takes no pause (its strafe-jump hack; a
+  // joined client sets it, net/q2_proto_in.hpp): what the prediction runs when no feel is told.
+  bool strafe_hack = false;
+  bool replay_v2 = false;  // it came out of a replay file version 2 (.ged)
   size_t pos = 0;
   DemoState state;
   std::vector<DemoEntity> baselines;  // by entity number
@@ -360,12 +484,12 @@ struct Demo {
   int64_t hidden = 0;   // records no client sees (the recorder's own data), skipped
   int64_t records = 0;  // records read
   int pending = 0;      // records read into the frame not yet finished
-  // The sequel format: each kept frame's player state (by frame number mod 16, `ring` beside it
+  // Quake II format: each kept frame's player state (by frame number mod 16, `ring` beside it
   // holding the entity list), the players the server takes, and the first frame read.
-  std::array<SequelView, 16> views;
+  std::array<Q2View, 16> views;
   int max_clients = 0;
   bool framed = false;
-  // The sequel format read off a live connection (net/sequel_client.hpp): the lines the server
+  // Quake II format read off a live connection (net/q2_client.hpp): the lines the server
   // stuffed (each with its newline; the reader appends, its owner takes them), the server's
   // reconnect message seen, the server data's count, and the newest frame read whole (-1: none,
   // or the last one deltaed from a frame this reader did not hold).
@@ -380,36 +504,51 @@ struct Demo {
   std::vector<DownloadPiece> download_pieces;
   std::vector<std::pair<std::string, ge::vfs::ArchiveOrigin>> download_origins;
   // Off a live connection to our server that agreed it (the game's svc 124, after a frame): each
-  // other player's state as the sequel's move holds it, the milliseconds since the server last ran
-  // his move, and that move (net/sequel_net_server.hpp); each message replaces the list and counts.
+  // other player's state as Quake II's move holds it, the milliseconds since the server last ran
+  // his move, and that move (net/q2_net_server.hpp); each message replaces the list and counts.
   struct OtherMove {
     int slot = 0, msec = 0;
-    ge::classic::SequelState state;
-    ge::classic::SequelCmd cmd;
+    ge::classic::Q2State state;
+    ge::classic::Q2Cmd cmd;
   };
   std::vector<OtherMove> other_moves;
   int64_t other_moves_read = 0;
-  // The easy jump's share our server of the sequel last told (svc 126), 0..1; -1 none told.
+  // The easy jump's share our server of Quake II last told (svc 126), 0..1; -1 none told.
   float speedjump_share = -1;
   // The tag of our server's logins' key (svc 127; "" none told).
   std::string account_tag;
-  // The feel our server of the sequel runs every move on (svc 122), when it told one; the
+  // The settings sheet our server of Quake II sends (svc 120, net/q2_votes.hpp), and whether it
+  // offered one (any part came): the server settings page asks it only then.
+  ge::server::SettingsSheet sheet;
+  bool sheet_offered = false;
+  // The feel our server of Quake II runs every move on (svc 122), when it told one; the
   // stock move's (with the server's stated air acceleration) until then.
   bool feel_told = false;
-  ge::classic::SequelFeel feel;
-  // Our server of the sequel takes this client's voice (svc 121's empty message as it entered);
-  // the voices it relays go into `DemoState::voice` as the first game's do.
+  ge::classic::Q2Feel feel;
+  // The weapons the player holds (a bit by Quake II's weapon row) and his ammunition of each kind
+  // (shells, bullets, grenades, rockets, cells, slugs from 1, then the mission packs' kinds) our
+  // server of Quake II last told (svc 118), when it told them: the weapon prediction's knowledge
+  // of a change. Kinds past `kArsenalAmmo` are read and passed over.
+  static constexpr int kArsenalAmmo = 16;
+  bool arsenal_told = false;
+  uint32_t arsenal_weapons = 0;
+  int16_t arsenal_ammo[kArsenalAmmo] = {};
+  // Our server of Quake II takes this client's voice (svc 121's empty message as it entered);
+  // the voices it relays go into `DemoState::voice` as Quake's do.
   bool voice_taken = false;
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;
-  // When set, the sequel reader lists each block's messages here (cleared at each block): what a
-  // relay that passes the blocks on reads them by (net/sequel_tv_face.hpp). The multiplayer
+  // When set, Quake II reader lists each block's messages here (cleared at each block): what a
+  // relay that passes the blocks on reads them by (net/q2_tv_face.hpp). The multiplayer
   // readers append each message they read (never cleared: the caller clears; offsets within the
   // packet or record read): what a converter passes on (demo_convert_multiview.cpp).
   std::vector<DemoSpan>* spans = nullptr;
-  // A sequel multiview recording (.mvd2): its bytes; what plays (`bytes`) is one player's view
-  // of it (`track`), written as the sequel's recording (demo_mvd2.hpp). Empty for any other.
+  // Every message the Quake II reader began, counted by its id (a frame's player state and entity
+  // list too): what a test of a joined client or a recording reads to know each kind arrived.
+  int64_t q2_read[256] = {};
+  // A Quake II multiview recording (.mvd2): its bytes; what plays (`bytes`) is one player's view
+  // of it (`track`), written as Quake II's recording (demo_mvd2.hpp). Empty for any other.
   std::vector<uint8_t> multiview_source;
 };
 
@@ -417,6 +556,9 @@ struct Demo {
 // (demo_pack.hpp: `layers`, `inner_name` and `truncated` say what was peeled), positioned at its
 // first frame. False with the reason and the next step when it is none.
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error);
+// A Quake II protocol number of the extended recordings and servers (3434 to 3436), whose extra
+// bits (custom skins, the view's teleport bit) are read.
+bool q2_extended(int protocol);
 
 enum class DemoRead : uint8_t { frame, end, error };
 
@@ -432,9 +574,9 @@ struct DemoMsg {
   size_t at = 0;
   bool bad = false;
   // When set, read_single_messages pushes each message's offset in `b` (where its id is), so a
-  // caller can cut a block at its messages (net/classic_tv_netgame.hpp).
+  // caller can cut a block at its messages (net/q1_tv_netgame.hpp).
   std::vector<uint32_t>* marks = nullptr;
-  // A sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp).
+  // A Quake II stream of protocol 3435 on: its points are int23 (demo_q2.cpp).
   bool int23 = false;
   // A single-player stream of protocol 999: its coordinate and angle encodings (demo_single.cpp).
   uint32_t single_flags = 0;
@@ -456,14 +598,21 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error);
 // The multiview format: whether `bytes` opens as one, and its next frame.
 bool is_multiview(std::span<const uint8_t> bytes);
 DemoRead next_multiview(Demo& d, std::string& error);
-// The sequel format (demo_sequel.cpp): whether `bytes` opens as one (its first block's length and
+// Quake II format (demo_q2.cpp): whether `bytes` opens as one (its first block's length and
 // the server data's protocol; the rest may still be on its way), and its next frame.
-bool is_sequel_demo(std::span<const uint8_t> bytes);
-DemoRead next_sequel(Demo& d, std::string& error);
-// `d` set up to read the sequel format from blocks appended to `d.bytes` as they come (a live
+bool is_q2_demo(std::span<const uint8_t> bytes);
+DemoRead next_q2(Demo& d, std::string& error);
+// `d` set up to read Quake II format from blocks appended to `d.bytes` as they come (a live
 // connection's payloads); open_demo does the same for a file.
-void sequel_stream_begin(Demo& d);
-inline constexpr size_t kSequelStuffedKept = 256;
+void q2_stream_begin(Demo& d);
+// The end of the one protocol 34 message at `at` in `b` (its id first), found by reading it into
+// `scratch` (a stream begun with q2_stream_begin, never shown): what Quake II's later protocols
+// copy as they are (net/q2_proto_in.hpp). False with the reason.
+bool q2_message_end(Demo& scratch, std::span<const uint8_t> b, size_t at, size_t& end,
+                    std::string& error);
+// What reading into a scratch stream left that would otherwise pile up (effects, prints, sounds).
+void q2_scratch_clear(Demo& d);
+inline constexpr size_t kQ2StuffedKept = 256;
 
 // The voice message's body (after the id byte) into `out`; false when it runs past the end.
 bool read_voice(DemoMsg& m, DemoVoice& out);
@@ -476,5 +625,9 @@ std::string map_of_model(const std::string& model);
 // The visible weapons' list `s` is drawn with: a multiview recording's the fixed one (each
 // player's weapon from his weapon stat, demo_video.cpp), else the one the server stuffed.
 std::span<const std::string> demo_vweps(const DemoState& s);
+
+// Quake II's music configstring read: "" or "0" stops (0), a number 1 to 99 is that track, a
+// name of a file is not played (the track `last` stays).
+int q2_music_track(const std::string& text, int last);
 
 }  // namespace shooters_edge::client

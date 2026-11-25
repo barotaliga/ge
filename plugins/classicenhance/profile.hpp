@@ -16,12 +16,15 @@
 //   gives the asset's name (the path without the kind's folder and extension);
 // - **the named files**: the palette, the picture wad, the map a new game starts on, and the file
 //   whose presence says the packs are the full game rather than the shareware part;
+// - **the mission packs**: the game's official add-ons, each its own folder beside the base
+//   folder, its title, and its first pack's size and SHA-256 (`MissionPack`, `find_pack`,
+//   `known_pack`);
 // - **the material words**: the words of a texture's name that say it is metal, wood or stone
 //   (`MaterialWords`, texture.hpp), the base of its enhanced roughness, each game's own since
 //   each names its textures its own way (a sky or a liquid is told by the map's marks instead).
 //
-// The rows are `kProfiles`; `classic_profile()` is the first, which every function taking a
-// profile uses when none is given, so the first game reads exactly as before the profiles. The
+// The rows are `kProfiles`; `q1_profile()` is the first, which every function taking a
+// profile uses when none is given, so Quake reads exactly as before the profiles. The
 // game-side half of a profile (its programs, movement, arsenal, menus) is the game's own
 // (`docs/shooters-edge.md` § Profiles); this is the content half every reader of the packs shares.
 // The plan for further profiles: `docs/classic-enhance.md` § Profiles.
@@ -29,7 +32,7 @@
 // ge:summary A classic game's content profile: base folder, packs, asset kinds and named files
 // ge:keywords profile content-profile game-profile layout base-dir pack asset-kind maps sounds
 // ge:keywords models sprites pictures palette wad start-map full-game registered classic-games
-// ge:keywords multiplayer-dir
+// ge:keywords multiplayer-dir mission-pack mission-packs find_pack known_pack add-on expansion
 // ge:skill classicenhance
 // ge:test tests/classicenhance_profile_test.cpp
 #pragma once
@@ -46,10 +49,20 @@
 namespace ge::classicenhance {
 
 // Files of one kind inside the packs: a path starting `dir` and ending `ext`, matched ignoring
-// letter case (the sequel's packs hold `sound/weapons/RAILGF1A.WAV` beside lower-case names).
+// letter case (Quake II's packs hold `sound/weapons/RAILGF1A.WAV` beside lower-case names).
 struct AssetKind {
   std::string_view dir;  // "maps/"
   std::string_view ext;  // ".bsp"
+};
+
+// A MISSION PACK: an official add-on to a game, played over its base folder from a folder of its
+// own beside it (`-game <folder>`), its first pack known by size and SHA-256 so a disc that keeps
+// it under another folder's name is still told apart.
+struct MissionPack {
+  std::string_view folder;  // its own folder beside the base folder, matched in any case
+  std::string_view name;    // its title, for the player
+  uint64_t size = 0;        // its first pack's bytes as the release ships it
+  std::string_view sha256;  // that pack's SHA-256, lower-case hex
 };
 
 struct Profile {
@@ -77,29 +90,48 @@ struct Profile {
   std::string_view start_map;  // the map a new game starts on, by name
   std::string_view full_game;  // present only in the full game's packs
   MaterialWords words;         // what a texture's name says it is made of
+  std::span<const MissionPack> packs = {};  // the game's mission packs
+  // The first palette index the game draws at full brightness (a texture's, a skin's): Quake's
+  // last 32 colours; 256 for a game whose texels are all lit by the light (Quake II, whose lamps
+  // are its surface lights, `brush::Texture::lamp`).
+  int fullbright_first = 256;
 };
 
-// The classic game's material words.
-inline constexpr std::string_view kClassicMetal[] = {"met",  "tech",  "comp",  "light", "plat",
-                                                     "pipe", "rivet", "steel", "iron"};
-inline constexpr std::string_view kClassicWood[] = {"wood", "plank", "crate", "box"};
-inline constexpr std::string_view kClassicStone[] = {
-    "brick", "bric", "rock", "stone", "city",  "wall", "wiz",   "floor", "ground",
-    "cop",   "slab", "tile", "rune",  "stair", "step", "cliff", "dirt"};
-// The sequel's: its bases are of metal, grating, pipes and machines, its floors, walls, roofs
+// Quake's material words.
+inline constexpr std::string_view kQ1Metal[] = {"met",  "tech",  "comp",  "light", "plat",
+                                                "pipe", "rivet", "steel", "iron"};
+inline constexpr std::string_view kQ1Wood[] = {"wood", "plank", "crate", "box"};
+inline constexpr std::string_view kQ1Stone[] = {"brick", "bric",  "rock",   "stone", "city", "wall",
+                                                "wiz",   "floor", "ground", "cop",   "slab", "tile",
+                                                "rune",  "stair", "step",   "cliff", "dirt"};
+// Quake II's: its bases are of metal, grating, pipes and machines, its floors, walls, roofs
 // and ceilings of stone and concrete ("florr" and "supprt" as its files spell them).
-inline constexpr std::string_view kSequelMetal[] = {
+inline constexpr std::string_view kQ2Metal[] = {
     "met",  "mtal", "comp", "grat",   "pip",   "lite",  "light",  "plat",    "rivet", "steel",
     "iron", "tech", "mach", "timpod", "alarm", "lever", "supprt", "support", "door"};
-inline constexpr std::string_view kSequelWood[] = {"wood", "plank"};
-inline constexpr std::string_view kSequelStone[] = {"rock",   "floor", "florr", "ceil",  "wall",
-                                                    "roof",   "sewer", "brick", "stone", "dirt",
-                                                    "ground", "cliff", "slab",  "tile",  "stair"};
+inline constexpr std::string_view kQ2Wood[] = {"wood", "plank"};
+inline constexpr std::string_view kQ2Stone[] = {"rock",   "floor", "florr", "ceil",  "wall",
+                                                "roof",   "sewer", "brick", "stone", "dirt",
+                                                "ground", "cliff", "slab",  "tile",  "stair"};
+
+// Each game's mission packs, as their releases ship them.
+inline constexpr MissionPack kQ1Packs[] = {
+    {"hipnotic", "Scourge of Armagon", 35527205,
+     "62b83569ba975015535be73407796ce0829ebcfa75a68fb29c67514649dc655f"},
+    {"rogue", "Dissolution of Eternity", 37875279,
+     "c3c40408f953e2de99f241dd85bf7854b69f1ae264b4e55a5657ef2ab12201a7"},
+};
+inline constexpr MissionPack kQ2Packs[] = {
+    {"xatrix", "The Reckoning", 93310499,
+     "a0fb86664204a208cd812798b5152515e8fe07697aaba1e0b48f78e6ef387ef0"},
+    {"rogue", "Ground Zero", 109117652,
+     "9de07d2722c7667c681319163edfd8dcd58e0640f8a4aa0c5917a9b19d8be02e"},
+};
 
 inline constexpr Profile kProfiles[] = {
     {
-        .id = "classic",
-        .what = "the classic game",
+        .id = "q1",
+        .what = "Quake",
         .base_dir = "id1",
         // The release's own folder name, matched like `id1`; spelled in two pieces so the
         // clean-slate scan (tools/agents-index.mjs) does not read it as prose naming the game.
@@ -117,14 +149,16 @@ inline constexpr Profile kProfiles[] = {
         .wad = "gfx.wad",
         .start_map = "start",
         .full_game = "gfx/pop.lmp",
-        .words = {kClassicMetal, kClassicWood, kClassicStone},
+        .words = {kQ1Metal, kQ1Wood, kQ1Stone},
+        .packs = kQ1Packs,
+        .fullbright_first = 224,
     },
     {
-        // The sequel: its maps keep their textures in wall texture files (`textures/*.wal`,
+        // Quake II: its maps keep their textures in wall texture files (`textures/*.wal`,
         // plugins/brush/wal.hpp), its models are the second triangle-model family, its pictures
         // are PCX files, and its palette is the one at the end of a PCX picture.
-        .id = "sequel",
-        .what = "the classic game's sequel",
+        .id = "q2",
+        .what = "Quake II",
         .base_dir = "baseq2",
         .multiplayer_dir = "",
         .pack_stem = "pak",
@@ -139,14 +173,21 @@ inline constexpr Profile kProfiles[] = {
         .wad = "",
         .start_map = "base1",
         .full_game = "maps/base1.bsp",
-        .words = {kSequelMetal, kSequelWood, kSequelStone},
+        .words = {kQ2Metal, kQ2Wood, kQ2Stone},
+        .packs = kQ2Packs,
     },
 };
 
 // The first row: the profile used when none is named.
-const Profile& classic_profile();
+const Profile& q1_profile();
 // The row with id `id`, or nullptr.
 const Profile* find_profile(std::string_view id);
+// `p`'s mission pack whose folder is `folder` (any case), or nullptr.
+const MissionPack* find_pack(const Profile& p, std::string_view folder);
+// The mission pack of any game whose first pack is `size` bytes with SHA-256 `sha256` (hex), and
+// its game in `*game`; nullptr when none is.
+const MissionPack* known_pack(uint64_t size, std::string_view sha256, const Profile** game);
+
 // Every row's id, comma separated, for a message naming the choices.
 std::string profile_ids();
 

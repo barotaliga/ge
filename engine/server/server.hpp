@@ -17,11 +17,13 @@
 // replays to the bit (the `server-core` lab); a dedicated server only waits between frames.
 //
 // THE SETTINGS are `ServerConfig`, every field a cvar on the server's tier (`add_server_cvars`):
-// `sv_hostname`, `sv_description`, `net_ip`, `net_port`, `sv_maxclients`, `sv_map`, `sv_bots`,
+// `sv_hostname`, `sv_description`, `net_ip`, `net_port` (and `net_ip6` with `net_enable_ipv6` 2:
+// an IPv6 socket on the same port beside the IPv4 one), `sv_maxclients`, `sv_map`, `sv_bots`,
 // `sv_lobby` (the engine's lobby, match.hpp, before every match) and its timers `sv_countdown`
 // and `sv_intermission`, `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
-// `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
+// `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_mapcmd` (a console line run after each map loads,
+// `server_map_loaded`), `sv_maxspectators`, `sv_spectatorpassword`,
 // `sv_rendezvous`, `sv_master` (the masters a server beats to, docs/hub.md), `sv_mod` (read-only:
 // the mods the server was started with), `rcon_password` (the remote console's password; empty, a
 // game offers none). The guards a game's endpoint holds its clients to: `sv_timeout` (a client
@@ -43,15 +45,18 @@
 // ge:keywords sv_vote_deny vote_settings sv_timeouts sv_timeoutlength sv_timeoutresume
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
+// ge:keywords sv_mapcmd map-command server_map_loaded
 // ge:keywords rcon_password remote-console sv_login sv_accountmaster sv_accountport
 // ge:skill net
 // ge:test tests/server_core_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "console/cvar.hpp"
@@ -63,6 +68,7 @@
 #include "net/transport.hpp"
 #include "server/login.hpp"
 #include "server/match.hpp"
+#include "server/sheet.hpp"
 #include "server/timeout.hpp"
 #include "server/vote.hpp"
 
@@ -74,11 +80,13 @@ struct Features;  // feature.hpp
 
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
-struct ServerConfig {
+struct ServerConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one, by name
   std::string hostname = "server";  // sv_hostname: the name in the browser and the lobby
   std::string description;          // sv_description: a line under the name
   std::string ip;                   // net_ip: the address to listen on (empty: every interface)
   int32_t port = 0;                 // net_port: the game's port (0: the game's default)
+  std::string ip6;                  // net_ip6: the IPv6 address to listen on (empty: every one)
+  int32_t ipv6 = 1;                 // net_enable_ipv6: 2 opens an IPv6 socket too
   int32_t maxclients = 8;           // sv_maxclients: 1..32
   std::string map;                  // sv_map (empty: the game's default)
   int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
@@ -94,10 +102,24 @@ struct ServerConfig {
   std::string coords;               // sv_coords: "latitude,longitude", for maps of servers
   std::string public_addr;          // sv_publicaddr: the "host:port" a browser should show
   std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
-  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
-  int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
-  int32_t timeouts = 1;             // sv_timeouts: each side's timeouts a map (timeout.hpp)
-  std::string spectator_password;   // sv_spectatorpassword: watching takes it
+  std::string mapcmd;               // sv_mapcmd: a console line run after each map loads
+  std::string console_prefix;       // console_prefix: before each terminal line (macros.hpp)
+  int32_t con_history = 128;        // con_history: typed lines kept and saved (terminal.hpp)
+  int32_t con_tab_mode = 1;         // con_completion_mode: how Tab lists matches (tab_list.hpp)
+  int32_t con_tab_threshold = 50;   // con_completion_threshold: matches listed before asking
+  int32_t con_logfile = 0;          // con_logfile: the console log (console_log.hpp) 0 off, 1, 2
+  int32_t con_logfile_flush = 0;    // con_logfile_flush: 0 buffered, 1 each line, 2 unbuffered
+  std::string con_logfile_name = "console";              // con_logfile_name: logs/<name>.log
+  std::string con_logfile_prefix = "[%Y-%m-%d %H:%M] ";  // con_logfile_prefix: before each line
+  int32_t fs_autoexec = 1;    // fs_autoexec: a mod switch runs the configs again
+  int32_t fatal_errors = 0;   // com_fatal_error: a game's recoverable error ends the process
+  int32_t net_log = 0;        // net_log: the packet log (net/packet_log.hpp) 0 off, 1, 2
+  int32_t net_log_flush = 0;  // net_log_flush: 0 buffered, 1 each entry, 2 unbuffered
+  std::string net_log_name = "network";  // net_log_name: logs/<name>.log
+  int32_t max_spectators = 0;            // sv_maxspectators: spectators beside the players
+  int32_t vote = 1;                // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
+  int32_t timeouts = 1;            // sv_timeouts: each side's timeouts a map (timeout.hpp)
+  std::string spectator_password;  // sv_spectatorpassword: watching takes it
   int32_t tv_port = 0;           // sv_tvport: the server's own TV's port (0: none; spectators.hpp)
   int32_t tv_max_viewers = 32;   // sv_tvmaxviewers: the TV's viewers at most (0: no cap)
   double tv_delay_s = 10;        // sv_tvdelay: what the TV's spectators see is this old, s
@@ -132,6 +154,9 @@ struct ServerConfig {
   // The settings the config made with `set` that nothing registered (a mod's own, such as a
   // match mod's switches), by name, as set: handed to a game whose rules read their own.
   std::map<std::string, std::string> created;
+  // The game's meta-cvars (ServerGame::metas: `sv_modern`) by name, as set: what they set is in
+  // `rules` and the core's own fields already.
+  std::map<std::string, std::string> metas;
 
   double seconds = 60;      // server time to run (0: until stopped); see server_configure
   double status_every = 5;  // a status line every this many seconds of server time (0: none)
@@ -144,6 +169,7 @@ struct ServerConfig {
   // A file of console lines the server runs as they are added (`--commands`; spawn.hpp writes
   // one beside each server it starts): `mod arena` switches the mods. "" none.
   std::string commands;
+  std::string manual;          // --manual: the reference manual's source written here, then quit
   std::string explain_prefix;  // only the cvars starting with this
   // A LISTEN server's content, prepared by the game's own client in its process (the program, the
   // map it already read, its player): the game's own type, read by its `create`; null for a
@@ -159,6 +185,10 @@ struct ServerConfig {
   // dedicated process once a master elsewhere's key is known; null: no offers to a master
   // elsewhere.
   const net::SignKeys* account_signer = nullptr;
+  // The server-info keys an administrator added with `sets` (or `set <key> <value> s`), as
+  // `\key\value` pairs, now: for a game that answers its own status queries. Set by the dedicated
+  // process; null: none.
+  std::function<std::string()> admin_info;
 };
 
 // What a replay found.
@@ -185,11 +215,39 @@ struct GameRule {
 // its admins and its mods use, such as a classic game's `maxclients` for `sv_maxclients`. It is a
 // synonym on the server's console (console/cvar.hpp): a server.cfg line, `+set`, rcon or a vote by
 // either name sets the one setting. `part` >= 0 names one word of a setting that holds several
-// (`sv_floodprot`'s "N S T").
+// (`sv_floodprot`'s "N S T"). `own`: the core has a setting of that name with another meaning
+// (Quake II's `sv_idlekick` is the idle drop, the core's the lobby's unready kick); the core's
+// is set aside while this game is the server's, and the name means the game's setting alone.
 struct SettingName {
   const char* name;
   const char* setting;
   int part = -1;
+  bool own = false;
+};
+
+// One level of a META-CVAR a game declares (`ServerGame::metas`; console/cvar.hpp § META-CVARS):
+// `name` at `value` sets each of `sets`' "<setting> <value>" pairs (`;` between them) that nothing
+// else set, and turning it off puts them back. Rows of one name make one meta, its help the first
+// row's. A game names its own members, so `sv_modern 1` means "a modern server" in every game and
+// each game says what that is for it (Shooter's Edge's QuakeWorld: every shot's line rewound).
+struct GameMeta {
+  const char* name;
+  const char* value;
+  const char* sets;
+  const char* help = nullptr;    // what the meta does: one sentence
+  const char* values = nullptr;  // what each value does
+};
+
+// A console word the GAME takes through `ServerGame::console` (its rules' `map`, its admin's
+// `kick`), declared so the server's console registers it: Tab completes it, `cmdlist` and the
+// reference manual list it, and running it hands the whole line to `console`. `also` is the game's
+// other spelling of the same word (a synonym; null none). A word the core has already is the
+// core's and is skipped. A word the game takes but does not declare still runs (the console's
+// unknown-word hook); it is only missing from the lists.
+struct GameWord {
+  const char* name;
+  const char* help;  // "<word> <args>: what it does", in a player's words
+  const char* also = nullptr;
 };
 
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a
@@ -197,6 +255,7 @@ struct SettingName {
 struct ServerGame {
   const char* binary = "server";  // the executable's name, at the head of every line it prints
   const char* title = "a game";   // the game's name, for the banner and `--help`
+  const char* version_text = "";  // the build's version as words, printed by `version`
   uint32_t protocol = 0;          // the LAN advert's protocol (net/packet.hpp's protocol_id)
   uint16_t default_port = 27500;
   uint16_t discovery_port = 0;    // the game's fixed LAN discovery port (0: no LAN answers)
@@ -207,6 +266,10 @@ struct ServerGame {
   int rule_count = 0;
   const SettingName* names = nullptr;  // the game's names for the core's settings, `name_count`
   int name_count = 0;
+  const GameWord* words = nullptr;  // the game's own console words (GameWord), `word_count`
+  int word_count = 0;
+  const GameMeta* metas = nullptr;  // the game's meta-cvars' levels (GameMeta), `meta_count`
+  int meta_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;
@@ -226,6 +289,24 @@ struct ServerGame {
   // `map`, `changelevel`, a mod's commands); false when the game does not take it either. May be
   // null.
   bool (*console)(void* game, const std::string& line) = nullptr;
+  // The game's farewell as `quit [reason]` or `recycle [reason]` ends the server (`reason` the
+  // words after it; `restart`: recycle's, the players told to reconnect), before `destroy`. Null:
+  // `destroy` alone says goodbye.
+  void (*quit)(void* game, const std::string& reason, bool restart) = nullptr;
+  // A RECOVERABLE ERROR the game raised since the last call (a hosted library's own error call):
+  // its text, once ("" none), read after each frame. The core prints it between two lines of
+  // stars ("ERROR: <text>") and calls `crash` with "Server crashed: <text>", the game left idle
+  // until the next map; with `com_fatal_error` it calls `crash` with "Server fatal crashed:
+  // <text>", prints the stars on the error stream ("FATAL: <text>") and the process ends with 1.
+  // Both may be null: the game raises none.
+  std::string (*drop_error)(void* game) = nullptr;
+  void (*crash)(void* game, const std::string& text) = nullptr;
+  // The maps the game can load, by name (`$com_maplist`); may be null.
+  void (*maps)(const void* game, std::vector<std::string>& out) = nullptr;
+  // The game's own listening sockets for `showip` ("Server TCP" and where it is bound), appended
+  // to `out`; may be null.
+  void (*sockets)(const void* game,
+                  std::vector<std::pair<std::string, net::Address>>& out) = nullptr;
   // The game's part of a status line (`players=8 commands=…`); may be null.
   std::string (*status)(const void* game) = nullptr;
   // The game's part of the public status record (net/status.hpp) a hub or a browser asks for: its
@@ -246,6 +327,9 @@ struct ServerGame {
   // offline. Both null: the core's own node, session and hosting round `frame`.
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
+  // The game's socket opened again (`net_restart`, perhaps on another port): the game's own
+  // listeners beside it (a TCP port at the same address) opened again too. May be null.
+  void (*reopened)(void* game, net::Transport& port) = nullptr;
 
   // A game a TV node can broadcast (engine/server/record.hpp): the last frame as the game's
   // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state
@@ -276,6 +360,12 @@ struct ServerGame {
   // says it, and the server's features act on it (`sv_autorecord` records each match). Null: the
   // game is always in its match.
   LobbyPhase (*phase)(const void* game) = nullptr;
+
+  // THE SETTINGS SHEET (sheet.hpp): what the player in `slot` may read and change of the server
+  // now (its map, mode, limits, rules and aids, each with how it changes), for a client's server
+  // settings page. The game sends it to its clients in its own protocol; a listen server's window
+  // reads it here. Null: the game shows none.
+  void (*sheet)(const void* game, int slot, SettingsSheet& out) = nullptr;
 };
 
 // A change of the match's phase, at the server's frame and clock after which it was read.
@@ -355,6 +445,10 @@ int64_t server_next_us(const Server& s);
 // The public status record as the server answers it (net/status.hpp): the core's half, then the
 // game's `fill_status`.
 net::Status server_public_status(const Server& s);
+// True once after each map loads: the map the game's status names (`server_public_status`) is not
+// `seen`, which becomes it. A dedicated server runs `sv_mapcmd` then (main.cpp); `seen` starts
+// empty, so the first map counts.
+bool server_map_loaded(const Server& s, std::string& seen);
 // `t=12.0 s frame=924 seated=8 clients=0 <the game's>`.
 std::string server_status(const Server& s);
 // What the server is: name, map, slots, address; the banner a dedicated server prints.

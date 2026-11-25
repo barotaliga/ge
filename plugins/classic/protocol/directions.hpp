@@ -1,4 +1,4 @@
-// THE DIRECTION TABLE of the sequel's protocol (and of both classic games' model formats, whose
+// THE DIRECTION TABLE of Quake II's protocol (and of both classic games' model formats, whose
 // vertex normals index the same table): 162 unit vectors, a direction sent as one byte, its index.
 //
 // The vectors are the vertices of an icosahedron (the cyclic permutations of (0, ±phi, ±1),
@@ -6,13 +6,13 @@
 // sphere: 10 × 4 × 4 + 2 = 162. They are built here, then put in the protocol's order by a
 // permutation measured against the table a stock program holds, and rounded to six decimals as it
 // holds them, its 24 components of magnitude cos 18° taken one sixth-place unit toward zero
-// (porting/shooters-edge/sequel-demo.md § 9 has the measurements).
+// (porting/shooters-edge/q2-demo.md § 9 has the measurements).
 //
 // THE PICK (`direction_index`): the entry with the largest dot product, computed in 32-bit floats,
 // a tie keeping the lower index; no positive dot product (a zero or missing direction) gives 0.
 // The direction need not be normalized. A reader refuses an index of 162 or more.
 //
-// ge:summary The sequel protocol's table of 162 directions: built, ordered, and the pick by dot
+// ge:summary Quake II protocol's table of 162 directions: built, ordered, and the pick by dot
 // ge:keywords direction-table normals anorms byte-direction write-dir read-dir spark-direction
 // ge:keywords direction_index directions icosahedron vertex-normal
 // ge:skill classic shooter net

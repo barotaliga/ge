@@ -21,21 +21,25 @@
 // ge:keywords create_world_draw draw_world resize_world palette particles dynamic-lights blend
 // ge:keywords models items flames read_world begin_world world_compiled finish_world own_sky
 // ge:keywords background-load async-load title warm_world warm-up shadow-cubes
-// ge:keywords viewmodel held-weapon light-probe
+// ge:keywords viewmodel held-weapon light-probe time_refresh timerefresh
 // ge:skill render brush shooter
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
 
+#include "console/console.hpp"
 #include "gpu/device.hpp"
+#include "render/frame.hpp"
 #include "render/morph.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/room_ear.hpp"
 
 namespace ge::audio {
 class Synth;
@@ -66,7 +70,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& device, const SearchPath& files,
                                wgpu::TextureFormat format, const look::Picture& picture,
                                std::span<const ge::viewmodel::HeldModel> weapons,
                                std::string& error, const ModelLoad& models = {},
-                               const GameAdapter& game = classic_adapter());
+                               const GameAdapter& game = qw_adapter());
 
 // The world's CPU half, read on any thread: `picture` is copied (the world is made in it), and
 // `models.names` must outlive the call.
@@ -77,7 +81,7 @@ struct WorldReadDeleter {
 using WorldReadPtr = std::unique_ptr<WorldRead, WorldReadDeleter>;
 WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const look::Picture& picture,
                         const ModelLoad& models, std::string& error,
-                        const GameAdapter& game = classic_adapter());
+                        const GameAdapter& game = qw_adapter());
 // Its GPU half on the device's thread: the uploads made and the pipelines started; drawn once
 // `finish_world` is done (`world_compiled` true, or it waits). Null with the reason in `error`.
 WorldDrawPtr begin_world(ge::gpu::Device& device, WorldReadPtr read, uint32_t width,
@@ -91,6 +95,8 @@ bool finish_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
 // The models it draws (world_models.hpp): their shapes, for where a warp's ash lands.
 const WorldModels& world_models(const WorldDraw& w);
+// Where the map's own brush models (doors, platforms) stood at the last frame drawn (engine m).
+std::span<const ge::brush::app::Mover> world_movers(const WorldDraw& w);
 // The map's light entities as it draws them (brush/app/draw_data.hpp's PointLight), each one's
 // `seen` set: for a lab to stand by a light whose source shows.
 std::span<const ge::brush::app::PointLight> world_lights(const WorldDraw& w);
@@ -100,7 +106,7 @@ std::vector<ge::render::Particle> world_particles(ge::gpu::Device& device, const
 void own_sky(WorldDraw& w, bool own);
 // The synth every world drawn gives its listener's room to (ce_acoustics; client/room_ear.hpp);
 // null (the default) hears none.
-void hear_worlds_on(ge::audio::Synth* synth);
+void hear_worlds_on(ge::audio::Synth* synth, const UnderEar* under = nullptr);
 // With `on` the level is seen from above (the live map's fly-down, engine/overview/fly.hpp): the
 // ceilings and the sky faces over the rooms left out so the floors show, every leaf drawn.
 void from_above(WorldDraw& w, bool on);
@@ -114,6 +120,15 @@ bool world_stale(const WorldDraw& w);
 void draw_world(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView view,
                 const FxFrame& fx, const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target);
+
+// `timerefresh` (render_words.hpp): the world drawn `frames` times from `view`'s eye, turning a
+// whole circle, with `fx` and no weapon or overlay; each frame shown through `acquire` and
+// `present`, or with `one_frame` all into one target shown once. The wall seconds it took (0: no
+// target came).
+double time_refresh(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView view,
+                    const FxFrame& fx, int frames, bool one_frame, int width, int height,
+                    const std::function<wgpu::TextureView()>& acquire,
+                    const std::function<void()>& present);
 
 // A WARM-UP frame of a world not shown yet, from `view` (where the player will see it from first):
 // nothing drawn but its sky's tables and at most `cubes` new shadow cubes (each the map drawn six
@@ -129,6 +144,9 @@ void world_sun(const WorldDraw& w, ge::render::FrameView view, double out[3]);
 // The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
 // has no timestamp queries.
 void record_span(const WorldDraw& w, PassTimes& p);
+// The last frame's stats (its passes, their CPU and GPU times): what gpustats reads
+// (render/gpu_watch.hpp).
+const ge::render::FrameStats& world_stats(const WorldDraw& w);
 
 // The burn entity `entity` shows this frame (client/burning.hpp; all 0 when none).
 ge::render::MorphBurn world_burn(const WorldDraw& w, int entity);

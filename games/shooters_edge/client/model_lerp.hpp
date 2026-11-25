@@ -16,7 +16,7 @@
 //   flows between its own frames too (`LerpModel::lerp`). Measured on the picture's clock (`t`), so
 //   it holds for any source.
 // - THE PLACE (`r_lerpmove`, the listen server only: a demo and a joined server are already drawn
-//   between their frames, demo_lerp.hpp and net/classic_remote.hpp): the server runs 72 or 77
+//   between their frames, demo_lerp.hpp and net/qw_remote.hpp): the server runs 72 or 77
 //   frames a second and the picture 60 or 144, so a moving thing's place falls unevenly on the
 //   pictures. Each is drawn ONE SERVER FRAME BEHIND, between the last two states the window saw
 //   (`ModelLerpClock`: the state's time and the picture's on the server's clock), its angles the
@@ -62,13 +62,17 @@ inline double frame_pace(double gap, double last) {
 
 // One frame number drawn between its changes on a clock: a model's animation, a held weapon's
 // recorded frame. `track_frame` reads the frame at `t` s and says what to draw: `from` (-1: the
-// frame alone) and the share `f` of the way to `frame`. A clock run back starts over.
+// frame alone) and the share `f` of the way to `frame`. A clock run back starts over. `fixed_s`
+// above 0 blends every change over that many seconds instead of the measured pace: a held weapon's
+// frames are a classic tenth of a second apart however unevenly the server's updates bring them
+// (a recording written 30 times a second sees them 0.067 or 0.1 s apart), so a measured pace would
+// turn its barrels at an uneven speed.
 struct FrameTrack {
   int frame = -1, from = -1;  // the frame now (-1: none seen) and the one it left (-1: none)
   double changed = -1;        // when `frame` came, s
   double span = kFrameSpan;   // what its blend takes, s
 };
-void track_frame(FrameTrack& tr, int frame, double t, int& from, float& f);
+void track_frame(FrameTrack& tr, int frame, double t, int& from, float& f, double fixed_s = 0);
 
 // The switches (r_lerpmodels, r_lerpmove): what is drawn between.
 struct ModelLerpSwitches {

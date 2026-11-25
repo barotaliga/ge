@@ -103,6 +103,7 @@ class MusicPlayer {
  public:
   // The synth bus the music plays on (the game's music fader); before the first `frame`.
   void bus(int b) { bus_ = b; }
+  int bus() const { return bus_; }
 };
 
 }  // namespace ge::audio

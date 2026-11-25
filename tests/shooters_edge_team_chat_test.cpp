@@ -10,7 +10,10 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/rulesets.hpp"
 #include "console/console.hpp"
+#include "console/ruleset.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/team_chat.hpp"
 
 namespace cl = shooters_edge::client;
@@ -69,8 +72,8 @@ TEST(percent_codes_read_the_players_state) {
   expect(fill("%w %b"), "launcher:23 sg:12");
 }
 
-// In the sequel the weapon codes name its own weapons, by its keys (hud::KeyedWeapons).
-TEST(the_weapon_codes_name_the_sequel_s_own_weapons) {
+// In Quake II the weapon codes name its own weapons, by its keys (hud::KeyedWeapons).
+TEST(the_weapon_codes_name_q2_s_own_weapons) {
   Fixture f;
   hud::Status s = rocketeer();
   s.keyed.set = true;
@@ -133,6 +136,20 @@ TEST(events_run_the_players_aliases) {
   std::string got;
   for (const std::string& l : f.con.output()) got += l + "|";
   expect(got, "new map|spawned|weapon|back|weapon|dead|");
+}
+
+TEST(an_item_the_server_says_was_taken_runs_f_bonusflash_once_a_frame) {
+  Fixture f;
+  f.con.execute("alias f_bonusflash \"echo gold\"");
+  const hud::Status s = rocketeer();
+  cl::team_frame(f.con, f.chat, s, "dm6", 0);
+  cl::team_frame(f.con, f.chat, s, "dm6", 2);  // two in one frame: run once
+  cl::team_frame(f.con, f.chat, s, "dm6", 2);  // none new
+  cl::team_frame(f.con, f.chat, s, "dm6", 3);
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got, "gold|gold|");
 }
 
 TEST(canned_messages_say_the_players_state) {
@@ -229,4 +246,155 @@ TEST(set_ex_fills_in_and_set_tp_takes_only_teamplay_settings) {
   f.con.execute("macrolist");
   CHECK(!f.con.output().empty() && f.con.output().back().ends_with(" in all"));
   CHECK(std::find(f.con.output().begin(), f.con.output().end(), "$health") != f.con.output().end());
+}
+
+// The team's $ macros (team_macros.hpp) read what the codes read, in every classic game.
+TEST(the_team_macros_name_the_players_state) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  const auto x = [&](const char* t) { return f.con.expand_text(t); };
+  expect(x("$health/$armor $armortype $shells $rockets $cells $ammo"), "34/25 y 12 23 30 23");
+  expect(x("$weapon $weaponnum [$weapons] $bestweapon:$bestammo"), "rl 7 [rl/sg/axe] rl:23");
+  expect(x("$powerups|$colored_powerups|$colored_short_powerups|$tp_powerups"), "quad|quad|q|quad");
+  f.con.execute("tp_poweruptextstyle 1");
+  expect(x("$tp_powerups $need $location $took $point"),
+         "q armor/health someplace nothing nothing");
+  expect(x("$ledstatus $ledpoint $matchstatus $team1"), "$R $B disconnected team1");
+  hud::Status s = rocketeer();
+  s.keyed.set = true;  // Quake II: its own weapons by their words
+  s.keyed.in_hand = 9;
+  s.keyed.carried = (1u << 1) | (1u << 9);
+  s.keyed.ammo[9] = 7;
+  cl::team_frame(f.con, f.chat, s, "q2dm1");
+  expect(x("$weapon $weaponnum $weapons $bestweapon $ammo"), "rg 9 rg/blaster rg 7");
+}
+
+// A server joined: the level's end and the countdown run their aliases; $team1 and $team2.
+TEST(the_match_runs_f_mapend_and_the_countdowns) {
+  Fixture f;
+  f.con.execute(
+      "alias f_mapend \"echo end\"; alias f_countdownstart \"echo count\";"
+      "alias f_countdownbreak \"echo break\"");
+  cl::DemoState s;
+  s.names[0] = "me";
+  s.names[1] = "Zed";
+  s.names[2] = "amy";
+  s.teams = {"red", "Blue", "red"};
+  s.serverinfo = {{"teamplay", "2"}, {"status", "Standby"}};
+  const hud::Status st = rocketeer();
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  s.serverinfo[1].second = "Countdown";
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  s.serverinfo[1].second = "Standby";
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  s.intermission = true;
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  f.con.clear_output();
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got, "count|break|end|");
+  expect(f.con.expand_text("$team1 $team2 $matchstatus"), "Blue red standby");
+}
+
+TEST(a_made_up_name_and_flood_protection) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.execute("cl_fakename Ace; say_team hi; say hi");
+  expect(f.sent[0], "say_team \"\rAce: hi\"");
+  expect(f.sent[1], "say \"hi\"");
+  f.con.execute("cl_floodprot 1; cl_fp_messages 3; cl_fp_persecond 10");
+  f.con.clear_output();
+  f.con.execute("say a; say b; say c");
+  CHECK_MSG(f.sent.size() == 3, "the third line in ten seconds is held back");
+  CHECK(!f.con.output().empty() && f.con.output().back() == "Flood Protection");
+}
+
+TEST(a_death_with_the_flag_runs_f_flagdeath_in_f_deaths_place) {
+  Fixture f;
+  f.con.execute(
+      "alias f_death \"echo dead\"; alias f_flagdeath \"echo flag\"; tp_forceTriggers 1;"
+      "alias f_trackspectate \"echo track\"");
+  cl::DemoState s;
+  s.format = cl::DemoFormat::client;
+  s.protocol = 28;
+  s.player = 2;
+  s.players.resize(32);
+  s.names[2] = "me";
+  hud::Status st = rocketeer();
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  s.players[2].effects = 16;  // the red flag's glow on the player
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  CHECK(cl::carries_flag(s));
+  s.players[2].effects = 0;  // dropped in the frame he died in
+  st.health = 0;
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  st.health = 100;
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  st.health = 0;  // a death with no flag
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  f.con.clear_output();
+  f.con.run();
+  f.con.execute("tp_triggers 0");
+  cl::spectate_event(f.con, "f_trackspectate");  // the camera's hooks have no gate
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got, "flag|dead|track|");
+  // Quake II's flag on the player's entity, and a Team Fortress key among the items.
+  cl::DemoState q2;
+  q2.protocol = 34;
+  q2.player = 0;
+  q2.entities.resize(4);
+  q2.entities[1].effects = 1 << 19;
+  CHECK(cl::carries_flag(q2));
+  cl::DemoState tf;
+  tf.format = cl::DemoFormat::client;
+  tf.players.resize(32);
+  tf.game = "fortress";
+  tf.stats[cl::kStatItems] = 131072;
+  CHECK(cl::carries_flag(tf));
+  tf.game = "qw";
+  CHECK(!cl::carries_flag(tf));
+}
+
+TEST(a_macro_the_player_gave_a_width_fills_its_column) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.execute("set tp_length_health 4; set tp_align_health r; set tp_length_armor 1");
+  expect(f.con.expand_text("[$health][$armor]"), "[  34][2]");
+}
+
+TEST(a_strict_ruleset_keeps_scripts_off_the_team_macros_and_quiets_the_events) {
+  Fixture f;
+  bool in_match = true;
+  ge::console::Rulesets rules(f.con, [&in_match] { return in_match; });
+  rules.set_book(ge::classic::qw_rulesets());
+  int impulses = 0;
+  f.con.add_command("impulse", "", [&impulses](Console&, const ge::console::Args&) { ++impulses; });
+  f.con.execute("alias f_death \"echo dead\"; alias f_respawn \"echo back\"; tp_forceTriggers 1");
+  hud::Status s = rocketeer();
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  f.con.execute("impulse $health; if $health < 50 then impulse 7");
+  CHECK(impulses == 2);  // default: a script may act on what the player holds
+  f.con.execute("ruleset smackdown");
+  rules.update();
+  f.con.clear_output();
+  f.con.execute("impulse $health; if $health < 50 then impulse 7; say_team $health $loc_here");
+  CHECK(impulses == 2);
+  CHECK(f.sent.size() == 1 && f.sent.back().find("34") != std::string::npos);
+  s.health = 0;  // a death in a match: f_death keeps quiet
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got,
+         "impulse cannot be used with team macros under the smackdown ruleset.|"
+         "impulse cannot be used with team macros under the smackdown ruleset.|");
+  in_match = false;  // between matches the events run again
+  s.health = 100;
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  f.con.run();
+  CHECK(f.con.output().back() == "back");
 }

@@ -53,7 +53,7 @@ void item_taken(A& q) {
 
 // Common setup: a trigger box on the floor, its model and pick-up sound.
 void item_start(A& q, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi, float respawn) {
-  q.precache_model(mdl);
+  if (!q.is(mdl, "")) q.precache_model(mdl);  // the old box of no kind has none
   q.precache_sound(snd);
   if (midair_on(q)) {  // nothing lies on the map in midair
     q.remove(q.self());
@@ -65,7 +65,7 @@ void item_start(A& q, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi, float respawn)
   q.set_f(me, q.L.f.flags, kFlItem);
   q.set_f(me, q.L.f.solid, kSolidTrigger);
   q.set_f(me, q.L.f.movetype, kMovetypeToss);
-  q.set_f(me, f_respawn_time, respawn);
+  q.set_f(me, f_respawn_time, quake_rules(q) ? quake_item_respawn(q, respawn) : respawn);
   q.setsize(me, lo, hi);
   q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, 6});
   if (q.droptofloor() == 0) {
@@ -126,6 +126,7 @@ void take_in_hand(A& q, bool (*better)(A&, int32_t pickup, float had), float had
 
 // A weapon on the map: new to him and ranked above the one he holds.
 bool weapon_better(A& q, int32_t pickup, float had) {
+  if (quake_rules(q)) return quake_takes_in_hand(q, q.f(pickup, q.L.f.weapon), false);
   const bool fresh = had == 0;
   const bool ranked =
       weapon_rank(q.f(q.self(), q.L.f.weapon)) < weapon_rank(q.f(pickup, q.L.f.weapon));
@@ -134,6 +135,9 @@ bool weapon_better(A& q, int32_t pickup, float had) {
 
 // A pack: it holds a weapon new to him, ranked below the one he holds (as the rule reads).
 bool pack_better(A& q, int32_t pickup, float had) {
+  if (quake_rules(q))
+    return (q.f(pickup, q.L.f.weapon) != 0) &&
+           quake_takes_in_hand(q, q.f(pickup, q.L.f.weapon), true);
   const bool fresh = had == 0;
   const bool has = q.f(pickup, q.L.f.weapon) != 0;
   const bool ranked =
@@ -195,14 +199,18 @@ void armour_start(A& q, float slot, float bit) {
   item_start(q, mdl, snd, {-16, -16, 0}, {16, 16, 56}, 20);
 }
 
-void ammo_start(A& q, int32_t mdl, int32_t setting) {
+// An ammunition box: `big` (spawnflags 1) holds twice as much and lies as the big box's model.
+void ammo_start(A& q, int32_t mdl, int32_t big, int32_t setting) {
   const int32_t me = q.self();
   if (q.deathmatch() == 4) {  // none lies on the map in deathmatch 4
     q.remove(me);
     return;
   }
   float n = 1;
-  if (on(band(q.f(me, q.L.f.spawnflags), 1))) n = 2;
+  if (on(band(q.f(me, q.L.f.spawnflags), 1))) {
+    n = 2;
+    mdl = big;
+  }
   q.set_f(me, q.L.f.ammo_shells, q.f(me, q.L.f.ammo_shells) * n);
   q.set_f(me, q.L.f.ammo_nails, q.f(me, q.L.f.ammo_nails) * n);
   q.set_f(me, q.L.f.ammo_rockets, q.f(me, q.L.f.ammo_rockets) * n);
@@ -431,9 +439,27 @@ void item_armorInv(A& q) { armour_start(q, 3, kItArmor3); }
 
 void ammo_touch(A& q) {
   if (!can_pick_up(q)) return;
-  if (!ammo_give_own(q)) return;
-  const int32_t n = name_of(q, q.i(q.self(), q.L.f.classname), 0);
-  if (q.is(n, "")) {
+  // Quake's: one holding the best weapon before takes up the new best after.
+  const int32_t was = q.self();
+  bool best = false;
+  if (quake_rules(q)) {
+    q.set_self(q.other());
+    best = q.f(q.self(), q.L.f.weapon) == quake_best_weapon(q);
+    q.set_self(was);
+  }
+  // The old box (item_weapon) is named by the kind it holds, and says "You got the " even with
+  // none.
+  const bool old_box = q.is(q.i(q.self(), q.L.f.classname), "item_weapon");
+  const bool empty = old_box & q.is(q.i(q.self(), q.L.f.netname), "");
+  if (!ammo_give_own(q) & !empty) return;
+  if (best) {
+    q.set_self(q.other());
+    q.set_f(q.self(), q.L.f.weapon, quake_best_weapon(q));
+    q.set_self(was);
+  }
+  const int32_t n =
+      old_box ? q.i(q.self(), q.L.f.netname) : name_of(q, q.i(q.self(), q.L.f.classname), 0);
+  if (q.is(n, "") & !old_box) {
     say_to(q, q.other(), kPrintLow, {q.s(s_you_got_ammunition)});
   } else {
     say_to(q, q.other(), kPrintLow, {q.s(s_you_got_the), n, q.s(s_nl)});
@@ -447,19 +473,51 @@ void ammo_touch(A& q) {
 
 void item_shells(A& q) {
   q.set_f(q.self(), q.L.f.ammo_shells, 20);
-  ammo_start(q, q.s(s_b_shell0), q.s(s_arsenal_ammo1));
+  ammo_start(q, q.s(s_b_shell0), q.s(s_b_shell1), q.s(s_arsenal_ammo1));
 }
 void item_spikes(A& q) {
   q.set_f(q.self(), q.L.f.ammo_nails, 25);
-  ammo_start(q, q.s(s_b_nail0), q.s(s_arsenal_ammo2));
+  ammo_start(q, q.s(s_b_nail0), q.s(s_b_nail1), q.s(s_arsenal_ammo2));
 }
 void item_rockets(A& q) {
   q.set_f(q.self(), q.L.f.ammo_rockets, 5);
-  ammo_start(q, q.s(s_b_rock0), q.s(s_arsenal_ammo3));
+  ammo_start(q, q.s(s_b_rock0), q.s(s_b_rock1), q.s(s_arsenal_ammo3));
 }
 void item_cells(A& q) {
   q.set_f(q.self(), q.L.f.ammo_cells, 6);
-  ammo_start(q, q.s(s_b_batt0), q.s(s_arsenal_ammo4));
+  ammo_start(q, q.s(s_b_batt0), q.s(s_b_batt1), q.s(s_arsenal_ammo4));
+}
+
+// The old ammunition box kept for old maps: spawnflags 1 shells, 4 nails, 2 rockets (the last of
+// these that is set wins), 8 the big box; it lies in deathmatch 4 too. With no kind it gives
+// nothing and still says "You got the ".
+void item_weapon(A& q) {
+  const int32_t me = q.self();
+  const float flags = q.f(me, q.L.f.spawnflags);
+  const bool big = on(band(flags, 8));
+  int32_t mdl = q.s(s_empty);
+  int32_t kind = q.s(s_empty);
+  if (on(band(flags, 1))) {
+    mdl = q.s(big ? s_b_shell1 : s_b_shell0);
+    kind = q.s(s_shells);
+    q.set_f(me, q.L.f.ammo_shells, big ? 40 : 20);
+  }
+  if (on(band(flags, 4))) {
+    mdl = q.s(big ? s_b_nail1 : s_b_nail0);
+    kind = q.s(s_spikes);
+    q.set_f(me, q.L.f.ammo_shells, 0);
+    q.set_f(me, q.L.f.ammo_nails, big ? 40 : 20);
+  }
+  if (on(band(flags, 2))) {
+    mdl = q.s(big ? s_b_rock1 : s_b_rock0);
+    kind = q.s(s_rockets);
+    q.set_f(me, q.L.f.ammo_shells, 0);
+    q.set_f(me, q.L.f.ammo_nails, 0);
+    q.set_f(me, q.L.f.ammo_rockets, big ? 10 : 5);
+  }
+  q.set_i(me, q.L.f.netname, kind);  // its name when taken
+  q.set_i(me, q.L.f.touch, q.fn(fn_ammo_touch));
+  item_start(q, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
 }
 
 void weapon_touch(A& q) {
@@ -522,6 +580,11 @@ void backpack_touch(A& q) {
   const float had = band(q.f(o, q.L.f.items), q.f(me, q.L.f.weapon));
   ammo_give_own(q);
   q.set_f(o, q.L.f.items, bor(q.f(o, q.L.f.items), q.f(me, q.L.f.weapon)));
+  // Quake's modes 3 and 5: a pack with a launcher brings its taker up to 5 rockets.
+  const float pw = q.f(me, q.L.f.weapon);
+  if (quake_rules(q) & ((q.deathmatch() == 3) | (q.deathmatch() == 5)) &
+      ((pw == kWGrenades) | (pw == kWRockets)) & (q.f(o, q.L.f.ammo_rockets) < 5))
+    q.set_f(o, q.L.f.ammo_rockets, 5);
   backpack_say(q, had);
   q.sound(q.other(), kChanItem, q.s(s_lock4_wav), 1, kAttnNorm);
   q.stuffcmd(q.other(), q.s(s_bf));
@@ -552,7 +615,11 @@ void backpack_drop(A& q) {
     q.set_i(pack, q.L.f.netname, pack_weapon_name(q, w));
   }
   Vec3 vel = q.v(pack, q.L.f.velocity);
-  vel.z = 300;  // tossed straight up (no draw on the server's generator)
+  vel.z = 300;           // tossed straight up (no draw on the server's generator)
+  if (quake_rules(q)) {  // Quake's: up to 100 each way across
+    vel.x = -100 + q.random() * 200;
+    vel.y = -100 + q.random() * 200;
+  }
   q.set_v(pack, q.L.f.velocity, vel);
   q.set_f(pack, q.L.f.flags, kFlItem);
   q.set_f(pack, q.L.f.solid, kSolidTrigger);
@@ -646,8 +713,15 @@ void power_drop(A& q, float bit) {
   const int32_t me = q.self();
   const PowerKind k = power_kind(bit);
   const float until = q.f(me, k.field);
-  if ((until < q.time() + 1) | ((bit == kItQuad) & (q.deathmatch() == 4)))
-    return;  // the OctaPower stays
+  const bool octa = (bit == kItQuad) & (q.deathmatch() == 4);
+  if ((until < q.time() + 1) | (octa & !quake_rules(q))) return;  // the OctaPower stays
+  if (quake_rules(q)) {  // Quake's: everyone told what was lost and how long it had left
+    St lost = s_lost_a_ring;
+    if (bit == kItQuad) lost = octa ? s_lost_an_octa : s_lost_a_quad;
+    say_all(q, kPrintLow,
+            {q.i(me, q.L.f.netname), q.s(lost), q.ftos(q.rint(until - q.time())),
+             q.s(s_seconds_remaining)});
+  }
   const int32_t p = q.spawn();
   q.set_i(p, q.L.f.classname, q.s(k.class_name));
   q.set_f(p, q.L.f.items, bit);
@@ -678,8 +752,16 @@ void dropped_power_touch(A& q) {
   const PowerKind k = power_kind(bit);
   q.set_f(o, k.field, q.f(me, k.field));
   clear_bit(q, o, q.own_field(f_power_said), bit);
-  say_to(q, o, kPrintLow,
-         {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(k.ours)), q.s(s_nl)});
+  if (quake_rules(q)) {  // Quake's: everyone told who took it up and how long it has left
+    St took = s_recovered_a_ring;
+    if (bit == kItQuad) took = q.deathmatch() == 4 ? s_recovered_an_octa : s_recovered_a_quad;
+    say_all(q, kPrintLow,
+            {q.i(o, q.L.f.netname), q.s(took), q.ftos(q.rint(q.f(me, k.field) - q.time())),
+             q.s(s_seconds_remaining_bang)});
+  } else {
+    say_to(q, o, kPrintLow,
+           {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(k.ours)), q.s(s_nl)});
+  }
   q.set_f(o, q.L.f.items, bor(q.f(o, q.L.f.items), bit));
   q.sound(o, kChanItem, q.i(me, q.L.f.noise), 1, kAttnNorm);
   q.stuffcmd(o, q.s(s_bf));
@@ -689,8 +771,9 @@ void dropped_power_touch(A& q) {
 // Each frame for a living player: the powers that ran out taken away, the glow of those held.
 void power_frame(A& q) {
   if (q.deathmatch() == 4) dmm4_frame(q);
-  power_warn(q, kItQuad, q.f(q.self(), f_super_damage_finished), q.s(s_power_quad_off),
-             q.s(s_damage2_wav));
+  const bool octa = quake_rules(q) & (q.deathmatch() == 4);  // Quake's mode 4 names it
+  power_warn(q, kItQuad, q.f(q.self(), f_super_damage_finished),
+             q.s(octa ? s_power_octa_off : s_power_quad_off), q.s(s_damage2_wav));
   power_warn(q, kItInvulnerability, q.f(q.self(), f_invincible_finished), q.s(s_power_pent_off),
              q.s(s_protect2_wav));
   power_warn(q, kItInvisibility, q.f(q.self(), f_invisible_finished), q.s(s_power_ring_off),

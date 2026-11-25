@@ -12,9 +12,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <utility>
 
 #include "classicenhance/profile.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -240,7 +243,7 @@ bool find_demo(const SearchPath& files, const std::string& name,
 std::string demo_game_dir(const std::string& basedir, const std::string& opened,
                           const std::string& recorded, std::string& note) {
   note.clear();
-  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  const std::string base(ge::classicenhance::q1_profile().base_dir);
   if (recorded.empty() || recorded == opened || recorded == base || opened != base) return opened;
   // A folder name only: a recording naming a path is not followed out of the base folder.
   if (recorded.find_first_of("/\\:") != std::string::npos || recorded == "." || recorded == "..")
@@ -301,6 +304,26 @@ void DemoTimeline::frame(const DemoState& s, bool new_level) {
   last = s.time;
 }
 
+namespace {
+
+// A snapshot taken when the timeline has gone `snap_every_s` past the last one (the first at the
+// first frame drawn), the bytes lent back to the demo rather than copied.
+void snap(Timedemo& t) {
+  if (t.snap_every_s <= 0) return;
+  if (!t.snaps.empty() && t.timeline.t < t.snaps.back().timeline.t + t.snap_every_s) return;
+  std::vector<uint8_t> bytes = std::move(t.demo.bytes);
+  t.snaps.push_back({t.demo, t.timeline, t.levels});
+  t.demo.bytes = std::move(bytes);
+  DemoState& kept = t.snaps.back().demo.state;  // what the frame carried is not carried again
+  kept.effects.clear();
+  kept.started.clear();
+  kept.stopped.clear();
+  kept.voice.clear();
+  kept.prints.clear();
+}
+
+}  // namespace
+
 TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
   std::vector<DemoEffect> effects;  // every frame read's, the ones not drawn too
   for (;;) {
@@ -334,9 +357,11 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
       t.skip = kSkipAfterLevel;
       t.last_ns = 0;
       t.timeline.frame(s, true);
+      snap(t);
       return TimedemoStep::new_level;
     }
     t.timeline.frame(s, false);
+    snap(t);
     return TimedemoStep::frame;
   }
 }
@@ -377,15 +402,30 @@ TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::str
 TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   const int level_before = t.levels;
   const std::string map_before = t.demo.state.map;
-  if (timeline_s < t.timeline.t) {  // back: from the start again, the tracked player kept
+  if (timeline_s < t.timeline.t) {  // back: from a snapshot or the start, the player tracked kept
     const int track = t.demo.track;
-    t.demo = t.start;
+    const auto after =
+        std::upper_bound(t.snaps.begin(), t.snaps.end(), timeline_s,
+                         [](double at, const DemoSnap& snap) { return at < snap.timeline.t; });
+    if (after == t.snaps.begin()) {
+      t.demo = t.start;
+      t.timeline = {};
+      t.levels = 0;
+    } else {
+      const DemoSnap& from = *std::prev(after);
+      std::vector<uint8_t> bytes = std::move(t.demo.bytes);
+      t.demo = from.demo;
+      t.demo.bytes = std::move(bytes);
+      t.timeline = from.timeline;
+      t.levels = from.levels;
+      t.snaps.erase(after, t.snaps.end());  // taken again as the frames after it are read
+    }
     t.demo.track = track;
-    t.timeline = {};
-    t.levels = 0;
   }
   TimedemoStep out = TimedemoStep::frame;
+  const bool stop_at_intermission = std::exchange(t.seek_stops_at_intermission, false);
   while (t.timeline.t < timeline_s || t.demo.state.map.empty()) {
+    if (stop_at_intermission && t.demo.state.intermission && !t.demo.state.map.empty()) break;
     const TimedemoStep s = timedemo_step(t, error);
     if (s == TimedemoStep::error) return s;
     if (s == TimedemoStep::end) {
@@ -396,8 +436,11 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   t.clock = t.demo.state.time;
   t.skip = 0;
   if (t.smooth) lerp_frame(t.lerp, t.demo.state, true);  // not drawn from before the seek
-  t.heard.clear();                                       // what the seek read past is not played
-  t.demo.state.effects.clear();                          // nor thrown
+  std::vector<DemoPrint> prints =
+      t.seek_prints ? std::move(t.heard.prints) : std::vector<DemoPrint>{};
+  t.heard.clear();                     // what the seek read past is not played
+  t.heard.prints = std::move(prints);  // nor shown, unless asked for
+  t.demo.state.effects.clear();        // nor thrown
   if (out == TimedemoStep::end) return out;
   return t.levels != level_before || t.demo.state.map != map_before ? TimedemoStep::new_level
                                                                     : TimedemoStep::frame;
@@ -417,19 +460,78 @@ void timedemo_mark(Timedemo& t, uint64_t now_ns) {
   t.last_ns = now_ns;
 }
 
-ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s) {
+ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s, bool kick) {
   ge::render::FrameView v;
+  const sh::Vec3f k = kick ? s.kick : sh::Vec3f{};
   const ge::camera::Vec3 eye = engine_point(s.eye);
   v.eye[0] = eye.x;
   v.eye[1] = eye.y;
   v.eye[2] = eye.z;
-  // The server's kick angles on the view (the sequel's bob, tilts and kicks; 0 in the first game).
-  v.heading = engine_heading(s.angles.y + s.kick.y);
-  v.pitch = engine_pitch(s.angles.x + s.kick.x);
-  v.roll = s.kick.z * 3.14159265358979323846 / 180;
+  // The server's kick angles on the view (Quake II's bob, tilts and kicks; 0 in Quake).
+  v.heading = engine_heading(s.angles.y + k.y);
+  v.pitch = engine_pitch(s.angles.x + k.x);
+  v.roll = k.z * 3.14159265358979323846 / 180;
   v.fov_y = fov_y;
   v.time_s = time_s;
   return v;
+}
+
+std::string bench_dump_record(const std::string& demo, const std::string& setup,
+                              const BenchStats& s, const std::string& date) {
+  const auto attr =
+      [](const std::string& v) {  // an attribute's text, its markup characters escaped
+        std::string out;
+        for (char c : v) {
+          if (c == '&')
+            out += "&amp;";
+          else if (c == '<')
+            out += "&lt;";
+          else if (c == '>')
+            out += "&gt;";
+          else if (c == '"')
+            out += "&quot;";
+          else
+            out += c;
+        }
+        return out;
+      };
+  const auto six = [](double v) {
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "%.6f", v);
+    return std::string(buf);
+  };
+#if defined(_WIN32)
+  const char* os = "Windows";
+#elif defined(__APPLE__)
+  const char* os = "macOS";
+#else
+  const char* os = "Linux";
+#endif
+  return "<timedemo date=\"" + attr(date) + "\">\n  <system os=\"" + os + "\" hardware=\"" +
+         attr(setup) + "\"/>\n  <client name=\"Shooter's Edge\"/>\n  <demo name=\"" + attr(demo) +
+         "\"/>\n  <result frames=\"" + std::to_string(s.frames) + "\" time=\"PT" + six(s.seconds) +
+         "S\" fps=\"" + six(s.avg_fps) + "\"/>\n</timedemo>\n";
+}
+
+bool bench_dump(const std::filesystem::path& path, const std::string& record, std::string& error) {
+  std::ofstream f(path, std::ios::binary | std::ios::app);
+  if (f) f << record;
+  if (f) return true;
+  error = "Could not write the timedemo result to " + path.string() + ".";
+  return false;
+}
+
+std::string local_date_now() {
+  const std::time_t now = std::time(nullptr);
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &now);
+#else
+  localtime_r(&now, &local);
+#endif
+  char buf[32];
+  std::strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%S", &local);
+  return buf;
 }
 
 hud::Status demo_status(const DemoState& s, double t) {
@@ -454,7 +556,44 @@ hud::Status demo_status(const DemoState& s, double t) {
       if (held == kWeaponBits[k]) h.weapon = static_cast<hud::Weapon>(k + 1);
   h.key_silver = (items & kKeySilver) != 0;
   h.key_gold = (items & kKeyGold) != 0;
+  // The items word and the weapon in hand as sent (a mission pack's status bar reads them), the
+  // count beside the ammunition icon, and the team game the server states.
+  h.items = static_cast<uint32_t>(items);
+  h.in_hand = static_cast<uint32_t>(held);
+  h.current_ammo = s.stats[kStatAmmo];
+  const size_t me = static_cast<size_t>(std::clamp(s.player, 0, 31));
+  h.frags = s.frags[me];
+  h.shirt = s.top[me], h.pants = s.bottom[me];
+  h.multiplayer = true;  // a server a client joins seats more than one unless it says otherwise
+  for (const auto& [key, value] : s.serverinfo) {
+    if (key == "teamplay") h.teamplay = std::atoi(value.c_str());
+    if (key == "maxclients") h.multiplayer = std::atoi(value.c_str()) != 1;
+  }
   return h;
+}
+
+bool bench_end_report(ge::console::Console& c, const Timedemo& bench, const std::string& why,
+                      bool by_player, const std::string& setup, int dumps,
+                      const std::filesystem::path& dump_log,
+                      const std::function<void(const std::string&)>& say) {
+  // A run stopped before a frame was timed has no report, only its reason; playback times none.
+  if (bench.paced) {
+    c.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
+    return !by_player && !why.empty();
+  }
+  if (why.empty() || !bench.frame_s.empty()) {
+    const BenchStats stats = bench_stats(bench.frame_s);
+    for (const std::string& line : bench_report(bench.name, setup, stats)) say(line);
+    std::string dump_error;  // demo_benchmarkdumps: the result kept in the game's timedemo.log
+    if (dumps != 0 &&
+        !bench_dump(dump_log, bench_dump_record(bench.name, setup, stats, local_date_now()),
+                    dump_error))
+      c.print(dump_error);
+    c.print(span_report(bench.passes));
+  }
+  if (why.empty()) return false;
+  c.print("timedemo: stopped early: " + why);
+  return true;
 }
 
 }  // namespace shooters_edge::client

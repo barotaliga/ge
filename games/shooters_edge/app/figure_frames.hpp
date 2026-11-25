@@ -1,4 +1,4 @@
-// ANOTHER GAME'S FIGURE IN THIS ONE'S POSES: a player figure made for one game (a sequel's
+// ANOTHER GAME'S FIGURE IN THIS ONE'S POSES: a player figure made for one game (a Quake II's
 // `tris.md2` dropped into players/<model>/) drawn where the server animates this game's figure. The
 // server picks frames of its own figure; each is looked up by its name's stem in the figure it
 // stands for and played on the dropped figure's frames of the same kind.
@@ -16,7 +16,7 @@
 // ge:summary Shooter's Edge's map from one figure's frames to another's by their names' kinds
 // ge:keywords player-figures frame-map figure_frames frame-kind stem stand run attack pain death
 // ge:keywords resting_frames dead-body
-// ge:keywords player-model another-games-model md2-in-first-game
+// ge:keywords player-model another-games-model md2-in-q1
 // ge:skill shooter morph
 // ge:test tests/shooters_edge_figure_frames_test.cpp
 #pragma once
@@ -35,7 +35,7 @@ enum class FrameKind : uint8_t { none, stand, run, attack, pain, death, jump };
 FrameKind frame_kind(std::string_view name);
 
 // For each frame, whether a body on it lies still: the last frame of a run of death frames, a
-// crouched death's too ("crdeath", the sequel's figure dying ducked).
+// crouched death's too ("crdeath", Quake II's figure dying ducked).
 std::vector<bool> resting_frames(std::span<const std::string> names);
 
 // For each of `from`'s frames, the frame of `to` it is drawn as (empty when `to` has none).

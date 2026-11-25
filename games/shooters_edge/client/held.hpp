@@ -10,8 +10,10 @@
 // - THE PLACE: the eye's look, the speed along the ground and whether the player stands on it (the
 //   stride's clock runs while he walks), from the view and the player's state.
 // - A RECORDING OR A JOINED SERVER (`step_demo_held`): a classic set's frame is the one the server
-//   sent (the player's weapon frame), drawn from the last over the time its frames last
-//   (model_lerp.hpp's `track_frame`) under `ViewSettings::lerp`; a frame the model lacks is rest.
+//   sent (the player's weapon frame), drawn from the last over a classic frame's fixed tenth of
+//   a second (model_lerp.hpp's `track_frame` with `kFrameSpan`, never the measured gap between
+//   updates, which a recording's own rate makes uneven) under `ViewSettings::lerp`; a frame the
+//   model lacks is rest. Quake II's hand is drawn the same way.
 //
 // ge:summary The weapon in hand: whose set, which one, a shot, the look, the stride
 // ge:keywords held-weapon hand step_held attack_finished shot weapon-switch viewmodel stride
@@ -35,6 +37,12 @@
 
 namespace shooters_edge::client {
 
+// Quake II's server's sway on the held weapon into `in` (its `game_sway` on): `gun_angles`
+// degrees (pitch down, yaw left, roll right side down) as the hand's turn, `gun_offset` units
+// along the world's axes as its shift along the view of `view_angles` (degrees).
+void q2_gun_sway(ge::shooter::Vec3f gun_angles, ge::shooter::Vec3f gun_offset,
+                 ge::shooter::Vec3f view_angles, view::HandInput& in);
+
 struct HeldState {
   view::Hand hand;
   float attack_finished = 0;  // the last frame's
@@ -44,11 +52,22 @@ struct HeldState {
   // A recording's or a joined server's weapon frame (a classic set's), drawn between its changes.
   FrameTrack recorded;
   int recorded_weapon = -1;  // the weapon `recorded` is of
-  int sequel_frame = -1;     // the sequel's hand's frame last step (a shot on stepping onto one)
+  // A frame other than 0 has come: the frames rule the drawn weapon (until then the hand plays
+  // its own shots, as under rules that never animate it).
+  bool frames_live = false;
+  int own_shots = -1;        // DemoState::own_shots last step (-1: not yet seen)
+  int64_t frames_read = -1;  // DemoState::frames last step: its sounds are new only once
+  int q2_frame = -1;         // Quake II's hand's frame last step (a shot on passing one)
+  bool q2_firing = false;    // and whether it was firing then,
+  int q2_weapon = -1;        // with which weapon
   // A weapon the hand holds in place of the game's (a `view::Weapon` index; -1 the game's): the
   // quick weapon's preview (quick_fire.hpp). Its shots are the game's weapon's only when the two
   // are the same.
   int show = -1;
+  // A recording played back (not a joined server), and the weapon it last fired and whose
+  // (r_viewmodellastfired: shown while the player idles; -1 none).
+  bool recording = false;
+  int last_fired = -1, last_fired_player = -1;
 };
 
 // The held weapons the window draws into `out`. With a classic game's folder open (`files`), only

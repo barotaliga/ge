@@ -9,11 +9,13 @@
 // curve, so it works where the eye judges colour and its 32 steps a channel are evenly spent.
 // It starts as the identity (`identity_grade`).
 //
-// THE ARRIVAL (`set_post_warp`, `arrival_warp`): the whole view warped while a player arrives
-// (a spawn, a teleport's far end): it opens out of a flash, the world pulled in toward the middle
-// and streaked toward it, washed out and tinted, and a clear disc grows from the middle with a
-// bright rim until the view is whole. Live, off a small uniform: a share of 0 costs the pass one
-// uniform branch, so it is never compiled out.
+// THE ARRIVAL (`set_post_warp`, `arrival_warp`): the view's edges touched while a player arrives
+// (a spawn, a teleport's far end): outside a clear disc that already holds the middle of the view
+// the picture is streaked toward the middle, washed out and tinted, the disc grows past the
+// corners with a faint rim, and the whole is gone in a third of a second. The middle, where a
+// player aims, is never touched, nothing flashes and nothing zooms: an arrival must never take the
+// view from a player who has to fight on at once. Live, off a small uniform: a share of 0 costs
+// the pass one uniform branch, so it is never compiled out.
 //
 // THE LENS AND THE FILM (M35a): what a camera does to the picture past the scene, each off at 0
 // and each its own `override` switch, so a game that leaves one off compiles it out and pays
@@ -51,7 +53,10 @@
 // ge:keywords sharpen cas contrast-adaptive-sharpening chromatic-aberration vignette film-grain
 // ge:keywords lens-dirt post-look lens-effects motion-blur shutter post-motion
 // ge:keywords screen-blend set_post_blend tint damage-flash
+// ge:keywords set_post_edge_blend edge_blend_share edge-blend damage-frame gl_damageblend_frac
 // ge:keywords arrival arrival_warp set_post_warp post-warp teleport-flash spawn-flash warp-in
+// ge:keywords ripple set_post_ripple underwater-warp waterwarp
+// ge:keywords set_post_view viewsize view-rect smaller-view
 // ge:skill render
 // ge:test tests/render_post_test.cpp
 #pragma once
@@ -85,6 +90,15 @@ struct PostSettings {
   PostLook look;      // which of the lens and film are compiled (above 0), and their start
   bool lens = false;  // mix in the lens pass's target (render/lens.hpp)
   bool dof = false;   // mix in depth of field's gather (render/dof.hpp)
+  // A picture worked out in the display's values (a classic game's look: the painted colours times
+  // their light), above 0: no exposure and no tone curve (whose toe sinks dark colours toward
+  // black), the colour divided by a white face's luminance (frame.wgsl's white_luminance) times
+  // this, the scale its passes wrote at, and clipped at white. 0: exposed and toned.
+  double display = 0;
+  // The tone curve's toe: a dark colour's least channel taken toward black (to about 6 x its
+  // square), the others by as much. A world of dark painted textures (a classic game's) loses its
+  // blues and greys to it and turns brown; false: the curve straight up to its shoulder.
+  bool toe = true;
   // Also build the pipeline with the bloom compiled out, so `set_post_bloom` turns the bloom off
   // and on in a live frame (a quality ladder's stop) with no pipeline made after the load.
   bool bloom_switch = false;
@@ -137,6 +151,16 @@ void set_post_look(gpu::Device& device, const Post& post, const PostLook& look);
 // when its player is hurt, the tint of a liquid round the eye): `rgba` an sRGB-encoded colour and
 // its share, 0..1; a share of 0 (the start) leaves the picture as it is.
 void set_post_blend(gpu::Device& device, const Post& post, const double rgba[4]);
+// THE EDGE BLEND: a second tint, laid after the screen's blend, as a frame round the view's four
+// edges (a game's damage flash kept off the middle, so a hit never hides what is ahead): `rgba` an
+// sRGB-encoded colour and its share at the very edge, `frac` the frame's depth as a share of the
+// view's shorter side (0..0.5). The share falls in a straight line from the edge to nothing at
+// that depth, the middle untouched; `frac` 0 lays it flat over the whole view, as the screen's
+// blend does. A share of 0 (the start) draws nothing.
+void set_post_edge_blend(gpu::Device& device, const Post& post, const double rgba[4], double frac);
+// The edge blend's share at a point of the view (`u`, `v` across and down it, 0..1) `w` x `h`
+// pixels big, for an edge share `alpha` and depth `frac`: the CPU's statement of post.wgsl's.
+double edge_blend_share(double u, double v, double w, double h, double alpha, double frac);
 // THE ARRIVAL'S WARP this frame (all 0: none, the pass as it was).
 struct PostWarp {
   double share = 0;            // 0..1: how warped the view still is outside the clear disc
@@ -145,14 +169,32 @@ struct PostWarp {
   double flash = 0;            // 0..1: the tint laid over the whole view (1: about white)
   double tint[3] = {1, 1, 1};  // the flash's and the rim's colour, sRGB-encoded
 };
-inline constexpr double kArrivalS = 0.65;  // the arrival's warp, s
-// The arrival's warp `age_s` into it at `strength` (0..1; 0: none) in `tint` (sRGB-encoded): a
-// flash held kArrivalFlashS then fading, the clear disc opening from the middle to past the
-// corners by kArrivalOpenS (eased out), the pull and the warp fading to nothing by kArrivalS.
-// Outside 0..kArrivalS: none.
-inline constexpr double kArrivalFlashS = 0.05, kArrivalOpenS = 0.45;
+inline constexpr double kArrivalS = 0.3;  // the arrival's warp, s
+// The arrival's warp `age_s` into it at `strength` (0..1; 0: none) in `tint` (sRGB-encoded): the
+// clear disc opening from kArrivalClear of the middle-to-corner distance to past the corners by
+// kArrivalOpenS (eased out), the edges' warp fading to nothing by kArrivalS; no flash and no pull
+// (`flash` and `zoom` stay 0). Outside 0..kArrivalS: none.
+inline constexpr double kArrivalOpenS = 0.22, kArrivalClear = 0.55;
 PostWarp arrival_warp(double age_s, double strength, const double tint[3]);
 void set_post_warp(gpu::Device& device, const Post& post, const PostWarp& warp);
+// THE RIPPLE this frame: every point of the picture shifted across by `share` of the screen's
+// width times a sine of its height, and down by `share` of its height times a sine of its width,
+// `waves` waves over the screen, at `phase` (rad); a share of 0 (the start) leaves it still. A
+// game's view under a liquid (Quake II's gl_waterwarp: 0.25 %, five waves, a radian a second).
+struct PostRipple {
+  double share = 0;
+  double waves = 5;
+  double phase = 0;
+};
+void set_post_ripple(gpu::Device& device, const Post& post, const PostRipple& ripple);
+// THE VIEW IN A SMALLER RECTANGLE: the whole picture drawn into `rect` (pixels of the output,
+// `width` x `height`), the rest black for the 2D layer to cover (a classic game's screen size
+// under 100 %, its border tiled); the whole output (the start) draws it as it was.
+struct ViewRect {
+  int x = 0, y = 0, w = 0, h = 0;
+};
+void set_post_view(gpu::Device& device, const Post& post, const ViewRect& rect, int width,
+                   int height);
 // Depth of field's focus, sharp share and strength (render/dof.hpp's), live: the post pass mixes
 // the gather in by each pixel's own circle under the same lens the dof pass gathered with.
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof);

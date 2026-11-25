@@ -33,7 +33,7 @@
 #include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "ui/raster.hpp"
 

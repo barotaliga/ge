@@ -7,6 +7,7 @@
 #include "shooters_edge/client/game_folder.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -14,11 +15,15 @@
 #include <system_error>
 #include <utility>
 
+#include "classic/content/fs_words.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
+#include "shooters_edge/server/q2_campaign.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::client {
 
@@ -133,7 +138,7 @@ void play_found(Args& args, const FoundInstall& f, const std::string& how) {
 void choose_folder(Args& args, const std::string& prefs, const std::vector<std::string>& places,
                    std::vector<FoundInstall>* found) {
   if (args.game_number > 0 && !args.basedir_set) {
-    // `-game N`: that game's install kept on this computer, else the one the game was started
+    // `-classic <id>`: that game's install kept on this computer, else the one the game was started
     // inside when it is that game, else the window asks for its folder (`ask_install`).
     const ge::classicenhance::Profile& want =
         ge::classicenhance::kProfiles[static_cast<size_t>(args.game_number) - 1];
@@ -247,7 +252,7 @@ KeptGame remembered_game(const std::string& prefs) {
     }
   }
   if (!kept.basedir.empty() && kept.profile.empty())
-    kept.profile = std::string(ge::classicenhance::classic_profile().id);
+    kept.profile = std::string(ge::classicenhance::q1_profile().id);
   return kept;
 }
 
@@ -300,12 +305,12 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
                  std::filesystem::path(files.folder).parent_path(),
                  std::filesystem::path(files.folder).filename().string(), "", lib) &&
              lib.parent_path() == std::filesystem::path(files.folder)) {
-    // A mod folder's game library of the sequel's interface: it plays the match; the baseline
+    // A mod folder's game library of Quake II's interface: it plays the match; the baseline
     // stands in for the rest.
     out::status("shooters_edge: the mod's game library " + lib.filename().string() + " runs");
     out.native_library = lib.string();
     loaded = baseline_progs(out.progs, error);
-  } else if (adapter.game != nullptr && adapter.game->id == std::string_view("classic") &&
+  } else if (adapter.game != nullptr && adapter.game->id == std::string_view("q1") &&
              qvm_of(files, out.module)) {
     // A mod folder's compiled module: it plays the match; the baseline stands in for the rest
     // (a campaign is still the packs' own program).
@@ -327,6 +332,8 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
         out.arsenal = profiles::arsenal_lines(game.arsenal);
         for (std::string& line : profiles::word_lines(game.words))
           out.item_names.push_back(std::move(line));
+        if (!game.arena_rules.empty())
+          out.item_names.push_back("localinfo rules " + std::string(game.arena_rules));
       }
     }
   }
@@ -353,7 +360,53 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
       find_file(files, ge::classicenhance::asset_path(content.maps, out.start_map), store).empty()
           ? std::string(game.fallback_map)
           : out.start_map;
+  // NEW GAME as the packs' default.cfg names it (a pack's own first map and its movies first),
+  // when the packs hold that map.
+  std::string map, shows;
+  const std::span<const uint8_t> cfg = find_file(files, "default.cfg", store);
+  if (new_game_level(std::string(cfg.begin(), cfg.end()), map, shows) &&
+      !find_file(files, ge::classicenhance::asset_path(content.maps, map), store).empty()) {
+    out.first_map = map;
+    out.new_game_shows = shows;
+  }
   return true;
+}
+
+bool new_game_level(const std::string& cfg, std::string& map, std::string& shows) {
+  // The words of `text` from `at` on, split at blanks; a `"` starts or ends a quoted word.
+  const auto word = [](const std::string& text, size_t& at) {
+    at = std::min(text.find_first_not_of(" \t\r", at), text.size());
+    const bool quoted = at < text.size() && text[at] == '"';
+    const size_t start = at + (quoted ? 1 : 0);
+    const size_t stop =
+        std::min(text.find_first_of(quoted ? "\"" : " \t\r;\"", start), text.size());
+    at = stop + (quoted && stop < text.size() ? 1 : 0);
+    return text.substr(start, stop - start);
+  };
+  size_t from = 0;
+  while (from < cfg.size()) {
+    const size_t end = std::min(cfg.find('\n', from), cfg.size());
+    std::string line = cfg.substr(from, end - from);
+    from = end + 1;
+    for (char& c : line) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    size_t at = 0;
+    if (word(line, at) != "alias" || word(line, at) != "newgame") continue;
+    const std::string body = word(line, at);  // its commands, `;` between them
+    for (size_t part = 0; part < body.size();) {
+      const size_t semi = std::min(body.find(';', part), body.size());
+      const std::string command = body.substr(part, semi - part);
+      part = semi + 1;
+      size_t w = 0;
+      if (word(command, w) != "map") continue;
+      const sv::LevelString ls = sv::level_string(word(command, w));
+      if (ls.map.empty()) return false;
+      map = ls.map;
+      shows = ls.shows;
+      return true;
+    }
+    return false;
+  }
+  return false;
 }
 
 namespace {
@@ -361,7 +414,7 @@ namespace {
 // NEW GAME and `coopgame` for a game whose own rules keep the campaign (GameContent's
 // `rules_campaign`): the multiplayer program's game on the first map with `deathmatch` 0, `coop`
 // off or on; a new game each time (`ListenOptions::new_game`). `coopgame` seats its companions
-// once the game has started (client/sequel_party.hpp), `addbot` and `removebot` after.
+// once the game has started (client/q2_party.hpp), `addbot` and `removebot` after.
 void rules_campaign_commands(ge::console::Console& con, Listen& listen, const GameContent& content,
                              std::string& next_map) {
   using CArgs = ge::console::Args;
@@ -373,6 +426,7 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
                     listen.opt.companions = 0;
                     listen.opt.new_game = true;
                     next_map = content.first_map;
+                    listen.cinematic = content.new_game_shows;  // the pack's movies first
                   });
   con.add_command("coopgame",
                   "coopgame [bots] [novice|average|expert] [map]: a new coop game (everyone on "
@@ -382,7 +436,7 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
                   [&listen, &next_map, &content](Con&, const CArgs& a) {
                     std::string map = content.first_map;
                     int bots = 1;
-                    sh::AimSkill skill = sh::AimSkill::average;
+                    sb::AimSkill skill = sb::AimSkill::average;
                     for (size_t i = 1; i < a.size(); i++) {
                       const std::string& w = a[i];
                       if (!w.empty() && w[0] >= '0' && w[0] <= '9')
@@ -403,22 +457,31 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
 
 namespace {
 
-// `save <name>` and `load <name>` (and the sequel's words for them, `savegame` and `loadgame`).
+// Where a save named `name` goes, as the player reads it: the classic file in the game folder,
+// else ours under saves/.
+std::string save_shown(const std::string& name, bool classic) {
+  return classic ? name + ".sav" : "saves/" + name + ".save";
+}
+
+// `save <name>` and `load <name>` (and Quake II's words for them, `savegame` and `loadgame`).
+// `quake`: Quake's own words round them ("Saving game to ...", "done.", "Loading game from
+// ..."), as the original prints them; else ours.
 void save_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
-                   std::string& load_ask) {
+                   std::string& load_ask, bool quake) {
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   for (const char* save : {"save", "savegame"})
     con.add_command(save,
                     "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: "
                     "the classic text save in the game folder)",
-                    [&listen, &files](Con& c, const CArgs& a) {
+                    [&listen, &files, quake](Con& c, const CArgs& a) {
                       if (a.size() < 2) {
                         c.print("save: save <name>");
                         return;
                       }
                       std::string why, name = a[1];
                       const bool classic = classic_save_name(name);
+                      if (quake) c.print("Saving game to " + save_shown(name, classic) + "...");
                       std::vector<uint8_t> bytes;
                       std::string text;
                       const bool made = classic
@@ -429,15 +492,19 @@ void save_commands(ge::console::Console& con, Listen& listen, const SearchPath& 
                       if (!made || !write_save(files, name, bytes, why, classic))
                         c.print(why);
                       else
-                        c.print("saved " + a[1]);
+                        c.print(quake ? "done." : "saved " + a[1]);
                     });
   for (const char* load : {"load", "loadgame"})
     con.add_command(load, "load <name>: the game saved as saves/<name>.save, else <name>.sav",
-                    [&load_ask](Con& c, const CArgs& a) {
-                      if (a.size() < 2)
+                    [&load_ask, quake](Con& c, const CArgs& a) {
+                      if (a.size() < 2) {
                         c.print("load: load <name>");
-                      else
-                        load_ask = a[1];
+                        return;
+                      }
+                      load_ask = a[1];
+                      std::string name = a[1];
+                      const bool classic = classic_save_name(name);
+                      if (quake) c.print("Loading game from " + save_shown(name, classic) + "...");
                     });
 }
 
@@ -450,9 +517,9 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
   if (content.campaign == nullptr) {
     for (const char* name : {"newgame", "coopgame", "save", "load", "savegame", "loadgame"})
       con.remove_command(name);
-    if (content.rules_campaign) {  // the sequel's game keeps its own saves (server/sequel_save.hpp)
+    if (content.rules_campaign) {  // Quake II's game keeps its own saves (server/q2_save.hpp)
       rules_campaign_commands(con, listen, content, next_map);
-      save_commands(con, listen, files, load_ask);
+      save_commands(con, listen, files, load_ask, false);
     }
     return;
   }
@@ -461,8 +528,9 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
                     listen.opt.console.emplace_back("deathmatch 0");
                     listen.opt.console.emplace_back("coop 0");
                     // What the player has finished opens and shuts the start map's episodes.
-                    if (const ge::console::Cvar* done = c.cvars().find("sv_episodes_done"))
-                      listen.opt.console.emplace_back("sv_episodes_done " + done->value);
+                    for (const char* k : {"sv_episodes_in_order", "sv_episodes_done"})
+                      if (const ge::console::Cvar* v = c.cvars().find(k))
+                        listen.opt.console.emplace_back(std::string(k) + " " + v->value);
                     listen.opt.companions = 0;
                     listen.opt.new_game = true;
                     next_map = content.start_map;
@@ -474,7 +542,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
       "map or the map named; addbot and removebot change the party during the game",
       [&listen, &next_map, &content](Con& c, const CArgs& a) {
         int bots = 1;
-        sh::AimSkill skill = sh::AimSkill::average;
+        sb::AimSkill skill = sb::AimSkill::average;
         std::string map = content.start_map;
         for (size_t i = 1; i < a.size(); i++) {
           const std::string& w = a[i];
@@ -490,14 +558,15 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
         }
         listen.opt.console.emplace_back("deathmatch 0");
         listen.opt.console.emplace_back("coop 1");
-        if (const ge::console::Cvar* done = c.cvars().find("sv_episodes_done"))
-          listen.opt.console.emplace_back("sv_episodes_done " + done->value);
+        for (const char* k : {"sv_episodes_in_order", "sv_episodes_done"})
+          if (const ge::console::Cvar* v = c.cvars().find(k))
+            listen.opt.console.emplace_back(std::string(k) + " " + v->value);
         listen.opt.companions = bots;
         listen.opt.companion_skill = skill;
         listen.opt.new_game = true;  // even with a campaign running: coop on, the bots seated
         next_map = map;
       });
-  save_commands(con, listen, files, load_ask);
+  save_commands(con, listen, files, load_ask, true);
 }
 
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
@@ -509,12 +578,12 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
     return listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
   }
   // A new game on rules that keep their own campaign starts their server afresh (its settings
-  // are the new game's); else a level change keeps it (net/classic_game.hpp).
+  // are the new game's); else a level change keeps it (net/qw_game.hpp).
   const bool fresh = content.rules_campaign && listen.opt.new_game;
   listen.opt.new_game = false;
   if (fresh) {  // the new game's companions seated once it runs (`coopgame <bots>`)
     if (!listen_start(listen, content.progs, std::move(map), listen.opt, error)) return false;
-    const std::string add = "addbot " + std::string(sh::aim_skill_name(listen.opt.companion_skill));
+    const std::string add = "addbot " + std::string(sb::aim_skill_name(listen.opt.companion_skill));
     for (int k = 0; k < listen.opt.companions; k++) listen_lobby(listen, add);
     return true;
   }
@@ -523,9 +592,11 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
   return listen_change(listen, std::move(map), error);
 }
 
-std::vector<std::string> save_slot_labels(const SearchPath& files, int slots) {
-  std::vector<std::string> out(static_cast<size_t>(std::max(slots, 0)));
-  for (size_t i = 0; i < out.size(); i++) out[i] = save_label(files, "s" + std::to_string(i));
+std::vector<std::string> save_slot_labels(const SearchPath& files,
+                                          std::span<const std::string> names) {
+  std::vector<std::string> out;
+  out.reserve(names.size());
+  for (const std::string& name : names) out.push_back(save_label(files, name));
   return out;
 }
 
@@ -535,6 +606,13 @@ bool keep_autosave(Listen& listen, const SearchPath& files) {
   if (!autosave.empty() && !write_save(files, "save0", autosave, why, false))
     listen.prints.push_back("The autosave was not written: " + why + "\n");
   return std::exchange(listen.load_menu_asked, false);
+}
+
+std::string load_save_asked(Listen& listen, const GameContent& content, const SearchPath& files,
+                            std::string& ask) {
+  const std::string name = std::exchange(ask, std::string());
+  std::string error;
+  return load_asked_save(listen, content, files, name, error) ? "loaded " + name : "load: " + error;
 }
 
 bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
@@ -549,13 +627,51 @@ bool load_asked_save(Listen& listen, const GameContent& content, const SearchPat
   else if (classic && !read_save(files, base, bytes, error, true))
     bytes.clear();
   if (!bytes.empty() && !classic && content.campaign == nullptr && content.rules_campaign)
-    return listen_load_sequel(listen, lo, bytes, name, error);  // the sequel's own save
+    return listen_load_q2(listen, lo, bytes, name, error);  // Quake II's own save
   if (bytes.empty() || content.campaign == nullptr) return false;
   if (classic)
     return listen_load_text(
         listen, *content.campaign, lo,
         std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()), name, error);
   return listen_load(listen, *content.campaign, lo, bytes, name, error);
+}
+
+void add_path_command(ge::console::Console& con, const SearchPath& files) {
+  con.add_command("path", "path: the folders and archives the game's files come from",
+                  [&files](ge::console::Console& c, const ge::console::Args&) {
+                    std::string text = ge::classic::content::search_path_text(files);
+                    while (!text.empty()) {
+                      const size_t nl = text.find('\n');
+                      c.print(text.substr(0, nl));
+                      text.erase(0, nl == std::string::npos ? text.size() : nl + 1);
+                    }
+                  });
+  // The read-only links over the search path (classic/content/fs_words.hpp), and fs_restart's
+  // listing of it; dir, fdir and whereis are the engine's (vfs/search_commands.hpp).
+  const auto say = [](ge::console::Console& c, std::string text) {
+    while (!text.empty()) {
+      const size_t nl = text.find('\n');
+      c.print(text.substr(0, nl));
+      text.erase(0, nl == std::string::npos ? text.size() : nl + 1);
+    }
+  };
+  const std::pair<const char*, const char*> words[] = {
+      {"link", "link [<name> <target>]: a link over the game's files made, or listed"},
+      {"softlink", "softlink [<name> <target>]: a link over the game's files made, or listed"},
+      {"unlink", "unlink <name> | -a: a link over the game's files taken away"},
+      {"softunlink", "softunlink <name> | -a: a link over the game's files taken away"}};
+  for (const auto& [word, help] : words) {
+    con.add_command(word, help, [&files, say](ge::console::Console& c, const ge::console::Args& a) {
+      std::vector<std::string> w;
+      for (size_t i = 0; i < a.size(); ++i) w.push_back(a[i]);
+      std::string out;
+      if (ge::classic::content::fs_command(files, w, out)) say(c, out);
+    });
+  }
+  con.add_command("fs_restart", "fs_restart: the folders and archives the game reads, listed again",
+                  [&files, say](ge::console::Console& c, const ge::console::Args&) {
+                    say(c, ge::classic::content::fs_restart_text(files));
+                  });
 }
 
 }  // namespace shooters_edge::client

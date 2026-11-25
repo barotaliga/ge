@@ -98,6 +98,15 @@ struct Bsp {
   // a face seen from behind left out), w 1 for the figures' shadows on the lightmaps
   // (Options::lightmap_shadows)
   detail: vec4f,
+  // the classic look's light: x its scale (Options::classic_light: 1 the lightmap's 128 shows a
+  // texel as painted, 255 twice as bright), y the light added to every luxel (Options::
+  // classic_lift, the lightmap's 0 .. 1 units), z the filtered textures' most taps along a slant
+  // (Options::anisotropy), w 1 the sky box read sharp (Options::crisp_sky)
+  classic: vec4f,
+  // the solid faces' textures: x their saturation (1 as painted), y 1 inverted; z the lightmaps'
+  // saturation (1 as baked); w the dynamic lights' edge (Options::dlight_falloff: 0 straight to
+  // their reach, 1 to 1.28 m short of it, 2 cut off 1.6 m short)
+  paint: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -139,10 +148,12 @@ struct Light {
 @group(1) @binding(9) var rebake_dir: texture_2d<f32>;
 // the animated textures' frames
 @group(1) @binding(10) var<storage, read> frames: array<vec4f>;
-// The brush models: a run of vertices (first, end), 1 hidden; the offset it is drawn at now.
+// The brush models: a run of vertices (first, end), 1 hidden; the offset it is drawn at now and
+// its turn about the map's origin before it (a quaternion, x y z w).
 struct Mover {
   range: vec4u,
   offset: vec4f,
+  rotation: vec4f,
 };
 // [0] the world's
 @group(1) @binding(11) var<storage, read> movers: array<Mover>;
@@ -225,6 +236,17 @@ fn style_level(id: u32) -> f32 {
   return bsp.styles[id >> 2u][id & 3u];
 }
 
+// The texture frame the vertex's brush model asks (its frame + 1; 0: on the clock), set by `moved`.
+var<private> mover_frame: u32 = 0u;
+// The vertex's brush model's turn (a quaternion), set by `moved`; its normal turns with it.
+var<private> mover_turn: vec4f = vec4f(0.0, 0.0, 0.0, 1.0);
+
+// `v` turned by the unit quaternion `q`.
+fn turned(q: vec4f, v: vec3f) -> vec3f {
+  let t = 2.0 * cross(q.xyz, v);
+  return v + q.w * t + cross(q.xyz, t);
+}
+
 // The vertex `vi` at `pos` where its brush model stands now; w 0 when the model is hidden.
 fn moved(vi: u32, pos: vec3f) -> vec4f {
   let n = arrayLength(&movers);
@@ -235,7 +257,9 @@ fn moved(vi: u32, pos: vec3f) -> vec4f {
   for (var i = 1u; i < n; i++) {
     let m = movers[i];
     if (vi >= m.range.x && vi < m.range.y) {
-      return vec4f(pos + m.offset.xyz, select(1.0, 0.0, m.range.z != 0u));
+      mover_frame = m.range.w;
+      mover_turn = m.rotation;
+      return vec4f(turned(m.rotation, pos) + m.offset.xyz, select(1.0, 0.0, m.range.z != 0u));
     }
   }
   return vec4f(pos, 1.0);
@@ -253,13 +277,27 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   o.world = at.xyz;
   o.st = v.st;
   o.lm = v.lm;
-  o.nrm = v.nrm;
+  o.nrm = turned(mover_turn, v.nrm);
   o.rect = v.rect;
   // An animated texture: the sequence's frame now, from this texture's own place in it.
-  let count = (v.anim >> 16u) & 255u;
+  let count = (v.anim >> 16u) & 127u;
   if (count > 1u) {
-    let at = (u32(max(bsp.info2.x, 0.0) * kFrameRate) + (v.anim >> 24u)) % count;
+    // On the map's clock at its rate (the world's row's w; 0: kFrameRate), or the model's frame.
+    let rate = select(kFrameRate, movers[0].offset.w, arrayLength(&movers) > 0u && movers[0].offset.w > 0.0);
+    var step = u32(max(bsp.info2.x, 0.0) * rate);
+    if (mover_frame > 0u) {
+      step = mover_frame - 1u;
+    }
+    let at = (step + (v.anim >> 24u)) % count;
     o.rect = frames[(v.anim & 0xffffu) + at];
+  }
+  // A flowing texture (draw_data.hpp's kAnimFlowing): it slides toward -s, a warped liquid's half
+  // a width a second, any other face's 1.6, a whole width at a time seamless.
+  if ((v.anim & 0x800000u) != 0u) {
+    let warp = v.kind == kWater || v.kind == kSlime || v.kind == kLava || v.kind == kWarp ||
+               v.kind == kTele;
+    let rate = select(1.6, 0.5, warp);
+    o.st.x = o.st.x - o.rect.z * fract(max(bsp.info2.x, 0.0) * rate);
   }
   o.kind = v.kind;
   o.lm2 = v.lm2;
@@ -272,6 +310,16 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
 fn finite2(v: vec2f) -> bool {
   let e = vec2u(0x7f800000u);
   return all((bitcast<vec2u>(v) & e) != e);
+}
+
+// A solid face's texel (linear) as Options::saturation and invert repaint it: toward its
+// luminance, then a negative of its sRGB value.
+fn repainted(c: vec3f) -> vec3f {
+  var o = mix(vec3f(dot(c, vec3f(0.2126, 0.7152, 0.0722))), c, bsp.paint.x);
+  if (bsp.paint.y > 0.5) {
+    o = srgb_to_linear(vec3f(1.0) - linear_to_srgb(clamp(o, vec3f(0.0), vec3f(1.0))));
+  }
+  return o;
 }
 
 // The texel at `st` (texels of mip 0) of the texture at `rect`, at mip `lod`, wrapped.
@@ -335,7 +383,7 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   let major = select(dy, dx, lx > ly);
   let big = max(lx, ly);
   let small = max(min(lx, ly), 1e-6);
-  let taps = clamp(ceil(big / small), 1.0, 4.0);
+  let taps = clamp(ceil(big / small), 1.0, clamp(bsp.classic.z, 1.0, 16.0));
   // 3, or 5 when a texture is upscaled
   let top = textureNumLevels(atlas) - 1u;
   let lod = clamp(max(log2(max(big / taps, 1e-6)), bsp.detail.x), 0.0, f32(top));
@@ -482,7 +530,13 @@ fn dynamic_light(p: vec3f) -> vec3f {
       continue;
     }
     let d = length(p - l.pos.xyz);
-    e += l.colour.rgb * max(1.0 - d / l.pos.w, 0.0);
+    var f = max(1.0 - d / l.pos.w, 0.0);
+    if (bsp.paint.w > 1.5) {  // Options::dlight_falloff 2: cut off kDlightHardM short of its reach
+      f = select(0.0, f, l.pos.w - d >= 1.6);
+    } else if (bsp.paint.w > 0.5) {  // 1: nothing kDlightSoftM short of it
+      f = max(1.0 - d / max(l.pos.w - 1.28, 1e-3), 0.0);
+    }
+    e += l.colour.rgb * f;
   }
   return e;
 }
@@ -508,7 +562,9 @@ fn lightmap(lm: vec2f, styles: u32) -> vec3f {
       e += textureSampleLevel(light_atlas, light_sampler, at, 0.0).rgb * style_level(id);
     }
   }
-  return e * (255.0 / 128.0);
+  // Options::lightmap_saturation: toward its luminance, 1 as baked
+  let l = e * (255.0 / 128.0);
+  return mix(vec3f(dot(l, vec3f(0.2126, 0.7152, 0.0722))), l, bsp.paint.z);
 }
 
 // THE DIRECTIONAL SHADE (engine/bake/bake.hpp, `directional_scale`, restated): the rebaked
@@ -567,8 +623,12 @@ fn sky_box_at(eye_d: vec3f) -> vec3f {
   f += u32(m < 0);
   let i = bsp.sky_box.yz;
   let st = clamp(vec2f(dot(d, cross(u, sign(l))), -dot(d, u)) / abs(m) * 0.5 + 0.5, i, 1 - i);
-  return textureSampleLevel(sky_box, light_sampler, (vec2f(vec2u(f % 3, f / 3)) + st) / vec2f(3, 2),
-                            0).rgb;
+  let uv = (vec2f(vec2u(f % 3, f / 3)) + st) / vec2f(3, 2);
+  if (bsp.classic.w > 0.5) {  // sharp: the texel it falls in
+    let size = vec2f(textureDimensions(sky_box));
+    return textureLoad(sky_box, vec2i(min(floor(uv * size), size - 1.0)), 0).rgb;
+  }
+  return textureSampleLevel(sky_box, light_sampler, uv, 0).rgb;
 }
 
 // The classic sky: a far layer and a near one over it (its texel 0 clear), scrolling.
@@ -1184,6 +1244,7 @@ fn shade(in: VsOut) -> FsOut {
   var glow = smoothstep(0.1, 0.9, tx.a);
   // r_drawflat: a solid face in its one colour, a floor's or a wall's, under the same light.
   if (in.kind == kSolid) {
+    albedo = repainted(albedo);
     let is_floor = normalize(in.nrm).y > 0.70710678;
     let fc = select(bsp.flat_wall, bsp.flat_floor, is_floor);
     if (fc.w > 0.5) {
@@ -1223,8 +1284,13 @@ fn shade(in: VsOut) -> FsOut {
   if (classic || (!kLitOnly && bsp.info.y < 0.5)) {
     var lit = lightmap(in.lm, in.styles) + dynamic_light(in.world);
     if (classic) {
+      // The classic games' own light: the painted colour times the light, in the display's
+      // values (their renderers multiplied the encoded colours), clipped per channel at white;
+      // the post pass shows it as worked out (post.hpp's PostSettings::display).
+      lit = (lit + vec3f(bsp.classic.y * (255.0 / 128.0))) * bsp.classic.x;
       lit = mix(lit, max(lit, vec3f(1.0)), glow);
-      out.colour = vec4f(albedo * lit * white, 1.0);
+      let shown = min(linear_to_srgb(albedo) * lit, vec3f(1.0));
+      out.colour = vec4f(srgb_to_linear(shown) * white, 1.0);
       return out;
     }
     if (bsp.detail.w > 0.5 && !second_view()) {
@@ -1393,4 +1459,9 @@ fn shade(in: VsOut) -> FsOut {
 
 fn srgb_to_linear(c: vec3f) -> vec3f {
   return select(pow((c + 0.055) / 1.055, vec3f(2.4)), c / 12.92, c <= vec3f(0.04045));
+}
+
+fn linear_to_srgb(c: vec3f) -> vec3f {
+  let k = max(c, vec3f(0.0));
+  return select(1.055 * pow(k, vec3f(1.0 / 2.4)) - 0.055, k * 12.92, k <= vec3f(0.0031308));
 }

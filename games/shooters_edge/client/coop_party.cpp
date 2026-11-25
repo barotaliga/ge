@@ -5,6 +5,9 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_campaign_view_test.cpp
 #include "shooters_edge/client/coop_party.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::client {
 
@@ -20,7 +23,7 @@ bool ensure_graph(Party& p, const sv::Campaign& c, const sv::MapSpec& map, std::
     return false;
   }
   auto nav = std::make_unique<bots::MapNav>();
-  if (!bots::build_map_nav(*q, map, "info_player_start", *nav, error)) {
+  if (!bots::build_map_nav(*q, map, bots::quake_maps(), "info_player_start", *nav, error)) {
     error += ". Bots can't play on this map; try coop on another.";
     return false;
   }
@@ -35,15 +38,18 @@ void make(Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) 
   m.fighter = bots::Fighter();
   m.sequence = 0;
   for (sh::MoveCmd& cmd : m.cmds) cmd = {};
-  m.fighter.features = sh::features_of(m.skill);
+  m.fighter.features = sb::features_of(m.skill);
   bots::fighter_init(m.fighter, p.nav->graph, s, slot, map.entities.c_str(), m.skill,
-                     sh::traits_of(m.skill, sh::Temper::balanced), kHz,
-                     p.seed + 31u * static_cast<uint32_t>(slot));
+                     sb::traits_of(m.skill, sb::Temper::balanced), kHz,
+                     p.seed + 31u * static_cast<uint32_t>(slot), bots::first_arsenal());
   m.fighter.bot.yaw = s.world.entities[static_cast<size_t>(slot) + 1].view_angles.y;
   m.fighter.bot.pilot.world = &p.nav->world;
   if (p.nav->swim.leading > 0) m.fighter.swim = &p.nav->swim;
   m.fighter.trap = &p.nav->trap;
-  bots::escort_init(m.fighter, s, slot, 0);
+  if (m.work)
+    sb::party_work_init(*m.work, m.fighter, *p.nav, s, map);
+  else
+    bots::escort_init(m.fighter, s, slot, 0);
 }
 
 }  // namespace
@@ -54,8 +60,8 @@ int party_size(const Party& p) {
   return n;
 }
 
-int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sh::AimSkill skill,
-              std::string& error) {
+int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sb::AimSkill skill,
+              std::string& error, bool helper) {
   if (!c.server) {
     error = "No game is running. Type \"coopgame\" to start a coop game.";
     return -1;
@@ -78,6 +84,7 @@ int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sh::AimSkill sk
   if (!ensure_graph(p, c, map, error)) return -1;
   auto m = std::make_unique<PartyMate>();
   m->skill = skill;
+  if (helper) m->work = std::make_unique<sb::PartyWork>();
   m->name = "mate" + std::to_string(++p.named);
   const std::string name = m->name;
   p.mates[static_cast<size_t>(slot)] = std::move(m);
@@ -99,6 +106,7 @@ bool party_remove(Party& p, sv::Campaign& c) {
 
 void party_enter(Party& p, sv::Campaign& c, const sv::MapSpec& map, std::string& error) {
   if (party_size(p) == 0 || !c.server) return;
+  p.share = sb::Party();  // the new map's steps
   if (!ensure_graph(p, c, map, error)) {
     while (party_remove(p, c)) {
     }
@@ -110,12 +118,33 @@ void party_enter(Party& p, sv::Campaign& c, const sv::MapSpec& map, std::string&
 }
 
 void party_packets(Party& p, const sv::RulesCommon& s, int msec, std::vector<sh::Packet>& out) {
+  // The helpers' split of the map, round the people (every player not a companion).
+  p.members.clear();
+  p.people.humans.clear();
+  p.people.facing.clear();
+  p.people.leash = sb::kPartyLeash;
+  p.people.exit_held = true;
+  for (int i = 0; i < sh::kMaxClients && i < s.sv.set.maxclients; i++) {
+    if (!s.clients[i].active) continue;
+    const sh::Edict& e = s.sv.edicts[static_cast<size_t>(i) + 1];
+    const PartyMate* m = p.mates[static_cast<size_t>(i)].get();
+    if (m == nullptr) {
+      p.people.humans.push_back(e.origin);
+      p.people.facing.push_back(s.world.entities[static_cast<size_t>(i) + 1].view_angles.y);
+    } else if (m->work) {
+      p.members.push_back({&m->work->way, i + 1, e.health > 0});
+    }
+  }
+  if (!p.members.empty() && p.nav) sb::party_share(p.share, p.members, *p.nav, s, p.people);
   for (int i = 1; i < sh::kMaxClients; i++) {
     if (!p.mates[static_cast<size_t>(i)] || !s.clients[i].active) continue;
     PartyMate& m = *p.mates[static_cast<size_t>(i)];
+    if (m.work) sb::party_work_plan(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.people);
     m.cmds[0] = m.cmds[1];
     m.cmds[1] = m.cmds[2];
     m.cmds[2] = bots::fighter_command(m.fighter, s, i, msec);
+    if (m.work)
+      sb::party_work_command(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.people, m.cmds[2]);
     sh::Packet pk;
     pk.client = i;
     pk.sequence = ++m.sequence;

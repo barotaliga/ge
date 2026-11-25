@@ -1,4 +1,4 @@
-# THE GALLERY: a free-for-all map for the first game, written as a map plan
+# THE GALLERY: a free-for-all map for Quake, written as a map plan
 # (plugins/brush/compile/plan.hpp) and built with `secli map build gallery.plan --textures=<the
 # game folder>`. Designed by the `map-design` skill for six to ten players: eight rooms in a ring
 # round a sunk atrium open to the sky, every room with two ways out or more and a door into the
@@ -6,7 +6,7 @@
 # a weapon near every start; the red armour in the middle of the atrium, where everyone sees whoever
 # takes it. The map is the same turned half round its centre (896, 896).
 #
-# Studied first (the map-overview lab, map-design § 0): the first game's open deathmatch maps and
+# Studied first (the map-overview lab, map-design § 0): Quake's open deathmatch maps and
 # the community's. Taken from them: a ring of rooms round one open middle, no dead end, a weapon by
 # every start, and the strong item in plain sight.
 

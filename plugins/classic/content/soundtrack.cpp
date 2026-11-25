@@ -26,12 +26,12 @@ bool decode_ogg(std::span<const uint8_t> bytes, Samples* out, std::string* error
 
 namespace {
 
-// The first game's disc: ten music tracks, their lengths as the disc plays them.
-constexpr uint16_t kClassicSeconds[] = {305, 143, 498, 362, 440, 515, 333, 386, 210, 313};
+// Quake's disc: ten music tracks, their lengths as the disc plays them.
+constexpr uint16_t kQ1Seconds[] = {305, 143, 498, 362, 440, 515, 333, 386, 210, 313};
 
 constexpr Soundtrack kSoundtracks[] = {
-    {"classic", 2, 11, kClassicSeconds},
-    {"sequel", 2, 11, {}},
+    {"q1", 2, 11, kQ1Seconds},
+    {"q2", 2, 11, {}},
 };
 
 // Recorded from real discs as they are seen; none yet.
@@ -149,6 +149,66 @@ std::string track_path(const std::string& game_dir, int track) {
   const std::filesystem::path p = std::filesystem::path(game_dir) / "music" / track_file(track);
   std::error_code ec;
   return std::filesystem::is_regular_file(p, ec) ? p.string() : std::string{};
+}
+
+namespace {
+
+// `name` as a key: `\` as `/`, no leading or doubled `/`, lower case, a music extension dropped.
+std::string music_key(std::string_view name) {
+  std::string k;
+  for (const char c : name) {
+    const char d = c == '\\' ? '/' : c;
+    if (d == '/' && (k.empty() || k.back() == '/')) continue;
+    k += d;
+  }
+  k = lower(k);
+  for (const std::string_view ext : {".flac", ".opus", ".ogg", ".mp3", ".wav"})
+    if (k.size() > ext.size() && k.ends_with(ext)) {
+      k.resize(k.size() - ext.size());
+      break;
+    }
+  return k;
+}
+
+}  // namespace
+
+std::string music_file(const std::string& game_dir, std::string_view name) {
+  const std::string key = music_key(name);
+  if (game_dir.empty() || key.empty() || key.find("..") != std::string::npos) return {};
+  const std::filesystem::path root = std::filesystem::path(game_dir) / "music";
+  std::error_code ec;
+  if (!std::filesystem::is_directory(root, ec)) return {};
+  std::vector<std::pair<std::string, std::filesystem::path>> found;  // A to Z without case
+  for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+       !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+    const std::filesystem::path& p = it->path();
+    if (p.filename().string().starts_with('.')) {
+      if (it->is_directory(ec)) it.disable_recursion_pending();
+      continue;
+    }
+    if (!it->is_regular_file(ec) || lower(p.extension().string()) != ".flac") continue;
+    std::string rel = p.lexically_relative(root).generic_string();
+    rel.resize(rel.size() - 5);  // ".flac"
+    if (lower(rel) == key)
+      found.emplace_back(lower(p.lexically_relative(root).generic_string()), p);
+  }
+  if (found.empty()) return {};
+  std::sort(found.begin(), found.end());
+  return found.front().second.string();
+}
+
+int q2_remap_track(std::string_view game_folder, int track) {
+  if (track < 2 || track > 11) return track;
+  // The folder's last name in any case, as `-game` gives it ("XATRIX", "C:\Quake2\xatrix\").
+  while (!game_folder.empty() && (game_folder.back() == '/' || game_folder.back() == '\\'))
+    game_folder.remove_suffix(1);
+  const size_t slash = game_folder.find_last_of("/\\");
+  const std::string folder =
+      lower(slash == std::string_view::npos ? game_folder : game_folder.substr(slash + 1));
+  if (folder == "rogue") return track + 10;
+  static constexpr int kXatrix[10] = {9, 13, 14, 7, 16, 2, 15, 3, 4, 18};
+  if (folder == "xatrix") return kXatrix[track - 2];
+  return track;
 }
 
 int level_track(std::string_view entities) {

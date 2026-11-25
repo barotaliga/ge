@@ -28,6 +28,26 @@ constexpr int kScreenW = 320, kScreenH = 200;
 constexpr float kRowTop = 32;
 constexpr float kLabelEnd = 192, kCursorX = 200, kValueX = 220;
 constexpr size_t kLabelChars = 22, kValueChars = 12;
+constexpr size_t kSlotChars = 39;  // a save slot's comment line, the whole width from x 16
+
+// A row's columns: where its label ends, its cursor and its value stand, and the value's glyphs.
+// The host page's choices stand in Quake's own columns, so an episode's or a level's long name
+// fits (20 glyphs from x 160); every other row in the menu's.
+struct Columns {
+  float label_end = kLabelEnd, cursor_x = kCursorX, value_x = kValueX;
+  size_t value_chars = kValueChars;
+};
+Columns columns_of(const ui::Page& page, const ui::Item& it) {
+  if (page.id == "host" && it.kind == ui::ItemKind::choice) return {136, 144, 160, 20};
+  return {};
+}
+
+// The glyphs a row's label holds on a layout: right-aligned to `end`, clear of the plaque.
+size_t label_chars(const ClassicLayout& l, float end = kLabelEnd) {
+  if (l.label_left <= 0) return kLabelChars;
+  const auto room = static_cast<size_t>(std::max(0.0f, (end - l.label_left) / 8));
+  return std::min(kLabelChars, room);
+}
 constexpr int kSliderCells = 10;
 
 constexpr float kBand = 20;  // a strip's row, classic px
@@ -67,28 +87,26 @@ const PageArt* art_of(std::string_view page) {
 
 // The rows and names the strips have no words for, set in their carved letters by code
 // (carved_letters.hpp). The games' names are spelt letter by letter: the tree names neither game.
-constexpr char kClassicName[] = {'Q', 'u', 'a', 'k', 'e'};
-constexpr char kSequelName[] = {'Q', 'u', 'a', 'k', 'e', ' ', 'i', 'i'};
+constexpr char kQ1Name[] = {'Q', 'u', 'a', 'k', 'e'};
+constexpr char kQ2Name[] = {'Q', 'u', 'a', 'k', 'e', ' ', 'i', 'i'};
 struct LetterWord {
   std::string_view row, text;
 };
-constexpr LetterWord kLetterWords[] = {
-    {"demos", "Demos"},
-    {"games", "Select Game"},
-    {"ranked", "Ranked Game"},
-    {"game-classic", std::string_view(kClassicName, std::size(kClassicName))},
-    {"game-sequel", std::string_view(kSequelName, std::size(kSequelName))}};
-// The same rows on the sequel's tags (plate_letters.hpp), in its capitals as its own tags have
+constexpr LetterWord kLetterWords[] = {{"demos", "Demos"},
+                                       {"games", "Select Game"},
+                                       {"ranked", "Ranked Game"},
+                                       {"game-q1", std::string_view(kQ1Name, std::size(kQ1Name))},
+                                       {"game-q2", std::string_view(kQ2Name, std::size(kQ2Name))}};
+// The same rows on Quake II's tags (plate_letters.hpp), in its capitals as its own tags have
 // them.
-constexpr char kClassicTag[] = {'Q', 'U', 'A', 'K', 'E'};
-constexpr char kSequelTag[] = {'Q', 'U', 'A', 'K', 'E', ' ', 'I', 'I'};
-constexpr LetterWord kTagWords[] = {
-    {"demos", "DEMOS"},
-    {"games", "SELECT GAME"},
-    {"help", "HELP"},
-    {"ranked", "RANKED GAME"},
-    {"game-classic", std::string_view(kClassicTag, std::size(kClassicTag))},
-    {"game-sequel", std::string_view(kSequelTag, std::size(kSequelTag))}};
+constexpr char kQ1Tag[] = {'Q', 'U', 'A', 'K', 'E'};
+constexpr char kQ2Tag[] = {'Q', 'U', 'A', 'K', 'E', ' ', 'I', 'I'};
+constexpr LetterWord kTagWords[] = {{"demos", "DEMOS"},
+                                    {"games", "SELECT GAME"},
+                                    {"help", "HELP"},
+                                    {"ranked", "RANKED GAME"},
+                                    {"game-q1", std::string_view(kQ1Tag, std::size(kQ1Tag))},
+                                    {"game-q2", std::string_view(kQ2Tag, std::size(kQ2Tag))}};
 
 // Row `id`'s word in the strips' cut letters, or empty.
 std::string_view letter_word(const ClassicArt& art, std::string_view id) {
@@ -98,7 +116,7 @@ std::string_view letter_word(const ClassicArt& art, std::string_view id) {
   return {};
 }
 
-// Row `id`'s word on the sequel's tags, or empty.
+// Row `id`'s word on Quake II's tags, or empty.
 std::string_view tag_word(const ClassicArt& art, std::string_view id) {
   if (art.letters.empty() || !art.plates()) return {};
   for (const LetterWord& w : kTagWords)
@@ -107,13 +125,15 @@ std::string_view tag_word(const ClassicArt& art, std::string_view id) {
 }
 
 // `text` in the art's cut letters, its line's top left at (x, y), classic px.
-void set_letters(const ClassicPen& pen, std::string_view text, float x, float y) {
+void set_letters(const ClassicPen& pen, std::string_view text, float x, float y,
+                 Tone tone = Tone::full) {
   const ClassicArt& art = pen.art;
+  const std::map<char, ui::Image>& set = toned(art.letters, tone);
   std::vector<float> xs;
   carved_layout(art, text, &xs);
   for (size_t i = 0; i < text.size(); i++) {
     if (text[i] == ' ') continue;
-    const ui::Image& img = art.letters.at(text[i]);
+    const ui::Image& img = set.at(text[i]);
     ui::Box b;
     b.rect = pen.at(x + xs[i], y, art.width_of(img), kCarvedLine);
     b.image = &img;
@@ -142,19 +162,21 @@ void draw_pieces(const ClassicPen& pen, const std::vector<TagPiece>& pieces, flo
 
 // `text` on a tag, its top left at (x, y), classic px; from the lit tags' letters when `lit` and
 // they have them.
-void set_tag(const ClassicPen& pen, std::string_view text, float x, float y, bool lit) {
-  draw_pieces(pen, tag_pieces(pen.art, text, lit, nullptr), x, y);
+void set_tag(const ClassicPen& pen, std::string_view text, float x, float y, bool lit,
+             Tone tone = Tone::full) {
+  draw_pieces(pen, tag_pieces(pen.art, text, lit, nullptr, tone), x, y);
 }
 
-// Row `id`'s word at (x, y), classic px: in the strips' cut letters, or on the sequel's tags; false
+// Row `id`'s word at (x, y), classic px: in the strips' cut letters, or on Quake II's tags; false
 // when the art has neither for it (the caller draws the glyphs instead). `lit`: the tag lit.
-bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false) {
+bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false,
+           Tone tone = Tone::full) {
   if (const std::string_view text = letter_word(pen.art, id); !text.empty()) {
-    set_letters(pen, text, x, y);
+    set_letters(pen, text, x, y, tone);
     return true;
   }
   if (const std::string_view text = tag_word(pen.art, id); !text.empty()) {
-    set_tag(pen, text, x, y, lit);
+    set_tag(pen, text, x, y, lit, tone);
     return true;
   }
   return false;
@@ -162,8 +184,8 @@ bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool li
 
 }  // namespace
 
-bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bool lit) {
-  return carve(pen, id, x, y, lit);
+bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bool lit, Tone tone) {
+  return carve(pen, id, x, y, lit, tone);
 }
 
 float carved_width(const ClassicArt& art, std::string_view id) {
@@ -189,6 +211,14 @@ std::string sentence(std::string_view s) {
   return out;
 }
 
+// Whether `page` is the quit box showing one of Quake's jokes (a label of several lines).
+bool shows_joke(const ui::Page& page) {
+  if (page.id != "quit") return false;
+  for (const ui::Item& it : page.items)
+    if (it.kind == ui::ItemKind::label && it.text.find('\n') != std::string::npos) return true;
+  return false;
+}
+
 std::string lower(std::string_view s) {
   std::string out(s);
   for (char& c : out)
@@ -207,10 +237,10 @@ std::string value_of(const ui::Item& it) {
   }
 }
 
-// The sequel's root: a plate a row (classic_view.hpp).
+// Quake II's root: a plate a row (classic_view.hpp).
 constexpr float kPlateX = 84, kPlateCursorX = 58, kPlaqueX = 16, kPlateTall = 32;
 
-// The sequel's banner over each page that has one.
+// Quake II's banner over each page that has one.
 constexpr std::pair<std::string_view, std::string_view> kBanners[] = {
     {"single", "m_banner_game"},        {"multi", "m_banner_multiplayer"},
     {"host", "m_banner_start_server"},  {"setup", "m_banner_plauer_setup"},
@@ -219,7 +249,7 @@ constexpr std::pair<std::string_view, std::string_view> kBanners[] = {
     {"controls", "m_banner_customize"}, {"servers", "m_banner_join_server"},
 };
 
-// A root row's own plate, or empty: the rows the sequel's main menu has words for.
+// A root row's own plate, or empty: the rows Quake II's main menu has words for.
 std::string_view plate_of(std::string_view id) {
   if (id == "single") return "m_main_game";
   if (id == "multi") return "m_main_multiplayer";
@@ -268,7 +298,7 @@ ClassicLayout layout_plates(const ui::Menu& menu, const ClassicArt& art, int wid
   return l;
 }
 
-// The sequel's root drawn: the plaque and the logo, a plate a row, the lit plate and the cursor on
+// Quake II's root drawn: the plaque and the logo, a plate a row, the lit plate and the cursor on
 // the focused one.
 void draw_plates(const ClassicPen& pen, const ui::Page& page, double t) {
   const ClassicArt& art = pen.art;
@@ -324,8 +354,9 @@ ClassicLayout classic_screen(int width, int height) {
 ClassicLayout classic_screen(const ClassicArt& art, int width, int height) {
   const float tall = art.screen_height();
   ClassicLayout l;
-  l.scale = std::max(1.0f, std::floor(std::min(static_cast<float>(width) / kScreenW,
-                                               static_cast<float>(height) / tall)));
+  l.scale = art.scale > 0 ? std::max(1.0f, art.scale)
+                          : std::max(1.0f, std::floor(std::min(static_cast<float>(width) / kScreenW,
+                                                               static_cast<float>(height) / tall)));
   l.x = std::floor((static_cast<float>(width) - kScreenW * l.scale) / 2);
   l.y = std::floor((static_cast<float>(height) - tall * l.scale) / 2) +
         (tall - kScreenH) / 2 * l.scale;
@@ -367,6 +398,33 @@ std::string_view banner_of(std::string_view page) {
   return {};
 }
 
+namespace {
+
+// A page longer than the screen's rows shows the ones round the focus, moved up so the last
+// fits; the rows above and below are not drawn (and not pointed at).
+void scroll_rows(const ui::Page& page, ClassicLayout& l, float top) {
+  const auto fit = static_cast<int>((kScreenH - kRowTop) / 8);
+  std::vector<size_t> shown;
+  int focus_row = 0;
+  for (size_t i = 0; i < page.items.size(); i++) {
+    if (l.items[i].w <= 0) continue;
+    if (static_cast<int>(i) == page.focus) focus_row = static_cast<int>(shown.size());
+    shown.push_back(i);
+  }
+  const int n = static_cast<int>(shown.size());
+  if (n <= fit) return;
+  const int first = std::clamp(focus_row - fit / 2, 0, n - fit);
+  for (int k = 0; k < n; k++) {
+    ui::Rect& r = l.items[shown[static_cast<size_t>(k)]];
+    if (k < first || k >= first + fit)
+      r = {};
+    else
+      r.y = top + static_cast<float>((k - first) * 8) * l.scale;
+  }
+}
+
+}  // namespace
+
 ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int width, int height) {
   if (art.plates() && menu.top().id == "main") return layout_plates(menu, art, width, height);
   ClassicLayout l = classic_screen(art, width, height);
@@ -380,7 +438,7 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
   l.items.assign(page.items.size(), {});
   l.bands.assign(page.items.size(), -1);
   const bool help = page.id == "help" && help_pages(art) > 0;
-  const bool quit = page.id == "quit";
+  const bool quit = page.id == "quit" || page.id == "newgame";  // a question in its box
   float row = quit ? 84 : kRowTop;
   int strip_row = 0;
   for (size_t i = 0; i < page.items.size(); i++) {
@@ -395,7 +453,16 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     }
     l.items[i] = rect(16, row, kScreenW - 32, 8);
     row += 8;
+    // Quake's quit joke: its four lines in the box, the answers a line under it.
+    if (quit && it.kind == ui::ItemKind::label && it.text.find('\n') != std::string::npos) {
+      l.items[i].h = 32 * l.scale;
+      row += 24 + 16;
+    }
   }
+  if (!l.strip && !quit) scroll_rows(page, l, kRowTop * l.scale + l.y);
+  const bool slots = page.id == "load" || page.id == "save";
+  if (const ui::Image* plaque = art.find("qplaque"); plaque != nullptr && !slots && !l.strip)
+    l.label_left = 16 + art.width_of(*plaque);  // the plaque at x 16, the labels from its edge
   return l;
 }
 
@@ -412,19 +479,51 @@ std::vector<std::string> classic_problems(const ui::Menu& menu, const ClassicLay
         r.bottom() > screen.bottom())
       out.push_back("page '" + page.id + "', row '" + it.id + "' is off the screen");
     if (layout.strip || layout.plates) continue;
-    const size_t cap = it.kind == ui::ItemKind::label ? 40 : kLabelChars;
-    if (it.text.size() > cap)
+    const bool slot = (page.id == "load" || page.id == "save") && it.kind != ui::ItemKind::back;
+    const Columns cols = columns_of(page, it);
+    const size_t cap = it.kind == ui::ItemKind::label ? 40
+                       : slot                         ? kSlotChars
+                                                      : label_chars(layout, cols.label_end);
+    size_t widest = 0;  // a label of several lines (the quit joke): its widest
+    for (size_t at = 0; at <= it.text.size();) {
+      const size_t end = std::min(it.text.find('\n', at), it.text.size());
+      widest = std::max(widest, end - at);
+      at = end + 1;
+    }
+    if (widest > cap)
       out.push_back("page '" + page.id + "', row '" + it.id + "': the label \"" + it.text +
                     "\" is wider than its " + std::to_string(cap) + " glyphs; shorten it");
-    if (value_of(it).size() > kValueChars)
+    if (value_of(it).size() > cols.value_chars)
       out.push_back("page '" + page.id + "', row '" + it.id + "': the value \"" + value_of(it) +
-                    "\" is wider than its 12 glyphs; shorten its choice");
+                    "\" is wider than its " + std::to_string(cols.value_chars) +
+                    " glyphs; shorten its choice");
   }
   return out;
 }
 
+SetupFigureBox setup_figure_box(const ui::Page& page, const ClassicLayout& l,
+                                const ClassicArt& art) {
+  float below = kRowTop;
+  bool colours = false;
+  for (size_t i = 0; i < page.items.size() && i < l.items.size(); i++) {
+    if (l.items[i].w > 0) below = std::max(below, (l.items[i].bottom() - l.y) / l.scale);
+    colours = colours || page.items[i].id == "topcolor";
+  }
+  const float screen_h = art.screen_height();
+  constexpr float kWide = 112, kSwatches = 16;  // 14 swatches of 8 px a row, two rows
+  const float top = below + 6, bottom = screen_h - 4 - (colours ? kSwatches + 2 : 0);
+  const float x = std::floor((kScreenW - kWide) / 2);
+  SetupFigureBox box;
+  box.figure = {l.x + x * l.scale, l.y + top * l.scale, kWide * l.scale,
+                std::max(0.0f, bottom - top) * l.scale};
+  if (colours)
+    box.swatches = {l.x + x * l.scale, l.y + (bottom + 2) * l.scale, kWide * l.scale,
+                    kSwatches * l.scale};
+  return box;
+}
+
 void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
-                  const ClassicLayout& l, double t, int help_page) {
+                  const ClassicLayout& l, double t, int help_page, bool live_figure) {
   const ClassicPen pen{dl, art, l};
   dl.rect({0, 0, static_cast<float>(dl.width()), static_cast<float>(dl.height())},
           ui::hex(0x000000, 0.6f));
@@ -439,11 +538,13 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     draw_plates(pen, page, t);
     return;
   }
-  pen.picture(art.find("qplaque"), 16, 4);
+  // The save slots fill the width from the left, as the original's: no plaque beside them.
+  const bool slots = page.id == "load" || page.id == "save";
+  if (!slots) pen.picture(art.find("qplaque"), 16, 4);
   const PageArt* pa = art_of(page.id);
   const ui::Image* title = pa != nullptr ? art.find(pa->title) : nullptr;
   const ui::Image* banner = art.plates() ? art.find(banner_of(page.id)) : nullptr;
-  if (page.id == "quit") {
+  if (page.id == "quit" || page.id == "newgame") {
     // The question in its box, no title.
   } else if (banner != nullptr) {
     pen.picture(banner, std::floor((kScreenW - art.width_of(*banner)) / 2), -16);
@@ -504,7 +605,49 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     return;
   }
 
-  if (page.id == "quit") pen.box(56, 68, 24, 5);
+  // Quake II asks whether to quit on a tag in its quit picture (the rest of the picture its
+  // credits): the tag alone cut from it, over the answers, in place of the box and the question
+  // written in the glyphs (whose sheet has no box pieces).
+  const ui::Image* asked = page.id == "quit" && art.plates() ? art.find("quit") : nullptr;
+  if (asked != nullptr) {
+    constexpr ui::Rect kQuitTag{86, 50, 144, 30};  // classic px of the 320 x 240 picture
+    float first = -1;
+    for (size_t i = 0; i < page.items.size(); i++)
+      if (l.items[i].w > 0 && page.items[i].kind != ui::ItemKind::label) {
+        first = local_y(l.items[i]);
+        break;
+      }
+    const float py = first >= 0 ? std::max(0.0f, first - kQuitTag.h - 6) : 90;
+    const float d = static_cast<float>(asked->width) / art.width_of(*asked);  // px a classic px
+    ui::Box b;
+    b.rect = pen.at(std::floor((kScreenW - kQuitTag.w) / 2), py, kQuitTag.w, kQuitTag.h);
+    b.image = asked;
+    b.uv = {kQuitTag.x * d, kQuitTag.y * d, kQuitTag.w * d, kQuitTag.h * d};
+    b.nearest = art.density <= 1;
+    b.feather = 0;
+    pen.dl.box(b);
+  } else if (shows_joke(page)) {
+    pen.box(56, 76, 24, 4);  // the game's own box: 24 characters by four lines
+  } else if (page.id == "quit" || page.id == "newgame") {
+    pen.box(56, 68, 24, 5);
+  }
+  // The setup page's figure in the shirt and pants its rows hold now, in its box under the rows.
+  if (page.id == "setup" && art.loaded() && !live_figure) {
+    int top = -1, bottom = -1;
+    float below = kRowTop;
+    for (size_t i = 0; i < page.items.size(); i++) {
+      const ui::Item& it = page.items[i];
+      if (l.items[i].w > 0) below = std::max(below, local_y(l.items[i]) + 8);
+      if (it.id == "topcolor" && !it.disabled) top = it.choice;
+      if (it.id == "bottomcolor" && !it.disabled) bottom = it.choice;
+    }
+    const ui::Image* fig = top >= 0 && bottom >= 0 ? art.player_in(top, bottom) : nullptr;
+    if (fig != nullptr) {
+      const float bx = std::floor((kScreenW - 72) / 2.0f), by = below + 8;
+      pen.picture(art.find("bigbox"), bx, by);
+      pen.picture(fig, bx + 12, by + 8);
+    }
+  }
   for (size_t i = 0; i < page.items.size(); i++) {
     const ui::Item& it = page.items[i];
     const ui::Rect& r = l.items[i];
@@ -512,13 +655,33 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     const float y = local_y(r);
     const float alpha = it.disabled ? 0.3f : 1.0f;
     if (it.kind == ui::ItemKind::label) {
+      if (asked != nullptr) continue;                 // the picture asks it
+      if (it.text.find('\n') != std::string::npos) {  // the quit joke's lines, gold, as written
+        float line_y = y;
+        for (size_t at = 0; at <= it.text.size();) {
+          const size_t end = std::min(it.text.find('\n', at), it.text.size());
+          pen.text(it.text.substr(at, end - at), 64, line_y, true);
+          line_y += 8;
+          at = end + 1;
+        }
+        continue;
+      }
       const std::string s = sentence(it.text);
       pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), y, false);
       continue;
     }
     std::string label = sentence(it.text);
-    if (label.size() > kLabelChars) label.resize(kLabelChars);
-    if (page.id == "quit") {
+    if (slots && it.kind != ui::ItemKind::back) {  // a slot's whole comment line, then its cursor
+      label = it.text;                             // the comment as the save wrote it
+      if (label.size() > kSlotChars) label.resize(kSlotChars);
+      pen.text(label, 16, y, false, alpha);
+      if (static_cast<int>(i) == page.focus)
+        pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), 8, y);
+      continue;
+    }
+    const Columns cols = columns_of(page, it);
+    if (const size_t most = label_chars(l, cols.label_end); label.size() > most) label.resize(most);
+    if (page.id == "quit" || page.id == "newgame") {
       // The answers centred in the box, the cursor before the focused one.
       const float x = std::floor((kScreenW - 8 * static_cast<float>(label.size())) / 2);
       pen.text(label, x, y, true, alpha);
@@ -526,23 +689,24 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
         pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), x - 16, y);
       continue;
     }
-    pen.text(label, kLabelEnd - 8 * static_cast<float>(label.size()), y, true, alpha);
+    pen.text(label, cols.label_end - 8 * static_cast<float>(label.size()), y, true, alpha);
     if (it.kind == ui::ItemKind::slider) {
       const double span = it.max - it.min;
       const double f = span > 0 ? std::clamp((it.value - it.min) / span, 0.0, 1.0) : 0;
-      pen.glyph(128, kValueX, y, alpha);
+      pen.glyph(128, cols.value_x, y, alpha);
       for (int c = 0; c < kSliderCells; c++)
-        pen.glyph(129, kValueX + 8 * static_cast<float>(c + 1), y, alpha);
-      pen.glyph(130, kValueX + 8 * (kSliderCells + 1), y, alpha);
-      pen.glyph(131, kValueX + 8 + static_cast<float>(std::lround(f * (kSliderCells - 1) * 8)), y,
-                alpha);
+        pen.glyph(129, cols.value_x + 8 * static_cast<float>(c + 1), y, alpha);
+      pen.glyph(130, cols.value_x + 8 * (kSliderCells + 1), y, alpha);
+      pen.glyph(131, cols.value_x + 8 + static_cast<float>(std::lround(f * (kSliderCells - 1) * 8)),
+                y, alpha);
     } else {
       std::string v = value_of(it);
-      if (v.size() > kValueChars) v.resize(kValueChars);
-      pen.text(v, kValueX, y, false, alpha);
+      if (v.size() > cols.value_chars) v.resize(cols.value_chars);
+      pen.text(v, cols.value_x, y, false, alpha);
     }
     if (static_cast<int>(i) == page.focus)
-      pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), kCursorX, y);
+      pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), cols.cursor_x,
+                y);
   }
 }
 

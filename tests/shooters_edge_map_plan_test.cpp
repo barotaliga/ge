@@ -1,4 +1,4 @@
-// A MAP'S TEAM PLAN (games/shooters_edge/bots/map_plan.hpp), worked out from the fixture halls
+// A MAP'S TEAM PLAN (plugins/shooterbots/map_plan.hpp), worked out from the fixture halls
 // furnished for a team game: the key items become areas, a base is chosen among the areas a way
 // leads to that hold no power, the quad's area is a rush with a lead, and the plan is the same
 // every run. An item's worth orders the powers over the armours over the weapons.
@@ -11,10 +11,12 @@
 
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooters_edge/bots/goals.hpp"
-#include "shooters_edge/bots/map_plan.hpp"
+#include "shooterbots/goals.hpp"
+#include "shooterbots/map_plan.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
@@ -78,7 +80,7 @@ TEST(a_maps_goals_are_only_what_its_items_and_areas_allow) {
       if (g.kind == k) return true;
     return false;
   };
-  std::vector<bt::Goal> goals = bt::map_goals(plan, items, "no-map");
+  std::vector<bt::Goal> goals = bt::map_goals(plan, items, "no-map", bt::quake_maps());
   CHECK(has(goals, bt::GoalKind::take) && has(goals, bt::GoalKind::time));
   CHECK(has(goals, bt::GoalKind::hold) && has(goals, bt::GoalKind::retake));
   CHECK(has(goals, bt::GoalKind::arm));
@@ -100,7 +102,7 @@ TEST(a_maps_goals_are_only_what_its_items_and_areas_allow) {
   plan.areas.back().name = "quad";
   plan.areas.back().items = {3};
   plan.areas.back().power = true;
-  goals = bt::map_goals(plan, items, "no-map");
+  goals = bt::map_goals(plan, items, "no-map", bt::quake_maps());
   CHECK(has(goals, bt::GoalKind::rush) && has(goals, bt::GoalKind::escort));
   CHECK(has(goals, bt::GoalKind::clear) && has(goals, bt::GoalKind::drop));
   for (const bt::Goal& g : goals)

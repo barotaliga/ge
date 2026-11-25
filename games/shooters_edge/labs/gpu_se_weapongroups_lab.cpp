@@ -50,7 +50,7 @@
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/labs/staged.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -164,7 +164,7 @@ void run(gl::Lab& lab) {
   std::vector<ge::viewmodel::HeldModel> weapons;
   bool at_eye = false;
   if (!folder.empty())
-    at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+    at_eye = cl::load_held_set(cl::qw_adapter(), files, {}, weapons);
   else if (!shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
     lab.note("no weapon is drawn: " + error);
   shooters_edge::look::Picture look;
@@ -208,7 +208,7 @@ void run(gl::Lab& lab) {
   con.execute("cl_weapongroups 1");
   con.execute(lab.arg("groups"));
   cl::WeaponGroups& groups = controls.groups;
-  groups.game = shooters_edge::profiles::classic_game().weapon_groups;
+  groups.game = shooters_edge::profiles::q1_game().weapon_groups;
 
   cl::ViewState shown;
   cl::FxState fx_state;

@@ -1,11 +1,11 @@
 ---
-title: In the sequel a map entity's world row follows the world and the players, and fields are entities too
+title: In Quake II a map entity's world row follows the world and the players, and fields are entities too
 date: 2026-11-11
-scope: games/shooters_edge/server/sequel_map.cpp, games/shooters_edge/server/sequel_server.cpp, tests/shooters_edge_sequel_server_test.cpp
-concepts: [sequel, movers, world-rows, map-row, door-field, plat-field, trace, entity-count]
+scope: games/shooters_edge/server/q2_map.cpp, games/shooters_edge/server/q2_server.cpp, tests/shooters_edge_q2_server_test.cpp
+concepts: [q2, movers, world-rows, map-row, door-field, plat-field, trace, entity-count]
 ---
 
-A trace through the sequel's map answers a WORLD ROW, not an entity index: row 0 is the world,
+A trace through Quake II's map answers a WORLD ROW, not an entity index: row 0 is the world,
 rows 1..kMaxClients the players, then the map's entities (`map_row(e)` = 1 + kMaxClients + e,
 `map_entity_of_row` back), then the missiles and the drops. Compare a hit with `map_row(e)`, never
 with `e`.

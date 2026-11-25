@@ -2,7 +2,7 @@
 title: Growing a hook table breaks every table written positionally (-Wmissing-field-initializers)
 date: 2026-11-14
 scope: games/shooters_edge/sim/mod_api.hpp, games/shooters_edge/mods/, tests/shooters_edge_mod_test.cpp, tests/mod_abi_two_fixture.cpp
-concepts: [abi-growth, hook-table, missing-field-initializers, werror, sample-mod, sequel-mods]
+concepts: [abi-growth, hook-table, missing-field-initializers, werror, sample-mod, q2-mods]
 ---
 
 Adding `damage` and `death` at the end of `se_mod_hooks_v1` keeps old binaries loading (the

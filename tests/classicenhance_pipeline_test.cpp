@@ -355,7 +355,7 @@ TEST(pipeline_leaves_a_release_with_remade_sounds_its_sounds_and_enhances_the_re
 }
 
 TEST(pack_textures_reads_a_map_that_keeps_its_textures_outside_by_their_files_and_marks) {
-  // The sequel's form: a version-38 map naming its textures, each texture's own file in the pack.
+  // Quake II's form: a version-38 map naming its textures, each texture's own file in the pack.
   ge::brush::Fixture fx = ge::brush::weather_fixture();
   ge::brush::FixtureRoom pool;
   pool.name = "pool";
@@ -368,14 +368,14 @@ TEST(pack_textures_reads_a_map_that_keeps_its_textures_outside_by_their_files_an
   CHECK_MSG(ge::brush::write_bsp(fx, ge::brush::Family::v38, &map_file, &error), error);
   ge::brush::Map map;
   CHECK_MSG(ge::brush::read_bsp(map_file, &map, &error), error);
-  const ce::Profile& sequel = *ce::find_profile("sequel");
+  const ce::Profile& q2 = *ce::find_profile("q2");
   ge::assets::IndexedImage pcx;
   pcx.width = 8, pcx.height = 8;
   pcx.indices.assign(64, 1);
   pcx.palette.resize(768);
   for (size_t i = 0; i < pcx.palette.size(); i++) pcx.palette[i] = uint8_t(i * 7);
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
-      {std::string(sequel.palette), ge::assets::encode_pcx(pcx)}, {"maps/yard.bsp", map_file}};
+      {std::string(q2.palette), ge::assets::encode_pcx(pcx)}, {"maps/yard.bsp", map_file}};
   // Every texture's file but one wall's, each 16 x 8 of its own index.
   std::string missing;
   uint8_t index = 10;
@@ -393,7 +393,7 @@ TEST(pack_textures_reads_a_map_that_keeps_its_textures_outside_by_their_files_an
   CHECK_MSG(ge::vfs::write_pak(files, &pack, &error), error);
   std::vector<ce::PackTexture> textures;
   ce::Palette pal;
-  CHECK_MSG(ce::pack_textures(pack, &pal, &textures, &error, sequel), error);
+  CHECK_MSG(ce::pack_textures(pack, &pal, &textures, &error, q2), error);
   // Each drawn texture once with its file's pixels; the sky (the sky box is drawn there) and the
   // one with no file left out; the liquid told by the map's mark, not its name.
   CHECK(textures.size() + 2 == map.textures.size());
@@ -403,10 +403,10 @@ TEST(pack_textures_reads_a_map_that_keeps_its_textures_outside_by_their_files_an
     CHECK(t.map == "yard" && t.width == 16 && t.height == 8 && t.indexed.size() == 128);
     if (t.name.find("slime") != std::string::npos) {
       liquid = t.marks.liquid;
-      CHECK(ce::material_of(t.name, t.marks, sequel.words) == ce::Material::liquid);
+      CHECK(ce::material_of(t.name, t.marks, q2.words) == ce::Material::liquid);
     }
     if (t.name.find("metal_panel") != std::string::npos) {
-      CHECK(ce::material_of(t.name, t.marks, sequel.words) == ce::Material::metal);
+      CHECK(ce::material_of(t.name, t.marks, q2.words) == ce::Material::metal);
     }
   }
   CHECK(liquid);

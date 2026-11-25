@@ -3,7 +3,7 @@
 // ge:summary The growing recording's broadcast: bytes in, one-second zstd blocks out
 // ge:keywords watcher broadcast growing-recording stream_add recording-track live
 // ge:skill replay shooter
-// ge:test tests/shooters_edge_classic_watcher_test.cpp
+// ge:test tests/shooters_edge_qw_watcher_test.cpp
 #include "shooters_edge/client/recording_tv.hpp"
 
 #include <string>

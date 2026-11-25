@@ -10,7 +10,7 @@
 //   beyond the moment the bucket is empty.
 // - THE TWO RULES: `sv_rconrate` holds the remote console; `sv_passwordrate` holds connects
 //   refused for a wrong player's or spectator's password (only a wrong one takes a try). Each game
-//   sets its defaults: the first game's "10*10" (ten a second) and 0, the sequel's 1 and 1.
+//   sets its defaults: Quake's "10*10" (ten a second) and 0, Quake II's 1 and 1.
 //
 // One bucket per server (not per address: a guesser has many). The clock is the caller's (the
 // server's own time, s). The rules are `kLimitRules` (an endpoint's, read when it starts by

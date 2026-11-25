@@ -62,7 +62,7 @@ FirstPersonRow classic_first_person(double unit_m) {
 
 Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPersonState& st,
                         double dt, double motion) {
-  const double crouched = core::lerp(row.eye_stand_m, row.eye_crouch_m, s.crouch);
+  const double crouched = core::lerp(row.eye_stand_m, row.eye_crouch_m, s.crouch) + row.eye_lift_m;
   bool snap = st.fresh;
   for (int i = 0; i < s.event_count; ++i) snap = snap || s.events[i].kind == Moment::teleport;
   if (snap) {
@@ -134,13 +134,18 @@ Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPerson
       row.dip_max_m > 0 ? row.dip_max_m * libm::tanh(dip / row.dip_max_m) : 0.0;
   double idle_yaw = 0, idle_pitch = 0, idle_roll = 0;
   if (row.idle > 0) {
-    idle_yaw = row.idle * libm::sin(st.clock * core::kTau / 2.0);
-    idle_pitch = row.idle * libm::sin(st.clock * core::kTau / 1.0);
-    idle_roll = row.idle * 0.3 * libm::sin(st.clock * core::kTau / 0.5);
+    auto axis = [&](double share, double period) {
+      return period > 0 ? row.idle * share * libm::sin(st.clock * core::kTau / period) : 0.0;
+    };
+    idle_yaw = axis(row.idle_yaw_share, row.idle_yaw_period_s);
+    idle_pitch = axis(row.idle_pitch_share, row.idle_pitch_period_s);
+    idle_roll = axis(row.idle_roll_share, row.idle_roll_period_s);
   }
 
   Pose p;
-  p.eye = Vec3{s.pos.x, st.eye_base + st.eye_height + (bob + dip_clipped) * motion, s.pos.z};
+  st.bob = bob;
+  p.eye = Vec3{s.pos.x, st.eye_base + st.eye_height + (bob * row.bob_eye + dip_clipped) * motion,
+               s.pos.z};
   p.yaw = s.look_yaw + idle_yaw * motion;
   p.pitch = s.look_pitch + (st.kick_pitch * kick_share + punch + idle_pitch) * motion;
   p.roll = (strafe_roll(row, side_speed) + st.kick_roll * kick_share + idle_roll) * motion;

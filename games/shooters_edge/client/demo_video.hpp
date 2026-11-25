@@ -88,18 +88,19 @@ struct DemoVideoOptions {
   bool autotrack = false;
   AutotrackSettings autotrack_set;
   bool hud = true;
-  const GameAdapter* game = nullptr;  // whose recordings it opens (null: the first game's)
+  const GameAdapter* game = nullptr;  // whose recordings it opens (null: Quake's)
   bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
   bool messages = true;  // the prints, the chat and the centre prints the recorded player read
   bool sound = true;
   bool lerp =
       true;  // drawn between the demo's frames (demo_lerp.hpp), as `demo_lerp` in the window
-  // The first game's bob, strafe roll and damage kick rebuilt on the eye (demo_eyes.hpp) by
+  // Quake's bob, strafe roll and damage kick rebuilt on the eye (demo_eyes.hpp) by
   // `view_row` (null: the classic row); false: the eye as recorded.
   bool classic_view = true;
   const ge::camera::FirstPersonRow* view_row = nullptr;
-  float volume = 0.5f;                     // the game's sounds, under the voices
-  float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is
+  float behind = 0;           // cam_thirdperson's distance behind the player, units (0: his eyes)
+  float volume = 0.5f;        // the game's sounds, under the voices
+  float voice_volume = 1.5f;  // the players' voices, over the game as voice chat is
   const look::Picture* picture = nullptr;  // the look (null: the classic look's defaults)
 };
 
@@ -134,7 +135,9 @@ using DemoVideoLerp = std::function<void(const DemoLerp&)>;
 // What a demo has standing in the world this frame, for `FxFrame::models`: its entities with a
 // model (not the eye's own), the other players in their colours, the level's statics. The video
 // and the window's playback (`playdemo`, `timedemo`) both draw these.
-void demo_placed(const DemoState& s, std::vector<Placed>& out);
+// `own_alpha`: the share of the tracked player's own figure shown when `draw_own` draws it.
+void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own = false,
+                 float own_alpha = 1);
 
 // A demo's frame as the effects read it (world_fx.hpp's FxScene): `fx`'s explosions, temporary
 // entities and missiles (demo_fx.hpp), what stands in the world (`demo_placed`), the players as

@@ -108,7 +108,7 @@ struct ElementSpec {
   float fit = 0;
   int digit_cells = 3;  // kind digits: the field's width in cells
   bool snap = false;
-  // `fixed_side`: never mirrored (a status bar drawn as the classic game drew it). `flush`: an
+  // `fixed_side`: never mirrored (a status bar drawn as Quake drew it). `flush`: an
   // element at a top or bottom anchor drawn against the screen's own edge, past the margin and
   // the insets, so no world shows between it and the edge.
   bool fixed_side = false;
@@ -150,6 +150,9 @@ struct Content {
   std::vector<Cell> cells;
   const Face* face = nullptr;
   float density = 1;  // the pictures' pixels per art pixel (pictures.hpp)
+  // The picture kinds: moved this many art pixels right and down from its place (the player's
+  // own nudge, as the crosshair's cl_crossx and cl_crossy).
+  float shift_x = 0, shift_y = 0;
   ui::Color over{1, 1, 1, 1};
   double t = 0;  // s, the frame's clock: the feed's, and the dial's needle eases by it
   // The instruments' numbers (instruments.hpp): a dial's value (`value` is its figure), the

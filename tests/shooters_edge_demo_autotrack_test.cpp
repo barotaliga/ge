@@ -17,7 +17,7 @@
 #include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;

@@ -78,6 +78,19 @@ void send_settings(SessionHost& h, int seat) {
   }
 }
 
+// The server info to one seat, or to every seated player with `seat` -1.
+void send_info(SessionHost& h, int seat) {
+  std::vector<uint8_t> buf(h.server_info.size() + 12);
+  Writer w = make_writer(buf.data(), buf.size());
+  write_u8(w, kServerInfo);
+  write_text(w, h.server_info.data(), h.server_info.size());
+  if (seat < 0) {
+    send_all(h, buf.data(), w.size);
+  } else {
+    send_seat(h, seat, buf.data(), w.size);
+  }
+}
+
 void refuse(SessionHost& h, int peer, SessionAsk ask, SessionWhy why) {
   const uint8_t buf[3] = {kRefused, static_cast<uint8_t>(ask), static_cast<uint8_t>(why)};
   node_send(*h.node, peer, h.config.channel, buf, 3);
@@ -117,6 +130,7 @@ void free_seat(SessionHost& h, int seat, SessionWhy why) {
   h.players[seat] = Player{};
   h.tokens[seat] = 0;
   h.seat_peer[seat] = -1;
+  h.user_info[seat].clear();
   const uint8_t buf[3] = {kGone, static_cast<uint8_t>(seat), static_cast<uint8_t>(why)};
   send_all(h, buf, 3);
   push(h, SessionEventType::left, seat).why = why;
@@ -184,6 +198,7 @@ void welcome(SessionHost& h, int seat) {
   }
   if (!h.settings.empty()) send_settings(h, seat);
   send_phase(h, seat);
+  if (!h.server_info.empty()) send_info(h, seat);
 }
 
 bool banned(const SessionHost& h, uint64_t token, const Address& from) {
@@ -350,6 +365,20 @@ void on_message(SessionHost& h, int peer, const uint8_t* data, size_t size, int6
       const uint8_t* text = read_text(r, kMaxMessage, n);
       if (r.bad) break;
       answer(h, seat, SessionAsk::command, take_command(h, seat, text, n, now_us));
+      return;
+    }
+    case kUserInfo: {
+      size_t n = 0;
+      const uint8_t* text = read_text(r, kMaxMessage, n);
+      if (r.bad) break;
+      std::string info(reinterpret_cast<const char*>(text), n);
+      if (info == h.user_info[seat]) return;
+      h.user_info[seat] = std::move(info);
+      SessionEvent& e = push(h, SessionEventType::user_info, seat);
+      e.offset = static_cast<uint32_t>(h.event_bytes.size());
+      e.size = static_cast<uint32_t>(n);
+      h.event_bytes.insert(h.event_bytes.end(), text, text + n);
+      h.event_bytes.push_back(0);
       return;
     }
     case kKick: {
@@ -594,6 +623,32 @@ bool session_host_print(SessionHost& h, int player, const char* text, size_t siz
   Writer w = make_writer(buf.data(), buf.size());
   write_u8(w, kPrint);
   write_text(w, line.data(), n);
+  send_seat(h, player, buf.data(), w.size);
+  return true;
+}
+
+bool session_host_server_info(SessionHost& h, const char* info, size_t size) {
+  if (size > kMaxMessage - 16) return false;
+  if (h.server_info.size() == size && std::memcmp(h.server_info.data(), info, size) == 0)
+    return false;
+  h.server_info.assign(info, size);
+  send_info(h, -1);
+  return true;
+}
+
+bool session_host_stuff(SessionHost& h, int player, const char* text, size_t size) {
+  if (size > kMaxMessage - 16) return false;
+  std::vector<uint8_t> buf(size + 16);
+  Writer w = make_writer(buf.data(), buf.size());
+  write_u8(w, kStuff);
+  write_text(w, text, size);
+  if (player == kNoPlayer) {
+    send_all(h, buf.data(), w.size);
+    return true;
+  }
+  if (player < 0 || player >= h.config.max_players || !h.players[player].used ||
+      h.seat_peer[player] < 0)
+    return false;
   send_seat(h, player, buf.data(), w.size);
   return true;
 }

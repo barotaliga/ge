@@ -12,10 +12,18 @@
 // Times are the client's clock in seconds (`t`): when each weapon was picked up (its icon flashes
 // for a second after) and when the player was last hurt (the portrait winces).
 //
+// THE ITEMS WORD (`items`, `in_hand`): the 32 item bits and the weapon in hand as the program
+// keeps them, for what the eight weapons above cannot say. A Quake mission pack's own status bar
+// reads its new weapons and items off them (art.hpp's `HudArt::pack`, layout.cpp), and every
+// gun's pickup flash is timed off a bit's rise (layout.hpp's `Hud::rose_at`). A program that
+// defines `items2` sends it above bit 23 in place of the runes (Scourge of Armagon's wetsuit,
+// Dissolution of Eternity's armour, ammunition and powerups).
+//
 // ge:summary Shooter's Edge's HUD snapshot: health, armour, ammunition, weapons, keys, powerups
 // ge:keywords hud status snapshot health armour armor ammo shells nails rockets cells weapons
 // ge:keywords weapon-group group-show
 // ge:keywords keys powerups cloak shield suit damage runes frags scoreboard player-status
+// ge:keywords items-word items2 in_hand mission-pack team-border current-ammo
 // ge:skill ui
 // ge:test tests/shooters_edge_hud_test.cpp
 #pragma once
@@ -74,7 +82,7 @@ struct FragRow {
 };
 
 // The weapons by the game's own number keys, for a game whose keys are not the eight `Weapon`s
-// (the sequel's eleven): what the quick weapon and the weapon groups read. Bit k of `carried` and
+// (Quake II's eleven): what the quick weapon and the weapon groups read. Bit k of `carried` and
 // `ready` (carried, with a shot's ammunition) is the weapon on key k; `ammo` by key, -1 for one
 // that spends none. Unset, they read the eight.
 struct KeyedWeapons {
@@ -85,23 +93,34 @@ struct KeyedWeapons {
 };
 
 struct Status {
+  // In the order that packs it (the lint holds the padding).
   double t = 0;  // s, the client's clock
+  double hurt_at = -1e9;
+  std::vector<FragRow> board;             // sorted best first; the HUD shows at most four
+  std::array<double, kPowers> power_s{};  // s left of each powerup; 0: not held
+  std::array<double, kGuns> picked_at{-1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9};
   int health = 100;
   int armour = 0;
-  ArmourClass armour_class = ArmourClass::none;
-  std::array<int, kAmmoKinds> ammo{};
-  Weapon weapon = Weapon::shotgun;
-  uint8_t owned = 0;  // bit (k - 1) for gun k: Weapon::shotgun is bit 0
-  std::array<double, kGuns> picked_at{-1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9};
-  bool key_silver = false, key_gold = false;
-  std::array<double, kPowers> power_s{};  // s left of each powerup; 0: not held
-  uint8_t runes = 0;                      // bit k: rune k + 1
-  double hurt_at = -1e9;
   int frags = 0;
-  std::vector<FragRow> board;  // sorted best first; the HUD shows at most four
-  bool dead = false;
+  // The items word and the weapon in hand as the program's bits (above); 0: not known, the HUD
+  // reads the other fields alone.
+  uint32_t items = 0, in_hand = 0;
+  int current_ammo = -1;  // the count beside the ammunition icon; -1: the weapon in hand's
+  // Team games (Dissolution of Eternity's team border): the server's `teamplay`, whether it seats
+  // more than one player (`multiplayer`), and the player's own shirt and pants colours (0..13; -1
+  // not known).
+  int teamplay = 0;
+  int shirt = -1, pants = -1;
+  std::array<int, kAmmoKinds> ammo{};
   GroupShow group;
   KeyedWeapons keyed;
+  ArmourClass armour_class = ArmourClass::none;
+  Weapon weapon = Weapon::shotgun;
+  uint8_t owned = 0;  // bit (k - 1) for gun k: Weapon::shotgun is bit 0
+  bool key_silver = false, key_gold = false;
+  uint8_t runes = 0;  // bit k: rune k + 1
+  bool dead = false;
+  bool multiplayer = false;
 
   bool has(Weapon w) const {
     return w == Weapon::melee || (owned >> (static_cast<int>(w) - 1) & 1) != 0;

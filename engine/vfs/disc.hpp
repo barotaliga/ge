@@ -10,8 +10,14 @@
 //   44.1 kHz 16-bit stereo, little-endian, as an image stores them. A track runs from its `INDEX
 //   01` to the next track's `INDEX 01` in the same file (a gap goes with the track before it, as
 //   rips keep it), the last one to the end of its file.
-// - **a `.bin` or `.img` alone** (no sheet): raw 2352-byte sectors when the first carries the sync
-//   pattern (its mode byte placing the user data), else 2048-byte ones; one data track.
+// - **an `.mdf` with its `.mds` sheet** (a disc copier's pair; the sheet found beside the image by
+//   its name, any case, or opened itself): every track, data and audio, its sectors 2048, 2352 or
+//   2448 bytes (2352 and the 96 bytes of subchannel); a data track's user data placed by its first
+//   sector's mode byte; an audio track's sound the first 2352 bytes of each sector.
+// - **a `.bin`, `.img` or `.mdf` alone** (no sheet): raw sectors when the first carries the sync
+//   pattern (its mode byte placing the user data), 2448 bytes each when the second sector's sync
+//   falls there (96 bytes of subchannel after each, as a disc copier's `.mdf` keeps them), else
+//   2352; 2048-byte ones when there is no sync; one data track.
 //
 // The file system is ISO 9660 on the first data track: the Joliet tree (UCS-2 names, any length)
 // when the disc has one, else the primary one (its `;1` and trailing `.` dropped). Names are kept
@@ -22,8 +28,9 @@
 //
 // ge:summary Reads a disc image (.iso, .cue with .bin, raw .bin/.img): ISO 9660 files, audio tracks
 // ge:keywords disc iso iso9660 joliet cue bin img image cd cd-rom cdda audio-track track mode1
-// ge:keywords mode2 raw-sector 2352 2048 sync data-track open_disc read_file read_audio
-// ge:keywords write_iso write_cue_bin fixture
+// ge:keywords mode2 raw-sector 2352 2048 2448 mdf subchannel sync data-track open_disc read_file
+// ge:keywords read_audio mds media-descriptor
+// ge:keywords write_iso write_cue_bin write_mds fixture
 // ge:skill vfs
 // ge:test tests/vfs_disc_test.cpp
 #pragma once
@@ -43,7 +50,7 @@ struct DiscTrack {
   TrackKind kind = TrackKind::data;
   int file = 0;            // index into Disc::image_files
   uint64_t start = 0;      // byte offset of its first sector in that file
-  uint32_t sector = 2048;  // bytes a sector takes in the file: 2048 or 2352
+  uint32_t sector = 2048;  // bytes a sector takes in the file: 2048, 2352 or 2448
   uint32_t user = 0;       // where a data sector's 2048 bytes start inside it (0, 16 or 24)
   uint32_t sectors = 0;    // its length
 };
@@ -78,7 +85,7 @@ class Disc {
   std::unique_ptr<Impl> impl_;
 };
 
-// Whether `path` names an image this reader opens by its extension (.iso, .cue, .bin, .img).
+// Whether `path` names an image this reader opens by its extension (.iso, .cue, .bin, .img, .mdf).
 bool is_disc_image(const std::string& path);
 // The image at `path` opened: its tracks and the files of its first data track; false with what is
 // wrong (the sheet's line, the missing `.bin`, no file system) and the next step in `*error`.
@@ -92,5 +99,10 @@ std::vector<uint8_t> write_iso(
     const std::string& volume = "GE_DISC");
 // The same data track as raw `MODE1/2352` sectors (sync, header, user data; no error codes).
 std::vector<uint8_t> raw_sectors(const std::vector<uint8_t>& iso);
+// A disc copier's `.mds` sheet for `tracks` in one image named `image` ("*.mdf": the sheet's own
+// name): each track's number, kind, sector size, its first sector's byte offset (`start`) and
+// length; every track but the first has a 150-sector pregap held in the image just before it.
+std::vector<uint8_t> write_mds(const std::vector<DiscTrack>& tracks,
+                               const std::string& image = "*.mdf");
 
 }  // namespace ge::vfs

@@ -62,7 +62,10 @@ namespace pg = ge::progs;
   X(arsenal_missile5, kTypeString) \
   X(arsenal_missile6, kTypeString) \
   X(arsenal_missile7, kTypeString) \
-  X(arsenal_missile8, kTypeString)
+  X(arsenal_missile8, kTypeString) \
+  X(quake, kTypeFloat)             \
+  X(rj, kTypeFloat)                \
+  X(corpse, kTypeEntity)
 
 // THE FIELDS after the form's, in the QC's order (the server finds `maxspeed`, `gravity` and
 // `attack_finished` by name; a map's "light" key fills `light_lev`).
@@ -110,7 +113,25 @@ namespace pg = ge::progs;
   X(splash_next, kTypeFloat)           \
   X(fall_speed, kTypeFloat)            \
   X(fired_z, kTypeFloat)               \
-  X(suit_finished, kTypeFloat)
+  X(suit_finished, kTypeFloat)         \
+  X(act_last, kTypeFloat)              \
+  X(act_hold, kTypeFloat)              \
+  X(act_fire, kTypeFloat)              \
+  X(dead_until, kTypeFloat)            \
+  X(freed, kTypeFloat)                 \
+  X(beam_next, kTypeFloat)             \
+  X(beam_held, kTypeFloat)             \
+  X(quad_heard, kTypeFloat)            \
+  X(ring_heard, kTypeFloat)            \
+  X(protect_heard, kTypeFloat)         \
+  X(warn_flash, kTypeFloat)            \
+  X(nail_side, kTypeFloat)             \
+  X(blade_at, kTypeFloat)              \
+  X(push_heard, kTypeFloat)            \
+  X(t_length, kTypeFloat)              \
+  X(t_width, kTypeFloat)               \
+  X(dest1, kTypeVector)                \
+  X(dest2, kTypeVector)
 
 // THE STRINGS the rules store or pass, both variants'.
 #define SE_RULES_STRINGS(X)                                                                        \
@@ -141,12 +162,16 @@ namespace pg = ge::progs;
   X(arsenal_weapon7, "arsenal_weapon7")                                                            \
   X(arsenal_weapon8, "arsenal_weapon8")                                                            \
   X(b_batt0, "maps/b_batt0.bsp")                                                                   \
+  X(b_batt1, "maps/b_batt1.bsp")                                                                   \
   X(b_bh10, "maps/b_bh10.bsp")                                                                     \
   X(b_bh100, "maps/b_bh100.bsp")                                                                   \
   X(b_bh25, "maps/b_bh25.bsp")                                                                     \
   X(b_nail0, "maps/b_nail0.bsp")                                                                   \
+  X(b_nail1, "maps/b_nail1.bsp")                                                                   \
   X(b_rock0, "maps/b_rock0.bsp")                                                                   \
+  X(b_rock1, "maps/b_rock1.bsp")                                                                   \
   X(b_shell0, "maps/b_shell0.bsp")                                                                 \
+  X(b_shell1, "maps/b_shell1.bsp")                                                                 \
   X(backpack, "backpack")                                                                          \
   X(backpack_mdl, "progs/backpack.mdl")                                                            \
   X(basetry_wav, "doors/basetry.wav")                                                              \
@@ -190,6 +215,30 @@ namespace pg = ge::progs;
   X(drowned, "drowned")                                                                            \
   X(electrocuted, "electrocuted")                                                                  \
   X(entered_the_game, " entered the game\n")                                                       \
+  X(spectator_word, "Spectator ")                                                                  \
+  X(left_the_game, " left the game\n")                                                             \
+  X(self_electrocute, "self_electrocute")                                                          \
+  X(deflected, "deflected")                                                                        \
+  X(satans_power, "satans power")                                                                  \
+  X(pent_deflect, "pent_deflect")                                                                  \
+  X(pent_both, "pent_both")                                                                        \
+  X(obit_rl_quad_1, "obit_rl_quad_1")                                                              \
+  X(obit_rl_quad_2, "obit_rl_quad_2")                                                              \
+  X(obit_rl_quad_3, "obit_rl_quad_3")                                                              \
+  X(power_octa_off, "power_octa_off")                                                              \
+  X(dq, "dq")                                                                                      \
+  X(dr, "dr")                                                                                      \
+  X(lost_a_quad, " lost a quad with ")                                                             \
+  X(lost_an_octa, " lost an OctaPower with ")                                                      \
+  X(lost_a_ring, " lost a ring with ")                                                             \
+  X(seconds_remaining, " seconds remaining\n")                                                     \
+  X(you_got_the_rune, "You got the rune!")                                                         \
+  X(a_rune_needs_its_episode, "a rune needs its episode in its spawnflags")                        \
+  X(recovered_a_quad, " recovered a Quad with ")                                                   \
+  X(recovered_an_octa, " recovered an OctaPower with ")                                            \
+  X(recovered_a_ring, " recovered a Ring with ")                                                   \
+  X(seconds_remaining_bang, " seconds remaining!\n")                                               \
+  X(style_off, "a")                                                                                \
   X(falling, "falling")                                                                            \
   X(fell_out, "an item fell out of the map at ")                                                   \
   X(flame2_mdl, "progs/flame2.mdl")                                                                \
@@ -242,6 +291,14 @@ namespace pg = ge::progs;
   X(open_bracket, " (")                                                                            \
   X(up_nl, " up)\n")                                                                               \
   X(land2_wav, "player/land2.wav")                                                                 \
+  X(gasp1_wav, "player/gasp1.wav")                                                                 \
+  X(gasp2_wav, "player/gasp2.wav")                                                                 \
+  X(inh2o_wav, "player/inh2o.wav")                                                                 \
+  X(inlava_wav, "player/inlava.wav")                                                               \
+  X(lburn1_wav, "player/lburn1.wav")                                                               \
+  X(lburn2_wav, "player/lburn2.wav")                                                               \
+  X(outwater_wav, "misc/outwater.wav")                                                             \
+  X(slimbrn2_wav, "player/slimbrn2.wav")                                                           \
   X(left, "left")                                                                                  \
   X(left_the_game_with, " left the game with ")                                                    \
   X(lock4_wav, "weapons/lock4.wav")                                                                \
@@ -337,6 +394,7 @@ namespace pg = ge::progs;
   X(self_squish, "self_squish")                                                                    \
   X(shafted, "shafted")                                                                            \
   X(shells, "shells")                                                                              \
+  X(spikes, "spikes")                                                                              \
   X(shield, "Shield")                                                                              \
   X(shot, "shot")                                                                                  \
   X(space, " ")                                                                                    \
@@ -643,7 +701,78 @@ namespace pg = ge::progs;
   X(ambience_suck1_wav, "ambience/suck1.wav")                                                      \
   X(ambience_swamp1_wav, "ambience/swamp1.wav")                                                    \
   X(ambience_swamp2_wav, "ambience/swamp2.wav")                                                    \
-  X(ambience_thunder1_wav, "ambience/thunder1.wav")
+  X(ambience_thunder1_wav, "ambience/thunder1.wav")                                                \
+  X(rules, "rules")                                                                                \
+  X(q1, "q1")                                                                                      \
+  X(rj_key, "rj")                                                                                  \
+  X(w_switch, "w_switch")                                                                          \
+  X(b_switch, "b_switch")                                                                          \
+  X(samelevel, "samelevel")                                                                        \
+  X(testplayerstart, "testplayerstart")                                                            \
+  X(h_player_mdl, "progs/h_player.mdl")                                                            \
+  X(teledth1_wav, "player/teledth1.wav")                                                           \
+  X(gib_wav, "player/gib.wav")                                                                     \
+  X(h2odeath_wav, "player/h2odeath.wav")                                                           \
+  X(drown2_wav, "player/drown2.wav")                                                               \
+  X(axhit1_wav, "player/axhit1.wav")                                                               \
+  X(pain2_wav, "player/pain2.wav")                                                                 \
+  X(pain3_wav, "player/pain3.wav")                                                                 \
+  X(pain4_wav, "player/pain4.wav")                                                                 \
+  X(pain5_wav, "player/pain5.wav")                                                                 \
+  X(pain6_wav, "player/pain6.wav")                                                                 \
+  X(death2_wav, "player/death2.wav")                                                               \
+  X(death3_wav, "player/death3.wav")                                                               \
+  X(death4_wav, "player/death4.wav")                                                               \
+  X(death5_wav, "player/death5.wav")                                                               \
+  X(h2ojump_wav, "player/h2ojump.wav")                                                             \
+  X(land_wav, "player/land.wav")                                                                   \
+  X(r_tele2_wav, "misc/r_tele2.wav")                                                               \
+  X(r_tele3_wav, "misc/r_tele3.wav")                                                               \
+  X(r_tele4_wav, "misc/r_tele4.wav")                                                               \
+  X(r_tele5_wav, "misc/r_tele5.wav")                                                               \
+  X(damage3_wav, "items/damage3.wav")                                                              \
+  X(inv3_wav, "items/inv3.wav")                                                                    \
+  X(sv_gravity, "sv_gravity")                                                                      \
+  X(g800, "800")                                                                                   \
+  X(g100, "100")                                                                                   \
+  X(lhit_wav, "weapons/lhit.wav")                                                                  \
+  X(lstart_wav, "weapons/lstart.wav")                                                              \
+  X(suicides_nl, " suicides\n")                                                                    \
+  X(already_dead, "Can't suicide -- allready dead!\n")                                             \
+  X(corpse_class, "bodyque")                                                                       \
+  X(exited_the_level, " exited the level\n")                                                       \
+  X(tried_to_leave, "tried to leave")                                                              \
+  X(world_blew_up, "world_blew_up")                                                                \
+  X(world_spiked, "world_spiked")                                                                  \
+  X(world_zapped, "world_zapped")                                                                  \
+  X(world_lavaball, "world_lavaball")                                                              \
+  X(world_left, "world_left")                                                                      \
+  X(windfly_wav, "ambience/windfly.wav")                                                           \
+  X(hum1_wav, "ambience/hum1.wav")                                                                 \
+  X(fire1_wav, "ambience/fire1.wav")                                                               \
+  X(cd_track, "cdtrack")                                                                           \
+  X(more_to_go_many, "There are more to go...")                                                    \
+  X(only_3_more, "Only 3 more to go...")                                                           \
+  X(only_2_more, "Only 2 more to go...")                                                           \
+  X(only_1_more, "Only 1 more to go...")                                                           \
+  X(sequence_completed, "Sequence completed!")                                                     \
+  X(found_secret_area, "You found a secret area!")                                                 \
+  X(trigger1_wav, "misc/trigger1.wav")                                                             \
+  X(medkey_wav, "misc/medkey.wav")                                                                 \
+  X(runekey_wav, "misc/runekey.wav")                                                               \
+  X(basekey_wav, "misc/basekey.wav")                                                               \
+  X(w_s_key_name, "silver key")                                                                    \
+  X(w_g_key_name, "gold key")                                                                      \
+  X(silver_runekey, "silver runekey")                                                              \
+  X(gold_runekey, "gold runekey")                                                                  \
+  X(silver_keycard, "silver keycard")                                                              \
+  X(gold_keycard, "gold keycard")                                                                  \
+  X(b_s_key_mdl, "progs/b_s_key.mdl")                                                              \
+  X(b_g_key_mdl, "progs/b_g_key.mdl")                                                              \
+  X(m_s_key_mdl, "progs/m_s_key.mdl")                                                              \
+  X(m_g_key_mdl, "progs/m_g_key.mdl")                                                              \
+  X(you_need_the, "You need the ")                                                                 \
+  X(lavaballed, "lavaball")
 
 // THE FUNCTIONS both programs hold by name: the hooks, the map's things, the thinks and touches.
 #define SE_COMMON_FUNCTIONS(X)                                      \
@@ -665,6 +794,11 @@ namespace pg = ge::progs;
   X(func_illusionary, "func_illusionary")                           \
   X(func_door, "func_door")                                         \
   X(func_plat, "func_plat")                                         \
+  X(func_train, "func_train")                                       \
+  X(train_blocked, "train_blocked")                                 \
+  X(train_arrived, "train_arrived")                                 \
+  X(train_next, "train_next")                                       \
+  X(train_place, "train_place")                                     \
   X(func_button, "func_button")                                     \
   X(trigger_multiple, "trigger_multiple")                           \
   X(trigger_once, "trigger_once")                                   \
@@ -733,7 +867,55 @@ namespace pg = ge::progs;
   X(teleport_touch, "teleport_touch")                               \
   X(push_touch, "push_touch")                                       \
   X(hurt_ready, "hurt_ready")                                       \
-  X(hurt_touch, "hurt_touch")
+  X(hurt_touch, "hurt_touch")                                       \
+  X(secret_closed, "secret_closed")                                 \
+  X(secret_back, "secret_back")                                     \
+  X(secret_shut_rest, "secret_shut_rest")                           \
+  X(secret_shut, "secret_shut")                                     \
+  X(secret_open_full, "secret_open_full")                           \
+  X(secret_aside, "secret_aside")                                   \
+  X(secret_open_rest, "secret_open_rest")                           \
+  X(secret_use, "secret_use")                                       \
+  X(secret_shot, "secret_shot")                                     \
+  X(secret_blocked, "secret_blocked")                               \
+  X(secret_door_touch, "secret_door_touch")                         \
+  X(func_door_secret, "func_door_secret")                           \
+  X(explobox_die, "explobox_die")                                   \
+  X(misc_explobox, "misc_explobox")                                 \
+  X(misc_explobox2, "misc_explobox2")                               \
+  X(fireball_touch, "fireball_touch")                               \
+  X(fireball_fly, "fireball_fly")                                   \
+  X(misc_fireball, "misc_fireball")                                 \
+  X(trap_fire, "trap_fire")                                         \
+  X(trap_spikeshooter, "trap_spikeshooter")                         \
+  X(trap_shooter_think, "trap_shooter_think")                       \
+  X(trap_shooter, "trap_shooter")                                   \
+  X(bubble_rise, "bubble_rise")                                     \
+  X(bubbles_make, "bubbles_make")                                   \
+  X(air_bubbles, "air_bubbles")                                     \
+  X(ambient_comp_hum, "ambient_comp_hum")                           \
+  X(ambient_drip, "ambient_drip")                                   \
+  X(ambient_drone, "ambient_drone")                                 \
+  X(ambient_flouro_buzz, "ambient_flouro_buzz")                     \
+  X(ambient_light_buzz, "ambient_light_buzz")                       \
+  X(ambient_suck_wind, "ambient_suck_wind")                         \
+  X(ambient_swamp1, "ambient_swamp1")                               \
+  X(ambient_swamp2, "ambient_swamp2")                               \
+  X(ambient_thunder, "ambient_thunder")                             \
+  X(laser_touch, "laser_touch")                                     \
+  X(tele_sound, "tele_sound")                                       \
+  X(quake_key_touch, "quake_key_touch")                             \
+  X(light_use, "light_use")                                         \
+  X(light_fluorospark, "light_fluorospark")                         \
+  X(trigger_killed, "trigger_killed")                               \
+  X(func_episodegate, "func_episodegate")                           \
+  X(func_bossgate, "func_bossgate")                                 \
+  X(onlyregistered_touch, "onlyregistered_touch")                   \
+  X(trigger_onlyregistered, "trigger_onlyregistered")               \
+  X(teleporttrain_next, "teleporttrain_next")                       \
+  X(teleporttrain_use, "teleporttrain_use")                         \
+  X(misc_teleporttrain, "misc_teleporttrain")                       \
+  X(item_weapon, "item_weapon")
 
 // WORDS AS THE BYTECODE TESTS THEM. A condition on a float (IF / IFNOT) tests the word, so -0 is
 // true; `!x`, `&&` and `||` compare as floats (and evaluate both sides: the rules ask both
@@ -743,10 +925,16 @@ inline float band(float a, float b) { return bit_and(a, b); }
 inline float bor(float a, float b) { return bit_or(a, b); }
 inline bool same_vec(Vec3 a, Vec3 b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
 
+// Vector words as the bytecode makes them: a float times a vector (MUL_FV) and the dot product
+// (MUL_V), each in its own order.
+inline Vec3 fv(float k, Vec3 v) { return {k * v.x, k * v.y, k * v.z}; }
+inline float dot(Vec3 a, Vec3 b) { return (a.x * b.x + a.y * b.y) + a.z * b.z; }
+
 // THE CONSTANTS.
 constexpr float kMovetypeNone = 0, kMovetypeWalk = 3, kMovetypeToss = 6, kMovetypePush = 7,
                 kMovetypeFlymissile = 9, kMovetypeBounce = 10;
 constexpr float kSolidNot = 0, kSolidTrigger = 1, kSolidBbox = 2, kSolidSlidebox = 3, kSolidBsp = 4;
+constexpr int kFlInWater = 16;  // in a liquid since the last frame out of one (the campaign's)
 constexpr int kFlClient = 8, kFlItem = 256, kFlOnground = 512, kFlJumpreleased = 4096;
 constexpr float kDamageNo = 0, kDamageYes = 1, kDamageAim = 2;
 constexpr float kDeadNo = 0, kDeadDead = 2, kDeadRespawnable = 3;
@@ -758,7 +946,13 @@ constexpr int kItShells = 256, kItNails = 512, kItRockets = 1024, kItCells = 204
               kItKey2 = 262144, kItInvisibility = 524288, kItInvulnerability = 1048576,
               kItSuit = 2097152, kItQuad = 4194304;
 constexpr float kChanWeapon = 1, kChanVoice = 2, kChanItem = 3, kChanBody = 4;
-constexpr float kAttnNone = 0, kAttnNorm = 1;
+constexpr float kAttnNone = 0, kAttnNorm = 1, kAttnIdle = 2, kAttnStatic = 3;
+constexpr float kChanAuto = 0;
+constexpr float kMovetypeNoclip = 8;
+constexpr float kContentWater = -3;
+constexpr float kMsgBroadcast = 0, kMsgAll = 2;
+constexpr float kSvcCdtrack = 32, kSvcFoundsecret = 28, kSvcIntermission = 30;
+constexpr float kTeTeleport = 11;
 constexpr float kPrintLow = 0, kPrintMedium = 1, kPrintHigh = 2;
 constexpr float kMulticastPhs = 1, kMulticastPvs = 2;
 constexpr float kSvcTempentity = 23;

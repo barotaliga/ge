@@ -23,7 +23,7 @@ gs::SpawnAsk dedicated_ask(const DedicatedHost& host, const std::string& map,
   ask.logs = host.logs;
   ask.port = host.port;
   ask.map = map;
-  if (host.game != 1) ask.extra = {"-game", std::to_string(host.game)};
+  if (host.game != 1) ask.extra = {"-classic", host.game == 2 ? "q2" : "q1"};
   for (const auto& [name, value] : settings)
     ask.cfg.append(name).append(" \"").append(value).append("\"\n");
   return ask;
@@ -37,7 +37,7 @@ void add_window_dedicated(ge::console::Console& con, const std::string& prefs,
   host.root = root;
   host.state = (std::filesystem::path(prefs) / "cli").string();
   host.logs = (std::filesystem::path(prefs) / "logs").string();
-  host.game = game_id == "sequel" ? 2 : 1;
+  host.game = game_id == "q2" ? 2 : 1;
   add_dedicated_commands(con, host);
 }
 

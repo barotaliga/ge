@@ -1,8 +1,8 @@
-// The sequel's plate letters cut out as see-through ink from its main menu's tags
+// Quake II's plate letters cut out as see-through ink from its main menu's tags
 // (plate_letters.hpp).
 //
-// ge:summary Cuts the sequel's tag letters out by whose ink each pixel is; pieces, shrinks, tags
-// ge:keywords menu sequel plates tag carved-letters ink alpha ownership rim pieced-letters
+// ge:summary Cuts Quake II's tag letters out by whose ink each pixel is; pieces, shrinks, tags
+// ge:keywords menu q2 plates tag carved-letters ink alpha ownership rim pieced-letters
 // ge:keywords small-capitals shading dirty-metal banner
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
@@ -677,11 +677,12 @@ float plate_layout(const ClassicArt& art, std::string_view text, std::vector<flo
 }
 
 std::vector<TagPiece> tag_pieces(const ClassicArt& art, std::string_view text, bool lit,
-                                 float* width) {
+                                 float* width, Tone tone) {
   const float wide = plate_layout(art, text, nullptr);
   if (width != nullptr) *width = wide;
   if (wide <= 0) return {};
-  const auto& set = lit && art.letters_lit.count('[') != 0 ? art.letters_lit : art.letters;
+  const auto& set =
+      toned(lit && art.letters_lit.count('[') != 0 ? art.letters_lit : art.letters, tone);
   std::vector<TagPiece> out;
   metal_run(&set.at('_'), kTagLeft, wide - kTagRight, &out);
   out.push_back({&set.at('['), 0, 0, kTagLeft, 1});

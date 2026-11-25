@@ -50,6 +50,7 @@
 #include "shooters_edge/view/hand.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
+#include "vfs/search.hpp"
 
 namespace {
 
@@ -176,7 +177,7 @@ constexpr std::pair<const char*, const char*> kWindowCvars[] = {
     {"r_lava_glow", "0.2"}, {"r_slime_glow", "1"},  {"gamma", "1"},        {"vid_fullscreen", "0"},
     {"sv_weather", "0"},    {"sv_rain", "1"},       {"sv_precip", "0.5"},  {"sv_wind", "4"},
     {"r_lightning", "1"},   {"r_snowcover", "1"},   {"r_wet", "1"},        {"topcolor", "4"},
-    {"bottomcolor", "12"},
+    {"bottomcolor", "12"},  {"ruleset", "default"},
 };
 
 // The window's console: what the menu's rows read and run.
@@ -229,8 +230,9 @@ constexpr PageShot kPages[] = {
      "The root: SELECT GAME first, then SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, HELP and "
      "QUIT, the focus on MULTIPLAYER."},
     {"games", "",
-     "SELECT GAME: each classic game by the picture of its name, the one loaded marked with its "
-     "edition and install, the other not found yet; ENTER on it finds its folder."},
+     "SELECT GAME: each game added by the picture of its name and its edition, the game playing "
+     "in colour, the one remix plays it with half, then ADD GAME, which asks for a game's "
+     "folder."},
     {"single", "",
      "SINGLE PLAYER: NEW GAME runs `newgame` (the packs' single-player program from the map "
      "start); LOAD and SAVE open the save slots."},
@@ -270,13 +272,13 @@ constexpr PageShot kPages[] = {
      "CLASSIC ENHANCED: LOAD GAME (the folder the game is installed in) and ENHANCE, then a page "
      "a subject."},
     {"ce_art", "ce_relief",
-     "TEXTURES AND MODELS: the enhanced textures and skins, the relief and the depth, smooth "
+     "TEXTURES, MODELS: the enhanced textures and skins, the relief and the depth, smooth "
      "shading, the 2D art."},
     {"ce_light", "r_fx_lights",
      "LIGHT AND SHADOW: the rebaked light, the shadows, the effects' light, the sparks' glow, "
      "the bloom."},
     {"ce_liquids", "r_lava_glow",
-     "WATER, LAVA AND SKY: each liquid on or off with its light, the teleporters, the sky and "
+     "LIQUIDS AND SKY: each liquid on or off with its light, the teleporters, the sky and "
      "the low clouds."},
     {"ce_fire", "ce_bonfires", "FIRE AND WIND: the live fire, the bonfires and the wind."},
     {"ce_weather", "sv_rain",
@@ -286,6 +288,8 @@ constexpr PageShot kPages[] = {
      "HELP: the keys (in the classic look, the pack's help pages, turned with the "
      "arrows)."},
     {"quit", "", "QUIT: the question, YES quits and NO goes back."},
+    {"newgame", "",
+     "NEW GAME while a game runs: the question first, YES starts the new game and NO goes back."},
 };
 
 // The pack at `path` as the menu's files.
@@ -357,6 +361,16 @@ void run(ge::lab::Lab& lab) {
       sets.push_back({"enhanced", std::move(enhanced), ge::lab::Det::measured});
   }
 
+  // The pack as the menu's files too: the setup page's live figure is read from them.
+  ge::vfs::SearchPath pack_files;
+  if (!pack.src.content().empty()) {
+    std::string error;
+    if (!ge::vfs::add_archive(&pack_files, "pak0.pak", pack.src.content(), "id1", &error))
+      lab.note("the pack is not the menu's files (" + error +
+               "): the setup page's figure is the "
+               "pack's still one");
+  }
+
   int problems = 0;
   const auto snap = [&](Game& g, const Viewport& v, const std::string& id, const std::string& title,
                         const std::string& caption, const std::string& look, const std::string& art,
@@ -396,20 +410,21 @@ void run(ge::lab::Lab& lab) {
       if (classic && v.h > v.w) continue;  // the classic screen is landscape
       Game g;
       if (classic) g.menu.set_art(sets[static_cast<size_t>(pass)].art);
+      if (classic && art != "fixture") g.host.files = &pack_files;
       int dimmed = 0, rows = 0;
       for (const PageShot& ps : kPages) {
         if (std::string_view(ps.page) == "games")
           g.menu.games().set_lister([] {
             return std::vector<sm::GameRow>{
-                {.id = "classic",
-                 .install = "/games/classic",
-                 .edition = "Shareware",
-                 .playing = true,
-                 .missing = false},
-                {.id = "sequel", .install = "", .edition = "", .playing = false, .missing = false}};
+                {.id = "q1", .install = "/games/classic", .edition = "Registered", .playing = true},
+                {.id = "q2", .install = "/games/q2", .edition = "Full game", .remixed = true}};
           });
-        g.menu.show(g.host, ps.page);
+        // NEW GAME's question is opened from the single-player page, so its NO goes back there.
+        const bool asked = std::string_view(ps.page) == "newgame";
+        g.menu.show(g.host, asked ? "single" : ps.page);
+        if (asked) g.menu.main().open("newgame");
         if (*ps.focus) g.menu.main().focus(ps.focus);
+        if (std::string_view(ps.page) == "setup") g.menu.update({}, false, g.host, 0);  // figure
         for (const ui::Item& it : g.menu.main().top().items) {
           if (it.kind == ui::ItemKind::label || it.kind == ui::ItemKind::back) continue;
           rows++;
@@ -419,6 +434,21 @@ void run(ge::lab::Lab& lab) {
             cat({look, classic ? "-" : "", classic ? art : "", "-", ps.page, "-", v.name()});
         snap(g, v, id, cat({"THE ", look, " MENU, ", ps.page, ", AT ", v.name()}), ps.caption, look,
              art, det);
+      }
+      if (classic && g.menu.figure().ready()) {
+        // The setup page's figure turned by a drag, firing the rocket launcher.
+        g.menu.show(g.host, "setup");
+        g.menu.main().focus("figweapon");
+        if (ui::Item* w = g.menu.main().top().find("figweapon"); w != nullptr) w->choice = 6;
+        g.menu.update({}, false, g.host, 0);
+        g.menu.figure().hold(150, 0);
+        g.menu.figure().fire();
+        g.menu.update({}, false, g.host, 0.25);
+        snap(g, v, cat({look, "-", art, "-setup-turned-", v.name()}),
+             "THE SETUP PAGE'S FIGURE, TURNED AND FIRING",
+             "The player's model drawn live in the chosen colours, turned by a drag and playing "
+             "the rocket launcher's attack frames.",
+             look, art, det);
       }
       if (classic) {
         // Two more help pages, as the arrows turn them.
@@ -503,9 +533,10 @@ void run(ge::lab::Lab& lab) {
              "and the kills, 3:07, 2/6, 41/52, in the big figures.",
              [&](ui::DrawList& dl) { sm::draw_intermission(dl, art, v.w, v.h, stats); });
       screen("finale", "THE FINALE, TYPED, " + name + ", AT " + v.name(),
-             "An episode's end: its text typed out at eight characters a second, here 12.5 s in "
-             "(100 characters), each line centred by its whole width.",
-             [&](ui::DrawList& dl) { sm::draw_level_text(dl, art, v.w, v.h, kFinale, 100); });
+             "An episode's end: its title picture at the top, its text typed out at eight "
+             "characters a second, here 12.5 s in (100 characters), each line centred by its "
+             "whole width; five lines start under the title (four or fewer at 35% down).",
+             [&](ui::DrawList& dl) { sm::draw_level_text(dl, art, v.w, v.h, kFinale, 100, true); });
       screen("solo", "THE SOLO SCOREBAR AND THE LEVEL'S FIGURES, " + name + ", AT " + v.name(),
              "The scores key held in a campaign: the status bar's place taken by the scorebar "
              "(monsters, secrets, the time, the map's title) and, with scr_levelstats 1, the "
@@ -517,6 +548,13 @@ void run(ge::lab::Lab& lab) {
                if (!art.glyphs.empty())
                  sm::draw_solo_scorebar(dl, art, v.w, v.h, "the Grey Halls", stats);
              });
+      screen("pause", "THE PAUSE PLAQUE, " + name + ", AT " + v.name(),
+             "A campaign paused (and showpause 1): the pack's picture in the middle of the view "
+             "above the status bar.",
+             [&](ui::DrawList& dl) { sm::draw_plaque(dl, art, v.w, v.h, "pause"); });
+      screen("loading", "THE LOADING PLAQUE, " + name + ", AT " + v.name(),
+             "A campaign's level being made: the pack's picture where the pause plaque goes.",
+             [&](ui::DrawList& dl) { sm::draw_plaque(dl, art, v.w, v.h, "loading"); });
       sm::BoardView plain_view, team_view, large_view;
       screen("scores", "THE SCOREBOARD, " + name + ", AT " + v.name(),
              "The scores key held in a match: the ranking picture, the header and its rules, a "

@@ -68,8 +68,7 @@ bool convert_supported(DemoFormat from, DemoFormat to) {
           (to == DemoFormat::client || to == DemoFormat::single)) ||
          (from == DemoFormat::client &&
           (to == DemoFormat::multiview || to == DemoFormat::single)) ||
-         ((from == DemoFormat::sequel || from == DemoFormat::sequel_multiview) &&
-          to == DemoFormat::sequel);
+         ((from == DemoFormat::q2 || from == DemoFormat::q2_multiview) && to == DemoFormat::q2);
 }
 
 std::string format_words(DemoFormat f) {
@@ -80,10 +79,10 @@ std::string format_words(DemoFormat f) {
       return "client recording (" + plain_extension(DemoFormat::client) + ")";
     case DemoFormat::multiview:
       return "multiview recording (.mvd)";
-    case DemoFormat::sequel:
-      return "sequel recording (.dm2)";
-    case DemoFormat::sequel_multiview:
-      return "sequel multiview recording (.mvd2)";
+    case DemoFormat::q2:
+      return "Quake II recording (.dm2)";
+    case DemoFormat::q2_multiview:
+      return "Quake II multiview recording (.mvd2)";
   }
   return "recording";
 }
@@ -118,12 +117,12 @@ bool convert_begin(DemoConvert& c, DemoFormat from, DemoFormat to, const Convert
     c.stream = client_to_single_stream();
     return true;
   }
-  if (from == DemoFormat::sequel && to == DemoFormat::sequel) {
-    c.stream = sequel_to_34_stream();
+  if (from == DemoFormat::q2 && to == DemoFormat::q2) {
+    c.stream = q2_to_34_stream();
     return true;
   }
-  if (from == DemoFormat::sequel_multiview && to == DemoFormat::sequel) {
-    c.stream = mvd2_to_sequel_stream();
+  if (from == DemoFormat::q2_multiview && to == DemoFormat::q2) {
+    c.stream = mvd2_to_q2_stream();
     return true;
   }
   const std::string cl = plain_extension(DemoFormat::client);
@@ -161,11 +160,11 @@ bool convert_demo(std::vector<uint8_t> bytes, DemoFormat to, const ConvertOption
                   std::vector<uint8_t>& out, ConvertNotes& notes, std::string& error) {
   Demo d;
   if (!open_demo(std::move(bytes), d, error)) return false;
-  // A multiview recording of the sequel converts from itself (the view `options.pov` asks for),
+  // A multiview recording of Quake II converts from itself (the view `options.pov` asks for),
   // not from the view it opened as.
   const bool mvd2 = !d.multiview_source.empty();
   DemoConvert c;
-  if (!convert_begin(c, mvd2 ? DemoFormat::sequel_multiview : d.state.format, to, options, error))
+  if (!convert_begin(c, mvd2 ? DemoFormat::q2_multiview : d.state.format, to, options, error))
     return false;
   convert_feed(c, mvd2 ? d.multiview_source : d.bytes);
   convert_end(c);
@@ -191,9 +190,9 @@ bool format_of_name(const std::string& path, DemoFormat& out) {
   else if (ext == "mvd")
     out = DemoFormat::multiview;
   else if (ext == "dm2")
-    out = DemoFormat::sequel;
+    out = DemoFormat::q2;
   else if (ext == "mvd2")
-    out = DemoFormat::sequel_multiview;
+    out = DemoFormat::q2_multiview;
   else
     return false;
   return true;

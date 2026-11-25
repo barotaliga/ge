@@ -1,26 +1,26 @@
 // CLASSIC REMIX'S SOUNDS (`cr_sounds`, docs/goals/M18u.md): the sounds a match is heard with,
-// chosen apart from its items. Each row pairs a multiplayer sound of the classic game with the
-// sequel's that plays the same part: a weapon's shot, a blast, a bounce, a ricochet, a pickup, an
+// chosen apart from its items. Each row pairs a multiplayer sound of Quake with the
+// Quake II's that plays the same part: a weapon's shot, a blast, a bounce, a ricochet, a pickup, an
 // item coming back, a teleport, a player's jump, landing, pain, death, gibbing and splash. The
 // campaign's sounds (monsters, machines, voices of the story) are left out: they keep their own.
 //
 // - **Heard as one game** (`heard_as`): a sound named by either game is heard as the chosen game's
 //   by its row: the first row whose other column names it gives the chosen game's name. A name
 //   no row knows is heard as it is.
-// - **Silence**: an empty name in a column is a sound that game does not make (the classic game
-//   has no footsteps), so hearing the sequel as the classic game leaves them out.
-// - **Many to one**: the sequel's machinegun picks among five shots, its hand grenade bounces two
+// - **Silence**: an empty name in a column is a sound that game does not make (Quake
+//   has no footsteps), so hearing Quake II as Quake leaves them out.
+// - **Many to one**: Quake II's machinegun picks among five shots, its hand grenade bounces two
 //   ways; the extra rows follow the first, so going back the first row's name is taken.
 // - **Names the games share** (`items/damage.wav`, `misc/talk.wav`) are not rows: the played
 //   game's own file is heard.
-// - **A player's own sounds** (the sequel's `*jump1.wav`, kept per figure): their row names the
+// - **A player's own sounds** (Quake II's `*jump1.wav`, kept per figure): their row names the
 //   base voice, `player/male/<file>`, which a `*` name is looked up as.
 //
 // The client hears every sound by this table while classic remix is on (client/remix.hpp's
 // `heard_game`), so `cr_items` alone never changes a sound: the other game's weapons fire with
 // the played game's shots until `cr_sounds` names the other game.
 //
-// ge:summary Classic remix's sounds: the classic game's and the sequel's multiplayer sounds paired
+// ge:summary Classic remix's sounds: Quake's and Quake II's multiplayer sounds paired
 // ge:keywords remix classic-remix cr_sounds sound-swap heard_as sound-match multiplayer-sounds
 // ge:keywords weapon-sound pickup-sound pain-sound footsteps remix_sounds
 // ge:skill shooter audio
@@ -34,11 +34,11 @@
 namespace shooters_edge::profiles {
 
 // The games the table's columns are, by content profile id.
-inline constexpr std::array<std::string_view, 2> kSoundGames = {"classic", "sequel"};
+inline constexpr std::array<std::string_view, 2> kSoundGames = {"q1", "q2"};
 
 struct SoundMatch {
-  std::string_view classic;  // "": the classic game makes no such sound
-  std::string_view sequel;
+  std::string_view classic;  // "": Quake makes no such sound
+  std::string_view q2;
   std::string_view what;  // the part both play, for the lab and the docs
 };
 
@@ -144,7 +144,7 @@ constexpr std::string_view heard_as(std::string_view name, std::string_view game
   const int to = sound_column(game);
   if (to < 0 || name.empty()) return name;
   for (const SoundMatch& m : kSoundMatches) {
-    const std::string_view cols[2] = {m.classic, m.sequel};
+    const std::string_view cols[2] = {m.classic, m.q2};
     for (int c = 0; c < 2; c++) {
       if (c == to || cols[c].empty()) continue;
       if (remix_sounds_detail::same_name(cols[c], name)) return cols[to];

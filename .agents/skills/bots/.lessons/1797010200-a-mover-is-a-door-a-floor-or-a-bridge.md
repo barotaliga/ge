@@ -1,7 +1,7 @@
 ---
 title: A mover is a door, a floor or a bridge to the nav, and what a bot shuts must be shut in the route and the reach alike
 date: 2026-11-09
-scope: plugins/shooter/nav.cpp, plugins/shooter/pilot.cpp, plugins/shooter/pilot_movers.cpp, games/shooters_edge/bots/map_nav.cpp, games/shooters_edge/bots/buttons.cpp, games/shooters_edge/bots/fighter.cpp
+scope: plugins/shooterbots/nav.cpp, plugins/shooterbots/pilot.cpp, plugins/shooterbots/pilot_movers.cpp, plugins/shooterbots/map_nav.cpp, plugins/shooterbots/buttons.cpp, plugins/shooterbots/fighter.cpp
 concepts: [door, button, errand, floor-door, plat, bridge, teleporter, shut-links, cut-links, nav-route, nav-reach, no-route, mover-in-the-way, client-fed, dm2]
 ---
 

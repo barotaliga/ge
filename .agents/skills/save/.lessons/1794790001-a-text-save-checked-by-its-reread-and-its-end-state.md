@@ -1,7 +1,7 @@
 ---
 title: Check a lossy text save by its reread and the game's end state, and read the box from the program
 date: 2026-10-31
-scope: games/shooters_edge/server/classic_save.cpp, games/shooters_edge/labs/se_campaign_lab.cpp
+scope: games/shooters_edge/server/q1_save.cpp, games/shooters_edge/labs/se_campaign_lab.cpp
 concepts: [classic-save, text-save, round-trip, absmin, mirror, renumber, end-state]
 ---
 

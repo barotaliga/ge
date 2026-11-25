@@ -97,3 +97,31 @@ TEST(the_values_follow_a_games_own_default) {
   CHECK(con::values_for_default("TEXT: a skin (base, the default)", "") == "TEXT: a skin");
   CHECK(con::values_for_default("N: that many", "3") == "N: that many");
 }
+
+TEST(value_choices_spells_out_a_few_values_and_nothing_for_many) {
+  con::Cvar c;
+  c.kind = con::CvarKind::text;
+  c.values = "lan: the LAN; invite: by invitation; \"\": none";
+  CHECK((con::value_choices(c) == std::vector<std::string>{"lan", "invite", "\"\""}));
+  c.kind = con::CvarKind::integer;
+  c.values = "0: off; 1..3: that level";
+  CHECK((con::value_choices(c) == std::vector<std::string>{"0", "1", "2", "3"}));
+  c.values = "0: off; 1..N: that many";
+  CHECK(con::value_choices(c).empty());
+  c.values = "0: off; 1..32: that many";
+  CHECK(con::value_choices(c).empty());  // more than eight
+  c.kind = con::CvarKind::number;
+  c.values = "0..1: that share";
+  CHECK(con::value_choices(c).empty());  // any number in between
+  c.values = "TEXT: a name";
+  CHECK(con::value_choices(c).empty());
+  c.values.clear();
+  c.kind = con::CvarKind::boolean;
+  CHECK((con::value_choices(c) == std::vector<std::string>{"0", "1"}));
+  c.kind = con::CvarKind::integer;
+  c.min = -1;
+  c.max = 1;
+  CHECK((con::value_choices(c) == std::vector<std::string>{"-1", "0", "1"}));
+  c.max = 100;
+  CHECK(con::value_choices(c).empty());
+}

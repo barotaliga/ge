@@ -27,18 +27,18 @@
 // PRIVATE pictures only; without it, the fixture: a hall and a room up a step from it. The run
 // heads the way of the longest clear run from where the player spawned.
 //
-// THE SEQUEL'S RULES (a map of brushes: `--rules=sequel` for the fixture, or a sequel's game folder
-// and map) work the view out on the server (plugins/classic/sequel_view.hpp: `run_pitch`,
+// QUAKE II'S RULES (a map of brushes: `--rules=q2` for the fixture, or a Quake II's game folder
+// and map) work the view out on the server (plugins/classic/q2_view.hpp: `run_pitch`,
 // `run_roll`, `bob_up`, `bob_pitch`, `bob_roll`, the blows' and the shot's kicks, the dead view)
 // and the window eases what they send between their frames. There the reference is the rules' view
-// as sent; the blows are the rules' own (`sequel_view_blow`), the player fires the blaster once
+// as sent; the blows are the rules' own (`q2_view_blow`), the player fires the blaster once
 // while standing (its kick), and on the fixture the Exit holds the bob's lift, the strafe's roll,
 // the blows' kicks, the shot's and the dead roll to the rules' numbers.
 //
 // ge:summary Lab: the first-person view's bob, roll, kick, step and death against the classic
 // ge:keywords lab se-view view bob roll kick step-smoothing dead-roll first-person classic-view
 // ge:keywords cl_bob cl_rollangle v_kickpitch v_kickroll formulas listen-server
-// ge:keywords sequel-view run_pitch run_roll bob_up bob_pitch bob_roll
+// ge:keywords q2-view run_pitch run_roll bob_up bob_pitch bob_roll
 // ge:skill camera shooter labs
 // ge:test tests/camera_first_person_test.cpp
 #include <algorithm>
@@ -66,9 +66,9 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/server/sequel_map.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -89,15 +89,15 @@ constexpr double kRollAngle = 2, kRollSpeed = 200;
 constexpr double kKickTime = 0.5, kKickPitch = 0.6, kKickRoll = 0.6, kKickMin = 10;
 constexpr double kStepRate = 80, kStepMax = 12;
 constexpr double kDeadEye = -16, kDeadRoll = 80;
-// The sequel's: the standing eye and the bob's top at a run (300 x bob_up).
-constexpr double kSequelEye = 22, kSequelBobTop = 1.2;
+// Quake II's: the standing eye and the bob's top at a run (300 x bob_up).
+constexpr double kQ2Eye = 22, kQ2BobTop = 1.2;
 
 // The fixture: a long hall (the writer's start in its middle, facing east) and a room 16 units up
 // at its east end (a step).
-bool fixture_files(cl::SearchPath& files, bool sequel, std::string& error) {
+bool fixture_files(cl::SearchPath& files, bool q2, std::string& error) {
   std::vector<uint8_t> map, pak;
-  if (sequel) {
-    // The sequel's rules move through brushes: the same hall and step as floors (no faces: the
+  if (q2) {
+    // Quake II's rules move through brushes: the same hall and step as floors (no faces: the
     // run is measured, not drawn).
     br::BrushWorld w;
     w.models.resize(1);
@@ -183,7 +183,7 @@ struct Classic {
 // The heading (of eight) with the longest clear run for the player's box from where he stands, to
 // 1024 units, so the run's stride is not cut short by a wall.
 float longest_run(const cl::Listen& l) {
-  if (const sv::SequelServer* sq = sv::sequel_of(*l.rules)) {  // the sequel's map and its trace
+  if (const sv::Q2Server* sq = sv::q2_of(*l.rules)) {  // Quake II's map and its trace
     const sh::Vec3f at = l.server->world.entities[1].origin;
     const sh::Vec3f mins{-16, -16, -24}, maxs{16, 16, 32};
     float best = -1, yaw = l.view.y;
@@ -247,8 +247,7 @@ struct Film {
 };
 
 void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_name,
-                const Pictures& pics, std::vector<Row>& rows, std::vector<Film>& film,
-                bool& sequel) {
+                const Pictures& pics, std::vector<Row>& rows, std::vector<Film>& film, bool& q2) {
   static const ge::progs::Progs progs = [] {
     ge::progs::Progs p;
     std::string why;
@@ -264,8 +263,8 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
     return;
   }
   const double tic = cl::listen_tic(l);
-  // A map of brushes plays on the sequel's rules, whose server works the view out itself.
-  sequel = sv::sequel_of(*l.rules) != nullptr;
+  // A map of brushes plays on Quake II's rules, whose server works the view out itself.
+  q2 = sv::q2_of(*l.rules) != nullptr;
   for (int i = 0; i < 100; i++) cl::listen_frame(l, {});  // spawned and landed
   const float yaw = longest_run(l);
   cl::ViewState shown;
@@ -298,7 +297,7 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
   Classic classic;
   double t = 0;
   bool drew_bob = false, drew_strafe = false, drew_kick = false, drew_dead = false;
-  bool drew_shot = !sequel;
+  bool drew_shot = !q2;
   for (const Step& step : kScript) {
     const int frames = static_cast<int>(step.seconds / tic);
     for (int i = 0; i < frames; i++) {
@@ -320,8 +319,8 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
         case Phase::strafe_left:
           cmd.side = -350;
           break;
-        case Phase::stand:  // the sequel's blaster, once: its kick for one rules frame
-          if (sequel && i == int(0.25 / tic)) cmd.buttons = sh::kButtonAttack;
+        case Phase::stand:  // Quake II's blaster, once: its kick for one rules frame
+          if (q2 && i == int(0.25 / tic)) cmd.buttons = sh::kButtonAttack;
           break;
         default:
           break;
@@ -341,9 +340,9 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
         b.blood = right ? 30 : 20;
         b.from = {p.origin.x + static_cast<float>(128 * ge::core::libm::cos(a)),
                   p.origin.y + static_cast<float>(128 * ge::core::libm::sin(a)), p.origin.z};
-        if (sequel) {  // the rules' own blow, as a hit by the sequel's fight lands it
-          ge::classic::sequel_view_blow(sv::sequel_of(*l.rules)->players[0].view, right ? 30 : 20,
-                                        right ? 30 : 20, b.from - p.origin);
+        if (q2) {  // the rules' own blow, as a hit by Quake II's fight lands it
+          ge::classic::q2_view_blow(sv::q2_of(*l.rules)->players[0].view, right ? 30 : 20,
+                                    right ? 30 : 20, b.from - p.origin);
         } else {
           l.blows.push_back(b);
           blow = &b;
@@ -358,20 +357,20 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
       r.eye = (shown.pose.eye.y - cl::engine_point(p.origin).y) / br::kUnitM;
       r.roll = shown.pose.roll / kDeg;
       r.pitch = -(shown.pose.pitch - cl::engine_pitch(0.0f)) / kDeg;  // from the look, level
-      if (sequel) {
+      if (q2) {
         // The rules' view as sent this frame: the window shows it eased between rules frames.
         const shooters_edge::server::PlayerNumbers& n = l.server->world.clients[0].numbers;
         r.eye_classic = n.view_offset[2];
-        r.roll_classic = p.dead ? ge::classic::kSequelDeadRoll : n.kick[2];
-        r.pitch_classic = p.dead ? ge::classic::kSequelDeadPitch : n.kick[0];
+        r.roll_classic = p.dead ? ge::classic::kQ2DeadRoll : n.kick[2];
+        r.pitch_classic = p.dead ? ge::classic::kQ2DeadPitch : n.kick[0];
       } else {
         classic.frame(p, yaw, blow, tic, r.eye_classic, r.roll_classic, r.pitch_classic);
       }
       rows.push_back(r);
       (void)view;
       // The pictures: the bob's top while running, the roll at full strafe, the kick's first
-      // frame, the dead view a second on (and the sequel's shot).
-      const double bob_now = r.eye_classic - (sequel ? kSequelEye : p.view_ofs.z);
+      // frame, the dead view a second on (and Quake II's shot).
+      const double bob_now = r.eye_classic - (q2 ? kQ2Eye : p.view_ofs.z);
       if (!drew_shot && step.phase == Phase::stand && r.pitch_classic < -0.5) {
         drew_shot = true;
         draw("shot", "A SHOT: THE WEAPON'S KICK",
@@ -380,57 +379,56 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
              "the view a touch higher than standing", t);
       }
       if (!drew_bob && step.phase == Phase::run && i > frames / 8 && p.on_ground &&
-          bob_now >= (sequel ? kSequelBobTop : kBobHi - 1e-6)) {
+          bob_now >= (q2 ? kQ2BobTop : kBobHi - 1e-6)) {
         drew_bob = true;
         draw("run-bob", "RUNNING: THE BOB AT ITS TOP",
-             sequel ? "From the eyes running at full speed, at the top of the stride (the eye 1.5 "
-                      "units up, the view nodded down by the run and the stride)."
-                    : "From the eyes running at full speed, at the top of the stride's bob (+4 "
-                      "units).",
+             q2 ? "From the eyes running at full speed, at the top of the stride (the eye 1.5 "
+                  "units up, the view nodded down by the run and the stride)."
+                : "From the eyes running at full speed, at the top of the stride's bob (+4 "
+                  "units).",
              "the view a little higher than standing, level", t);
       }
       if (!drew_strafe && step.phase == Phase::strafe_right && i == frames - 1) {
         drew_strafe = true;
         draw("strafe-right", "STRAFING RIGHT: THE ROLL",
-             sequel ? "From the eyes strafing right at full speed: the horizon rolled 1.5 degrees "
-                      "(300 x run_roll), right side down."
-                    : "From the eyes strafing right at full speed: the horizon rolled 2 degrees, "
-                      "right side down.",
+             q2 ? "From the eyes strafing right at full speed: the horizon rolled 1.5 degrees "
+                  "(300 x run_roll), right side down."
+                : "From the eyes strafing right at full speed: the horizon rolled 2 degrees, "
+                  "right side down.",
              "the horizon tipped down to the right, a little", t);
       }
-      if (!drew_kick &&
-          (sequel ? step.phase == Phase::hit && r.roll_classic > 5 : blow != nullptr)) {
+      if (!drew_kick && (q2 ? step.phase == Phase::hit && r.roll_classic > 5 : blow != nullptr)) {
         drew_kick = true;
         draw("kick-right", "A BLOW FROM THE RIGHT: THE KICK",
-             sequel ? "The rules frame a blow of 30 from the right lands: the view tipped 9 "
-                      "degrees toward it (0.3 of 30 x 100 / health)."
-                    : "The frame a blow of 30 from the right lands: the view tipped 9 degrees "
-                      "toward it.",
+             q2 ? "The rules frame a blow of 30 from the right lands: the view tipped 9 "
+                  "degrees toward it (0.3 of 30 x 100 / health)."
+                : "The frame a blow of 30 from the right lands: the view tipped 9 degrees "
+                  "toward it.",
              "the horizon tipped down to the right, more than the strafe's", t);
       }
       if (!drew_dead && step.phase == Phase::dead && i == frames - 1 && p.dead) {
         drew_dead = true;
         draw("dead", "DEAD: ON THE FLOOR",
-             sequel ? "A second after the player died: the eye low, the view rolled 40 degrees "
-                      "and looking 15 up."
-                    : "A second after the player died: the eye 16 units under the origin, the "
-                      "view rolled 80 degrees.",
+             q2 ? "A second after the player died: the eye low, the view rolled 40 degrees "
+                  "and looking 15 up."
+                : "A second after the player died: the eye 16 units under the origin, the "
+                  "view rolled 80 degrees.",
              "the floor close and the world on its side", t);
       }
     }
   }
 }
 
-void chart(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, const std::string& id,
+void chart(gl::Lab& lab, const std::vector<Row>& rows, bool q2, const std::string& id,
            const std::string& title, const std::string& y_label, double Row::*view,
            double Row::*classic, const std::string& caption, const std::string& look_for) {
   gl::LineChart spec;
   spec.frame = {title,
-                sequel ? "the sequel's rules, their view worked out by the server; a frame a point"
-                       : "the classic look's defaults; one server frame a point",
+                q2 ? "Quake II's rules, their view worked out by the server; a frame a point"
+                   : "the classic look's defaults; one server frame a point",
                 "t (s)", y_label};
   gl::Trace a{"the view", {}, {}},
-      b{sequel ? "the rules' view as sent" : "the classic formula", {}, {}};
+      b{q2 ? "the rules' view as sent" : "the classic formula", {}, {}};
   for (const Row& r : rows) {
     a.x.push_back(r.t);
     a.y.push_back(r.*view);
@@ -451,10 +449,10 @@ void chart(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, const std::s
   lab.shot({id, c.title, caption, look_for, {}}, gl::to_picture(c.plot));
 }
 
-// The sequel's view, checked by its own numbers: the window eases the rules' view between their
+// Quake II's view, checked by its own numbers: the window eases the rules' view between their
 // frames, so it trails what they sent by up to a frame and is not held to it.
 // On a real map the walls cut the script's moves short, so only the fixture is held to them.
-void check_sequel(gl::Lab& lab, const std::vector<Row>& rows, bool held) {
+void check_q2(gl::Lab& lab, const std::vector<Row>& rows, bool held) {
   double top = -1e9, strafe = 0, blow_roll = 0, blow_pitch = 0, shot = 0, dead_roll = 0;
   for (const Row& r : rows) {
     if (r.phase == Phase::run) top = std::max(top, r.eye_classic);
@@ -464,27 +462,27 @@ void check_sequel(gl::Lab& lab, const std::vector<Row>& rows, bool held) {
     if (r.phase == Phase::stand) shot = std::min(shot, r.pitch_classic);
     if (r.phase == Phase::dead) dead_roll = r.roll;
   }
-  lab.metric("sequel.run.eye-top", top, "units");
-  lab.metric("sequel.strafe.roll", strafe, "deg");
-  lab.metric("sequel.blows.roll", blow_roll, "deg");
-  lab.metric("sequel.blows.pitch", blow_pitch, "deg");
-  lab.metric("sequel.shot.pitch", shot, "deg");
-  lab.metric("sequel.dead.roll", dead_roll, "deg");
+  lab.metric("q2.run.eye-top", top, "units");
+  lab.metric("q2.strafe.roll", strafe, "deg");
+  lab.metric("q2.blows.roll", blow_roll, "deg");
+  lab.metric("q2.blows.pitch", blow_pitch, "deg");
+  lab.metric("q2.shot.pitch", shot, "deg");
+  lab.metric("q2.dead.roll", dead_roll, "deg");
   std::string off;
-  if (top < kSequelEye + 1) off += " the run's eye tops at " + std::to_string(top) + ";";
+  if (top < kQ2Eye + 1) off += " the run's eye tops at " + std::to_string(top) + ";";
   if (strafe < 1.2 || strafe > 2.5) off += " the strafe rolls " + std::to_string(strafe) + ";";
   if (blow_roll < 8) off += " the blow from the right rolls " + std::to_string(blow_roll) + ";";
   if (blow_pitch > -4) off += " the blow from ahead tips " + std::to_string(blow_pitch) + ";";
   if (shot > -0.9) off += " the shot tips " + std::to_string(shot) + ";";
-  if (std::fabs(dead_roll - ge::classic::kSequelDeadRoll) > 0.5)
+  if (std::fabs(dead_roll - ge::classic::kQ2DeadRoll) > 0.5)
     off += " the dead view rolls " + std::to_string(dead_roll) + ";";
   if (held && !off.empty())
-    lab.fail("se-view: the sequel's view is off its rules:" + off,
-             "Chart the phase where it parts (sequel-eye.png, sequel-roll.png, sequel-pitch.png) "
-             "against plugins/classic/sequel_view.hpp's rules and its test. Skill: camera.");
+    lab.fail("se-view: Quake II's view is off its rules:" + off,
+             "Chart the phase where it parts (q2-eye.png, q2-roll.png, q2-pitch.png) "
+             "against plugins/classic/q2_view.hpp's rules and its test. Skill: camera.");
 }
 
-void report(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, bool fixture) {
+void report(gl::Lab& lab, const std::vector<Row>& rows, bool q2, bool fixture) {
   double eye = 0, roll = 0, pitch = 0, top = -1e9, low = 1e9, most_roll = 0, most_kick = 0;
   for (const Row& r : rows) {
     eye = std::max(eye, std::fabs(r.eye - r.eye_classic));
@@ -494,8 +492,8 @@ void report(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, bool fixtur
     if (r.phase == Phase::strafe_right) most_roll = std::max(most_roll, r.roll);
     if (r.phase == Phase::hit) most_kick = std::max(most_kick, std::fabs(r.pitch));
   }
-  if (sequel) check_sequel(lab, rows, fixture);
-  if (!sequel) {
+  if (q2) check_q2(lab, rows, fixture);
+  if (!q2) {
     lab.metric("eye.worst-off", eye, "units");
     lab.metric("roll.worst-off", roll, "deg");
     lab.metric("pitch.worst-off", pitch, "deg");
@@ -504,16 +502,16 @@ void report(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, bool fixtur
     lab.metric("strafe.roll", most_roll, "deg");
     lab.metric("blows.pitch", most_kick, "deg");
   }
-  if (!sequel && (eye > 0.01 || roll > 0.01 || pitch > 0.01))
+  if (!q2 && (eye > 0.01 || roll > 0.01 || pitch > 0.01))
     lab.fail("se-view: the view is off the classic formulas by up to " + std::to_string(eye) +
                  " units, " + std::to_string(roll) + " degrees of roll and " +
                  std::to_string(pitch) + " of pitch",
              "Chart the phase where it parts (eye.png, roll.png, pitch.png) and compare "
              "engine/camera/first_person.cpp's classic row with docs/camera.md § Shooter's Edge's "
              "view. Skill: camera.");
-  const char* ref = sequel ? "rules" : "classic";
-  gl::LabTable table{sequel ? "the script's phases: the view against the rules' view as sent"
-                            : "the script's phases: the view against the classic formulas",
+  const char* ref = q2 ? "rules" : "classic";
+  gl::LabTable table{q2 ? "the script's phases: the view against the rules' view as sent"
+                        : "the script's phases: the view against the classic formulas",
                      {"phase", "from (s)", "eye (u)", ref, "roll (deg)", ref, "pitch (deg)", ref},
                      {}};
   for (size_t i = 0; i < rows.size();) {
@@ -532,19 +530,19 @@ void report(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, bool fixtur
     i = j;
   }
   lab.table(table);
-  if (sequel) {
-    chart(lab, rows, true, "sequel-eye", "THE EYE OVER THE ORIGIN", "eye (units)", &Row::eye,
+  if (q2) {
+    chart(lab, rows, true, "q2-eye", "THE EYE OVER THE ORIGIN", "eye (units)", &Row::eye,
           &Row::eye_classic,
-          "The eye over the origin through the script on the sequel's rules: 22 standing, the "
+          "The eye over the origin through the script on Quake II's rules: 22 standing, the "
           "stride's lift running (at most 300 x bob_up), the shot's push back, eased up the step, "
           "low dead.",
           "the view's line following the rules' a frame behind");
-    chart(lab, rows, true, "sequel-roll", "THE VIEW'S ROLL", "roll (deg, right side down)",
-          &Row::roll, &Row::roll_classic,
+    chart(lab, rows, true, "q2-roll", "THE VIEW'S ROLL", "roll (deg, right side down)", &Row::roll,
+          &Row::roll_classic,
           "The roll: the stride's sway, +1.5 strafing right and -1.5 left (run_roll), the kick "
           "toward a blow from the right fading over half a second, 40 dead.",
           "the view's line following the rules' a frame behind");
-    chart(lab, rows, true, "sequel-pitch", "THE VIEW'S PITCH FROM THE LOOK", "pitch (deg, down)",
+    chart(lab, rows, true, "q2-pitch", "THE VIEW'S PITCH FROM THE LOOK", "pitch (deg, down)",
           &Row::pitch, &Row::pitch_classic,
           "The pitch off the look: the blaster's one-frame kick up, the run's nod down "
           "(run_pitch, bob_pitch), a blow from ahead tipping it up, 15 up dead.",
@@ -568,12 +566,12 @@ void report(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, bool fixtur
         "the view's line on the formula's everywhere");
 }
 
-// One run of the script: on the fixture by `sequel_fixture`'s rules, or on the folder's map.
-void run_one(gl::Lab& lab, const std::string& folder, bool sequel_fixture) {
+// One run of the script: on the fixture by `q2_fixture`'s rules, or on the folder's map.
+void run_one(gl::Lab& lab, const std::string& folder, bool q2_fixture) {
   std::string error;
   cl::SearchPath files;
   if (folder.empty()) {
-    if (!fixture_files(files, sequel_fixture, error)) {
+    if (!fixture_files(files, q2_fixture, error)) {
       lab.fail("se-view: the fixture: " + error, "Read the reason above. Skill: brush.");
       return;
     }
@@ -599,16 +597,12 @@ void run_one(gl::Lab& lab, const std::string& folder, bool sequel_fixture) {
   }
   std::vector<Row> rows;
   std::vector<Film> film;
-  bool sequel = false;
-  run_script(lab, files, folder.empty() ? "steps" : lab.arg("map"), pics, rows, film, sequel);
+  bool q2 = false;
+  run_script(lab, files, folder.empty() ? "steps" : lab.arg("map"), pics, rows, film, q2);
   if (rows.empty()) return;
-  report(lab, rows, sequel, folder.empty());
+  report(lab, rows, q2, folder.empty());
   for (const Film& f : film)
-    lab.shot({(sequel ? "sequel-" : "") + f.id,
-              f.title,
-              f.caption,
-              f.look_for,
-              {{"map", lab.arg("map")}}},
+    lab.shot({(q2 ? "q2-" : "") + f.id, f.title, f.caption, f.look_for, {{"map", lab.arg("map")}}},
              f.picture, gl::Det::measured);
 }
 
@@ -619,7 +613,7 @@ void run(gl::Lab& lab) {
     run_one(lab, folder, false);
     return;
   }
-  if (rules != "sequel") run_one(lab, "", false);
+  if (rules != "q2") run_one(lab, "", false);
   if (rules != "classic") run_one(lab, "", true);
 }
 
@@ -635,8 +629,8 @@ const gl::LabSpec kSpec{
     "and frames from the eyes on a real map.",
     {
         {"game", "", "a game folder (<base>/<folder>); empty: the fixture hall and its step"},
-        {"map", "e1m1", "with --game: the map (a sequel's map plays on the sequel's rules)"},
-        {"rules", "both", "without --game: the fixture's rules: classic, sequel or both"},
+        {"map", "e1m1", "with --game: the map (a Quake II's map plays on Quake II's rules)"},
+        {"rules", "both", "without --game: the fixture's rules: classic, Quake II or both"},
     },
     "",
     run,

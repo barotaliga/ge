@@ -11,8 +11,8 @@ cache. It depends on the core, `assets` (the inflater, SHA-256), `audio` (the sp
 resampler), `lab` (the PNG writer), `vfs`
 (the pack and zip archives), `camera` and `viewmodel` (the view, and the held weapon's form, place and light), `brush` (the
 maps) and `morph` (the models and sprites):
-`ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel PLUGINS brush morph APP gpu render)`
-(the APP list is for the GPU lab alone).
+`plugins/classicenhance/CMakeLists.txt`'s `ge_add_plugin` line is the list (`detail` for the
+spent shells' bounce and the surfaces their landings are heard on).
 
 ## The line that keeps it legal
 
@@ -46,15 +46,15 @@ maps) and `morph` (the models and sprites):
 - **Paths come from the profile.** A stage or reader never writes a folder, an archive name or
   an asset path itself: it asks the source's profile (`profile.hpp`), so a second classic game is a
   second row. A file kind the engine has no reader for is a new reader, not a branch in a stage.
-- **Never name the classic game** outside `porting/shooters-edge/` (`make agents-check`): say
-  "the classic shareware pack", "the release zip". The release's own file names inside its
+- **Call the games by name** (Quake, Quake II; `q1`, `q2` in code; never on our own branding,
+  `docs/shooters-edge.md` § The games' names): "Quake's shareware pack", "the release zip". The release's own file names inside its
   archive (`resource.1`, `id1/pak0.pak`) are matched by the code and are fine.
 
 | File | What |
 | --- | --- |
 | `classicenhance/source.hpp/.cpp` | `open_source`: a path to the release zip, an installed folder, the pack or a content zip (`pak0.pk3`), found by every route and verified (`kKnownPacks`, `kKnownZips`, the known sets); `pack_from_zip`, `verify_pack`, `match_known_set` |
 | `classicenhance/known_sets.hpp/.cpp`, `known_files.cpp` | The known sets: a release by every file it holds (path, size, 128-bit digest), `match_sets`, `sha128_hex`; the full game's and the remaster's rows |
-| `classicenhance/profile.hpp/.cpp` | The content profiles (`kProfiles`): a classic game's base folder, numbered packs, asset kinds (maps, sounds, models, sprites, pictures) and named files (palette, wad, start map, full-game marker); `classic_profile`, `find_profile`, `asset_name`, `assets_of`, `read_palette`. Every stage finds its files through `Source::profile`, never a path of its own |
+| `classicenhance/profile.hpp/.cpp` | The content profiles (`kProfiles`): a classic game's base folder, numbered packs, asset kinds (maps, sounds, models, sprites, pictures) and named files (palette, wad, start map, full-game marker); `q1_profile`, `find_profile`, `asset_name`, `assets_of`, `read_palette`. Every stage finds its files through `Source::profile`, never a path of its own |
 | `classicenhance/texture.hpp/.cpp` | One texture enhanced: the kernel-regression upscale with one round of back-projection, sharpening and grain; height, normal, roughness and emissive; `material_of`, `never_drawn` |
 | `classicenhance/upscaler.hpp/.cpp` | The trained texture upscaler (M41g): `kUpscalerWeights` (where the tool fetches them, their SHA-256), `load_upscaler`, `open_upscaler`, `upscale` on the CPU, `seeded_upscaler_weights` (the small network the tests and labs run), `UpscaleDevice` |
 | `classicenhance/net.hpp/.cpp` | The upscaler's CPU layers: blocked linear and 3 × 3 kernels, depthwise, layer norm, batch norm folded, GELU, softmax, pixel shuffle |
@@ -70,6 +70,7 @@ maps) and `morph` (the models and sprites):
 | `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → models → pictures, each skipped when its recorded key is current; `pack_textures` |
 | `classicenhance/weapons.hpp/.cpp` | The held weapons (M48b): `held_from_morph` (the eye frame into the held frame, wound back out, the fullbright skin texels as glow), `classic_weapon_row`, `probe_under` (the lightmap under the player, 128 = 1), `muzzle_flash_light`, `flame_lights`, `pack_weapons`, `classic_fire_of` and `classic_fire_frame` (each weapon's muzzle-fire look and rate, the firing frames); the labs `classic-weapons` and `classic-weapons-fire` (GPU) |
 | `classicenhance/cached.hpp/.cpp` | The cache read back by a game: `find_cache`, `cached_texture` (the albedo, glow in alpha), `cached_surface` (normal x, y, height and roughness in one texel, for the BSP scene's surface atlas: `ce_relief`, `ce_parallax`), `cached_skins`, `cached_picture`, `cached_rebake`, `cached_sound` (a sound's WAV, played in place of the pack's under `ce_sounds`) |
+| `classicenhance/shells.hpp/.cpp` | The spent cases (`ce_shells`): the hull, brass and heavy brass; each one's bounce (`engine/detail/debris.hpp`'s shapes), its model coloured from the game's palette (`casing_model`), its landing sound by the surface's class (`casing_sound`, named `ce/shell/<case>/<class>/<variant>`); which gun throws which is each game's |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),

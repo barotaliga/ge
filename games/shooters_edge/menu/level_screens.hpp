@@ -63,12 +63,19 @@ struct ClassicType {
 // `n` right-aligned in `width` characters ("%3i"); `keep` > 0 keeps only its first `keep`.
 std::string padded(int n, int width, int keep = 0);
 
-// The intermission over a `width` x `height` frame.
+// The intermission over a `width` x `height` frame: drawn over the camera's view as it is, as the
+// original draws it (no dimming).
 void draw_intermission(ge::ui::DrawList& dl, const ClassicArt& art, int width, int height,
                        const LevelStats& s);
-// A finale's or a cutscene's text with its first `typed` characters shown ('\n' breaks a line).
+// A finale's or a cutscene's text with its first `typed` characters shown ('\n' breaks a line),
+// over the undimmed view: up to four lines from 35% down the screen, more from line 48; each line
+// centred and cut at 40 characters. `title`: the finale's own picture (gfx/finale) at the top.
 void draw_level_text(ge::ui::DrawList& dl, const ClassicArt& art, int width, int height,
-                     std::string_view text, size_t typed);
+                     std::string_view text, size_t typed, bool title = false);
+// A picture of the pack's (gfx/<name>) centred in the view above the status bar: `pause` while
+// the game is paused (`pause`, under `showpause`), `loading` while the next level loads.
+void draw_plaque(ge::ui::DrawList& dl, const ClassicArt& art, int width, int height,
+                 std::string_view name);
 // The level's statistics while the scores key is held: `title` the map's message (or its name).
 void draw_level_stats(ge::ui::DrawList& dl, const ClassicArt& art, int width, int height,
                       std::string_view title, const LevelStats& s);

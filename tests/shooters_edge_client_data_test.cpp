@@ -20,7 +20,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/client_data.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
@@ -185,6 +185,7 @@ TEST(the_punch_reaches_the_program_and_decays_on_the_loop) {
 
 TEST(lookspring_drifts_the_pitch_only_while_moving_on_the_ground_with_the_mouse_still) {
   cl::ControlSettings c;
+  c.freelook = false;  // looking by keys: a mouse-look player never drifts (below)
   ge::input::InputState in;
   sh::MoveCmd walk;
   walk.forward = 400;
@@ -203,6 +204,71 @@ TEST(lookspring_drifts_the_pitch_only_while_moving_on_the_ground_with_the_mouse_
   in.mouse.dy = 3;
   cl::spring_view(in, c, true, walk, 0, 1, view);
   CHECK(near(view.x, 4.8f));  // the mouse is pitching the view
+}
+
+TEST(lookspring_never_pulls_a_mouse_look_players_pitch) {
+  // Quake II's own default config sets lookspring 1 with freelook 1: walking with the mouse still
+  // must leave the pitch where the player pointed it.
+  cl::ControlSettings c;
+  ge::console::Console con;
+  ge::shooter::add_control_cvars(con, c);
+  c.lookspring = true;
+  ge::input::InputState in;
+  sh::MoveCmd walk;
+  walk.forward = 400;
+  sh::Vec3f view{-30, 90, 0};
+  for (int i = 0; i < 60; i++) cl::spring_view(in, c, true, walk, 0, 1.0 / 60, view);
+  CHECK(view.x == -30);  // freelook on (the default)
+  c.freelook = false;
+  con.execute("+mlook");
+  for (int i = 0; i < 60; i++) cl::spring_view(in, c, true, walk, 0, 1.0 / 60, view);
+  CHECK(view.x == -30);  // +mlook held
+  CHECK(!cl::button_moves(c).center);
+  con.execute("-mlook");
+  CHECK(cl::button_moves(c).center);   // letting +mlook go levels the view (freelook off)
+  CHECK(!cl::button_moves(c).center);  // once
+  cl::spring_view(in, c, true, walk, 0, 0.1, view);
+  CHECK(near(view.x, -30 + static_cast<float>(cl::kSpringSpeed * 0.1)));  // keys alone: drifts
+  c.freelook = true;
+  con.execute("+mlook");
+  cl::button_moves(c);
+  con.execute("-mlook");
+  CHECK(!cl::button_moves(c).center);  // with freelook on, +mlook changes nothing
+}
+
+TEST(a_keyboard_players_pitch_drifts_to_the_slope_faster_each_second_until_a_hand_stops_it) {
+  // The campaign's drift: from rest, sped up by v_centerspeed (500) each second, whatever
+  // lookspring says; a mouse look or a look key stops it, running forward starts it again.
+  cl::ControlSettings c;
+  c.freelook = false;
+  cl::PitchDrift d;
+  sh::Moves m;
+  sh::MoveCmd stand;
+  sh::Vec3f view{20, 90, 0};
+  cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(view.x == 20);  // at rest the first frame
+  cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(near(view.x, 20 - 0.05f));  // 5 degrees a second after 0.01 s
+  for (int i = 0; i < 100; i++) cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(view.x == 0);  // there, and held
+  view.x = 30;
+  m.lookdown = true;  // a look key: stopped
+  cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  m.lookdown = false;
+  for (int i = 0; i < 10; i++) cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(view.x == 30);
+  sh::MoveCmd run;
+  run.forward = 400;  // full speed forward for more than 0.15 s: drifting again
+  for (int i = 0; i < 20; i++) cl::drift_pitch(m, c, d, true, false, run, 0, 0.01, view);
+  CHECK(!d.still);
+  for (int i = 0; i < 100; i++) cl::drift_pitch(m, c, d, true, false, run, 0, 0.01, view);
+  CHECK(view.x == 0);
+  view.x = 30;
+  for (int i = 0; i < 10; i++) cl::drift_pitch(m, c, d, false, false, run, 0, 0.01, view);
+  CHECK(view.x == 30);  // in the air
+  c.freelook = true;    // the mouse looks: never
+  for (int i = 0; i < 100; i++) cl::drift_pitch(m, c, d, true, false, run, 0, 0.01, view);
+  CHECK(view.x == 30);
 }
 
 TEST(a_blow_kicks_the_view_toward_its_source_by_its_count) {
@@ -237,4 +303,20 @@ TEST(a_blow_kicks_the_view_toward_its_source_by_its_count) {
             std::to_string(before.pitch - after.pitch));
   CHECK_MSG(std::fabs((after.roll - before.roll) - kick) < 1e-3,
             std::to_string(after.roll - before.roll));
+}
+
+// +use sets the use button while held, and a tap between two commands still reaches the next.
+TEST(use_button_held_or_tapped_reaches_the_command) {
+  cl::ControlSettings c;
+  ge::console::Console con;
+  ge::shooter::add_control_cvars(con, c);
+  ge::input::InputState in;
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) == 0);
+  con.execute("+use");
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) != 0);
+  con.execute("-use");
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) == 0);
+  con.execute("+use; -use");  // a tap between two commands
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) != 0);
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) == 0);
 }

@@ -9,7 +9,7 @@
 //
 // A LATE VIEWER: the recording's messages are deltas against what came before them, so only the
 // first block is a keyframe and a viewer who joins late is sent the match from its start, as a
-// sequel broadcast's is (sequel_tv.hpp).
+// Quake II broadcast's is (q2_tv.hpp).
 //
 //   recording_broadcast_begin(b, meta)       then, as the recording grows:
 //   recording_broadcast_add(b, bytes)        recording_broadcast_tick(b, now_ms)  (closes a second)
@@ -20,7 +20,7 @@
 // ge:keywords watcher broadcast growing-recording tv replay-v2 stream late-viewer recording-track
 // ge:keywords recording_broadcast_begin recording_broadcast_add recording_broadcast_tick
 // ge:skill replay shooter
-// ge:test tests/shooters_edge_classic_watcher_test.cpp
+// ge:test tests/shooters_edge_qw_watcher_test.cpp
 #pragma once
 
 #include <cstddef>

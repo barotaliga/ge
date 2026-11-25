@@ -67,6 +67,8 @@ double step_harm(const Harm& harm, double temperature, int level, HarmState& sta
       state.wait = harm.interval;
     }
   }
+  if (harm.restart && level >= 1 && state.level == 0) state.wait = 0;
+  state.level = level;
   // The heat: the wetted share's contact flux and the outside's on the whole skin. The dose is
   // counted on the share it reaches (the rate at the share's own flux, times the share).
   const double share = wetted_share(level);

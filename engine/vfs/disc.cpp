@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <set>
 
@@ -184,6 +185,11 @@ std::string beside(const fs::path& sheet, const std::string& name) {
   const std::string want = lower(fs::path(name).filename().string());
   for (const auto& e : fs::directory_iterator(sheet.parent_path(), ec))
     if (lower(e.path().filename().string()) == want) return e.path().string();
+  // A sheet and its image renamed together (a download names both after the release): the file
+  // with the sheet's own name and the named file's extension.
+  const std::string renamed = lower(sheet.stem().string() + fs::path(name).extension().string());
+  for (const auto& e : fs::directory_iterator(sheet.parent_path(), ec))
+    if (lower(e.path().filename().string()) == renamed) return e.path().string();
   return "";
 }
 
@@ -310,6 +316,98 @@ bool open_sheet(const fs::path& path, Disc* d, Disc::Impl* im, std::string* erro
   return true;
 }
 
+// A disc copier's `.mds` sheet beside its `.mdf` (the format as measured on a copy of a game's
+// disc, little-endian): the signature "MEDIA DESCRIPTOR" at 0; at 80 the session block's offset.
+// The session block: at 10 its count of track blocks (a byte), at 20 their offset. A track block
+// is 80 bytes: its mode at 0 (0xA9 audio, any other a data track), its point at 4 (1..99 a track;
+// 0xA0 and up the lead-in's entries, skipped), at 12 the offset of its extra block, at 16 its
+// sector's size in the image (16 bits), at 40 its byte offset in the image (64 bits), at 52 the
+// offset of the footer naming the image. The extra block: the pregap in sectors at 0 (held in the
+// image for every track but the image's first, so a track's own sectors start that far after its
+// offset), its length in sectors at 4. The footer: at 0 the name's offset, at 4 whether it is
+// UTF-16; "*.mdf" names the sheet's own name with `.mdf`.
+bool open_mds(const fs::path& path, Disc* d, Disc::Impl* im, std::string* error) {
+  std::ifstream in(path, std::ios::binary);
+  std::vector<uint8_t> b((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const auto bad = [&](const std::string& why) {
+    *error = "the sheet " + path.string() + ": " + why +
+             "; check the sheet, or move it away and give the .mdf alone (its data track is "
+             "read without it)";
+    return false;
+  };
+  const auto at32 = [&](size_t o) { return o + 4 <= b.size() ? le32(b.data() + o) : 0u; };
+  const auto at16 = [&](size_t o) {
+    return o + 2 <= b.size() ? uint32_t(b[o]) | uint32_t(b[o + 1]) << 8 : 0u;
+  };
+  static const char kSig[] = "MEDIA DESCRIPTOR";
+  if (b.size() < 96 || !std::equal(kSig, kSig + 16, b.begin())) return bad("it is not a sheet");
+  const size_t session = at32(80);
+  const uint32_t blocks = session + 10 < b.size() ? b[session + 10] : 0u;
+  const size_t first = at32(session + 20);
+  if (session == 0 || first == 0 || first + size_t(blocks) * 80 > b.size())
+    return bad("its track list runs past its end");
+  std::string image;
+  for (uint32_t k = 0; k < blocks; k++) {
+    const uint8_t* t = b.data() + first + size_t(k) * 80;
+    const int point = t[4];
+    if (point < 1 || point > 99) continue;
+    const size_t extra = le32(t + 12), footer = le32(t + 52);
+    DiscTrack dt;
+    dt.number = point;
+    dt.kind = t[0] == 0xa9 ? TrackKind::audio : TrackKind::data;
+    dt.sector = at16(size_t(t - b.data()) + 16);
+    if (dt.sector != 2048 && dt.sector != 2352 && dt.sector != 2448)
+      return bad("track " + std::to_string(point) + "'s sectors are " + std::to_string(dt.sector) +
+                 " bytes (2048, 2352 and 2448 are read)");
+    if (extra == 0 || extra + 8 > b.size())
+      return bad("track " + std::to_string(point) + " has no length");
+    const uint64_t offset = uint64_t(le32(t + 40)) | uint64_t(le32(t + 44)) << 32;
+    const uint32_t pregap = at32(extra);
+    dt.sectors = at32(extra + 4);
+    dt.start = offset + (offset == 0 ? 0 : uint64_t(pregap) * dt.sector);
+    if (image.empty() && footer != 0 && footer + 8 <= b.size()) {
+      const size_t name = at32(footer);
+      const bool wide = at32(footer + 4) != 0;
+      for (size_t i = name; i < b.size(); i += wide ? 2 : 1) {
+        const uint32_t c = wide ? at16(i) : b[i];
+        if (c == 0) break;
+        put_utf8(image, c);
+      }
+    }
+    d->tracks.push_back(dt);
+  }
+  if (d->tracks.empty()) return bad("it lists no track");
+  if (image.empty() || image == "*.mdf") image = path.stem().string() + ".mdf";
+  const std::string found = beside(path, image);
+  if (found.empty()) return bad("the image '" + image + "' is not beside it");
+  d->image_files.push_back(found);
+  im->in.push_back(std::make_unique<std::ifstream>(found, std::ios::binary));
+  if (!*im->in.back()) {
+    *error = "could not open " + found + ", which the sheet " + path.string() +
+             " names; check its permissions";
+    return false;
+  }
+  // A data track's user data, placed by its first sector's mode byte.
+  for (DiscTrack& t : d->tracks) {
+    if (t.kind != TrackKind::data || t.sector == 2048) continue;
+    uint8_t head[16] = {};
+    if (!im->read(0, t.start, 16, head) || !std::equal(kSync, kSync + 12, head))
+      return bad("data track " + std::to_string(t.number) + " has no sync where it starts");
+    t.user = head[15] == 2 ? 24 : 16;
+  }
+  return true;
+}
+
+// The `.mds` sheet beside an `.mdf`, its name matched in any case; empty when there is none.
+fs::path sheet_beside(const fs::path& mdf) {
+  std::error_code ec;
+  const std::string want = lower(mdf.stem().string()) + ".mds";
+  for (const auto& e :
+       fs::directory_iterator(mdf.parent_path().empty() ? "." : mdf.parent_path(), ec))
+    if (lower(e.path().filename().string()) == want) return e.path();
+  return {};
+}
+
 bool open_plain(const fs::path& path, Disc* d, Disc::Impl* im, std::string* error) {
   d->image_files.push_back(path.string());
   im->in.push_back(std::make_unique<std::ifstream>(path, std::ios::binary));
@@ -326,7 +424,13 @@ bool open_plain(const fs::path& path, Disc* d, Disc::Impl* im, std::string* erro
   DiscTrack t;
   t.number = 1;
   if (std::equal(kSync, kSync + 12, head)) {
-    t.sector = 2352;
+    // Raw sectors: 2352 bytes, or 2448 when each carries its 96 bytes of subchannel (an `.mdf`
+    // as a disc copier writes it), told by where the second sector's sync falls.
+    uint8_t next[12] = {};
+    f.clear();
+    f.seekg(2448);
+    f.read(reinterpret_cast<char*>(next), 12);
+    t.sector = f && size >= uint64_t{2} * 2448 && std::equal(kSync, kSync + 12, next) ? 2448 : 2352;
     t.user = head[15] == 2 ? 24 : 16;
   }
   t.sectors = uint32_t(size / t.sector);
@@ -363,9 +467,18 @@ bool Disc::read_audio(const DiscTrack& t, std::vector<int16_t>* out, std::string
     *error = "track " + std::to_string(t.number) + " is a data track, not audio";
     return false;
   }
+  // 2352 bytes of sound a sector; any more a sector holds (its subchannel) is passed over.
   const size_t bytes = size_t(t.sectors) * 2352;
   std::vector<uint8_t> raw(bytes);
-  if (!impl_->read(t.file, t.start, bytes, raw.data())) {
+  bool whole = true;
+  if (t.sector == 2352) {
+    whole = impl_->read(t.file, t.start, bytes, raw.data());
+  } else {
+    for (uint32_t s = 0; s < t.sectors && whole; s++)
+      whole = impl_->read(t.file, t.start + uint64_t(s) * t.sector, 2352,
+                          raw.data() + size_t(s) * 2352);
+  }
+  if (!whole) {
     *error = "audio track " + std::to_string(t.number) + " runs past the end of " +
              image_files[size_t(t.file)] + "; the image is cut short, make it again from the disc";
     return false;
@@ -378,15 +491,17 @@ bool Disc::read_audio(const DiscTrack& t, std::vector<int16_t>* out, std::string
 
 bool is_disc_image(const std::string& path) {
   const std::string ext = lower(fs::path(path).extension().string());
-  return ext == ".iso" || ext == ".cue" || ext == ".bin" || ext == ".img";
+  return ext == ".iso" || ext == ".cue" || ext == ".bin" || ext == ".img" || ext == ".mdf";
 }
 
 bool open_disc(const std::string& path, Disc* out, std::string* error) {
   *out = Disc();
   const fs::path p(path);
-  const bool ok = lower(p.extension().string()) == ".cue"
-                      ? open_sheet(p, out, out->impl_.get(), error)
-                      : open_plain(p, out, out->impl_.get(), error);
+  const std::string ext = lower(p.extension().string());
+  const fs::path mds = ext == ".mds" ? p : ext == ".mdf" ? sheet_beside(p) : fs::path();
+  const bool ok = ext == ".cue"  ? open_sheet(p, out, out->impl_.get(), error)
+                  : !mds.empty() ? open_mds(mds, out, out->impl_.get(), error)
+                                 : open_plain(p, out, out->impl_.get(), error);
   return ok && read_filesystem(*out, *out->impl_, error);
 }
 
@@ -563,6 +678,50 @@ std::vector<uint8_t> raw_sectors(const std::vector<uint8_t>& iso) {
     std::copy_n(iso.begin() + s * 2048, 2048, o + 16);
   }
   return out;
+}
+
+std::vector<uint8_t> write_mds(const std::vector<DiscTrack>& tracks, const std::string& image) {
+  // The header, one session, the lead-in's three entries, the tracks, their extra blocks, the
+  // footer and the name, laid out as a disc copier lays them.
+  const size_t session = 96, first = 120, count = 3 + tracks.size();
+  const size_t extras = first + count * 80, footer = extras + tracks.size() * 8;
+  const size_t name = footer + 16;
+  std::vector<uint8_t> b(name + (image.size() + 1) * 2, 0);
+  const auto put32 = [&](size_t o, uint32_t v) {
+    for (int i = 0; i < 4; i++) b[o + size_t(i)] = uint8_t(v >> (8 * i));
+  };
+  const char* sig = "MEDIA DESCRIPTOR";
+  std::copy(sig, sig + 16, b.begin());
+  b[16] = 1;
+  b[17] = 5;
+  put32(80, uint32_t(session));
+  b[session + 10] = uint8_t(count);
+  b[session + 12] = 1;
+  b[session + 14] = uint8_t(tracks.empty() ? 0 : tracks.back().number);
+  put32(session + 20, uint32_t(first));
+  for (size_t k = 0; k < 3; k++) b[first + k * 80 + 4] = uint8_t(0xa0 + k);
+  for (size_t k = 0; k < tracks.size(); k++) {
+    const DiscTrack& t = tracks[k];
+    const size_t o = first + (3 + k) * 80;
+    const uint32_t pregap = 150;
+    const uint64_t offset = k == 0 ? t.start : t.start - uint64_t(pregap) * t.sector;
+    b[o] = t.kind == TrackKind::audio ? 0xa9 : 0xaa;
+    b[o + 1] = 8;
+    b[o + 4] = uint8_t(t.number);
+    put32(o + 12, uint32_t(extras + k * 8));
+    b[o + 16] = uint8_t(t.sector);
+    b[o + 17] = uint8_t(t.sector >> 8);
+    put32(o + 40, uint32_t(offset));
+    put32(o + 44, uint32_t(offset >> 32));
+    put32(o + 48, 1);
+    put32(o + 52, uint32_t(footer));
+    put32(extras + k * 8, pregap);
+    put32(extras + k * 8 + 4, t.sectors);
+  }
+  put32(footer, uint32_t(name));
+  put32(footer + 4, 1);
+  for (size_t i = 0; i < image.size(); i++) b[name + 2 * i] = uint8_t(image[i]);
+  return b;
 }
 
 }  // namespace ge::vfs

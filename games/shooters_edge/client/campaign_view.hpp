@@ -5,12 +5,12 @@
 // it the bytes of each frame's all-clients stream and its own slot's stream, in that order.
 //
 // THE MESSAGES, by their byte: 30 intermission (none), 31 finale (a string), 34 cutscene (a
-// string), 33 sellscreen (none), 32 cdtrack (track and loop bytes: recorded, never played: the
-// game has no music), 27 killedmonster and 28 foundsecret (none: one more of statistic 14 or 13),
-// 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps to them), 52 the
-// re-release's achievement (its id, a string: stepped over, no store here). A byte it
-// does not know ends the read of that buffer (what it cannot size it cannot step over): counted in
-// `unread` and the first one named in `unknown`.
+// string), 33 sellscreen (none), 32 cdtrack (track and loop bytes: kept in `cdtrack` for the
+// window to play from the player's soundtrack), 27 killedmonster and 28 foundsecret (none: one more
+// of statistic 14 or 13), 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps
+// to them), 52 the re-release's achievement (its id, a string: stepped over, no store here). A byte
+// it does not know ends the read of that buffer (what it cannot size it cannot step over): counted
+// in `unread` and the first one named in `unknown`.
 //
 // THE STATISTICS are the four a joining client is sent (11 total secrets, 12 total monsters, 13
 // secrets found, 14 monsters killed): `join_stats` sets them, and each find or kill adds one.
@@ -68,7 +68,8 @@ enum class EffectKind : uint8_t {
   beam,
   blood,
   named,
-  named_trail
+  named_trail,
+  burst  // a program's burst in a colour other than blood's
 };
 struct Effect {
   EffectKind kind = EffectKind::impact;
@@ -79,6 +80,12 @@ struct Effect {
   ge::shooter::Vec3f end;  // a beam's end; a named trail's
   ge::shooter::Vec3f way;  // a named effect's way (zero: up)
   std::string name;        // a named effect's
+  int colour = 0;          // a laser's sparks' palette index; a burst's; explosion2's first
+  int q2_specks = 0;       // Quake II: a hit's puff of this many specks of `colour` off `way`
+  // Quake II: a gun's flash's value (q2_flash_fx.hpp; -1 none) and whether a monster's, for the
+  // spent cases its gun throws (shells.hpp).
+  int flash = -1;
+  bool flash_monster = false;
 };
 
 inline constexpr double kPrintSpeed = 8;  // scr_printspeed's default, characters a second

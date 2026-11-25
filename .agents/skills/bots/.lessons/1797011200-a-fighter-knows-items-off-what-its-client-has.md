@@ -1,11 +1,11 @@
 ---
 title: A fighter knows items off the map, its ears and its status bar, and every goal needs hysteresis, an end and its cause counted
 date: 2026-10-30
-scope: games/shooters_edge/profiles/items.hpp, games/shooters_edge/bots/knowledge.cpp, games/shooters_edge/bots/ears.cpp, games/shooters_edge/bots/packs.cpp, games/shooters_edge/bots/fighter.cpp, plugins/shooter/hearing.cpp, plugins/shooter/temper.cpp, plugins/shooter/traits.cpp, engine/ai/choose.hpp
+scope: games/shooters_edge/profiles/items.hpp, plugins/shooterbots/knowledge.cpp, plugins/shooterbots/ears.cpp, plugins/shooterbots/packs.cpp, plugins/shooterbots/fighter.cpp, plugins/shooterbots/hearing.cpp, plugins/shooterbots/temper.cpp, plugins/shooterbots/traits.cpp, engine/ai/choose.hpp
 concepts: [items, item-row, item-knowledge, hearing, pickup-sound, status-bar, own-pickup, packs, pick-best, hysteresis, retreat, temperament, traits, presets, lying, short-goal]
 ---
 
-- Items, call words and sounds are rows of `profiles::kClassicTables` (a variant before its plain
+- Items, call words and sounds are rows of `profiles::kQ1Tables` (a variant before its plain
   row): edit a row, never the bots. Items come off the map's entity text, as a client has them (copy
   the names out); a taken item stops being sent, which times it fairly.
 - Only a UNIQUE pickup sound says which item went; a shared one places the player only.

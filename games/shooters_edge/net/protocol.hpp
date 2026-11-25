@@ -1,8 +1,8 @@
 // THE PROTOCOL FAMILY IN THE GAME'S NET CODE: the classic protocol family's wire, net channel and
-// info strings (plugins/classic/protocol) named in `shooters_edge::net`, so the first game's
-// protocol (classic_*.hpp) and the sequel's (sequel_*.hpp) both read them as their own words. A
+// info strings (plugins/classic/protocol) named in `shooters_edge::net`, so QuakeWorld's
+// protocol (qw_*.hpp) and Quake II's (q2_*.hpp) both read them as their own words. A
 // game's own protocol adds only what is its alone: its version, ports, messages, move checksum
-// and usercmd (classic_wire.hpp, sequel_net.hpp).
+// and usercmd (qw_wire.hpp, q2_net.hpp).
 //
 // ge:summary The classic protocol family's wire, channel and info strings named in the game's net
 // ge:keywords protocol-family wire net-channel info-string using-declarations
@@ -60,8 +60,10 @@ using sp::write_string;
 using sp::Channel;
 using sp::channel_can_packet;
 using sp::channel_process;
+using sp::channel_read;
 using sp::channel_reliable;
 using sp::channel_reliable_backlog;
+using sp::channel_sending_pieces;
 using sp::channel_set_rate;
 using sp::channel_setup;
 using sp::channel_transmit;
@@ -77,6 +79,7 @@ using sp::info_pairs;
 using sp::info_public;
 using sp::info_remove;
 using sp::info_set;
+using sp::info_strict;
 using sp::info_valid;
 using sp::kInfoKeyBytes;
 using sp::kInfoMaxKeys;
@@ -85,8 +88,8 @@ using sp::kUserInfoBytes;
 using sp::sanitize_name;
 using sp::unique_name;
 
-// The game's name and version as servers are told it: the first game's server info (`*version`)
-// and the sequel client's user info (`version`).
+// The game's name and version as servers are told it: Quake's server info (`*version`)
+// and Quake II client's user info (`version`).
 inline constexpr const char* kProgramVersion = "ShootersEdge 0.1";
 
 }  // namespace shooters_edge::net

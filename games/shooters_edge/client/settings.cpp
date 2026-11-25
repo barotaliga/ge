@@ -7,6 +7,8 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <system_error>
 
@@ -15,6 +17,8 @@
 #include "console/cfg.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/server/commands.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -69,7 +73,64 @@ bool save_settings(ge::console::Console& con, const std::filesystem::path& serie
 }
 
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
+  {
+    // Every classic game's, each with its own default (Quake's here; Quake II says its own).
+    ge::console::CvarLayer classic(con.cvars(), kLayerClassic);
+    con.cvars().bind({.name = "rate",
+                      .fallback = "2500",
+                      .flags = ge::console::kArchive | ge::console::kUserInfo,
+                      .help = "How many bytes a second a joined server may send you.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 500,
+                      .max = 1000000,
+                      .values = "500..1000000: that many bytes a second, held to the server's "
+                                "own bounds (2500 the default)"},
+                     &info.rate);
+    con.cvars().bind({.name = "password",
+                      .fallback = "",
+                      .flags = ge::console::kUserInfo,
+                      .help = "The password a closed server asks of its players.",
+                      .kind = ge::console::CvarKind::text,
+                      .values = "\"\": none (the default); TEXT: sent when you join"},
+                     &info.password);
+    con.cvars().bind({.name = "msg",
+                      .fallback = "1",
+                      .flags = ge::console::kArchive | ge::console::kUserInfo,
+                      .help = "The least important messages a joined server sends you.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 0,
+                      .max = 3,
+                      .values = "0: pickups and everything; 1: from medium up, no pickups (the "
+                                "default); 2: important ones and chat; 3: chat alone"},
+                     &info.msg);
+    con.cvars().bind({.name = "noaim",
+                      .fallback = "0",
+                      .flags = ge::console::kArchive | ge::console::kUserInfo,
+                      .help = "Whether you ask a joined QuakeWorld server for no aim help on "
+                              "rockets and grenades.",
+                      .kind = ge::console::CvarKind::boolean,
+                      .values = "0: the server's aim help (the default); 1: none"},
+                     &info.noaim);
+  }
   ge::console::CvarLayer shell(con.cvars(), kLayerShell);  // client/cvar_layers.hpp
+  // Quake's one word for both colours: `color 4` dresses you all in one, `color 4 12` apart.
+  con.add_command(
+      "color", "color <shirt> [pants]: your colours, 0..13 each (one for both); color: shows them",
+      [&info](ge::console::Console& c, const ge::console::Args& a) {
+        if (a.size() < 2) {
+          c.print("Your shirt is colour " + std::to_string(info.top) + " and your pants colour " +
+                  std::to_string(info.bottom) + ".");
+          c.print("To change them: color <shirt> [pants], each 0 to 13.");
+          return;
+        }
+        // Each value as Quake keeps it: its low four bits, past 13 held at 13 (16 is 0, 15 is 13).
+        const auto colour = [](const std::string& text) {
+          return std::to_string(std::min(std::atoi(text.c_str()) & 15, 13));
+        };
+        c.cvars().set("topcolor", colour(a[1]), ge::console::Source::local);
+        c.cvars().set("bottomcolor", colour(a.size() >= 3 ? a[2] : a[1]),
+                      ge::console::Source::local);
+      });
   for (const auto& [name, field, what] :
        {std::tuple{"topcolor", &info.top,
                    "Your shirt's colour, which a team game sets to the team's."},
@@ -128,10 +189,17 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   // The easy jump's ask again whenever the slot lost it (a rejoin clears the server's user info).
   if (l.server->sv.clients[0].active && l.server->sv.clients[0].speedjump != info.speedjump)
     l.rules->user_info(0, "cl_speedjump", info.speedjump ? "1" : "0");
+  // Quake II's rules hold the view to the field of view they are told (q2_view.hpp).
+  const bool q2 = l.rules != nullptr && (shooters_edge::server::q2_of(*l.rules) != nullptr ||
+                                         shooters_edge::server::native_q2_of(*l.rules) != nullptr);
+  const ge::console::Cvar* lens = con.cvars().find("cl_fov");
+  const std::string fov = q2 && lens != nullptr ? lens->value : info.sent_fov;
   if (l.server == info.sent_to && name == info.name && info.top == info.sent_top &&
       info.bottom == info.sent_bottom && info.skin == info.sent_skin &&
-      info.model == info.sent_model)
+      info.model == info.sent_model && fov == info.sent_fov)
     return;
+  const bool fov_new = l.server != info.sent_to || fov != info.sent_fov;
+  info.sent_fov = fov;
   info.sent_to = l.server;
   info.name = name, info.sent_top = info.top, info.sent_bottom = info.bottom;
   info.sent_skin = info.skin;
@@ -149,6 +217,7 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   set("name", name);
   set("skin", info.skin);
   if (model_named) set("model", info.model);
+  if (q2 && fov_new) set("fov", fov);
   if (l.room) return;  // a team game's lobby wears the team's colours (lobby.cpp)
   set("topcolor", std::to_string(info.top));
   set("bottomcolor", std::to_string(info.bottom));

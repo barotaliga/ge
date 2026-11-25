@@ -1,5 +1,7 @@
 // THE EPISODES IN ORDER: a campaign's episodes open one at a time, each once the one before it is
 // done, and a done episode stays shut; what the player has done is kept from game to game.
+// A SETTING, off by default (`sv_episodes_in_order`): the original game opens every episode of
+// the full game from the start and begins each new game with no runes; with it on, as below.
 //
 // - **Done** is a bit an episode (1, 2, 4, 8: its rune's bit in the program's `serverflags`). The
 //   server's `sv_episodes_done` holds it; at every map's start the host adds the runes the game
@@ -9,13 +11,13 @@
 // - **On the start map** the program's `serverflags` gains every done episode's bit before the
 //   world spawns, so the program's own gates stand as the runes say: a done episode's gate shuts
 //   its hall, and with all four done the way to the last map opens. That holds for a new game
-//   too, which in the classic rules starts with no runes.
+//   too, which in Quake's rules starts with no runes.
 // - **The bars**: the start map keeps episodes 2 to 4 behind bars (doors a full-game-only trigger
 //   opens when a player walks up to them, porting/shooters-edge/campaign.md § Episodes). The host
 //   rewrites the start map's entity text before it spawns: the full-game trigger in front of an
 //   episode not yet open becomes a plain message trigger with no targets, so its bars stay shut
 //   and a player walking up is told which episode opens them. Episodes 2 and 3 are each barred
-//   by two doors two units apart, one named by the trigger and one not; the classic engine reads
+//   by two doors two units apart, one named by the trigger and one not; Quake's engine reads
 //   brush models a unit larger on every side, so there the two touch and open together, but
 //   here the unnamed one would open on a player's approach. So an unnamed door within 4 units of
 //   a shut bar takes its name and waits to be fired too. The trigger's episode is the one

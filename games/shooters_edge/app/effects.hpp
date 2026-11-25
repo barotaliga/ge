@@ -78,6 +78,15 @@ void grenade_trail(const double from[3], const double to[3], uint32_t seed, Pale
 
 // An explosion at `at`: 1024 specks thrown out.
 void explosion(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// The mission packs' blast (explosion2) at `at`: 512 specks of the palette's run `start` ..
+// `start + length - 1`, taken in turn, flung out at up to 256 units/s on each axis and speeding
+// out (x e^4t) for 0.3 s. A length of 0 throws nothing.
+void explosion2(const double at[3], int start, int length, uint32_t seed, Palette palette,
+                Particles* out);
+// A program's burst at `at` in any colour: `specks` specks, each a random shade of the colour's
+// row of 8, all thrown at `way` (engine m/s), alive 0 to 0.4 s.
+void burst(const double at[3], int specks, int colour, const double way[3], uint32_t seed,
+           Palette palette, Particles* out);
 // A shot's or a nail's hit at `at`: `specks` dark grey specks (20 a pellet, 10 a nail, 20 a big
 // nail's).
 void impact(const double at[3], int specks, uint32_t seed, Palette palette, Particles* out);
@@ -94,13 +103,9 @@ inline constexpr uint32_t kTrailGib = 4, kTrailZombieGib = 32;
 inline constexpr double kBloodStep = 3 * 0.025, kThinBloodStep = 6 * 0.025;
 double blood_trail(const double from[3], const double to[3], double step, double carry,
                    uint32_t seed, Palette palette, Particles* out);
-// The same blood in the sequel's look: its palette's dark reds (232..239), each speck thrown down
-// at 40 units/s and living 1 to 1.4 s.
-double sequel_blood_trail(const double from[3], const double to[3], double step, double carry,
-                          uint32_t seed, Palette palette, Particles* out);
 // A teleport's arrival at `at` (the feet): a grid of grey specks flying out.
 void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
-// THE SEQUEL'S ARRIVALS, in its own numbers (map units; its specks fall at twice the gravity they
+// QUAKE II'S ARRIVALS, in its own numbers (map units; its specks fall at twice the gravity they
 // name, 80 units/s^2 for its 40): `at` is the entity's origin (a player's box's middle).
 // - A teleport's burst (a player teleported or respawned, either end of a pad): a lattice of 1053
 //   grey specks (palette 7..14) over 32 units across and 48 up from 16 below, each flying out at
@@ -112,15 +117,123 @@ void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particl
 //   drifting at up to 20 units/s, living 1..1.3 s.
 // - A teleporter pad's fountain, each server frame: 8 specks (219) within 16 across and 1..8 below,
 //   rising at 80..87 units/s, living 2 s.
-enum SequelArrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
-void sequel_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
-void sequel_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
-void sequel_player_flash(const double at[3], SequelArrival kind, uint32_t seed, Palette palette,
-                         Particles* out);
-void sequel_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// - A boss teleporting out: 4096 specks (16, 104, 168 or 144), each at an angle round the point
+//   and 0..31 units out, 8..97 units above it, flying out at 70..133 units/s along its angle and
+//   down at 69..100 units/s, pulled back in at 100 units/s^2 and pushed up at 160 (`Particle::
+//   accel`), so the cloud swirls in and rises; living 1.67..2.67 s.
+enum Q2Arrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
+void q2_boss_teleport(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// A burst of `count` specks of palette `colour` (each `colour` + 0..7 with `vary`) off a face along
+// `normal` (map units' axes, x/y the plan; zero: none), each 0..`reach`-1 units out along it and
+// -4..3 across, drifting at up to 20 units/s and falling, living 0.5..0.8 s: a laser's sparks
+// (reach 8, one colour), a splash (reach 32, varied).
+// `fall`: the specks' pull down in the trails' units (80 the usual; negative rises: a tunnel's
+// sparks).
+void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
+               bool vary, uint32_t seed, Palette palette, Particles* out, double fall = 80);
+// Quake II's blaster bolt's hit: 40 specks of palette 0xe0..0xe7 off the face along `normal` (map
+// units' axes), each 0..15 units out along it and -4..3 across, pushed off at 30 units/s with up to
+// 40 more on each axis, falling, living 0.5..0.8 s.
+void q2_blaster_specks(const double at[3], const double normal[3], uint32_t seed, Palette palette,
+                       Particles* out);
+// Quake II's explosion's specks: 256 of palette `colour` + 0..7 (0xe0 a rocket's or a grenade's,
+// 0xd0 the BFG's big burst), each within -16..15 units of the point on every axis, flung at
+// -192..191 units/s on each axis and falling, living 0.625..1 s.
+void q2_blast_specks(const double at[3], int colour, uint32_t seed, Palette palette,
+                     Particles* out);
+// QUAKE II'S OTHER EFFECTS OFF THE WIRE (map units, its own numbers):
+// - BUBBLES along a line, the first at its start: grey (4..11), within 2 units, rising at 6
+//   units/s and drifting at up to 5, a bubble every 32 units, living 1..1.2 s; the second kind
+//   a bubble every 8 units, 4 lower, rising at 20 and drifting at up to 10, living 1..1.1 s.
+// - A FORCE WALL: along its line every 4 units, seven steps in ten, a speck of its colour within
+//   3 units, falling at 30..50 units/s, living 3..3.5 s.
+// - STEAM (and the chain fist's smoke): `count` specks of `colour` + 0..7 within a tenth of the
+//   jet's speed, along the jet (`jet`: its way times its speed) and spread a third of its speed
+//   across it, pulled down by `fall` (40 steam, 0 smoke), living 0.5..0.8 s.
+// - A BLUE BOLT'S HIT: 40 yellow-to-orange specks (224..231) 0..15 units out along `way`, flying
+//   at 30 units/s along it and up to 40 any way, falling, living 0.5..0.8 s.
+// - THE WIDOW'S SPLASH: 256 specks on a sphere of 45 units flying out at 40 units/s, of four
+//   colours (16, 104, 168, 144), living 0.625..1 s.
+void q2_bubbles(const double from[3], const double to[3], bool second, uint32_t seed,
+                Palette palette, Particles* out);
+void q2_force_wall(const double from[3], const double to[3], int colour, uint32_t seed,
+                   Palette palette, Particles* out);
+void q2_steam(const double at[3], const double jet[3], int count, int colour, double fall,
+              uint32_t seed, Palette palette, Particles* out);
+void q2_blue_hit(const double at[3], const double way[3], uint32_t seed, Palette palette,
+                 Particles* out);
+void q2_widow_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_player_flash(const double at[3], Q2Arrival kind, uint32_t seed, Palette palette,
+                     Particles* out);
+void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// QUAKE II'S TRAILS, in its own numbers (map units; the specks' gravity as for its arrivals):
+// - THE THINNING TRAIL (a gib's blood, a grenade's and a rocket's smoke): a try every half unit
+//   along the stretch, a speck when a draw of 0..1023 falls under the piece's `count` (1024 when
+//   it first shows), the count losing 5 a try down to 100: two specks a unit at first, one in
+//   five after about 92 units. Its spread is fixed by the count at the frame's start: within 4
+//   units and drifting at up to 15 units/s above 900, 2 and 10 above 800, else 1 and 5. Blood is
+//   its dark reds (232..239), thrown down at 40 units/s with no gravity, living 1..1.4 s; smoke
+//   its greys (4..11), rising at 40 units/s^2, living 1..1.2 s.
+// - A rocket's fire beside its smoke: a speck one unit in eight, yellow to orange (220..223),
+//   within 5 units, drifting at up to 20 units/s and falling, living 1..1.2 s.
+// - A blaster's bolt: an orange speck (224) every 5 units, within 1, drifting at up to 5 units/s,
+//   living 0.3..0.5 s.
+// - A green gib's blood: the thinning trail in greens (219..226), as a gib's.
+// - A FLAG's (and the tag token's) column: a speck of its colour (a red flag 242, a blue 115, the
+//   tag 220) every 5 units within 16 of the line, drifting at up to 5 units/s, living 0.8..1 s.
+// - An ION RIPPER's bolt: a speck every 5 units on the line (228..231), thrown 10 units/s one way
+//   then the other along the world's x (`side` carries the swing from frame to frame), living
+//   0.15..0.25 s.
+enum class Q2Trail : uint8_t { blood, smoke, green_blood };
+void q2_column_trail(const double from[3], const double to[3], int colour, uint32_t seed,
+                     Palette palette, Particles* out);
+// The trap's glow at `at` (its origin raised 32 units): a column of yellow specks rising from 14
+// below to 50 above it, a speck every 5 units, and 8 thrown out from round it that fall.
+void q2_trap(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// The disruptor's bolt: two black strands woven about its line, a speck every 3 units, rising
+// slowly, 0.5 s each.
+void q2_tracker_trail(const double from[3], const double to[3], uint32_t seed, Palette palette,
+                      Particles* out);
+// A tracker's dark shell: 300 black specks on a sphere of `radius_u` units round `at`, drawn for
+// one frame.
+void q2_tracker_shell(const double at[3], double radius_u, uint32_t seed, Palette palette,
+                      Particles* out);
+// A power screen's or shield's splash: 256 green specks on a sphere of `radius_u` units round `at`,
+// moving out at 40 units a second, 0.5 to 0.8 s each.
+void q2_power_splash(const double at[3], double radius_u, uint32_t seed, Palette palette,
+                     Particles* out);
+// The widow's beam-out, `ratio` (0..1) of its way through: 300 specks on a sphere of 45 × ratio
+// units round `at` in its four colours, drawn for one frame.
+void q2_beam_out(const double at[3], double ratio, uint32_t seed, Palette palette, Particles* out);
+void q2_ion_trail(const double from[3], const double to[3], int& side, uint32_t seed,
+                  Palette palette, Particles* out);
+inline constexpr int kSqTrailStart = 1024, kSqTrailFloor = 100, kSqTrailFade = 5;
+inline constexpr double kSqTrailAttemptUnits = 0.5;
+void q2_trail(const double from[3], const double to[3], Q2Trail kind, int& count, uint32_t seed,
+              Palette palette, Particles* out);
+void q2_rocket_fire(const double from[3], const double to[3], uint32_t seed, Palette palette,
+                    Particles* out);
+void q2_bolt_trail(const double from[3], const double to[3], uint32_t seed, Palette palette,
+                   Particles* out);
+// FLIES round a corpse (its flies bit): black specks (palette 0) that swarm over a 60 s cycle
+// from the first frame they are seen (`since_s` into it): their number rises from none to 162
+// over 20 s, holds, and falls to none over the last 20 s, every second one of them drawn (81 at
+// most). Fly i swings 64 units through `at` along the i-th of the 162 directions (sin(t + i), t
+// the picture's clock in s) and 16 units out along a way that turns at its own two rates (0 to
+// 2.55 radians a second). They are thrown afresh every frame, each living `life` s (the frame's).
+inline constexpr int kSqFliesMax = 162;
+inline constexpr double kSqFliesCycleS = 60;
+int q2_flies_count(double since_s);
+void q2_flies(const double at[3], double t, double since_s, double life, Palette palette,
+              Particles* out);
 // The light a player's entry (green), exit (red) or respawn (yellow) flash gives for the one
 // frame it is drawn in: 200 to 231 units, by `seed`.
-Light sequel_arrival_light(const double at[3], SequelArrival kind, uint32_t seed);
+Light q2_arrival_light(const double at[3], Q2Arrival kind, uint32_t seed);
+// A light of `radius_u` map units and colour (fractions 0..1) at `at`, as bright as its size (a
+// welding spark's, a flashlight's).
+Light q2_point_light(const double at[3], double radius_u, double red, double green, double blue);
 // Lava thrown up at `at` (its surface): glowing specks over a 6 m square that arc and fall.
 void lava_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 
@@ -171,20 +284,53 @@ void dynamic_light_at(std::span<const Light> lights, const double w[3], double s
 
 // THE SCREEN'S BLEND: what surrounds the eye, how hurt the player is now, the powers held.
 enum class Medium : uint8_t { air, water, slime, lava };
+// THE CLASSIC TINTS (a single-player program's, as the original's client shows them): one
+// powerup at a time, the first held of quad, suit, ring, pentagram.
+enum class Powerup : uint8_t { none, quad, suit, ring, pent };
 struct Screen {
   double hurt = 0;    // the hurt's flash now: a hit's damage, falling by kHurtFade a second
   double armour = 0;  // the same for what the armour took of it: a duller amber under the red
+  double bonus = 0;   // an item taken: the gold flash's strength now, kBonusFlash falling to 0
   Medium medium = Medium::air;
   bool power = false, shield = false, suit = false, stealth = false;
+  // The classic tints in place of the layers above: `hurt` is the damage tint's strength (of
+  // 255) in `hurt_rgb` (0..255), `bonus` the pickup flash as above, `powerup` the one power's
+  // tint. Combined contents, damage, bonus, powerup, each over the last.
+  bool classic = false;
+  Powerup powerup = Powerup::none;
+  double hurt_rgb[3] = {255, 0, 0};
+  // The tint over the view in open air (`v_cshift`, a mod's own): its colour (0..255) and its
+  // strength (of 255); 0 none, the default.
+  double air = 0;
+  double air_rgb[3] = {130, 80, 50};
 };
+// THE POWERS HELD, from the player's item bits (the items stat the server sends: ring, pentagram,
+// suit, quad), never from the glow bits on his own figure, which a server may set for other
+// reasons (a match's prewar): the classic tint (`powerup`, the first held of quad, suit, ring,
+// pentagram) and ours (`power`, `shield`, `suit`, `stealth`).
+inline constexpr int kItemRing = 524288, kItemPent = 1048576, kItemSuit = 2097152,
+                     kItemQuad = 4194304;
+void take_powers(Screen& s, int items);
+// The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
+// each, at least kHurtCountMin) to `strength`, kept at most kClassicHurtMost, and takes the
+// blow's colour into `rgb`: (200, 100, 100) when the armour took more than the blood, (220, 50,
+// 50) when it took some, else (255, 0, 0). The strength falls by kHurtFade a second.
+inline constexpr double kHurtCountMin = 10, kClassicHurtMost = 150;
+void take_classic_hurt(double& strength, double rgb[3], double armour, double blood);
 inline constexpr double kHurtFade = 150;  // damage a second the flash fades by
+// An item taken flashes the view gold: this strong at once (of 255, the share it lays over the
+// picture), falling by kBonusFade a second, so it is gone in half a second.
+inline constexpr double kBonusFlash = 50;
+inline constexpr double kBonusFade = 100;
+// The pickup flash after `dt` s more, and lit again by `taken` items since the last frame.
+double fade_bonus(double bonus, double dt, int64_t taken);
 // The hurt's flash after `dt` s more (the next frame's `hurt`), and a hit of `damage` on it.
 double fade_hurt(double hurt, double dt);
 double take_hurt(double hurt, double damage);
 // How much of each layer the player lets through (the v_ cvars, app/look.hpp): the medium round
 // the eye, the hurt's flash and the armour's, and each power's tint; 0..1 each, 1 the full.
 struct BlendShares {
-  double content = 1, damage = 1, quad = 1, pent = 1, suit = 1, ring = 1;
+  double content = 1, damage = 1, quad = 1, pent = 1, suit = 1, ring = 1, bonus = 1;
 };
 // The one colour (sRGB-encoded) and share the post pass mixes the picture toward, each layer at
 // its share of `k`.

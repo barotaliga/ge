@@ -32,9 +32,11 @@
 // ge:keywords placed-model effect-models s_explod bolt effect_model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
+// ge:keywords rotating-brush-models func_rotating rotate_object
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
 // ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting filtered_models
 // ge:keywords player-figures choose_look worn_slot drawn_kind carried-weapons skin-files
+// ge:keywords place_returning hologram_of returning-items item-hologram ce_respawns
 // ge:skill render shooter morph
 #pragma once
 
@@ -44,10 +46,12 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "brush/app/bsp_draw.hpp"
 #include "brush/map.hpp"
+#include "classicenhance/hologram.hpp"
 #include "gpu/device.hpp"
 #include "render/frame.hpp"
 #include "render/morph.hpp"
@@ -68,7 +72,7 @@ struct Placed {
   int modelindex = 0;
   int frame = 0, skin = 0;
   int carried = 0;  // a second model drawn with it on its frame (a carried weapon); 0 none
-  // The first game's visible weapon (plugins/classic/vweps.hpp): the server's index into its list
+  // Quake's visible weapon (plugins/classic/vweps.hpp): the server's index into its list
   // of the weapon this player holds (0 none), and `vwep_bare`: drawn without his own gun even with
   // none (a server recording's body on a death frame). `filtered_models` swaps the body and adds
   // the weapon (WorldModels::vweps).
@@ -82,20 +86,40 @@ struct Placed {
   float frame_f = 1;
   bool lerp = false;
   int effects = 0;  // the entity's effect bits (kGlow...)
-  // The sequel's look (sequel_look.hpp): its light pulsing (an item's glow) and a coloured shell
+  // Quake II's look (q2_look.hpp): its light pulsing (an item's glow) and a coloured shell
   // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
   bool pulse = false, shell = false;
-  bool bleeds = false;  // a body's piece by its bits (the sequel's gib bit), not its model file
+  bool bleeds = false;       // a body's piece by its bits (Quake II's gib bit), not its model file
+  bool green_blood = false;  // its blood green (Quake II's green gib bit)
+  bool flies = false;        // Quake II's corpse with flies round it (its flies bit)
+  bool shell_only = false;   // its shell alone, no plain draw under it (a power screen's plate)
+  // A Quake II entity's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
+  // q2_look.hpp's q2_texture_frame): a brush model's texture frame, a model's or a sprite's own
+  // frame, cycled on the picture's clock; -1 elsewhere, its textures on the map's clock.
+  int q2_anim = -1;
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
-  float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
-  float scale = 1;     // its size about the origin (a mod's `scale`)
+  bool spinning = false;  // Quake II's spinning lights: upside down, 500 degrees a second
+  bool bobs = false;      // Quake II's bob bit: rising and sinking 5 units
+  // Quake II's render bits: lit full whatever the room, or never darker than a tenth.
+  bool full_bright = false, min_light = false;
+  bool no_shadow = false;  // Quake II's render bit: it casts no ground shadow (model_shadow.hpp)
+  // Seen through infra-red goggles: its skin times pure red, no light of the room, no glow.
+  bool infra_red = false;
+  float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
+  float scale = 1;  // its size about the origin (a mod's `scale`)
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
+  // An item coming back as a hologram (ce_respawns, classicenhance/hologram.hpp): the share of its
+  // light that is the hologram's blue, and the blue shell over it (0: none).
+  float holo_blue = 0, holo_shell = 0;
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
   // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
   // by `player_skin_morph`); empty: none named.
   std::string skin_name;
+  // A picture it wears in place of its model's own skin, by its path in the game's files (Quake
+  // II's custom skin: the skin number naming a picture of the server's list); empty: its own.
+  std::string skin_picture;
   // A player's `model` (its user info's: the figure in `players/<model>/` it is drawn as, over the
   // game's own); empty: none named.
   std::string model_name;
@@ -113,21 +137,71 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // window after the server's list whether the program precached them or not (a pack without one
 // draws nothing in its place, silently): the explosion's sprite and the three bolts' segments. A
 // placed one's modelindex is the server's list's size plus its slot here (`effect_model`).
-enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3 };
-inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr", "progs/bolt.mdl",
-                                                "progs/bolt2.mdl", "progs/bolt3.mdl"};
+// `loc_draw`'s marker is a head: Quake's the player's, Quake II's the ancient head (each game's
+// pack has only its own, so the other draws nothing).
+// `figure_q2`: what a Quake II player's model 255 ("the client's own") is drawn as, in the look his
+// slot names (`Placed::skin_name`), when a recording or a joined server sends one.
+// `case_hull`, `case_brass`, `case_heavy`: the guns' spent cases (ce_shells, shells.hpp), made by
+// classic enhance (classicenhance/shells.hpp's `casing_model`, in the game's palette), in
+// classicenhance::Casing's order; never read from the packs.
+// `q2_fx` on: Quake II's model effects (q2_model_fx.hpp's Q2FxModel, in its order).
+enum class EffectModel : uint8_t {
+  explosion,
+  bolt,
+  bolt2,
+  bolt3,
+  place_q1,
+  place_q2,
+  figure_q2,
+  case_hull,
+  case_brass,
+  case_heavy,
+  q2_fx
+};
+inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
+                                                "progs/bolt.mdl",
+                                                "progs/bolt2.mdl",
+                                                "progs/bolt3.mdl",
+                                                "progs/h_player.mdl",
+                                                "models/items/c_head/tris.md2",
+                                                "players/male/tris.md2",
+                                                "ce/case_hull",
+                                                "ce/case_brass",
+                                                "ce/case_heavy",
+                                                "models/objects/r_explode/tris.md2",
+                                                "models/objects/explode/tris.md2",
+                                                "models/objects/smoke/tris.md2",
+                                                "models/objects/flash/tris.md2",
+                                                "models/monsters/parasite/segment/tris.md2",
+                                                "models/ctf/segment/tris.md2",
+                                                "sprites/s_bfg2.sp2"};
+inline int effect_model(int listed, EffectModel m) { return listed + static_cast<int>(m); }
 inline int effect_model(const Listen& l, EffectModel m) {
-  return (l.server ? static_cast<int>(l.server->models.size()) : 0) + static_cast<int>(m);
+  return effect_model(l.server ? static_cast<int>(l.server->models.size()) : 0, m);
 }
+// Quake II's model 255: the player's own figure, from his client info.
+inline constexpr int kQ2OwnLook = 255;
 
 // The effect bits a power held lights its holder with (the mod's EF_DIMLIGHT, EF_BLUE, EF_RED).
 inline constexpr int kGlow = 8, kGlowBlue = 64, kGlowRed = 128;
 
 // A carried model's entity number: its holder's plus this, so its last pose is its own.
 inline constexpr int kCarriedEntity = 1 << 20;
+inline constexpr int kPlateEntity = 1 << 21;  // a power screen's plate: its bearer + this
 
 // Every entity to draw this frame (not the local player); a carried model right after its holder.
 void place_models(const Listen& l, std::vector<Placed>& out);
+
+// An item taken and coming back (the rules' world's `back_in`): where it will lie, as it will show,
+// and the seconds until it does on the server's clock.
+struct Returning {
+  Placed item;
+  double in_s = 0;
+};
+// Every item coming back within `within_s` (none in a game whose rules cannot say).
+void place_returning(const Listen& l, double within_s, std::vector<Returning>& out);
+// `item` drawn as the hologram `h` (its see-through share, blue light and shell).
+Placed hologram_of(const Placed& item, const ge::classicenhance::HologramLook& h);
 
 struct ModelLoad {
   std::span<const std::string> names;  // the server's model list
@@ -141,7 +215,7 @@ struct ModelLoad {
 
 // THE VISIBLE WEAPONS LOADED (classic/vweps.hpp): entry `i` of the server's list is model kind
 // `first + i`; `on` when the body loaded (or the list draws none, `-`), else the feature is off
-// for the level. `draw` is r_drawvweps this frame (the sequel's cl_vwep: 0 draws each figure's
+// for the level. `draw` is r_drawvweps this frame (Quake II's cl_vwep: 0 draws each figure's
 // own plain weapon in place of the one carried).
 struct Vweps {
   uint32_t first = 0, count = 0;
@@ -170,7 +244,7 @@ struct ModelKind {
   float glow_share = 0;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
   bool player = false;  // the players' own figure (kPlayerModel): it wears each one's skin
-  // The second game's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
+  // Quake II's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
   // (`#<file>`, its file in the figure's folder, `carried`): drawn in each player's own look.
   bool figure = false;
   std::vector<bool> resting;  // a player's figure: each frame a body lies still on (a death's last)
@@ -178,30 +252,32 @@ struct ModelKind {
   // carries under cl_vwep 0; kNone: none.
   uint32_t plain = kNone;
   std::string carried;
-  // Drawn for the first game's players (a `model` naming its folder): the frame of its own drawn
+  // Drawn for Quake's players (a `model` naming its folder): the frame of its own drawn
   // for each frame of the game's figure, by the frames' names (app/figure_frames.hpp); empty: the
   // same frame.
   std::vector<int> frame_map;
   uint32_t worn = ~0u;  // a weapon of a figure's folder: the skin-only model its picture is in
-  // A first-game player's figure from another game: its folder's `weapon.md2` (an index into the
+  // A Quake player's figure from another game: its folder's `weapon.md2` (an index into the
   // figure kinds, in its own picture), drawn in its hand on the same frame; kNone: none.
   uint32_t held = kNone;
+  std::string path;  // its file in the game's files ("progs/soldier.mdl"), as the list names it
+  std::vector<std::string> frame_names;  // the players' own figure's frames' names (`player`)
 };
 
 // THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`
 // read with a map (each a skin-only morph model, kept while the atlas holds them).
 inline constexpr std::string_view kPlayerModel = "progs/player.mdl";
-// The second game's figure's plain weapon (in its folder): what it carries under cl_vwep 0.
+// Quake II's figure's plain weapon (in its folder): what it carries under cl_vwep 0.
 inline constexpr std::string_view kPlainWeapon = "weapon.md2";
 inline constexpr size_t kMaxPlayerSkins = 32;
-// The second game's figures read with a map (every folder under `players/` with a figure), and the
+// Quake II's figures read with a map (every folder under `players/` with a figure), and the
 // skins in them.
 inline constexpr size_t kMaxFigures = 8;
 // The skins worn at once (render/morph.hpp's slots): one read the first time it is worn, kept
 // until a slot is wanted for another and it was worn longest ago.
 inline constexpr size_t kSkinSlots = 32;
 
-// A skin picture listed with the map: its key, read whole (the second game's) or cut as the first
+// A skin picture listed with the map: its key, read whole (Quake II's) or cut as Quake's
 // game's, and its files in the order tried (.tga, .png, .pcx).
 struct SkinFile {
   std::string key;
@@ -224,15 +300,22 @@ struct WorldModels {
   ge::render::Morph morph;
   ge::render::Sprites sprites;
   bool has_morph = false, has_sprites = false;
+  // The glow disc's made frame (gl_flashblend), ModelKind::kNone when there are no sprites, and the
+  // screen's orange tint this frame from an eye inside one of the moment's lights (0..1).
+  uint32_t glow_disc = ModelKind::kNone;
+  double flash_tint = 0;
   models::LightProbe probe;
   struct Lit {
     sh::Vec3f at;
     float rgb[3] = {1, 1, 1};
+    bool floor_found = false;  // the floor under it (its height and slope) for its shadow
+    models::FloorUnder floor;
   };
   std::unordered_map<int, Lit> lit;                          // by entity
   std::unordered_map<int, ge::render::MorphPose> last_pose;  // by entity
   // Each morph model's frames and triangles kept on the CPU (no skin): where a warp's ash lands.
   std::vector<ge::render::MorphModel> shapes;
+  std::unordered_map<uint32_t, float> radius;  // by morph model: its frame 0's radius, m (shadows)
   std::vector<ge::render::MorphDraw> morph_draws;
   std::vector<ge::render::SpriteDraw> sprite_draws;
   std::vector<std::pair<double, size_t>> near;  // scratch
@@ -240,13 +323,13 @@ struct WorldModels {
   std::unordered_map<std::string, uint32_t> player_skins;
   SkinChoice skin_choice;
   Vweps vweps;
-  // r_fullbrightskins this frame: how far a player (the first game's figure, a figure from a
+  // r_fullbrightskins this frame: how far a player (Quake's figure, a figure from a
   // folder) is lifted toward full light, unshaded at 1 (0..1).
   double fullbright = 0;
-  // The second game's figures (folder -> its kind in `figure_kinds`) and the weapons carried on
+  // Quake II's figures (folder -> its kind in `figure_kinds`) and the weapons carried on
   // each ("<folder>/<file>" -> its kind there).
   std::unordered_map<std::string, uint32_t> figures, figure_carried;
-  // Each figure folder's first picture listed (folder -> its `skin_files` row): the first game's
+  // Each figure folder's first picture listed (folder -> its `skin_files` row): Quake's
   // player whose skin the folder lacks wears it.
   std::unordered_map<std::string, uint32_t> figure_first_skins;
   std::vector<ModelKind> figure_kinds;
@@ -262,6 +345,9 @@ struct WorldModels {
   } slots;
 };
 
+// The pictures `placed` wear (`Placed::skin_picture`) listed beside the skins the first time one is
+// seen, each read the first time it is worn (`worn_slot`).
+void list_worn_pictures(WorldModels& m, std::span<const Placed> placed);
 // The kind `p` is drawn as, and what it wears: a player in their own skin, a second-game player as
 // their own figure, the weapon they carry from its folder.
 const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn);
@@ -277,11 +363,12 @@ struct ModelsRead {
   uint32_t brushes = 0;
   std::vector<ge::render::MorphModel> morphs;
   std::vector<ge::render::SpriteFrame> frames;
+  uint32_t glow_disc = ModelKind::kNone;  // the glow disc's frame among them (gl_flashblend)
   ge::render::TintRamps ramps;
   models::LightProbe probe;
   std::unordered_map<std::string, uint32_t> player_skins;  // skin key -> its `skin_files` row
   std::unordered_map<std::string, uint32_t> figures, figure_carried;
-  // Each figure folder's first picture listed (folder -> its `skin_files` row): the first game's
+  // Each figure folder's first picture listed (folder -> its `skin_files` row): Quake's
   // player whose skin the folder lacks wears it.
   std::unordered_map<std::string, uint32_t> figure_first_skins;
   std::vector<ModelKind> figure_kinds;
@@ -295,14 +382,15 @@ struct ModelsRead {
 // reported once and drawn as nothing.
 ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette,
                        const ge::brush::Map& map, const ModelLoad& load,
-                       const GameAdapter& game = classic_adapter());
+                       const GameAdapter& game = qw_adapter());
 // The models read uploaded; the passes join `pipelines` (finished by the caller).
 void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, WorldModels& m,
                    const wgpu::BindGroupLayout& frame, ModelsRead read);
 // Where the map's own brush models stand this frame (doors, plats, buttons): each one an entity
-// of `placed` holds offset by that entity's origin; one no entity holds (removed by the game) is
-// hidden. Empty when the models were loaded with no server's list.
-void place_brushes(const WorldModels& m, std::span<const Placed> placed,
+// of `placed` holds offset by that entity's origin and turned by its angles (a rotating door, a
+// fan); one no entity holds (removed by the game) is hidden. Empty when the models were loaded with
+// no server's list.
+void place_brushes(const WorldModels& m, std::span<const Placed> placed, double t,
                    std::vector<ge::brush::app::Mover>& out);
 // This frame's draws of `placed` at `view` (its time the animations' clock), lit `brightness`
 // times the lightmap under each and never under `minlight` (the world's own: ba::Options's
@@ -316,9 +404,21 @@ struct InPlace {
   // entity the game's own logic turns into one as its shot bursts), so the sprite is left out.
   bool flames = false, flares = false, bubbles = false, explosions = false;
   double bubbles_share = 1;
-  // r_powershells and r_itempulse (sequel_look.hpp's power_look): a power's coloured shell over
+  // r_powershells and r_itempulse (q2_look.hpp's power_look): a power's coloured shell over
   // its carrier and an item's pulsing light, in either game.
   bool power_shells = false, item_pulse = false;
+  // cl_nobob: an item the game marks to float (Quake II's bob bit) drawn still.
+  bool items_still = false;
+  // Quake II's model light (classic/q2_fx_switches.hpp; the look's `model_light`): every model's
+  // light times `light`; `flat` (gl_dotshading 0) lit evenly, no side brighter; `roll_hack`
+  // (cl_rollhack) every other player's figure (not `self`, the player's own) leaning the other way.
+  double light = 1;
+  bool flat = false, roll_hack = false;
+  int self = 0;
+  // The models' ground shadows (model_shadow.hpp's mode: 0 none, 1 under each, 2 fading).
+  int shadows = 0;
+  // gl_flashblend: each of the moment's lights drawn as a glow disc (classic/flash_blend.hpp).
+  bool flash_blend = false;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
@@ -329,11 +429,17 @@ void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Ma
                     std::span<const Placed> placed, const ge::render::FrameView& view,
                     double brightness, double minlight, bool smooth, const InPlace& in_place,
                     std::span<const ge::brush::app::DynamicLight> dynamic = {},
-                    double dynamic_strength = 1, const Burning* burning = nullptr);
+                    double dynamic_strength = 1, const Burning* burning = nullptr,
+                    std::span<const std::pair<int, ge::render::MorphBlood>> bloodied = {});
 
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
+// The point `a`, `b` (barycentric from its first corner) of triangle `tri` of `p`'s model as it
+// stands in its REST frame (frame 0), times its scale (m): where render/morph.hpp's MorphWound
+// sits.
+bool body_rest(const WorldModels& m, const Placed& p, double time_s, uint32_t tri, float a, float b,
+               float out[3]);
 // The tip of what `p` holds out at `time_s`: of its model's points as drawn, the one furthest along
 // `forward` (world, unit), into `tip` (world, m). A monster's gun barrel, as its frame moves it.
 // False for a sprite, a brush or none.

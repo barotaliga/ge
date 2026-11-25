@@ -30,6 +30,10 @@ std::optional<std::vector<uint8_t>> inflate_zlib(std::span<const uint8_t> stream
 // or nothing when it is malformed or does not come to exactly `expected_size` bytes.
 std::optional<std::vector<uint8_t>> inflate_raw(std::span<const uint8_t> stream,
                                                 size_t expected_size);
+// The bytes a raw deflate stream holds whatever their count (a stream sent in pieces with no size
+// said, Quake II's compressed download), or nothing when it is malformed or comes to more than
+// `most` bytes.
+std::optional<std::vector<uint8_t>> inflate_raw_any(std::span<const uint8_t> stream, size_t most);
 // The bytes a gzip file holds (RFC 1952: one member, its header's optional fields skipped, the
 // size and the CRC-32 in its trailer checked), or nothing when it is not one or is damaged.
 std::optional<std::vector<uint8_t>> inflate_gzip(std::span<const uint8_t> file);

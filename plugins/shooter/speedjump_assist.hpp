@@ -15,7 +15,7 @@
 //    back across the aim (toward it from the side the way is on), and in the air it turns the
 //    other way once it is `kSpeedJumpSwing` degrees past the aim; so the path weaves across the
 //    aim line, and a far-off aim is turned to at the strafe's full rate while it gains. In a slow
-//    air (a command's step A short of the air's cap: the sequel's default) a flight turns less
+//    air (a command's step A short of the air's cap: Quake II's default) a flight turns less
 //    than the swing, so a takeoff near the aim (within
 //    half the last flight's turn) turns to the side the last takeoff did, so the hops go out to
 //    both sides in turn rather than back and forth on one. Such a move cannot turn its hops to a
@@ -29,12 +29,12 @@
 //    c = sqrt(W^2 - share x (W^2 - c*^2)) gains `share` of it (the classic move, A past 30:
 //    c = 30 x sqrt(1 - share)). The wish lies at acos(c / h) from the way on the turning side.
 //  - THE MOVES: the classic move (`kClassicJumpRules`: the 30 cap, accelerate 10, wish 320), and
-//    the sequel's (`sequel_jump_rules`, sequel_move.hpp): with the server's air acceleration 0 (its
+//    Quake II's (`q2_jump_rules`, q2_move.hpp): with the server's air acceleration 0 (its
 //    default) no cap and accelerate 1 on a wish of up to 300, which turns slowly and gains much,
 //    else the classic cap with accelerate 10. Its jump is the up move and needs a let-go as the
-//    classic one does; the window's jump key reaches it as the up move (the sequel's runner) and
+//    classic one does; the window's jump key reaches it as the up move (Quake II's runner) and
 //    the aid's let-go in the air clears both, so either move hops on every landing it allows
-//    (the sequel holds a hop back for its landing pause after a long fall).
+//    (Quake II holds a hop back for its landing pause after a long fall).
 //  - THE SENT YAW: the side key held toward the turn (left for a left turn) with the yaw 90
 //    degrees off the wish, which puts it near the way, as a strafer looks.
 //
@@ -51,7 +51,7 @@
 // ge:summary The easy jump: the client strafes for forward+jump, weaving the hops; the view's share
 // ge:keywords speedjump cl_speedjump cl_speedjump_view pm_speedjump easy-jump easy-bunnyhop assist
 // ge:keywords accessibility auto-strafe assisted_command strafe-share jump-release swing weave
-// ge:keywords speedjump-rules sequel-speedjump air-law
+// ge:keywords speedjump-rules q2-speedjump air-law
 // ge:skill shooter
 // ge:test tests/shooter_speedjump_assist_test.cpp
 #pragma once
@@ -73,9 +73,9 @@ struct SpeedJumpRules {
 
 inline constexpr SpeedJumpRules kClassicJumpRules{};
 
-// The sequel's air (sequel_move.hpp): `air_accelerate` the server's air acceleration in force (0 in
+// Quake II's air (q2_move.hpp): `air_accelerate` the server's air acceleration in force (0 in
 // a single-player game and by default).
-constexpr SpeedJumpRules sequel_jump_rules(float air_accelerate) {
+constexpr SpeedJumpRules q2_jump_rules(float air_accelerate) {
   return air_accelerate != 0 ? SpeedJumpRules{10, 30, 300} : SpeedJumpRules{1, 0, 300};
 }
 
@@ -95,7 +95,7 @@ struct SpeedJumpAid {
 // The command to send for `held` (the player's own, his aim in `angles`) from his predicted state
 // `s`, gaining `share` (0..1) of the best strafe's gain the move's air (`rules`) allows; `view`
 // (0..1) of the swing is shown. The jump is the jump button or an up move of 10 or more (the
-// sequel's), let go together in the air.
+// Quake II's), let go together in the air.
 MoveCmd assisted_command(const MoveCmd& held, const MoveState& s, float share, float view,
                          SpeedJumpAid& aid, const SpeedJumpRules& rules = kClassicJumpRules);
 

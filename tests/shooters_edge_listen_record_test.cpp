@@ -24,7 +24,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/timedemo.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/unpack.hpp"
@@ -230,7 +230,7 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   // Played by its name, as `playdemo match1` finds it.
   std::vector<uint8_t> found_bytes;
   std::string found, error;
-  CHECK_MSG(cl::find_demo(files, "match1", shooters_edge::profiles::classic_game().demo_extensions,
+  CHECK_MSG(cl::find_demo(files, "match1", shooters_edge::profiles::q1_game().demo_extensions,
                           found_bytes, found, error),
             error);
   CHECK(found_bytes == bytes);

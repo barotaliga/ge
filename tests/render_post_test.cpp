@@ -6,7 +6,7 @@
 // vignette) and add grain that averages out.
 //
 // ge:summary Tests for the post pass: halves, the bloom's chain and glow, the grade's table
-// ge:keywords test render post bloom grade lut float_to_half energy
+// ge:keywords test render post bloom grade lut float_to_half energy edge-blend
 // ge:skill render testing
 #include <cmath>
 #include <cstdlib>
@@ -240,13 +240,17 @@ TEST(the_bloom_switch_holds_without_its_dry_pipeline) {
   CHECK(post.bloom_on);
 }
 
-TEST(the_arrival_flashes_opens_and_is_gone_by_its_end) {
+TEST(the_arrival_touches_only_the_edges_and_is_gone_by_its_end) {
   const double white[3] = {1, 1, 1};
   const r::PostWarp start = r::arrival_warp(0, 1, white);
-  CHECK(start.flash > 0.8 && start.share == 1 && start.zoom == 1 && start.reveal == 0);
-  const r::PostWarp mid = r::arrival_warp(0.2, 1, white);
-  CHECK(mid.flash < start.flash && mid.reveal > 0.5 && mid.zoom < start.zoom);
-  // Open past the corners by kArrivalOpenS, nothing left at kArrivalS, nothing outside it.
+  // The middle is clear from the start; nothing flashes and nothing zooms, ever.
+  CHECK(start.share > 0.4 && start.reveal >= r::kArrivalClear && start.reveal < 0.6);
+  CHECK(start.flash == 0 && start.zoom == 0);
+  const r::PostWarp mid = r::arrival_warp(0.1, 1, white);
+  CHECK(mid.share < start.share && mid.reveal > start.reveal && mid.flash == 0 && mid.zoom == 0);
+  // Open past the corners by kArrivalOpenS, nothing left at kArrivalS (a third of a second at
+  // most), nothing outside it.
+  CHECK(r::kArrivalS <= 0.34);
   CHECK(r::arrival_warp(r::kArrivalOpenS, 1, white).reveal > 1.0);
   CHECK(r::arrival_warp(r::kArrivalS - 1e-3, 1, white).share < 1e-4);
   const r::PostWarp after = r::arrival_warp(r::kArrivalS, 1, white);
@@ -254,11 +258,11 @@ TEST(the_arrival_flashes_opens_and_is_gone_by_its_end) {
   const r::PostWarp none = r::arrival_warp(0.1, 0, white);
   for (const r::PostWarp* w : {&after, &before, &none})
     CHECK(w->share == 0 && w->flash == 0 && w->zoom == 0);
-  // Half the strength: half the flash.
-  CHECK(std::abs(r::arrival_warp(0, 0.5, white).flash - 0.5 * start.flash) < 1e-12);
+  // Half the strength: half the warp.
+  CHECK(std::abs(r::arrival_warp(0, 0.5, white).share - 0.5 * start.share) < 1e-12);
 }
 
-TEST(the_arrival_whites_out_then_leaves_the_picture_as_it_was) {
+TEST(the_arrival_tints_the_edges_leaves_the_middle_and_then_the_picture_as_it_was) {
   auto device = ge::test::test_device();
   if (!device) return;
   ge::gpu::Device& d = *device;
@@ -270,16 +274,71 @@ TEST(the_arrival_whites_out_then_leaves_the_picture_as_it_was) {
   const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
   const double cyan[3] = {0.2, 1, 1};
   r::set_post_warp(d, s.plain, r::arrival_warp(0, 1, cyan));
-  const ge::gpu::Image flash = draw(d, s, s.plain, false, out);
-  // The flash lifts the whole view (the grey at about 175) toward its tint: green to near white,
-  // red less.
-  CHECK(at(plain, 3, 3, 1) < 200);
-  CHECK(at(flash, 3, 3, 1) > 240);
-  CHECK(at(flash, kW / 2, kH / 2, 1) > 240);
-  CHECK(at(flash, 3, 3, 1) > at(flash, 3, 3, 0) + 20);
+  const ge::gpu::Image edge = draw(d, s, s.plain, false, out);
+  // The corner is tinted toward cyan (green lifted more than red); the middle is as it was.
+  CHECK(at(edge, 3, 3, 1) > at(plain, 3, 3, 1) + 10);
+  CHECK(at(edge, 3, 3, 1) > at(edge, 3, 3, 0) + 10);
+  CHECK(at(edge, kW / 2, kH / 2, 1) == at(plain, kW / 2, kH / 2, 1));
+  CHECK(at(edge, kW / 2, kH / 2, 0) == at(plain, kW / 2, kH / 2, 0));
   r::set_post_warp(d, s.plain, r::arrival_warp(r::kArrivalS, 1, cyan));
   const ge::gpu::Image after = draw(d, s, s.plain, false, out);
   for (uint32_t y = 0; y < kH; y += 7)
     for (uint32_t x = 0; x < kW; x += 7) CHECK(at(after, x, y, 1) == at(plain, x, y, 1));
+  CHECK(d.errors.load() == 0);
+}
+
+TEST(a_smaller_view_draws_the_whole_picture_in_its_rectangle_and_black_round_it) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const float grey[3] = {0.1f, 0.1f, 0.1f};
+  fill(d, s, grey, 0);
+  const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
+  r::set_post_view(d, s.plain, {16, 16, 32, 32}, kW, kH);  // half of each, centred
+  const ge::gpu::Image small = draw(d, s, s.plain, false, out);
+  CHECK(at(small, 3, 3, 1) == 0 && at(small, kW - 3, kH - 3, 1) == 0);  // the border black
+  CHECK(at(small, 15, kH / 2, 1) == 0 && at(small, 48, kH / 2, 1) == 0);
+  // Inside, the grey as before (a flat field reads the same between its pixels), give or take
+  // the dither.
+  CHECK(std::abs(at(small, kW / 2, kH / 2, 1) - at(plain, kW / 2, kH / 2, 1)) <= 1);
+  CHECK(std::abs(at(small, 17, 17, 1) - at(plain, 17, 17, 1)) <= 1);
+  r::set_post_view(d, s.plain, {0, 0, kW, kH}, kW, kH);  // all of it: as it was, bit for bit
+  const ge::gpu::Image whole = draw(d, s, s.plain, false, out);
+  CHECK(whole.rgba == plain.rgba);
+  CHECK(d.errors.load() == 0);
+}
+
+TEST(the_edge_blend_is_a_frame_fading_inward_and_flat_at_no_depth) {
+  // 100 x 50 at 0.2: a frame 10 pixels deep, its share falling from the edge's to nothing.
+  CHECK(r::edge_blend_share(0, 0.5, 100, 50, 0.6, 0.2) == 0.6);
+  CHECK(std::abs(r::edge_blend_share(0.05, 0.5, 100, 50, 0.6, 0.2) - 0.3) < 1e-12);
+  CHECK(r::edge_blend_share(0.5, 0.5, 100, 50, 0.6, 0.2) == 0);  // the middle clear
+  CHECK(r::edge_blend_share(0.5, 0.1, 100, 50, 0.6, 0.2) > 0);   // 5 pixels from the top
+  CHECK(r::edge_blend_share(0.5, 0.5, 100, 50, 0.6, 0) == 0.6);  // 0: flat over the view
+  CHECK(r::edge_blend_share(0.5, 0.5, 100, 50, 0.6, 2) == 0);    // held to 0.5
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const float grey[3] = {0.1f, 0.1f, 0.1f};
+  fill(d, s, grey, 0);
+  const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
+  const double red[4] = {1, 0, 0, 0.6};
+  r::set_post_edge_blend(d, s.plain, red, 0.25);
+  const ge::gpu::Image framed = draw(d, s, s.plain, false, out);
+  CHECK(at(framed, 0, kH / 2, 0) > at(plain, 0, kH / 2, 0) + 40);  // red at the edge
+  CHECK(at(framed, 0, kH / 2, 1) < at(plain, 0, kH / 2, 1));
+  CHECK(std::abs(at(framed, kW / 2, kH / 2, 0) - at(plain, kW / 2, kH / 2, 0)) <= 1);  // clear
+  r::set_post_edge_blend(d, s.plain, red, 0);
+  const ge::gpu::Image flat = draw(d, s, s.plain, false, out);
+  CHECK(at(flat, kW / 2, kH / 2, 0) > at(plain, kW / 2, kH / 2, 0) + 40);
+  const double none[4] = {0, 0, 0, 0};
+  r::set_post_edge_blend(d, s.plain, none, 0.25);
+  CHECK(draw(d, s, s.plain, false, out).rgba == plain.rgba);
   CHECK(d.errors.load() == 0);
 }

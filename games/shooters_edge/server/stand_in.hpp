@@ -1,7 +1,7 @@
 // A STAND-IN BOT: a seeded wanderer that fills a bot slot until Shooter's Edge's real bots land
 // (M18r, games/shooters_edge/bots). It is no bot: it knows no map and plans nothing. It exists so
 // the server, its slots, its input log and the `se-server` lab can be driven by many players now,
-// through the same seam the real bots will use (shooter/cmd_source.hpp), reading the server and
+// through the same seam the real bots will use (shooterbots/cmd_source.hpp), reading the server and
 // never writing it.
 //
 // What it does each command, off its own seeded stream (`core::Rng`, from the run's seed and its
@@ -24,7 +24,7 @@
 #include <cstdint>
 
 #include "core/prng.hpp"
-#include "shooter/cmd_source.hpp"
+#include "shooterbots/cmd_source.hpp"
 
 namespace shooters_edge::server {
 
@@ -41,6 +41,6 @@ struct StandIn {
 // A stand-in for `slot` off the run's `seed`.
 StandIn make_stand_in(uint32_t seed, int slot);
 // The seam for a stand-in (kept alive and unmoved while the slot is filled).
-ge::shooter::CmdSource stand_in_source(StandIn& s);
+ge::shooterbots::CmdSource stand_in_source(StandIn& s);
 
 }  // namespace shooters_edge::server

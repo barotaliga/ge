@@ -10,14 +10,26 @@
 // whom (the one whose sight a monster fell in); the deaths; how near the companions kept (their
 // share of the time within kEscortFar, the farthest); the buttons they pressed; what the leader's
 // plan went for; and for the pictures the map's nodes, everyone's track and the modes, a point
-// every half second. A digest folds every frame (the time, every player's origin, view and health),
-// so a run replays to the bit.
+// every fifth of a second. A digest folds every frame (the time, every player's origin, view and
+// health), so a run replays to the bit.
+//
+// A PARTY OF BOTS (`partners`): the leader and his partners each run the way through, the map's
+// work split between them by plugins/shooterbots/party.hpp (each stop to the nearest; seen places
+// and secrets shared; the exit once nothing is left for any), so a party clears a map at 100%
+// sooner than one bot alone.
+//
+// A PARTY OF ONE (`skills` empty, `single`): the campaign in single player, the leader alone; with
+// `complete` the 100% run (way_through.hpp: every monster, every secret, then the exit) and `god`
+// on, the run proves each map can be cleared. The level's own count (the program's
+// `total_monsters`, `killed_monsters`, `total_secrets`, `found_secrets`) is the report's, and the
+// time to the exit is the time the intermission began. A map not left within `map_seconds` is a
+// failure ("the time ran out"), as Quake II's unit calls it.
 //
 // The maps come from the caller's loader (the player's own packs: none ships in the tree).
 //
 // ge:summary A co-op episode played through: a leader finding each map's exit, companions beside
 // ge:keywords coop-episode run_coop_episode episode play-through e1m1 leader way-through
-// ge:keywords companions intermission changelevel parms real-maps
+// ge:keywords companions intermission changelevel parms real-maps party partners
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #pragma once
@@ -26,11 +38,15 @@
 #include <string>
 #include <vector>
 
-#include "shooters_edge/bots/companion.hpp"
-#include "shooters_edge/bots/way_through.hpp"
+#include "shooterbots/companion.hpp"
+#include "shooterbots/party.hpp"
+#include "shooterbots/way_through.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 struct EpisodeOptions {
   server::MapLoader load = nullptr;  // the maps by name
@@ -38,21 +54,49 @@ struct EpisodeOptions {
   std::string first = "e1m1";
   int maps = 8;              // at most this many maps
   double map_seconds = 600;  // a map's time before it is called unfinished, s
-  std::vector<sh::AimSkill> skills = {sh::AimSkill::expert};  // one companion each
-  sh::AimSkill leader = sh::AimSkill::expert;
+  std::vector<sb::AimSkill> skills = {sb::AimSkill::expert};  // one companion each
+  // THE PARTY (plugins/shooterbots/party.hpp): partners who run the way through beside the
+  // leader, one each, the map's work split among them (nearest takes it), the exit waiting for
+  // all of it; players 2.. after the leader, before the companions.
+  std::vector<sb::AimSkill> partners;
+  // (`partners`) BESIDE A PERSON: the leader plays as a person would (his own way through, not of
+  // the party) and the partners are HELPERS beside him, as a hosted co-op game's `addbot helper`
+  // (party.hpp's `PartyWork` round the people): leashed to him by kPartyLeash, the exit his.
+  bool beside = false;
+  sb::AimSkill leader = sb::AimSkill::expert;
   int skill = 1;  // the campaign's `skill`
   uint32_t seed = 1;
   std::string root = ".";                   // the repository's root (the campaign's sources)
   const ge::progs::Progs* progs = nullptr;  // a program of the caller's (none: our campaign)
   bool plan = false;                        // keep the leader's changes of plan
+  bool wide_models = false;        // a game's own content: its movers sized as the window does
+  bool registered = false;         // the content is the full game
+  bool single = false;             // single player (coop 0), the leader alone
+  bool complete = false;           // the 100% run (way_through.hpp)
+  bool tour = true;                // and its stops taken in the tour's order (tour.hpp)
+  bool god = false;                // the leader's (and his partners') `god` on every map
+  std::vector<std::string> avoid;  // exits to these maps are not taken (a secret level)
+  std::vector<std::string> stop;   // an exit to one of these ends the run (the episode's end)
 };
 
 struct EpisodeMap {
   std::string name, next;  // the map, and the one its exit led to ("" none)
   bool finished = false;
   double seconds = 0;
+  double exit_s = -1;  // when the intermission began (-1 never)
+  // The level's own count at its end (the program's globals; -1 a program without them).
+  int total_monsters = -1, killed_monsters = -1, total_secrets = -1, found_secrets = -1;
   std::string end;  // why it ended (the exit, the time, a fault)
   int monsters = 0, killed_by_leader = 0, killed_by_mates = 0, killed_unseen = 0;
+  int killed_by_partners = 0;  // the party's partners' kills (EpisodeOptions::partners)
+  sb::PartyStats party;        // the party's sharing
+  int64_t partner_steps = 0;   // the steps the partners did
+  int64_t left_to_mates = 0;   // plans that left a stop to a mate, the party's
+  // (`beside`) the helpers' share of the time within kPartyLeash of the leader, the farthest one
+  // was, the plans they went back to him and the steps they took off an exit.
+  double helper_near_share = 0;
+  float helper_farthest = 0;
+  int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
   int leader_deaths = 0, mate_deaths = 0;
   double near_share = 0;  // the companions' share of the time within kEscortFar of him
   float farthest = 0;
@@ -64,15 +108,21 @@ struct EpisodeMap {
   int64_t far_in_water = 0;
   WayStats way;
   int64_t nav_nodes = 0, movers = 0, faults = 0;
-  double nav_ms = 0;  // wall time
+  // The map's tricks the move proved into blast jumps (map_nav.hpp `tricks_made`): rocket, grenade.
+  int64_t nav_rockets = 0, nav_grenades = 0, nav_combos = 0;
+  std::string last_fault;  // the program's newest fault on this map, with its stack
+  double nav_ms = 0;       // wall time
   sh::Vec3f lo, hi;
   std::vector<sh::Vec3f> nodes;               // every node (the picture's floor)
-  std::vector<sh::Vec3f> leader;              // a point every half second
-  std::vector<std::vector<sh::Vec3f>> mates;  // each companion's, the same
-  std::vector<uint8_t> way_kind;              // the plan's WayKind, every half second
+  std::vector<sh::Vec3f> leader;              // a point every fifth of a second
+  std::vector<std::vector<sh::Vec3f>> mates;  // each partner's and companion's, the same
+  std::vector<uint8_t> way_kind;              // the plan's WayKind, every fifth of a second
   std::vector<sh::Vec3f> kills;               // where each monster fell
-  std::vector<sh::Vec3f> exits;               // the exits' middles
-  std::vector<std::string> plan;              // the leader's changes of plan (EpisodeOptions::plan)
+  std::vector<sh::Vec3f> secrets;             // where the leader stood as each secret counted
+  // The leader's rocket and grenade jumps: each flight, the take-off first and the landing last.
+  std::vector<std::vector<sh::Vec3f>> blasts;
+  std::vector<sh::Vec3f> exits;   // the exits' middles
+  std::vector<std::string> plan;  // the leader's changes of plan (EpisodeOptions::plan)
 };
 
 struct EpisodeReport {

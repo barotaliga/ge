@@ -11,6 +11,7 @@
 #include <string>
 
 #include "console/cvar.hpp"
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "shooter/rjump_assist.hpp"
 #include "shooter/usercmd.hpp"
@@ -42,6 +43,8 @@ void add_control_cvars(console::Console& con, Controls& c) {
                     if (was <= 0) was = 90;  // cl_fov 0: the rig's own 90
                     const double scaled = std::atof(c.zoom.sensitivity.c_str()) * kZoomFov / was;
                     v.set("cl_fov", core::num::to_string(kZoomFov), console::Source::local);
+                    // m_autosens on slows the mouse by the lens itself: not twice.
+                    if (c.autosens != 0) return;
                     v.set("sensitivity", core::num::to_string(scaled), console::Source::local);
                   });
   con.add_command("-zoom", "-zoom: the view and the mouse as they were before +zoom",
@@ -80,6 +83,16 @@ void add_control_cvars(console::Console& con, Controls& c) {
        .values =
            "0..1: degrees a count (0.022 the default); -1..0: the same, pitching the other way"},
       &c.m_pitch);
+  con.cvars().bind({.name = "m_autosens",
+                    .fallback = "0",
+                    .flags = console::kArchive,
+                    .help = "Slows the mouse as the view narrows, so a zoomed aim moves as far "
+                            "on screen.",
+                    .min = 0,
+                    .max = 179,
+                    .values = "0: off (the default); 91..179: tuned at that field of view; any "
+                              "other value: tuned at 90"},
+                   &c.autosens);
   con.cvars().bind({.name = "m_invert",
                     .fallback = "0",
                     .flags = console::kArchive,
@@ -90,10 +103,27 @@ void add_control_cvars(console::Console& con, Controls& c) {
   con.cvars().bind({.name = "lookspring",
                     .fallback = "0",
                     .flags = console::kArchive,
-                    .help = "Whether the view's pitch centres, following the slope, as you move.",
+                    .help = "Whether the view's pitch centres when you let mouse look go, and "
+                            "follows the slope as you move while looking by keys.",
                     .kind = console::CvarKind::boolean,
                     .values = "0: it stays (the default); 1: it centres"},
                    &c.lookspring);
+  con.cvars().bind({.name = "v_centermove",
+                    .fallback = "0.15",
+                    .flags = console::kArchive,
+                    .help = "How long you run forward before a keyboard view drifts level again.",
+                    .min = 0,
+                    .max = 10,
+                    .values = "0..10: that many seconds (0.15 the default)"},
+                   &c.center_move);
+  con.cvars().bind({.name = "v_centerspeed",
+                    .fallback = "500",
+                    .flags = console::kArchive,
+                    .help = "How fast a keyboard view's drift toward the slope speeds up.",
+                    .min = 0,
+                    .max = 10000,
+                    .values = "0..10000: degrees a second each second (500 the default)"},
+                   &c.center_speed);
   con.cvars().bind({.name = "cl_aimhelp_turn",
                     .fallback = "1",
                     .flags = console::kArchive,
@@ -171,6 +201,15 @@ void add_control_cvars(console::Console& con, Controls& c) {
                     .max = 10,
                     .values = "-10..10: units a count at sensitivity 1 (1 the default)"},
                    &c.m_forward);
+  con.cvars().bind({.name = "m_side",
+                    .fallback = "0.8",
+                    .flags = console::kArchive,
+                    .help = "How far the mouse's sideways moves sidestep you when they do (+strafe "
+                            "held, or lookstrafe with +mlook).",
+                    .min = -10,
+                    .max = 10,
+                    .values = "-10..10: units a count at sensitivity 1 (0.8 the default)"},
+                   &c.m_side);
   // The keys' speeds: what each asks the server for, walking; running times cl_movespeedkey.
   struct Speed {
     const char* name;
@@ -211,6 +250,7 @@ void add_control_cvars(console::Console& con, Controls& c) {
       "attack", "+attack: fire while held (cl_quickweapon 1: the best of cl_quickweapon_prio)");
   b.attack2 = &con.add_button(
       "attack2", "+attack2: fire the best of cl_quickweapon_prio2 while held, then switch back");
+  b.use = &con.add_button("use", "+use: the use button while held (a server's game may act on it)");
   b.moveup = &con.add_button("moveup", "+moveup: swim up while held");
   b.movedown = &con.add_button("movedown",
                                "+movedown: swim down while held (crouches in a move that ducks)");
@@ -228,6 +268,9 @@ void add_control_cvars(console::Console& con, Controls& c) {
   b.lookdown = &con.add_button("lookdown", "+lookdown: look down while held (cl_pitchspeed)");
   b.klook = &con.add_button("klook", "+klook: the forward and back keys look up and down instead");
   b.mlook = &con.add_button("mlook", "+mlook: the mouse looks up and down while held (freelook 0)");
+  // The classic games' use key: held, as a config binds it, but never sent; no classic game reads
+  // it from a move.
+  con.add_button("use", "+use: the classic use key; the classic games do nothing with it");
   for (const char* name : {"centerview", "force_centerview"})
     con.add_command(name, std::string(name) + ": level the view",
                     [&b](console::Console&, const console::Args&) { b.center = true; });
@@ -245,6 +288,8 @@ Moves button_moves(Controls& c) {
   m.jump = down(b.jump);
   m.attack = down(b.attack);
   m.attack2 = down(b.attack2);
+  m.use = down(b.use) || (b.use != nullptr && b.use->pressed);  // a tap is not lost
+  if (b.use != nullptr) c.buttons.use->pressed = false;
   m.speed = down(b.speed);
   m.strafe = down(b.strafe);
   m.left = down(b.left);
@@ -253,7 +298,8 @@ Moves button_moves(Controls& c) {
   m.lookdown = down(b.lookdown);
   m.klook = down(b.klook);
   m.mlook = down(b.mlook);
-  m.center = b.center;
+  m.center = b.center || (b.mlook_held && !m.mlook && c.lookspring && !c.freelook);
+  c.buttons.mlook_held = m.mlook;
   c.buttons.center = false;
   m.impulse = b.impulse;
   c.buttons.impulse = 0;
@@ -269,9 +315,10 @@ Moves button_moves(Controls& c) {
 
 void release_buttons(Controls& c) {
   ControlButtons& b = c.buttons;
-  for (console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown,
-                             b.jump, b.attack, b.speed, b.strafe, b.left, b.right, b.attack2,
-                             b.rjump, b.rrjump, b.lookup, b.lookdown, b.klook, b.mlook})
+  for (console::Button* p :
+       {b.forward, b.back,   b.moveleft, b.moveright, b.moveup, b.movedown, b.jump,
+        b.attack,  b.speed,  b.strafe,   b.left,      b.right,  b.attack2,  b.rjump,
+        b.rrjump,  b.lookup, b.lookdown, b.klook,     b.mlook,  b.use})
     if (p != nullptr) p->held = 0, p->pressed = false;
   b.impulse = 0;
 }
@@ -293,10 +340,58 @@ Moves key_moves(const input::InputState& in) {
 void spring_view(const input::InputState& in, const Controls& c, bool on_ground, const MoveCmd& cmd,
                  float ideal, double dt, Vec3f& view) {
   if (!c.lookspring || !on_ground || in.mouse.dy != 0) return;
+  // A player looking with the mouse (freelook, or +mlook held) aims where he points it: the
+  // drift is for those who look by keys alone, as in every classic game.
+  if (c.freelook || (c.buttons.mlook != nullptr && c.buttons.mlook->down())) return;
   if (cmd.forward == 0 && cmd.side == 0) return;
   const double most = kSpringSpeed * dt;
   const double gap = static_cast<double>(ideal) - view.x;
   view.x = static_cast<float>(view.x + std::clamp(gap, -most, most));
+}
+
+void drift_pitch(const Moves& m, const Controls& c, PitchDrift& d, bool on_ground, bool noclip,
+                 const MoveCmd& cmd, float ideal, double dt, Vec3f& view) {
+  if (c.freelook || m.mlook || m.lookup || m.lookdown) d.still = true;  // a hand on the pitch
+  if (d.mlook_held && !m.mlook && c.lookspring) d.still = false;
+  d.mlook_held = m.mlook;
+  if (m.center) d.still = false;
+  if (!on_ground || noclip) {
+    d.run_s = 0;
+    d.speed = 0;
+    return;
+  }
+  if (d.still) {
+    d.speed = 0;
+    const int ahead = cmd.forward < 0 ? -cmd.forward : cmd.forward;
+    d.run_s = ahead < c.forward_speed ? 0 : d.run_s + dt;
+    if (d.run_s > c.center_move) d.still = false;
+    return;
+  }
+  const double gap = static_cast<double>(ideal) - view.x;
+  if (gap == 0) {
+    d.speed = 0;
+    return;
+  }
+  double step = d.speed * dt;
+  d.speed += c.center_speed * dt;
+  const double left = gap < 0 ? -gap : gap;
+  if (step >= left) {
+    step = left;
+    d.speed = 0;
+  }
+  view.x = static_cast<float>(view.x + (gap > 0 ? step : -step));
+}
+
+AutoSens auto_sens(const Controls& c) {
+  if (c.autosens == 0) return {};
+  const double tuned = c.autosens > 90 && c.autosens <= 179 ? c.autosens : 90;
+  const double lens = c.lens_fov != nullptr && *c.lens_fov > 0 ? *c.lens_fov : 90;
+  // The height a lens across sees at 4:3, degrees.
+  const auto high = [](double across) {
+    constexpr double kDeg = 3.14159265358979323846 / 180;
+    return 2 * core::libm::atan(core::libm::tan(across * kDeg / 2) * 0.75) / kDeg;
+  };
+  return {.x = lens / tuned, .y = high(lens) / high(tuned)};
 }
 
 double yaw_per_count(const Controls& c) {
@@ -315,7 +410,9 @@ void turn_view(const input::InputState& in, const Moves& m, const Controls& c, d
   const MouseTurn feel = feel_mouse(c.mouse, in.mouse.dx, in.mouse.dy, c.sensitivity, dt);
   // The old saves' degrees a count (a sensitivity under 0.5) are never shaped (feel_mouse).
   const double s = feel.sensitivity;
-  const double yaw = s < 0.5 ? s : s * c.m_yaw, pitch = s < 0.5 ? s : s * c.m_pitch;
+  const AutoSens lens = auto_sens(c);  // m_autosens
+  const double yaw = (s < 0.5 ? s : s * c.m_yaw) * lens.x;
+  const double pitch = (s < 0.5 ? s : s * c.m_pitch) * lens.y;
   const double dy = looks ? feel.dy * pitch * (c.invert ? -1 : 1) : 0;
   if (!strafe) view.y = static_cast<float>(view.y - feel.dx * yaw);
   const double keys = m.speed ? c.angle_speed_key : 1;  // +speed turns the keys faster
@@ -358,7 +455,7 @@ MoveCmd read_controls(const Moves& m, const input::InputState& in, const Control
     if (m.left) s -= ss;
   }
   if (m.strafe || c.lookstrafe) {
-    const double side = in.mouse.dx * yaw_per_count(c) * c.strafe_scale;
+    const double side = in.mouse.dx * c.sensitivity * c.m_side;
     s = std::clamp(s + static_cast<int>(side), -ss, ss);
   }
   // freelook off and +mlook not held: the mouse's up and down move you.
@@ -367,7 +464,7 @@ MoveCmd read_controls(const Moves& m, const input::InputState& in, const Control
     f = std::clamp(f + static_cast<int>(fwd), -32767, 32767);
   }
   // Up and down: swimming in the classic move (bound to no key; SPACE swims up); down crouches in
-  // a move that ducks (the sequel's, plugins/classic/sequel_move.hpp: up below 0 on the ground).
+  // a move that ducks (Quake II's, plugins/classic/q2_move.hpp: up below 0 on the ground).
   const int us = speed(c.up_speed);
   const int u = (m.moveup ? us : 0) - (m.movedown ? us : 0);
   cmd.forward = static_cast<int16_t>(f);
@@ -375,6 +472,7 @@ MoveCmd read_controls(const Moves& m, const input::InputState& in, const Control
   cmd.up = static_cast<int16_t>(u);
   if (m.attack || m.attack2) cmd.buttons |= kButtonAttack;
   if (m.jump) cmd.buttons |= kButtonJump;
+  if (m.use) cmd.buttons |= kButtonUse;
   cmd.impulse = static_cast<uint8_t>(m.impulse);
   return cmd;
 }

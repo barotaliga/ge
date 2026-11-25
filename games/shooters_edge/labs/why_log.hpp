@@ -31,6 +31,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ai/why.hpp"
@@ -75,6 +76,29 @@ struct WhyLog {
       for (const ge::ai::Fact& f : why.facts(d))
         facts += (facts.empty() ? "" : " ") + std::string(f.name) + "=" +
                  ge::core::num::to_fixed(f.value, 2);
+      // The best three options passed over, with their scores (`vs.<name>=<score>`, the chosen
+      // one's `own=`): what a choice beat, and by how much.
+      {
+        const auto opts = why.options(d);
+        std::array<const ge::ai::Choice*, 3> top{};
+        for (const ge::ai::Choice& o : opts) {
+          if (std::string_view(o.name) == d.chosen) {
+            facts += (facts.empty() ? "own=" : " own=") + ge::core::num::to_fixed(o.score, 2);
+            continue;
+          }
+          if (o.barred != nullptr || o.score <= 0) continue;
+          for (size_t q = 0; q < top.size(); q++)
+            if (top[q] == nullptr || o.score > top[q]->score) {
+              for (size_t r = top.size() - 1; r > q; r--) top[r] = top[r - 1];
+              top[q] = &o;
+              break;
+            }
+        }
+        for (const ge::ai::Choice* o : top)
+          if (o != nullptr)
+            facts += (facts.empty() ? "vs." : " vs.") + std::string(o->name) + "=" +
+                     ge::core::num::to_fixed(o->score, 2);
+      }
       entries.push_back({t, std::to_string(k), "decision", d.name, d.chosen, d.because, d.margin,
                          std::move(facts)});
     }

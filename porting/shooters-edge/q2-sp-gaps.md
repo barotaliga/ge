@@ -1,0 +1,40 @@
+# Quake II single player: the gaps to 1-1, and what has landed
+
+Niclas, 2026-11-20: single player must play 1-1 with the original game. Two clean-room audits list
+every difference a player could notice, ranked 1 (at once on the stock campaign), 2 (sometimes)
+and 3 (rare or cosmetic):
+
+- `q2-sp-world.md`: entities, movers, triggers, targets, level flow (51: 14 / 20 / 17).
+- `q2-sp-monsters.md`: monsters, AI, weapons, items (68: 11 / 36 / 21).
+
+Work goes rank 1 first, in small PRs. Not ours: the base1 bot playthrough (Q2 conveniences
+thread) and client cvars such as v_gunkick (client settings thread).
+
+## Landed
+
+| Date | PR | Audit rows |
+| --- | --- | --- |
+| 2026-11-20 | #1202 weapons on monsters | monsters 2 (direct hit no splash), 3 (BFG lasers and burst hit monsters), 4 (rail through monsters), 5 (first blow on an unaware monster doubles), 12 (splash needs a clear line to a monster), 13 in part (bullets and blasts reach the brain's screen with a direction) |
+| 2026-11-20 | corpses and map hooks | monsters 1 (corpses meet shots and blasts and are thrown apart; moves pass them), 7 (deathtarget), 8 (combattarget), 9 (point_combat holds only with its Hold flag, and never a flier), 10 (parasite's drain within 256 and ±30° of pitch), 11 (the flyer bursts at death) |
+
+| 2026-11-20 | world, first round | world 2 (target_explosion's delay holds back its blast and targets), 7 (an item's first touch fires its targets and message, taken or not), 8 ("\n" is a new line), 9 (worldspawn `gravity` in single player), 11 and 31 (a trigger with angle 0 has no way: a push stops, no facing check), 12 (target_speaker's `volume` and `attenuation`, -1 heard everywhere) |
+
+| 2026-11-20 | world rank 1, rank 2 | world 1 (the unit's end and its movie), 3 (func_clock), 4 (trigger_elevator), 5 (target_laser), 6 (debris), 10 in part (movers carry and push monsters; monsters open doors), 13 (target_spawner), 14 (animated textures); rank 2: 15 (func_door_secret), 16 (mixed-case keys, door teams finish together), 17, 18 (the counter and key text), 19 (secret and goal sounds, mine3 and fact1), 20 (mover sounds fall off at static), 21 (target_splash's count and way), 23 (light styles), 24 (CD track and the last goal), 25 (banner, dish, mine lamps, placed gibs), 26 (power cubes), 28 (run-out sounds), 29 and 30 (monsters on triggers, hurt and push), 32 (trains), 33 (intermission), 34 (teleport sound); monsters 6 (infighting) |
+
+| 2026-11-20 | screen, monsters rank 2 | world 22 (boss teleport), 27 (screen tints), 10's rest (things on movers); monsters 14 in part (impact noise, ambushers see the noise), 23, 24, 25, 27, 28, 30 in part (four grenades), 31, 32, 33, 34, 35, 36 in part (timings), 37, 38, 39, 43, 44, 46 |
+
+| 2026-11-20 | monsters' AI | monsters 14, 16, 17, 18, 19, 20, 21, 22, 26 in part (timer calls and loops; the pose-tied fidgets open), 29 in part (death pick, dying shots; run-and-shoot and the head shot open), 47 in part (cries); rank 3: 50, 52, 54, 57, 58 |
+
+| 2026-11-20 | monsters' rank 3 | monsters 15 (dark corners, by the map's baked light server side), 26's rest (fidgets), 29's rest (run-and-shoot, head shot), 47's rest (the prisoner's poses and skins); rank 3: 48, 49, 51, 53, 55, 56, 59, 60, 61, 62, 63 in part (run frames, sounds), 64 (sounds), 65, 66, 67, 68 |
+
+| 2026-11-20 | world rank 3, the last | world 35 to 51 (51 and 46 as the facts say; 43, 48, 49 and 41 were already the original's); monsters 63's torso, the floater's second stand |
+
+| 2026-11-21 | client effects | flies on corpses, the power screen's plate and the shield's shell for 0.2 s after a blow (sparks and lashit), god mode's white shell checked, the thinning trail (gib, grenade, rocket smoke), a rocket's fire specks, a blaster's specks, missiles' effect bits sent on the wire |
+
+| 2026-11-21 | area portals | doors cut hearing between rooms (the map's areas flooded over the open portals), and a game library's area calls answered |
+
+| 2026-11-21 | a game library's single player | spawn points, levels kept in a unit, the autosave, save and load, the new game's settings, the load menu, for a mod's game library (a mission pack's) |
+
+## Next
+
+Nothing open in either audit. Facts: `q2-world-round4.md`, `q2-client-effects.md`, `q2-areas.md`, `q2-native-sp.md`.

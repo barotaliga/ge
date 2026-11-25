@@ -1,4 +1,4 @@
-// Tests: the dedicated coop server (net/classic_coop_game.hpp): with `sv_coop 1` the server runs
+// Tests: the dedicated coop server (net/qw_coop_game.hpp): with `sv_coop 1` the server runs
 // our campaign in coop with its companions, a client who connects enters it on a free coop start,
 // a browser's status query lists it as coop, and the server's table hands every call to it.
 //
@@ -14,11 +14,11 @@
 #include "check.hpp"
 #include "net/sim_network.hpp"
 #include "progs/qc_compile.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_coop_game.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_coop_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_wire.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -89,7 +89,7 @@ struct Rig {
   gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
   gn::Transport port, client_port, browser;
   std::unique_ptr<se::CoopGame> g;
-  se::ClassicClientEnd visitor;
+  se::QwClientEnd visitor;
   int64_t now = 0;
   explicit Rig(int bots) {
     gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
@@ -202,7 +202,7 @@ TEST(the_server_table_hands_a_coop_game_to_the_campaign) {
   gs::ServerConfig c = coop_config(0);
   c.root = "/nonexistent-coop-root";
   std::string error;
-  void* g = se::classic_game().create(c, error);
+  void* g = se::qw_game().create(c, error);
   CHECK(g == nullptr);
   CHECK_MSG(!error.empty(), "no error for a missing folder");
 }

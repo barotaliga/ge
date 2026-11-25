@@ -144,7 +144,9 @@ player may change:
   follow it over a fraction of a second, so a staircase is a ramp to the eye and not a judder.
 - **The bob**: the stride as a cycle in time (`bobcycle` s, the share of it that rises,
   `bobup`), its height in proportion to the ground speed (`bob`), clamped; zero in the air. A
-  weapon's sway reads the same cycle (a game draws its weapon off the bob it is handed).
+  weapon's sway reads the same cycle (a game draws its weapon off the bob it is handed: the
+  state keeps each frame's, `FirstPersonState::bob`). The eye carries `bob_eye` of it: 1 its own,
+  0 when a game gives the eye's bob up (a raised eye), 2 when the weapon's bob rides the head too.
 - **The roll**: a strafe tips the horizon (`rollangle` at `rollspeed`, in proportion to the
   sideways speed, capped) — and a hit from the side rolls it away from the blow.
 - **The kick** (the view punch): a shot or a hit hands a pitch and roll impulse to a stiff
@@ -189,15 +191,15 @@ recording, a single-player demo) the change of place between the last two frames
 ground is the prediction's, else the player's box traced 2 units down the level's player hull
 onto a floor no steeper than the move's; the blows are the damage messages to the player, each
 taken once however many frames were read since the last picture; dead the eye drops and the
-view rolls 80 degrees. The sequel's recordings carry their rules' view and are drawn as sent.
+view rolls 80 degrees. Quake II's recordings carry their rules' view and are drawn as sent.
 The `se-demo-eyes` lab plays a demo the window's way and charts the eye's height, roll and pitch
 as recorded and rebuilt.
 
-**The sequel's view is the rules'.** On the sequel's rules (a map of brushes) the server works the
+**Quake II's view is the rules'.** On Quake II's rules (a map of brushes) the server works the
 view out once a rules frame (0.1 s) and sends it in the player state, so every client, ours or
 another, shows the same view; the window turns its own bob, roll and kick off and eases what the
-rules sent between their frames. `plugins/classic/sequel_view.hpp` is the rule, any game on the
-sequel's rules calls it, and its server settings are:
+rules sent between their frames. `plugins/classic/q2_view.hpp` is the rule, any game on the
+Quake II's rules calls it, and its server settings are:
 
 | What | The rules' view | Server cvars (defaults) |
 | --- | --- | --- |
@@ -210,7 +212,7 @@ sequel's rules calls it, and its server settings are:
 | Dead | no kick; rolled 40 degrees, looking 15 up toward the killer | |
 | The eye | the view height, less the fall's dip, plus the lift and the shot's push, held to -14..14 across and -22..30 up | |
 
-The `se-view` lab runs the same script on the sequel's rules (`--rules=sequel`, or a sequel's map)
+The `se-view` lab runs the same script on Quake II's rules (`--rules=q2`, or a Quake II's map)
 and holds the fixture's bob, strafe roll, blows, shot and dead view to these numbers.
 
 ### Boom (`Boom`): the chase camera
@@ -460,6 +462,7 @@ binding; every row inside the engine is in metres, seconds and radians.
 | `cl_rollangle`, `cl_rollspeed` | deg, world units/s | the strafe roll and the sideways speed that reaches it |
 | `v_kicktime`, `v_kickpitch`, `v_kickroll` | s, deg, deg | the view punch |
 | `v_idlescale` | deg | the idle sway at its most (0 off) |
+| `v_ipitch_cycle`, `v_iyaw_cycle`, `v_iroll_cycle`; `v_ipitch_level`, `v_iyaw_level`, `v_iroll_level` | 1/s (per 2π), deg per deg | each axis's speed and size under `v_idlescale` (a classic game's: Shooter's Edge binds them onto `FirstPersonRow`'s idle shares and periods) |
 | `cl_landdip` | share | the landing dip |
 | `cl_camera` | name | the rung (`chase`, `helmet`, `eyes`, …: the game's ladder), registered only when a game asks for it |
 | `cl_chasedist`, `cl_chaseheight` | world units | the arm of every boom named `chase` (0: the rig's own) |

@@ -18,7 +18,7 @@ constexpr std::string_view kRootArchive =
     "Q2"
     "Game.kpf";
 
-// The first game's bundled client's own folder, spelled in pieces so the clean-slate scan
+// Quake's bundled client's own folder, spelled in pieces so the clean-slate scan
 // (tools/agents-index.mjs) does not read it as prose naming the client.
 constexpr std::string_view kClientDir =
     "ezqu"
@@ -37,7 +37,7 @@ LoadOrder first_game() {
   return o;
 }
 
-LoadOrder sequel() {
+LoadOrder q2() {
   LoadOrder o;
   o.layout.archives_over_loose = true;
   o.layout.pak_prefix = true;
@@ -59,8 +59,8 @@ LoadOrder sequel() {
 }  // namespace
 
 const LoadOrder& load_order_of(const ge::classicenhance::Profile& content) {
-  static const LoadOrder kFirst = first_game(), kSequel = sequel();
-  return content.id == ge::classicenhance::kProfiles[1].id ? kSequel : kFirst;
+  static const LoadOrder kFirst = first_game(), kQ2 = q2();
+  return content.id == ge::classicenhance::kProfiles[1].id ? kQ2 : kFirst;
 }
 
 }  // namespace ge::classic::content

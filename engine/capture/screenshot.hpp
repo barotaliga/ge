@@ -13,19 +13,27 @@
 //   is made when it is missing. With `kMaxQueued` pictures already waiting a new one is refused
 //   and said so, never queued without bound.
 // - THE SETTINGS are the player's cvars (`add_screenshot_cvars`, archived): `scr_format` png, jpg
-//   (the default: opens everywhere, a tenth of a PNG), avif or heic; `scr_quality` 1..100 (90)
-//   for the lossy ones; `scr_chroma` 444 (the default: a JPEG's colour at full size, so a HUD's
-//   coloured letters stay sharp) or 420 (halved each way, about a quarter smaller).
+//   (the default: opens everywhere, a tenth of a PNG), avif or heic (jpeg is jpg; tga and pcx,
+//   formats no longer written, are png); `scr_quality` 1..100 (90) for the lossy ones;
+//   `scr_chroma` 444 (the default: a JPEG's colour at full size, so a HUD's coloured letters stay
+//   sharp) or 420 (halved each way, about a quarter smaller); `scr_folder` another folder: a name
+//   beside the game's screenshot folder ("" that one) or a whole path (`~/Desktop/quake`).
+// - A NAMED ONE (`screenshot <name>`, `request(name)`): `<name>.<ext>` in the folder instead of the
+//   time's name, never written over another.
 // - THE NAME: `<prefix>-YYYY-MM-DD-HHMMSS.<ext>` in local time (`screenshot_stem`), then `-2`, `-3`
 //   ... when that second already has one, so the folder lists in the order they were taken and no
-//   screenshot is ever written over another.
+//   screenshot is ever written over another. A template (`scr_template`, `quakeXXX`) names it
+//   instead: the first free number in its X's, the time's name once every number is taken.
 // - THE REPORT: each file written, or why it was not, comes back from `poll` on the game's thread
 //   as a line for its console.
 //
 // ge:summary Screenshots: the key's request, the settings, the frame packed and written off-thread
 // ge:keywords screenshot f12 print-screen png still picture frame worker no-stall request due
 // ge:keywords write poll flush screenshot_stem screenshots-folder scr_format scr_quality scr_chroma
-// ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality
+// ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality scr_folder
+// ge:keywords scr_template scr_compression screenshot_template_name name-template
+// ge:keywords named-screenshot screenshot-name grab take_grab remote-screenshot screenshotpng
+// ge:keywords screenshotjpg screenshottga
 // ge:skill replay
 // ge:test tests/capture_screenshot_test.cpp
 #pragma once
@@ -51,12 +59,16 @@ class Cvars;
 namespace ge::capture {
 
 struct ScreenshotSettings {
-  std::string format = "jpg";  // scr_format: png, jpg, avif, heic
+  std::string format = "jpg";  // scr_format: png, jpg, avif, heic (jpeg is jpg; tga, pcx png)
   int32_t quality = 90;        // scr_quality: 1..100
   int32_t chroma = 444;        // scr_chroma: 444 full, 420 halved (JPEG)
+  std::string folder;          // scr_folder: "" the writer's own; a name beside it; a whole path
+  std::string name_template;   // scr_template: "" by the time; X's numbered ("quakeXXX")
+  int32_t compression = 6;     // scr_compression: 0 a PNG's rows stored, 1..9 packed
 };
 
-// scr_format, scr_quality and scr_chroma bound to `s`, archived (the player's to keep).
+// scr_format, scr_quality, scr_chroma, scr_folder, scr_template and scr_compression bound to `s`,
+// archived (the player's to keep).
 void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s);
 // The settings as the writer's options; an unknown format is JPEG, said in `note`.
 StillOptions still_options(const ScreenshotSettings& s, std::string& note);
@@ -66,8 +78,16 @@ class Screenshots;
 // the command's help ("<game folder>/screenshots/").
 void add_screenshot_command(console::Console& console, Screenshots& writer, std::string_view where);
 
+// screenshotjpg, screenshotpng and screenshottga: the next frame in that format, named or not.
+void add_screenshot_format_commands(console::Console& console, Screenshots& writer);
+
 // `<prefix>-YYYY-MM-DD-HHMMSS` for the local time `t`.
 std::string screenshot_stem(std::string_view prefix, const std::tm& t);
+
+// A screenshot's name by the player's template (`scr_template`): its last run of X's replaced by
+// `n`, zero-padded to the run's length ("quakeXXX" and 7: "quake007"); the template itself when it
+// has no X; "" when `n` does not fit the run.
+std::string screenshot_template_name(std::string_view tpl, int n);
 
 class Screenshots {
  public:
@@ -82,7 +102,24 @@ class Screenshots {
   ~Screenshots();  // the pictures still waiting are written first
 
   // The key was pressed: the next frame drawn is taken.
-  void request() { asked_ = true; }
+  void request() { asked_ = file_asked_ = true; }
+  // A GRAB: the next frame drawn kept in memory instead of a file (a server asked for a picture
+  // of the player's screen), scaled to `width` x `height` and packed as JPEG at `quality`; read
+  // it with `take_grab` once the worker has it. False when one is already waiting.
+  bool grab(int width, int height, int quality);
+  // The grab's bytes, once (false: none ready). An empty picture means the frame could not be
+  // packed.
+  bool take_grab(std::vector<uint8_t>& out);
+  // The same, named `name` (`screenshot <name>`, a match's scoreboard): `<folder>/<name>.<ext>`,
+  // `-2`, `-3` ... when that is taken; a folder in the name is made. False, with the reason in
+  // `why`, for a name that leaves the folder (`..`, a path from the root) or is empty.
+  bool request(std::string name, std::string* why);
+  // The next picture asked for in `format` (png, jpg, tga) and, above 0, at `quality`, whatever
+  // the settings say (screenshotpng, screenshotjpg).
+  void request_format(std::string format, int quality = 0) {
+    asked_format_ = std::move(format);
+    asked_quality_ = quality;
+  }
   // Whether this frame is the one to copy back; true once a request, then false until the next.
   bool due();
   // The frame's pixels (RGBA8, rows top to bottom, no padding) handed to the worker, named by the
@@ -97,20 +134,32 @@ class Screenshots {
 
  private:
   struct Job {
-    std::string path;
+    std::string path;  // "": a grab, kept in `grabbed_`
+    int grab_width = 0, grab_height = 0;
     uint32_t width = 0, height = 0;
     std::vector<uint8_t> rgba;
     StillOptions options;
     std::string note;  // why the format is not the one asked for
   };
   void work();
-  std::string next_path(std::string_view ext);
+  std::string next_path(std::string_view ext, const std::string& named, const std::string& tpl);
+  std::string folder() const;                 // `dir_`, or the settings' folder beside it
+  bool taken(const std::string& path) const;  // handed out already (`handed_`)
 
   std::string dir_;
   std::string prefix_;
   const ScreenshotSettings* settings_ = nullptr;
   bool asked_ = false;
-  std::string last_stem_;  // the second the last name was taken in, and its count
+  bool file_asked_ = false;                      // a file was asked for (not only a grab)
+  bool grab_wanted_ = false, grab_out_ = false;  // a grab asked for; one in the worker or ready
+  int grab_width_ = 0, grab_height_ = 0, grab_quality_ = 70;
+  bool grab_ready_ = false;
+  std::vector<uint8_t> grabbed_;
+  std::string asked_name_;    // the next picture's name ("": by the time)
+  std::string asked_format_;  // the next picture's own format ("": the settings')
+  int asked_quality_ = 0;
+  std::vector<std::string> handed_;  // the paths handed to the worker, written or not yet
+  std::string last_stem_;            // the second the last name was taken in, and its count
   int last_count_ = 0;
 
   std::mutex mutex_;

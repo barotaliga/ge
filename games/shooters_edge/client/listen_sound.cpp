@@ -43,6 +43,7 @@ void ListenHearing::frame(Listen& l, const SearchPath& files, float dt, std::str
     retired_.retire(std::move(sounds_));  // kept until its voices have faded
     sounds_ = std::make_unique<DemoSounds>(synth_, files, volume_);
     sounds_->enhance_from(enhanced_);
+    sounds_->switches_from(q2_);
     files_ = &files;
     entries_ = -1;
   }

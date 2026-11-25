@@ -17,7 +17,7 @@
 // ge:keywords lab se-aimhelp aim-help aimhelp vote users player-aids join-line leeway hitscan
 // ge:keywords sv_aimhelp_x sv_aimhelp_y accessibility touch-controls
 // ge:skill shooter net labs
-// ge:test tests/shooters_edge_shot_help_test.cpp tests/shooters_edge_classic_admin_test.cpp
+// ge:test tests/shooters_edge_shot_help_test.cpp tests/shooters_edge_qw_admin_test.cpp
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -37,9 +37,9 @@
 #include "server/server.hpp"
 #include "shooter/server.hpp"
 #include "shooter/trace.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -182,13 +182,13 @@ Session run_session(gl::Lab& lab) {
   c.maxclients = 8;
   c.seed = seed;
   gs::Server s;
-  if (!gs::server_open(s, se::classic_game(), c, &port, nullptr, r.error)) return r;
+  if (!gs::server_open(s, se::qw_game(), c, &port, nullptr, r.error)) return r;
   std::unique_ptr<gn::Transport> ct[kClients];
-  std::unique_ptr<se::ClassicClientEnd> ends[kClients];
+  std::unique_ptr<se::QwClientEnd> ends[kClients];
   auto join = [&](size_t i) {
     ct[i] = std::make_unique<gn::Transport>();
     gn::open_sim_transport(*ct[i], net, gn::sim_address(static_cast<uint32_t>(i + 1), kClientPort));
-    ends[i] = std::make_unique<se::ClassicClientEnd>();
+    ends[i] = std::make_unique<se::QwClientEnd>();
     se::ClientConfig cc;
     cc.name = kNames[i];
     cc.files = {"skins/base.pcx"};
@@ -208,8 +208,8 @@ Session run_session(gl::Lab& lab) {
   const int second = static_cast<int>(1.0 / s.frame_s);
   for (size_t i = 0; i < 3; i++) join(i);
   step(4 * second);
-  se::ClassicClientEnd& anna = *ends[0];
-  auto say = [&](se::ClassicClientEnd& who, const std::string& line) {
+  se::QwClientEnd& anna = *ends[0];
+  auto say = [&](se::QwClientEnd& who, const std::string& line) {
     if (&who == &anna) r.console.push_back("]" + line);
     se::client_command(who, line);
     step(second / 2);
@@ -319,8 +319,8 @@ void run(gl::Lab& lab) {
   lab.metric("session.users_lists_it", r.listed ? 1 : 0, "");
   if (!r.passed || !r.told_all || r.key_seen != "1" || !r.dora_told || !r.listed)
     lab.fail("the vote did not grant bert the aim help as the words say",
-             "run tests/shooters_edge_classic_game_test.cpp and "
-             "tests/shooters_edge_classic_admin_test.cpp; skill: net.");
+             "run tests/shooters_edge_qw_game_test.cpp and "
+             "tests/shooters_edge_qw_admin_test.cpp; skill: net.");
   gl::LabTable t{"anna's console, then what dora was told on joining", {"who", "line"}, {}};
   for (const std::string& l : r.console) t.rows.push_back({"anna", l});
   for (const std::string& l : r.dora) t.rows.push_back({"dora", l});

@@ -5,7 +5,7 @@ scope: plugins/classicenhance
 concepts: [profile, content-profile, refactor, digest, before-after, asset-kind, sound-path]
 ---
 
-Moving the first game's paths into `kProfiles` touched every stage. The proof that nothing moved
+Moving Quake's paths into `kProfiles` touched every stage. The proof that nothing moved
 was the `enhance`, `classic-menu` and `classic-weapons` labs run at `--smoke --tag=before` on a
 stash of main, then `--compare=before` and their digests after: every picture's diff 0.000 and
 every digest the same. Watch the stages that cut a path by a fixed count: the sounds kept their

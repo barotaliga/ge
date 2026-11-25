@@ -622,15 +622,21 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
     q.cool_s = 0;
   };
   // `n` drops along `axis` (unit) spread by `cone`, at `lo`..`hi` m/s, `size` m across at most.
+  const double* from = h.at;  // where the drops being thrown leave the body
+  // How many of `n` drops this much blood throws (none at 0, at least one of any above it).
+  const auto many = [&](int n) {
+    if (h.amount <= 0 || n <= 0) return 0;
+    return std::max(1, static_cast<int>(std::lround(n * h.amount)));
+  };
   const auto throw_drops = [&](const double axis[3], int n, double cone, double lo, double hi,
                                double size, float dark) {
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0, m = many(n); i < m; ++i) {
       double d[3];
       unit(r, d);
       for (int k = 0; k < 3; ++k) d[k] = axis[k] + cone * d[k];
       const double l = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
       for (double& c : d) c /= l > 1e-9 ? l : 1;
-      Particle q = at(h.at);
+      Particle q = at(from);
       set_v(q, d, rnd(r, lo, hi));
       q.v[1] += float(rnd(r, 0.2, 0.9));  // a little up: it arcs before it falls
       q.life = float(rnd(r, 0.9, 1.6));
@@ -645,11 +651,11 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
   };
   // The mist: fine drops that hang a moment where the blow went in.
   const auto mist = [&](const double axis[3], int n, double speed, float dark) {
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0, m = many(n); i < m; ++i) {
       double d[3];
       unit(r, d);
       for (int k = 0; k < 3; ++k) d[k] = 0.6 * axis[k] + d[k];
-      Particle q = at(h.at);
+      Particle q = at(from);
       set_v(q, d, speed * rnd(r, 0.3, 1.0));
       q.life = float(rnd(r, 0.25, 0.55));
       q.size = float(rnd(r, 0.012, 0.03));
@@ -661,22 +667,55 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
       births->push_back(q);
     }
   };
+  // The pour: drops let go at the wound with almost no speed, a little out from the body, that
+  // run down it and fall.
+  const auto pour = [&](int n, float dark) {
+    for (int i = 0, m = many(n); i < m; ++i) {
+      Particle q = at(from);
+      const double d[3] = {-dir[0] * rnd(r, 0.05, 0.25) + rnd(r, -0.08, 0.08), -rnd(r, 0.1, 0.5),
+                           -dir[2] * rnd(r, 0.05, 0.25) + rnd(r, -0.08, 0.08)};
+      for (int k = 0; k < 3; ++k) q.v[k] = float(d[k]);
+      q.life = float(rnd(r, 1.0, 1.8));
+      q.size = float(rnd(r, 0.008, 0.02));
+      q.fall = 1;
+      q.drag = 0.2f;
+      q.streak = 0.02f;
+      q.opacity = 1;
+      colour(q, dark);
+      births->push_back(q);
+    }
+  };
   const double back[3] = {-dir[0], -dir[1], -dir[2]};
   const int count = std::clamp(h.count, 1, 12);
+  // Out of the exit, along the line: the most blood, the heaviest drops, the furthest.
+  const auto out_of_exit = [&](int drops, double cone, double lo, double hi, double size) {
+    if (!h.through) return;
+    from = h.exit;
+    throw_drops(dir, drops, cone, lo, hi, size, 1.0f);
+    mist(dir, drops / 2, 1.8, 1.0f);
+    from = h.at;
+  };
   switch (h.by) {
     case BloodBy::any:
     case BloodBy::pellet:
       for (int p = 0; p < count; ++p) {
-        throw_drops(back, 4, 0.7, 0.8, 2.2, 0.02, 1.0f);
-        throw_drops(dir, 7, 0.45, 1.5, 3.5, 0.025, 1.0f);
-        mist(back, 6, 1.2, 1.0f);
+        mist(back, 5, 0.9, 1.0f);
+        throw_drops(back, 2, 0.7, 0.6, 1.4, 0.012, 1.0f);
+        pour(2, 1.0f);
+        if (h.through) out_of_exit(6, 0.4, 2.0, 4.5, 0.028);
       }
+      if (!h.through) throw_drops(dir, 2 * count, 0.6, 0.4, 1.2, 0.015, 1.0f);  // off the skin
       break;
     case BloodBy::nail:
       for (int p = 0; p < count; ++p) {
-        throw_drops(dir, 10, 0.18, 3.0, 5.5, 0.022, 1.0f);
-        throw_drops(back, 3, 0.5, 0.6, 1.6, 0.015, 1.0f);
-        mist(dir, 4, 1.5, 1.0f);
+        mist(back, 4, 0.8, 1.0f);
+        throw_drops(back, 2, 0.5, 0.5, 1.2, 0.01, 1.0f);
+        if (h.through) {
+          out_of_exit(14, 0.2, 3.5, 6.5, 0.026);
+          pour(3, 1.0f);
+        } else {
+          pour(7, 1.0f);
+        }
       }
       break;
     case BloodBy::blade: {
@@ -685,6 +724,7 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
       throw_drops(sweep, 18, 0.3, 2.0, 4.5, 0.03, 1.0f);
       throw_drops(other, 6, 0.4, 1.0, 2.0, 0.02, 1.0f);
       mist(sweep, 8, 1.5, 1.0f);
+      pour(10, 1.0f);
       break;
     }
     case BloodBy::arc: {
@@ -693,6 +733,9 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
       mist(up, 10, 0.8, 0.6f);
       break;
     }
+    case BloodBy::drip:
+      pour(1, 1.0f);
+      break;
     case BloodBy::blast:
       throw_drops(dir, 28, 0.8, 2.5, 6.5, 0.035, 1.0f);
       throw_drops(dir, 10, 1.2, 1.0, 3.0, 0.02, 0.9f);
@@ -783,6 +826,51 @@ void glow_trail(const double from[3], const double to[3], const float rgb[3], do
     const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
     out->push_back(shine(p, rgb, 3.0, size, 0.25, r));
   }
+}
+
+gr::BeamLook laser_look(float width_m, const float rgb[3]) {
+  gr::BeamLook a;
+  a.step_m = 1.0f;
+  a.wander = 0;  // straight
+  a.pull = 1;
+  a.filaments = 1;
+  a.strike_hz = 0;
+  a.core_m = width_m;
+  a.glow_m = width_m * 1.5f;
+  a.core_keys = 0.3f;  // seen through, as bright as a lit wall at the classic's 0.3
+  a.glow_keys = 0.05f;
+  for (int k = 0; k < 3; ++k) a.core_rgb[k] = a.glow_rgb[k] = a.light_rgb[k] = rgb[k];
+  a.flash = 0;
+  a.flicker = 0;
+  a.shimmer = 0;
+  a.attack_s = 0.01f;
+  a.release_s = 0.01f;
+  a.light_cd = 0;
+  a.hit_cd = 0;
+  a.root_cd = 0;
+  a.ember_s = 0;
+  return a;
+}
+
+gr::BeamLook q2_rail_trail_look(float width_m, float radius_m, const float rgb[3], float fade_s) {
+  gr::BeamLook a = laser_look(width_m, rgb);
+  a.core_keys = 1;  // as bright as a lit wall, seen through at its edge
+  a.glow_keys = 0.1f;
+  a.release_s = fade_s > 0.01f ? fade_s : 0.01f;
+  if (radius_m > 0) {  // the spiral: one thin line circling the core
+    a.step_m = 0.06f;
+    a.braid_m = radius_m;
+    a.twist = 1.4f;  // a turn every 0.7 m
+    a.core_m = 0.01f;
+    a.glow_m = 0.03f;
+  }
+  return a;
+}
+
+void round_beam(gr::BeamLook& look) {
+  look.glow_m = 0.01f;  // the least a sheath may be, unseen at no light
+  look.glow_keys = 0;
+  look.glow_cd = 0;
 }
 
 const gr::BeamLook& rail_look() {
@@ -965,16 +1053,19 @@ void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Parti
   }
 }
 
-void blaster_hit(const double p[3], uint32_t seed, Particles* out) {
+void blaster_hit(const double p[3], uint32_t seed, Particles* out, bool green) {
   Rng r = ge::core::make_rng(seed);
   for (int i = 0; i < 24; ++i) {
     double d[3];
     unit(r, d);
-    Particle q = ember(p, d, rnd(r, 1.5, 4.0), 2600, 0.12, rnd(r, 0.15, 0.4), r);
+    Particle q = green ? shine(p, kBfgRgb, 2.0, 0.03, rnd(r, 0.15, 0.4), r)
+                       : ember(p, d, rnd(r, 1.5, 4.0), 2600, 0.12, rnd(r, 0.15, 0.4), r);
+    if (green) set_v(q, d, rnd(r, 1.5, 4.0));
     q.size = float(rnd(r, 0.02, 0.035));
     out->push_back(q);
   }
-  for (int i = 0; i < 6; ++i) out->push_back(shine(p, kBoltRgb, 3.0, 0.08, 0.15, r));
+  for (int i = 0; i < 6; ++i)
+    out->push_back(shine(p, green ? kBfgRgb : kBoltRgb, 3.0, 0.08, 0.15, r));
 }
 
 void bfg_burst(const double p[3], uint32_t seed, Particles* out) {

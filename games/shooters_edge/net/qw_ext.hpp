@@ -1,0 +1,110 @@
+// THE QUAKEWORLD PROTOCOL'S EXTENSIONS, as a table: each family's magic, each bit's name and value,
+// and which bits our server offers (the first tier). Adding an extension is adding a row to
+// `kExtBits` and the code that honours it; negotiation never changes.
+//
+// THE FAMILIES: `x` (magic 0x58455446, the four letters "FTEX" read little endian), `x2`
+// (0x32455446, "FTE2") and the demo stream's `mvd` (0x3144564D, "MVD1") are negotiated in the
+// challenge and the connect (the server offers a bit set, the client answers the bits it accepts,
+// the server keeps the AND) or in the signon's `pext` step; the `z` set travels only in user info
+// and server info (`*z_ext`), with no handshake, and the game's own `ge` set likewise (`*ge_ext`):
+// a QuakeWorld client never asks for it, so never gets a message it does not know.
+//
+// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend, download
+// origin, item back and the settings sheet; x scale, transparency, colour-mod, sound-double,
+// model-double, entity-double and entity-double2, spawnstatic2, 256 packet entities and chunked
+// downloads; mvd float coords, the teleport kind on setangle and weapon prediction. Everything else
+// is refused. x float coords (only with sv_bigcoords) and the rest exist in the table so they can
+// be named, never offered.
+//
+// ge:summary The QuakeWorld protocol's extension families and bits as a table; the first tier
+// ge:keywords extensions pext z_ext fte-bits mvd-bits negotiate offered first-tier transparency
+// ge:keywords model-double entity-double chunked-downloads float-coords spawnstatic2 sound-double
+// ge:keywords scale colour-mod item-back weapon-prediction
+// ge:skill net shooter
+// ge:test tests/shooters_edge_qw_wire_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <string>
+
+#include "shooters_edge/net/qw_wire.hpp"
+
+namespace shooters_edge::net {
+
+enum class ExtFamily : uint8_t { x, x2, mvd, z, ge, count };
+constexpr uint32_t kMagicX = 0x58455446, kMagicX2 = 0x32455446, kMagicMvd = 0x3144564d;
+
+// The x family's bits.
+constexpr uint32_t kXScale = 0x2, kXTrans = 0x8, kXSoundDbl = 0x80, kXModelDbl = 0x1000,
+                   kXEntityDbl = 0x2000;
+constexpr uint32_t kXEntityDbl2 = 0x4000, kXFloatCoords = 0x8000, kXColourMod = 0x80000;
+constexpr uint32_t kXSpawnStatic2 = 0x400000, kX256Entities = 0x1000000;
+constexpr uint32_t kXChunkedDl = 0x20000000, kXClientProgs = 0x40000000;
+// The x2 family's.
+constexpr uint32_t kX2Voice = 0x2;
+// The demo family's. Weapon prediction: every playerinfo with the weapon frame carries a byte after
+// it, and the player's own the weapon's state when that byte is nonzero (net/qw_delta.hpp); the
+// client runs the weapon forward from it (classic/weapon_predict.hpp).
+constexpr uint32_t kMvdFloatCoords = 0x1, kMvdTeleport = 0x2, kMvdWeaponPred = 0x80;
+// The z set's.
+constexpr uint32_t kZPmType = 1, kZPmTypeNew = 2, kZViewHeight = 4, kZServerTime = 8;
+constexpr uint32_t kZPitchLimits = 0x10, kZJoinObserve = 0x20, kZOnGround = 0x40;
+constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
+// The game's own set (`*ge_ext`, as the z set travels): named effects, svc ids 120 and 121; the
+// aim help's bend told to the player it helped, svc id 122 (the client turns the view onto it);
+// a download's archive, svc id 123 before the download (the client keeps the file in a partial of
+// that archive: engine/vfs/partial.hpp); the other players' moves on Quake II's server, svc id
+// 124 after each frame (the client runs them forward as the QuakeWorld join does:
+// net/q2_predict.hpp); the easy jump's share on Quake II's server, svc id 126 when it
+// changes (the client strafes at it: net/q2_remote.hpp); the tag of the key its logins'
+// tickets are signed with, svc id 127 once known (Quake II has no server info to carry
+// `*accountkey`: our client logs itself in by it, net/qw_remote.hpp); the feel Quake II's
+// server runs every player's move on (classic/q2_move.hpp's Q2Feel), svc id 122 when it
+// changes (the client predicts on it: net/q2_predict.hpp); voice on Quake II's server, the
+// first game's voice message as svc id 121 down and clc id 83 up (net/qw_voice_route.hpp);
+// every rules frame of Quake II's server (`sv_fps` past 10), numbered by the frames the level has
+// run, where a stock client gets the tenths alone (net/q2_net_server.hpp); an item taken and
+// when it comes back, svc id 119 to a spawned client when it is taken and again as it changes (the
+// client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server; the
+// damage the player dealt (Quake II's temporary entity 128, the hit marker's) on Quake II's server;
+// the server's settings sheet (engine/server/sheet.hpp), svc id 125 in answer to `ge_sheet`
+// (net/qw_sheet.hpp); the weapons the player holds and his ammunition of each kind on Quake II's
+// server, svc id 118 when they change (the window predicts a weapon change on them:
+// net/q2_weapon.hpp).
+constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
+                   kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
+                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024, kGeSettings = 2048,
+                   kGeArsenal = 4096;
+
+struct ExtBit {
+  ExtFamily family;
+  bool first_tier;  // offered by our server
+  uint32_t bit;
+  const char* name;
+};
+extern const ExtBit kExtBits[];
+extern const int kExtBitCount;
+
+uint32_t family_magic(ExtFamily f);
+const char* family_name(ExtFamily f);
+// The family a magic names; false when none.
+bool family_of_magic(uint32_t magic, ExtFamily& out);
+
+// A set of bits per family: what was offered, asked for, or agreed.
+struct Ext {
+  uint32_t bits[static_cast<int>(ExtFamily::count)] = {};
+  uint32_t& operator[](ExtFamily f) { return bits[static_cast<int>(f)]; }
+  uint32_t operator[](ExtFamily f) const { return bits[static_cast<int>(f)]; }
+  bool has(ExtFamily f, uint32_t bit) const { return (bits[static_cast<int>(f)] & bit) != 0; }
+};
+
+// The first tier (with x float coords too when `bigcoords`).
+Ext first_tier(bool bigcoords = false);
+// What both sides keep: the bits of `asked` that `offered` has.
+Ext agree(const Ext& offered, const Ext& asked);
+// The coordinates the agreed bits make.
+Coords coords_of(const Ext& e);
+// The bit names set, comma separated ("none" for an empty set): a status line, a lab's table.
+std::string describe_ext(const Ext& e);
+
+}  // namespace shooters_edge::net

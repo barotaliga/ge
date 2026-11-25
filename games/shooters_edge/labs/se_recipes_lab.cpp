@@ -1,9 +1,9 @@
 // LAB `se-recipes`: THE MOVES PEOPLE MAKE AGAIN AND AGAIN, read off a folder of recorded games as
-// recipes a bot can play back (plugins/shooter/recipes.hpp, docs/goals/M18r.md § 0r). Every demo
-// in `--dir` (or `--file`; by default a few short matches written in code on the fixture halls)
-// is scanned with every player's track (client/demo_scan.hpp), each track read as hops on its
-// map's hulls (shooter/hops.hpp) and cut into HOP STARTS (from a stand or a walk to the target
-// speed by chained jumps).
+// recipes a bot can play back (plugins/shooterbots/recipes.hpp, docs/goals/M18r.md § 0r). Every
+// demo in `--dir` (or `--file`; by default a few short matches written in code on the fixture
+// halls) is scanned with every player's track (client/demo_scan.hpp), each track read as hops on
+// its map's hulls (shooterbots/hops.hpp) and cut into HOP STARTS (from a stand or a walk to the
+// target speed by chained jumps).
 //
 // THE LEVELS: each player with `--least` seconds of track or more is graded by his median speed
 // across (as se-rj does), the slowest third AMATEUR, the middle INTERMEDIATE, the fastest third
@@ -24,7 +24,7 @@
 // ge:keywords lab se-recipes recipe recipes hop-start time-to-400 stand-start copy-movement
 // ge:keywords demos mvd keys levels spots entry-zone movement-skill
 // ge:skill bots labs
-// ge:test tests/shooter_recipes_test.cpp
+// ge:test tests/shooterbots_recipes_test.cpp
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -42,8 +42,8 @@
 #include "core/parallel.hpp"
 #include "lab/lab.hpp"
 #include "shooter/brush_hull.hpp"
-#include "shooter/hops.hpp"
-#include "shooter/recipes.hpp"
+#include "shooterbots/hops.hpp"
+#include "shooterbots/recipes.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/demo_write.hpp"
@@ -54,6 +54,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cl = shooters_edge::client;
 namespace la = shooters_edge::labs;
 using ge::core::num::to_fixed;
@@ -92,7 +93,7 @@ struct Stop {
 };
 
 // The frame `dt` seconds from frame i (back when negative), within the track.
-size_t frame_at(const std::vector<sh::HopFrame>& f, size_t i, double dt) {
+size_t frame_at(const std::vector<sb::HopFrame>& f, size_t i, double dt) {
   size_t j = i;
   if (dt < 0)
     while (j > 0 && f[i].t - f[j - 1].t <= -dt) j--;
@@ -101,26 +102,26 @@ size_t frame_at(const std::vector<sh::HopFrame>& f, size_t i, double dt) {
   return j;
 }
 
-void read_stops(const sh::HopReading& r, int player, const sh::HopStartSettings& set,
+void read_stops(const sb::HopReading& r, int player, const sb::HopStartSettings& set,
                 std::vector<Stop>& out) {
-  const std::vector<sh::HopFrame>& f = r.frames;
+  const std::vector<sb::HopFrame>& f = r.frames;
   for (size_t i = 0; i + 1 < f.size(); i++) {
-    const bool still = f[i].phase == sh::HopPhase::ground && f[i].speed < set.stood;
+    const bool still = f[i].phase == sb::HopPhase::ground && f[i].speed < set.stood;
     if (!still) continue;
-    const bool next_still = f[i + 1].phase == sh::HopPhase::ground && f[i + 1].speed < set.stood;
+    const bool next_still = f[i + 1].phase == sb::HopPhase::ground && f[i + 1].speed < set.stood;
     if (next_still) continue;  // the stop's last frame only
     Stop st;
     st.player = player;
     size_t first = i;  // the stop's first still frame
-    while (first > 0 && f[first - 1].phase == sh::HopPhase::ground &&
+    while (first > 0 && f[first - 1].phase == sb::HopPhase::ground &&
            f[first - 1].speed < set.stood)
       first--;
     st.still_s = static_cast<float>(f[i].t - f[first].t);
     for (size_t j = frame_at(f, first, -1.5); j <= first; j++)
-      if (f[j].phase != sh::HopPhase::cut && f[j].speed > st.from) st.from = f[j].speed;
+      if (f[j].phase != sb::HopPhase::cut && f[j].speed > st.from) st.from = f[j].speed;
     {
-      const sh::HopFrame& b = f[frame_at(f, first, -0.3)];
-      const sh::HopFrame& a = f[frame_at(f, i, 0.4)];
+      const sb::HopFrame& b = f[frame_at(f, first, -0.3)];
+      const sb::HopFrame& a = f[frame_at(f, i, 0.4)];
       const float bx = f[first].origin.x - b.origin.x, by = f[first].origin.y - b.origin.y;
       const float ax = a.origin.x - f[i].origin.x, ay = a.origin.y - f[i].origin.y;
       const float after = std::sqrt(ax * ax + ay * ay), before = std::sqrt(bx * bx + by * by);
@@ -135,11 +136,11 @@ void read_stops(const sh::HopReading& r, int player, const sh::HopStartSettings&
     }
     bool cut = false;
     for (size_t j = i + 1; j < f.size() && f[j].t - f[i].t <= set.within_s; j++) {
-      if (f[j].phase == sh::HopPhase::cut) {
+      if (f[j].phase == sb::HopPhase::cut) {
         cut = true;
         break;
       }
-      if (f[j].phase == sh::HopPhase::ground && f[j].speed < set.stood) break;  // stopped again
+      if (f[j].phase == sb::HopPhase::ground && f[j].speed < set.stood) break;  // stopped again
       if (f[j].takeoff && st.to_target < 0) st.takeoffs++;
       const float t = static_cast<float>(f[j].t - f[i].t);
       if (st.to320 < 0 && f[j].speed >= 320) st.to320 = t;
@@ -155,7 +156,7 @@ void read_stops(const sh::HopReading& r, int player, const sh::HopStartSettings&
 struct Start {
   int demo = 0, player = 0;
   std::string map;
-  sh::HopStart s;
+  sb::HopStart s;
 };
 
 float quantile(std::vector<float> v, float q) {
@@ -168,8 +169,8 @@ double share(int part, int whole) { return whole > 0 ? static_cast<double>(part)
 
 // The keys' class: forward with a side (a circle start), forward alone, a side alone, other.
 int keys_class(uint8_t k) {
-  const bool f = (k & sh::kKeyForward) != 0, side = (k & (sh::kKeyLeft | sh::kKeyRight)) != 0;
-  if ((k & sh::kKeyBack) != 0) return 3;
+  const bool f = (k & sb::kKeyForward) != 0, side = (k & (sb::kKeyLeft | sb::kKeyRight)) != 0;
+  if ((k & sb::kKeyBack) != 0) return 3;
   if (f && side) return 0;
   if (f) return 1;
   if (side) return 2;
@@ -262,11 +263,49 @@ struct Maps {
 };
 
 // The numbers of a set of starts.
+// The view's reversals in a start's frames by se-people's rule (a 25 ms read, both turns past 60
+// degrees a second, opposite ways), and the seconds read: people's own mouse through a hop start,
+// the yardstick for the bots' copied starts (se-team's `view40.recipe`). By the phase each read
+// ends in: 0 the low to the entry (t < 0), 1 the run to the first takeoff, 2 the lift (the
+// first 0.2 s after it: a bot's copied start hands the view to its hop there), 3 the air chain
+// after (a bot's copied start plays the run; the low is its own view, the chain its hop's).
+constexpr int kPhases = 4;
+constexpr double kLift_s = 0.2;
+void start_reversals(const sb::HopStart& s, std::array<int64_t, kPhases>& reversals,
+                     std::array<double, kPhases>& secs) {
+  if (s.frames.size() < 2) return;
+  double next = s.frames.front().t, last_t = -1, rate = 0;
+  float last_yaw = 0;
+  size_t j = 0;
+  while (next <= s.frames.back().t) {  // a tick on the frames' clock, summed as it was read
+    while (j + 1 < s.frames.size() && s.frames[j + 1].t <= next) j++;
+    const float yaw = s.frames[j].yaw;
+    if (last_t >= 0) {
+      float d = yaw - last_yaw;
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      const double r = -d / 0.025;
+      const size_t ph = next < 0 ? 0 : next <= s.run_s ? 1 : next <= s.run_s + kLift_s ? 2 : 3;
+      if (std::fabs(r) < 3000) {
+        if (std::fabs(r) > 60 && std::fabs(rate) > 60 && r * rate < 0) reversals[ph]++;
+        secs[ph] += 0.025;
+      }
+      rate = r;
+    }
+    last_t = next;
+    last_yaw = yaw;
+    next += 0.025;
+  }
+}
+
 struct Tally {
   int starts = 0, made = 0, stood = 0;
   std::array<int, 4> keys{};
   std::vector<float> t_target, low_target, speed_in, run_s, speed_off, lag, top;
-  void add(const sh::HopStart& s) {
+  std::array<int64_t, kPhases> reversals{};  // the view's in the starts' frames by phase
+  std::array<double, kPhases> view_s{};      // (start_reversals)
+  void add(const sb::HopStart& s) {
+    start_reversals(s, reversals, view_s);
     starts++;
     made += s.made ? 1 : 0;
     stood += s.stood ? 1 : 0;
@@ -286,7 +325,7 @@ void run(gl::Lab& lab) {
   const int gold = std::max(2, static_cast<int>(lab.arg_num("gold")));
   const int most = static_cast<int>(lab.arg_num("most"));
   const int rows = static_cast<int>(lab.arg_num("rows"));
-  sh::HopStartSettings set;
+  sb::HopStartSettings set;
   set.target = static_cast<float>(lab.arg_num("target"));
   set.within_s = lab.arg_num("within");
   set.slow = static_cast<float>(lab.arg_num("slow"));
@@ -347,14 +386,14 @@ void run(gl::Lab& lab) {
       continue;
     }
     read++;
-    std::vector<sh::HopReading> hops(32);
-    std::vector<std::vector<sh::HopStart>> found(32);
+    std::vector<sb::HopReading> hops(32);
+    std::vector<std::vector<sb::HopStart>> found(32);
     ge::core::parallel_bands(32, 32, [&](size_t b, size_t e) {
       for (size_t k = b; k < e; k++) {
-        const std::vector<sh::TrackPoint>& tr = scan.tracks[k];
+        const std::vector<sb::TrackPoint>& tr = scan.tracks[k];
         if (tr.size() < 8) continue;
-        sh::read_hops(tr, *m->world, sh::HopSettings{}, hops[k]);
-        sh::read_hop_starts(tr, hops[k], set, found[k]);
+        sb::read_hops(tr, *m->world, sb::HopSettings{}, hops[k]);
+        sb::read_hop_starts(tr, hops[k], set, found[k]);
       }
     });
     for (size_t k = 0; k < 32; k++) {
@@ -366,7 +405,7 @@ void run(gl::Lab& lab) {
       p.speed = hops[k].summary.speed_p50;
       const int at = static_cast<int>(players.size());
       players.push_back(p);
-      for (sh::HopStart& s : found[k]) starts.push_back({static_cast<int>(i), at, scan.map, s});
+      for (sb::HopStart& s : found[k]) starts.push_back({static_cast<int>(i), at, scan.map, s});
       read_stops(hops[k], at, set, stops);
     }
   }
@@ -430,6 +469,22 @@ void run(gl::Lab& lab) {
     lab.metric(key + "run-s-p50", quantile(t.run_s, 0.5f), "s");
     lab.metric(key + "takeoff-p50", quantile(t.speed_off, 0.5f), "u/s");
     lab.metric(key + "lag-p50", quantile(t.lag, 0.5f), "deg");
+    {
+      int64_t rv = 0;
+      double vs = 0;
+      static constexpr const char* kPhase[kPhases] = {"low", "run", "lift", "air"};
+      const double all_s = t.view_s[0] + t.view_s[1] + t.view_s[2] + t.view_s[3];
+      for (size_t ph = 0; ph < kPhases; ph++) {
+        rv += t.reversals[ph];
+        vs += t.view_s[ph];
+        lab.metric(key + "reversals." + kPhase[ph] + "-per-s",
+                   t.view_s[ph] > 0 ? static_cast<double>(t.reversals[ph]) / t.view_s[ph] : 0,
+                   "per-s");
+        lab.metric(key + "reversals." + kPhase[ph] + "-s-share",
+                   all_s > 0 ? t.view_s[ph] / all_s : 0, "share");
+      }
+      lab.metric(key + "reversals-per-s", vs > 0 ? static_cast<double>(rv) / vs : 0, "per-s");
+    }
     for (int c = 0; c < 4; c++)
       lab.metric(key + "keys." + kKeysClass[c] + "-share",
                  share(t.keys[static_cast<size_t>(c)], t.starts), "share");
@@ -674,8 +729,8 @@ void run(gl::Lab& lab) {
   }
 
   // THE PROOF (`--prove=N`): the first N made starts from a stand played back through the move
-  // (shooter/recipes.hpp play_recipe) on an open floor and at home (their own spot on their map),
-  // with the keys and view of the frame itself (lead 0) and of the next (lead 1).
+  // (shooterbots/recipes.hpp play_recipe) on an open floor and at home (their own spot on their
+  // map), with the keys and view of the frame itself (lead 0) and of the next (lead 1).
   const int prove = static_cast<int>(lab.arg_num("prove"));
   if (prove > 0) {
     OpenFloor open;
@@ -694,11 +749,11 @@ void run(gl::Lab& lab) {
           if (n >= prove) break;
           if (!one.s.made || !one.s.stood || one.s.frames.size() < 4) continue;
           n++;
-          const sh::RecipeFrame& f0 = one.s.frames.front();
+          const sb::RecipeFrame& f0 = one.s.frames.front();
           const sh::MoveWorld& w = where == 0 ? open.world : *maps.by_name[one.map]->world;
           const sh::Vec3f from = where == 0 ? sh::Vec3f{0, 0, 24} : f0.feet;
-          sh::RecipePlay r;
-          sh::play_recipe(one.s.frames, w, move, from, 0, lead, r);
+          sb::RecipePlay r;
+          sb::play_recipe(one.s.frames, w, move, from, 0, lead, r);
           rec.push_back(one.s.speed_off);
           if (r.takeoff >= 0) jumped++, off.push_back(r.speed_takeoff);
           top.push_back(r.top);
@@ -730,7 +785,7 @@ void run(gl::Lab& lab) {
   // slow walk, a walk), their start's angle off the way (30-degree bins) and their turn's side, at
   // most
   // `--book-per-level` a level, the best proof first in each cell; written as the rows of a
-  // RecipeBook (shooter/recipes.hpp) a game compiles in.
+  // RecipeBook (shooterbots/recipes.hpp) a game compiles in.
   if (!lab.arg("book").empty()) {
     OpenFloor open;
     sh::MoveSettings move;
@@ -739,14 +794,14 @@ void run(gl::Lab& lab) {
       int level = 0;
       std::string cell;
       float score = 0;
-      sh::RecipeEntry e;
-      std::vector<sh::RecipeStep> steps;
+      sb::RecipeEntry e;
+      std::vector<sb::RecipeStep> steps;
     };
     std::vector<Cand> cands;
     for (const Start& one : starts) {
       const int lv = players[static_cast<size_t>(one.player)].level;
       if (lv < 0 || !one.s.made) continue;
-      std::vector<sh::RecipeFrame> fr = one.s.frames;
+      std::vector<sb::RecipeFrame> fr = one.s.frames;
       size_t cut = 0;
       while (cut < fr.size() && !fr[cut].jump) cut++;
       if (cut + 2 >= fr.size() || cut < 3) continue;
@@ -755,10 +810,10 @@ void run(gl::Lab& lab) {
       // off first is late through every change after (and people's are few).
       bool back = false;
       for (size_t k = 0; k <= cut; k++)
-        back = back || (fr[k].ground && (fr[k].keys & sh::kKeyBack));
+        back = back || (fr[k].ground && (fr[k].keys & sb::kKeyBack));
       if (back) continue;
-      sh::RecipePlay r;
-      sh::play_recipe(fr, open.world, move, {0, 0, 24}, 0, 0, r);
+      sb::RecipePlay r;
+      sb::play_recipe(fr, open.world, move, {0, 0, 24}, 0, 0, r);
       const float rec = sh::root_of(fr[cut + 1].velocity.x * fr[cut + 1].velocity.x +
                                     fr[cut + 1].velocity.y * fr[cut + 1].velocity.y);
       if (r.takeoff < 0 || r.speed_takeoff < 0.95f * rec || r.speed_takeoff < 380) continue;
@@ -792,13 +847,13 @@ void run(gl::Lab& lab) {
         float y = fr[k].yaw - way;
         while (y > 180) y -= 360;
         while (y < -180) y += 360;
-        sh::RecipeStep step;
+        sb::RecipeStep step;
         // NOLINTNEXTLINE(bugprone-incorrect-roundings): a time since the start, never negative
         step.ms = static_cast<uint16_t>((fr[k].t - fr.front().t) * 1000 + 0.5f);
         step.yaw10 = static_cast<int16_t>(y * 10);
         step.keys = fr[k].keys;
-        step.flags = static_cast<uint8_t>((fr[k].jump ? sh::kStepJump : 0) |
-                                          (fr[k].ground ? sh::kStepGround : 0));
+        step.flags = static_cast<uint8_t>((fr[k].jump ? sb::kStepJump : 0) |
+                                          (fr[k].ground ? sb::kStepGround : 0));
         c.steps.push_back(step);
         if (k > 0) {
           float dh = fr[k].yaw - fr[k - 1].yaw;
@@ -811,7 +866,7 @@ void run(gl::Lab& lab) {
       // The way it first moves off (the first frame past 100 u/s) against the way, in 30-degree
       // bins: a stand's spread is where it sets off.
       float off = h0;
-      for (const sh::RecipeFrame& q : fr) {
+      for (const sb::RecipeFrame& q : fr) {
         const float sp = sh::root_of(q.velocity.x * q.velocity.x + q.velocity.y * q.velocity.y);
         if (sp <= 100) continue;
         off = static_cast<float>(ge::core::libm::atan2(q.velocity.y, q.velocity.x)) * kDeg - way;
@@ -832,7 +887,8 @@ void run(gl::Lab& lab) {
     // since the last step, the view off the way in tenths of a degree, the keys and the flags).
     std::string out =
         "// Written by `se-recipes --book`: people's made hop starts, cut at their first takeoff "
-        "and\n// proven on an open floor (shooter/recipes.hpp RecipeBook). Do not edit by hand.\n"
+        "and\n// proven on an open floor (shooterbots/recipes.hpp RecipeBook). Do not edit by "
+        "hand.\n"
         "// {level, speed, heading10, reach, swing, takeoff, steps}\n";
     uint32_t at = 0;
     int in_book = 0;
@@ -861,7 +917,7 @@ void run(gl::Lab& lab) {
             const Cand& c = *v[round];
             std::string steps;
             uint16_t last = 0;
-            for (const sh::RecipeStep& q : c.steps) {
+            for (const sb::RecipeStep& q : c.steps) {
               steps += hex(static_cast<uint32_t>(std::min(255, q.ms - last)), 2) +
                        hex(static_cast<uint16_t>(q.yaw10), 4) +
                        hex(static_cast<uint32_t>(q.keys | (q.flags << 4)), 2);
@@ -890,14 +946,14 @@ void run(gl::Lab& lab) {
       "\tlow\tlag_off\trun_keys\ttakeoffs\tmade\tto_target_s\tspeed_out\ttop\tframes\n";
   for (const Start& s : starts) {
     const Player& p = players[static_cast<size_t>(s.player)];
-    const sh::HopStart& h = s.s;
+    const sb::HopStart& h = s.s;
     tsv += s.map + "\t" + std::to_string(s.demo) + "\t" + std::to_string(s.player) + "\t" +
            (p.level >= 0 ? kLevelName[p.level] : "-") + "\t" + to_fixed(h.t, 2) + "\t" +
            to_fixed(h.feet.x, 1) + "\t" + to_fixed(h.feet.y, 1) + "\t" + to_fixed(h.feet.z, 1) +
            "\t" + to_fixed(h.speed_in, 0) + "\t" + (h.stood ? "1" : "0") + "\t" +
            to_fixed(h.yaw_in, 1) + "\t" + to_fixed(h.heading, 1) + "\t" + to_fixed(h.run_s, 3) +
            "\t" + to_fixed(h.speed_off, 0) + "\t" + to_fixed(h.low, 0) + "\t" +
-           to_fixed(h.lag_off, 1) + "\t" + sh::keys_name(h.run_keys) + "\t" +
+           to_fixed(h.lag_off, 1) + "\t" + sb::keys_name(h.run_keys) + "\t" +
            std::to_string(h.takeoffs) + "\t" + (h.made ? "1" : "0") + "\t" +
            to_fixed(h.to_target_s, 3) + "\t" + to_fixed(h.low_to_target_s, 3) + "\t" +
            to_fixed(h.speed_out, 0) + "\t" + to_fixed(h.top, 0) + "\t" +
@@ -911,12 +967,12 @@ void run(gl::Lab& lab) {
     fr << "start\tlevel\tt\tx\ty\tz\tvx\tvy\tvz\tyaw\tpitch\tkeys\tjump\tground\n";
     for (size_t i = 0; i < starts.size(); i++) {
       const int lv = players[static_cast<size_t>(starts[i].player)].level;
-      for (const sh::RecipeFrame& f : starts[i].s.frames)
+      for (const sb::RecipeFrame& f : starts[i].s.frames)
         fr << i << '\t' << (lv >= 0 ? kLevelName[lv] : "-") << '\t' << to_fixed(f.t, 3) << '\t'
            << to_fixed(f.feet.x, 1) << '\t' << to_fixed(f.feet.y, 1) << '\t'
            << to_fixed(f.feet.z, 1) << '\t' << to_fixed(f.velocity.x, 1) << '\t'
            << to_fixed(f.velocity.y, 1) << '\t' << to_fixed(f.velocity.z, 1) << '\t'
-           << to_fixed(f.yaw, 2) << '\t' << to_fixed(f.pitch, 2) << '\t' << sh::keys_name(f.keys)
+           << to_fixed(f.yaw, 2) << '\t' << to_fixed(f.pitch, 2) << '\t' << sb::keys_name(f.keys)
            << '\t' << (f.jump ? 1 : 0) << '\t' << (f.ground ? 1 : 0) << '\n';
     }
   }
@@ -926,7 +982,7 @@ const gl::LabSpec kSpec{
     "se-recipes",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "plugins/shooter/recipes.hpp over many demos (games/shooters_edge/labs/se_recipes_lab.cpp, "
+    "plugins/shooterbots/recipes.hpp over many demos (games/shooters_edge/labs/se_recipes_lab.cpp, "
     "client/demo_scan.hpp, wire_view.hpp)",
     "bots",
     "Which moves do people make again and again that a bot could copy, read off their recorded "

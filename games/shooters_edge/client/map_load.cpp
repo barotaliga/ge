@@ -5,13 +5,19 @@
 // ge:skill render shooter
 #include "shooters_edge/client/map_load.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <exception>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "core/num_text.hpp"
 #include "core/output.hpp"
+#include "hud/spinner.hpp"
+#include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/menu/level_screens.hpp"
 
 namespace shooters_edge::client {
 
@@ -27,6 +33,9 @@ MapRead read_map(const SearchPath* files, const RemixFiles* remix, const std::st
   MapRead r;
   try {
     r.map = load_remixed_map(*files, name, remix, r.error, &r.said);
+    // A Quake II map with no visibility loads, everything seen from everywhere: the player told.
+    if (r.map && r.map->bsp.map.family == ge::brush::Family::v38 && r.map->bsp.map.pvs.empty())
+      r.said += std::string(r.said.empty() ? "" : "\n") + std::string(kNoVisibility);
   } catch (const std::exception& e) {
     r.map.reset();
     r.error = failed_on("the map " + name, e);
@@ -68,10 +77,23 @@ std::string load_caption(const MapLoad& l) {
   return s;
 }
 
+bool console_load_line(const MapLoad& load, LoadLine& line, ge::console::Console& con,
+                       ge::console::ConsoleView& view, double now_s) {
+  if (!busy(load) || line.given_up) return false;
+  hold_load_line(load.what, load.since_s, line, con, view, now_s);
+  return true;
+}
+
+void release_load_line(const MapLoad& load, LoadLine& line, ge::console::ConsoleView& view,
+                       bool keep, bool elsewhere) {
+  release_load_line(busy(load), elsewhere, line, view, keep);
+}
+
 void load_map(MapLoad& l, const SearchPath& files, const std::string& name, double now_s) {
   l.what = name;
   l.since_s = now_s;
   l.began = std::chrono::steady_clock::now();
+  l.plaque_gone = false;
   l.map = std::async(std::launch::async, read_map, &files, l.remix, name);
 }
 
@@ -85,6 +107,7 @@ void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
     l.what = map.name;
     l.since_s = now_s;
     l.began = std::chrono::steady_clock::now();
+    l.plaque_gone = false;
   }
   // The thread's own copies: the map's bytes (the server keeps its own map), the names.
   auto copy = std::make_shared<LoadedMap>();
@@ -154,6 +177,10 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
               bool measured, double now_s, WorldDrawPtr& world, bool& current, bool& fresh) {
   namespace out = ge::core::output;
   fresh = false;
+  if (busy(l) && listen.campaign_host && !l.plaque_gone && now_s - l.since_s >= kPlaqueMostS) {
+    l.plaque_gone = true;
+    con.print("Loading plaque timed out.");
+  }
   while (busy(l)) {
     LoadStep step =
         step_load(l, *at.device, at.width, at.height, at.format, *at.picture, at.weapons, measured);
@@ -171,7 +198,11 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
         step.map = load_named_map(*at.files, "arena", error);
     }
     if (step.map) {
-      if (!step.said.empty()) con.print(step.said);
+      for (size_t at_line = 0; at_line < step.said.size();) {  // a line each
+        const size_t end = std::min(step.said.find('\n', at_line), step.said.size());
+        con.print(step.said.substr(at_line, end - at_line));
+        at_line = end + 1;
+      }
       if (!start_map(listen, *at.content, std::move(step.map), error)) {
         out::error("shooters_edge: the map change failed: " + error +
                    "; see docs/shooters-edge.md § Playing it");
@@ -213,6 +244,18 @@ void cancel_load(MapLoad& l) {
   l.compiling.reset();
   l.warming.reset();
   l.what.clear();
+}
+
+void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
+                  const shooters_edge::menu::ClassicArt& art, int w, int h, double now_s) {
+  if (!busy(load)) return;
+  if (l.campaign_host && !load.plaque_gone && art.find("loading") != nullptr) {
+    shooters_edge::menu::draw_plaque(dl, art, w, h, "loading");
+    return;
+  }
+  const ge::hud::Style style = shooters_edge::hud::hud_style();
+  ge::hud::draw_spinner(dl, ge::hud::frame_for(w, h, style), style, now_s, load_caption(load),
+                        now_s - load.since_s);
 }
 
 }  // namespace shooters_edge::client
