@@ -143,6 +143,9 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       // The last quarter of the map's time is for the way out: a map he cannot clear still ends.
       way.complete_until = s.sv.time + opt.map_seconds * 0.75;
       way.avoid = opt.avoid;
+      // A shot button whose place he does not reach is shot from one he has (r1m4's across the
+      // lava, from the end of the corridor), as Quake II's campaign does.
+      if (opt.complete) f.features.set(sb::Feature::shotplace, true);
       if (opt.complete) way_complete_init(f, nav, s, c.map);
       way_init(way, f, nav, s, c.map);
       if (opt.plan && k == 0) way.log = &em.plan;

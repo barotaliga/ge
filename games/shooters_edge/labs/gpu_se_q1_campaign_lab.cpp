@@ -351,7 +351,7 @@ void run(gl::Lab& lab) {
   const bool beside = lab.arg("beside") == "1";
   gl::LabTable t{"each map at 100%",
                  {"map", "bots", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths",
-                  "given up", "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
+                  "given up", "plans: exit/button/key/trigger/explore/monster/secret/arm", "nodes",
                   "tricks: rocket/grenade/combo", "blast jumps", "faults"},
                  {}};
   std::vector<fb::EpisodeMap> maps;

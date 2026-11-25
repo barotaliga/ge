@@ -11,6 +11,7 @@
 #include <cstring>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "brush/map.hpp"
 #include "shooter/trace.hpp"
@@ -118,7 +119,8 @@ void way_shot_triggers(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
         if (n == dn)
           if (const int door = edict_of(s, dm); door >= 0) bs.doors.push_back(door);
     }
-    if (bs.doors.empty()) continue;
+    // One that opens no door (e2m7's seven, counted by a trigger_counter that opens the way on)
+    // is still shot: done once it answered (gone, or touching nothing).
     // Shot from the nearest node whose eye line reaches it (a window is shot through the room).
     float best_d = kWayShotTriggerFrom;
     for (size_t n = 0; n < g.nodes.size(); n++) {
@@ -231,6 +233,11 @@ int way_bolt_pick(const WayThrough& w, const ge::shooterbots::BotView& s) {
     return best;
   }
   return b.fire;
+}
+
+bool way_shot_only(const EntityBlock& b) {
+  const char* hp = block_value(b, "health");
+  return hp != nullptr && std::atof(hp) > 0;
 }
 
 }  // namespace ge::shooterbots
