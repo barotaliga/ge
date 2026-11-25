@@ -37,6 +37,7 @@
 
 #include "assets/image.hpp"
 #include "classicenhance/pipeline.hpp"
+#include "classicenhance/upscaler.hpp"
 
 namespace ge::classicenhance {
 
@@ -119,6 +120,7 @@ class EnhanceJob {
   mutable std::mutex mutex_;
   RunReport report_;
   Source source_;
+  Upscaler network_;  // the cache's weights, when RunOptions::cached_network opens them
 };
 
 }  // namespace ge::classicenhance

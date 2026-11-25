@@ -93,9 +93,6 @@ void run(gl::Lab& lab) {
     return;
   }
   es::Scene s;
-  // Shooter's Edge's frame never adapts the eye to a flash (no lamp_lux): drawn as the game draws
-  // it, the huge blast lights the yard and the wall and leaves the dusk sky as it was.
-  s.adapt = false;
   if (!es::make_scene(*device, s, w, h, 10)) {
     lab.fail("the explosions' pipelines did not build",
              "Read the gpu: lines above. Skill: render.");
@@ -115,17 +112,20 @@ void run(gl::Lab& lab) {
         names.push_back(std::string(k.name) + " " + fixed(m, 2) + " S");
       }
     }
-    lab.shot({"kinds",
-              "THE BLAST'S KINDS",
-              "Each kind of the enhanced blast on the floor 16 m ahead at dusk, at three moments: "
-              "common (a rocket's), big (explosion1's big one, 1.8 times), huge (the nuke's, 3.2 "
-              "times, white-hot), dark (the tracker's) and bare (the ball alone).",
-              "common: the orange ball and its embers; big: the same, larger, more embers; huge: "
-              "a white ball filling the view and lighting the yard and wall, pale dust after; "
-              "dark: a black sooty cloud with black specks rushing in, no glow, gone by 0.9 s; "
-              "bare: the ball with no embers or sparks",
-              {}},
-             es::sheet_of(pics, names, 3), Det::measured);
+    lab.shot(
+        {"kinds",
+         "THE BLAST'S KINDS",
+         "Each kind of the enhanced blast on the floor 16 m ahead at dusk, at three moments: "
+         "common (a rocket's), big (explosion1's big one, 1.8 times), huge (the nuke's, 3.2 "
+         "times, white-hot), dark (the tracker's) and bare (the ball alone).",
+         "common: the orange ball and its embers; big: the same, larger, more embers; huge: "
+         "a white ball filling the view and lighting the yard and wall, the dusk sky gone dark "
+         "while it burns (the eye adapted to a flash many times the common one's, as a "
+         "camera's exposure would), pale dust after; "
+         "dark: a black sooty cloud with black specks rushing in, no glow, gone by 0.9 s; "
+         "bare: the ball with no embers or sparks",
+         {}},
+        es::sheet_of(pics, names, 3), Det::measured);
   }
   {
     std::vector<gl::Picture> pics;
