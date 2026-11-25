@@ -371,34 +371,48 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
-| gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
+| gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | done | 1 | the units run off the maps' own level strings (rmine1 → `reu1_` → rware1 → `reu2_` → rhangar1 → `reu3_` → rammo1 → `reu4_` → rboss → `rend` and the victory picture); a new game starts on the map the pack's default.cfg names (classic/content/load_order.hpp `new_game_map`: rmine1), co-op's victory loops back there (net/q2_game.cpp); the unit configs' `give` lines take the pack's names; rboss hands out the A-M bomb selected (server/q2_gz_rules.cpp `gz_entered`); tests/shooters_edge_q2_gz_test.cpp |
 | gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | done | 2 | NEW GAME takes the level default.cfg names (`*rintro.cin+rmine1`: client/game_folder.hpp `new_game_level`); the unit ends' movies from the maps' level strings; all seven decoded to their end, frames and sound |
-| gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | verify | 2 | pictures named by the rules' configstrings |
+| gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | done | 2 | the rules' item table names each icon (server/q2_bar.cpp); the pack's pics/ hold them all and win by name over the base's (tests/shooters_edge_game_adapter_test.cpp) |
 | gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | verify | 3 | pictures by name over the base pack's |
 | gz.vwep | the new guns in other players' hands (the patch's `w_*.md2`) | verify | 2 | plugins/morph/carry.hpp; needs imp.vwep |
 | gz.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp; held end to end by tests/shooters_edge_take_in_test.cpp (the window's music finds the remapped file; any case or a path) |
 | gz.sounds | the sounds the client plays itself for the pack: the ETF rifle's and the disruptor's muzzle flashes, the monsters' flashes 138..210, none for its effect bits; its loops are the game's own | done |  | server/q2_flash.cpp; tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
 | gz.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp; held by tests/shooters_edge_q2_flash_test.cpp (the_mission_packs_flashes_play_their_own_shots) |
 | gz.effects | the tracker's and the other entity effects, the disguise's figure, infra-red goggles' view | done |  | client/world_fx_q2.cpp, client/q2_look.hpp; the marks drawn held by tests/shooters_edge_q2_world_fx_test.cpp |
-| gz.te.blaster2 | a green blaster's hit (temporary entity 30) | missing | 2 | client ledger `te.blaster2`, not taken for the base game |
-| gz.te.lightning | a lightning beam between two things (33; the tesla) | missing | 1 | `te.lightning`; LIFT: Quake's lightning beam drawing |
-| gz.te.plain_explosion | an explosion with no specks (35) | missing | 2 | `te.plain_explosion` |
-| gz.te.heatbeam | the player's heat beam (38) | missing | 1 | `te.heatbeam`; LIFT: our own lightning beam (the smooth weapon thread's `cl_fakeshaft`) |
-| gz.te.monster_heatbeam | a monster's heat beam (39) | missing | 1 | `te.monster_heatbeam`; same LIFT |
-| gz.te.moreblood | a bigger burst of blood (42; the chainfist) | missing | 2 | `te.moreblood` |
-| gz.te.heatbeam_sparks | the heat beam's sparks (43) | missing | 2 | `te.heatbeam_sparks` |
-| gz.te.heatbeam_steam | the heat beam's steam (44) | missing | 2 | `te.heatbeam_steam` |
-| gz.te.electric_sparks | blue electric sparks (46) | missing | 2 | `te.electric_sparks` |
-| gz.te.tracker_explosion | the disruptor's dark burst (47) | missing | 1 | `te.tracker_explosion` |
-| gz.te.nukeblast | the A-M bomb's growing blast (51) | missing | 1 | `te.nukeblast` |
-| gz.te.explosion1_big | a bigger explosion (53; the bosses) | missing | 2 | `te.explosion1_big` |
-| gz.te.explosion1_np | an explosion with no specks (54) | missing | 2 | `te.explosion1_np` |
-| gz.te.flechette | a flechette's hit (55) | missing | 1 | `te.flechette` |
+| gz.te.blaster2 | a green blaster's hit (temporary entity 30) | done | 2 | client/world_fx_q2.cpp (`q2_pack_point`): 40 specks of 0xd0.., the flare's green skin and a green light of 150; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.lightning | a lightning beam between two things (33; the tesla) | done | 1 | client/world_fx_q2.cpp (`q2_held_line`, `q2_draw_held`): 35-unit links over the length less 20, one alone at the end when short, held 0.2 s a pair; `weapons/tesla.wav` on the tesla; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.plain_explosion | an explosion with no specks (35) | done | 2 | client/q2_model_fx.hpp: the rocket's ball and light, no specks, silent; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.heatbeam | the player's heat beam (38) | done | 1 | client/world_fx_q2.cpp: 32-unit links spinning a degree a millisecond, the own beam from the gun along the view with its sliding rings, held 0.2 s (first 0.1 s); facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.monster_heatbeam | a monster's heat beam (39) | done | 1 | client/world_fx_q2.cpp: the beam's links and a shell of 40 specks at the gun; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.moreblood | a bigger burst of blood (42; the chainfist) | done | 2 | client/world_fx_q2.cpp: 250 specks of 0xe8..; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.heatbeam_sparks | the heat beam's sparks (43) | done | 2 | client/world_fx_q2.cpp: 50 specks of 0x08.. thrown along the face at 60 units/s, half the fall; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.heatbeam_steam | the heat beam's steam (44) | done | 2 | client/world_fx_q2.cpp: 20 specks of 0xe0.. as the sparks; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.electric_sparks | blue electric sparks (46) | done | 2 | client/world_fx_q2.cpp: 40 specks of 0x75..; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.tracker_explosion | the disruptor's dark burst (47) | done | 1 | client/world_fx_q2.cpp, app/effects.cpp (`q2_tracker_burst`): 128 black specks for 1.5..2 s, a darkening light of 150 for a tenth; `weapons/disrupthit.wav`; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.nukeblast | the A-M bomb's growing blast (51) | done | 1 | client/world_fx_q2.cpp (`q2_sustains`): 700 specks a frame on a sphere growing to 200 units over a second; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.explosion1_big | a bigger explosion (53; the bosses) | done | 2 | client/q2_model_fx.hpp: the rocket's ball at twice the size, its light as the plain one's; rocklx1a; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.explosion1_np | an explosion with no specks (54) | done | 2 | client/q2_model_fx.hpp: the rocket's ball and light, no specks; rocklx1a; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.flechette | a flechette's hit (55) | done | 1 | client/world_fx_q2.cpp: 40 specks of 0x6f.., the flare's skin 2 and a pale blue light; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
 | gz.dm | the fourteen deathmatch maps played by bots | missing | 2 |  |
 | gz.coop | co-op through the units (`info_player_coop_lava`) | missing | 2 |  |
-| gz.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
+| gz.save | saves of the pack's campaign | done | 2 | server/q2_save.cpp chunk version 13: the mines', tesla's and disruptor's stages, double damage, the IR goggles, the chainfist's swing; tests/shooters_edge_q2_gz_test.cpp loads a game with mines in flight and stuck and plays it on bit for bit; `se-q2-save --mod=rogue` on rmine1 and rlava1 |
 | gz.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | gz.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the ETF rifle as rapid, the plasma beam (both names) as beam, the prox launcher as lobber, the disruptor as launcher, their ammunition beside them, double damage as damage; the chainfist, the tesla, the A-M bomb, the spheres, the decoy and the goggles drop (tests/shooters_edge_remix_test.cpp) |
+| gz.sweep | every map of the pack started on its rules and run (the se-q2-map-sweep lab): spawn faults, missing models and sounds, maps left at once | done |  | labs/se_q2_map_sweep_lab.cpp; on the pack 2026-11-24: all 32 maps start and run 10 s, no model or sound missing; the classnames still unspawned are the rows below |
+| gz.base.trigger_multiple | `trigger_multiple`'s TOGGLE (8): off at the start, each use switches it, a use never fires it (rammo1's unit start toggles its exit) | done | 1 | server/q2_gz_world.cpp (`gz_used`, `gz_toggled`); facts gz-world.md § 6; tests/shooters_edge_q2_gz_test.cpp |
+| gz.base.items | an item's TRIGGER_SPAWN (1) kept: unseen where placed until used, then dropped to the floor; no "invalid spawnflags" for it | done | 1 | server/q2_server.cpp (`gz_trigger_spawned`, `q2_item_used`); facts porting/shooters-edge/gz-items.md; tests/shooters_edge_q2_gz_test.cpp; 40 items on rammo1, rbase1, rbase2, rlava1, rmine1, rsewer2 |
+| gz.base.trigger_push | `trigger_push`: a named one toggles, START_OFF (2) starts off (said when nothing names it), SILENT (4) | done | 2 | server/q2_gz_triggers.cpp (a named push toggles; START_OFF said and a solid wall when unnamed; SILENT) |
+| gz.base.target_earthquake | `target_earthquake`'s SILENT (1): no rumble | done | 3 | server/q2_targets.cpp, q2_gz_world.cpp (`gz_silent`) |
+| gz.base.func_door_rotating | `func_door_rotating`'s INACTIVE (8192): no touch and no damage until its first use, then a door like any other that no trigger uses again | done | 1 | server/q2_gz_world.cpp, q2_map.cpp (its touch field asleep); rhangar2, rsewer1; tests/shooters_edge_q2_gz_test.cpp |
+| gz.base.func_explosive | a named `func_explosive`'s INACTIVE (8): solid and unbreakable until used, breakable after, blown by a later use | done | 2 | server/q2_gz_world.cpp, q2_targets.cpp; rhangar1, rhangar2; tests/shooters_edge_q2_gz_test.cpp; a team member's removal from its chain not taken |
+| gz.base.func_train | `path_corner`'s speed, accel and decel; a train's `team` moving with it | done | 1 | server/q2_gz_trains.cpp (corners' speed, accel and decel; the team riding) |
+| gz.base.func_rotating | `func_rotating`'s ACCEL (8192), its targets fired as it starts and stops | done | 2 | server/q2_gz_trains.cpp (ACCEL; targets fired at start and stop) |
+| gz.base.target_laser | `target_laser`'s WINDOWSTOP (128); the beam passing on through things it hurt | done | 2 | server/q2_fight.cpp (`fight_laser`); all 7 placed (rammo2, rbase1) carry WINDOWSTOP, and our beam stops at windows already (the base game's passes them: a base row's gap); tests/shooters_edge_q2_gz_test.cpp |
+| gz.base.func_plat | `func_plat` used by monsters; 100 crush to a dead blocker; the bad area while it rises | done | 2 | server/q2_gz_triggers.cpp (monsters ride toward an enemy; 100 crush to a dead blocker; the bad area while it rises) |
+| gz.base.misc_explobox | the barrel in liquids (no slime harm, no drowning) | done | 3 | server/q2_gz_triggers.cpp (burns in lava, splashes, no slime harm) |
+| gz.base.trigger_gravity | `trigger_gravity`'s TOGGLE and START_OFF; gravity as a fraction | done | 3 | server/q2_gz_triggers.cpp (TOGGLE, START_OFF, the fraction; the player's move takes it) |
+| gz.base.spawn_filter | co-op's "not in co-op" (4096) and the three skills at once | done | 2 | the co-op spawn rule in server/q2_gz_rules.cpp (gz.ai.rest's row) |
 
 ### What the maps place that the base game's maps never do
 

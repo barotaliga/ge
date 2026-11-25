@@ -27,6 +27,7 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/face_hit.hpp"
 #include "shooters_edge/client/q2_enhance_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -1181,6 +1182,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.q2_models_next = 0;
     s.q2_cables.clear();
     s.q2_lasers.clear();
+    s.q2_held.clear();
+    s.q2_nukes.clear();
   }
   for (; s.explosions_seen < l.explosions.size(); s.explosions_seen++) {
     const ge::camera::Vec3 at = engine_point(l.explosions[s.explosions_seen]);
@@ -1449,13 +1452,16 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const bool burst = e.code == -1;
         const ge::camera::Vec3 way = engine_point(e.way * 15);
         const double v[3] = {way.x, way.y, way.z};
-        if ((s.on.q2.no_particles & 16) != 0) break;  // Quake II's cl_disable_particles 16
+        // Quake II's cl_disable_particles 16 (the gekk's green blood is not its to leave out).
+        if ((s.on.q2.no_particles & 16) != 0 && e.code != 26) break;
         if (s.on.blood) {
           bleed_fx(l, s, e, p, eye_map, l.map ? floor_under(*l.map, e.at, eye_map) : -1e9, t, out);
         } else if (e.q2_specks > 0) {  // Quake II's puff of blood off the hit (q2_temp_fx.hpp)
+          // The gekk's green blood: one colour, close to the face, as a laser's sparks are laid.
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
-          fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
-                        &out.births);
+          const bool green = e.code == 26;
+          fx::q2_specks(p, off_face, e.q2_specks, e.colour, green ? 8 : 32, !green, s.seed++,
+                        s.palette, &out.births);
         } else if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t,
                                    out)) {
           fx::blood(p,
@@ -1548,6 +1554,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_named_fx(s, e, p, s.on.warps && near_warp(s.warps, e.at, t), t, out);
           break;
         }
+        if (s.on.hits && l.q2) {  // a mission pack's hit in its own colour (world_fx_q2.cpp)
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          const int code = q2_pack_te_code(e.name);
+          if (code != 0 && q2_enhance_pack_hit(s, code, p, off_face, t, out)) break;
+        }
+        if (l.q2 && q2_pack_point(s, e, p, t, out)) break;   // Ground Zero's (world_fx_q2.cpp)
         if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
@@ -1586,6 +1598,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         put(engine_point(e.end), to);
         // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
         if (q2_named_trail(s, e, from, to, t, out)) break;
+        if (l.q2 && s.on.beams && (e.name == "te_heatbeam" || e.name == "te_monster_heatbeam")) {
+          q2_enhance_heat_beam(s, e, t);  // a hot strip under ce_beams
+          break;
+        }
+        // Ground Zero's tesla bolts and heat beams, held by their sources (world_fx_q2.cpp).
+        if (l.q2 && q2_held_line(s, e, t)) break;
         // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
         if (l.q2 && !s.on.monsters && q2_cable(s, e, t)) break;
         // Quake II's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.

@@ -133,11 +133,12 @@ void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles*
 // sparks).
 void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
                bool vary, uint32_t seed, Palette palette, Particles* out, double fall = 80);
-// Quake II's blaster bolt's hit: 40 specks of palette 0xe0..0xe7 off the face along `normal` (map
-// units' axes), each 0..15 units out along it and -4..3 across, pushed off at 30 units/s with up to
-// 40 more on each axis, falling, living 0.5..0.8 s.
+// Quake II's blaster bolt's hit: 40 specks of palette `colour` + 0..7 (0xe0 the blaster's, 0xd0
+// the green blaster's, 0x6f a flechette's) off the face along `normal` (map units' axes), each
+// 0..15 units out along it and -4..3 across, pushed off at 30 units/s with up to 40 more on each
+// axis, falling, living 0.5..0.8 s.
 void q2_blaster_specks(const double at[3], const double normal[3], uint32_t seed, Palette palette,
-                       Particles* out);
+                       Particles* out, int colour = 0xe0);
 // Quake II's explosion's specks: 256 of palette `colour` + 0..7 (0xe0 a rocket's or a grenade's,
 // 0xd0 the BFG's big burst), each within -16..15 units of the point on every axis, flung at
 // -192..191 units/s on each axis and falling, living 0.625..1 s.
@@ -220,6 +221,23 @@ void q2_power_splash(const double at[3], double radius_u, uint32_t seed, Palette
 // The widow's beam-out, `ratio` (0..1) of its way through: 300 specks on a sphere of 45 × ratio
 // units round `at` in its four colours, drawn for one frame.
 void q2_beam_out(const double at[3], double ratio, uint32_t seed, Palette palette, Particles* out);
+// GROUND ZERO'S (map units, the game's own numbers):
+// - The disruptor's burst: 128 black specks within -16..15 units, flung at -128..127 units/s on
+//   each axis, falling, living 1.5..2 s.
+// - The A-M bomb's blast, `ratio` (0..1) of its second: 700 specks on a sphere of 200 × ratio units
+//   (palette 110, 112, 114 or 116), drawn for one frame.
+// - A monster's heat beam at its gun: 40 specks of palette 0xe0 on a sphere of 10 units, one frame.
+// - The player's own heat beam's rings: from `from` along `way` (a unit vector, map axes) for
+//   `length` units, a ring every 32 units of 20 specks at 18 degree steps in the plane of `right`
+//   and `up`, 1.5 units round (narrowing to a point over the first 10 units), the first `phase`
+//   (0..32) units from the start; palette 216..223 at half opacity, drawn for one frame.
+void q2_tracker_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_nuke_blast(const double at[3], double ratio, uint32_t seed, Palette palette,
+                   Particles* out);
+void q2_monster_beam_shell(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_heat_rings(const double from[3], const double way[3], const double right[3],
+                   const double up[3], double length, double phase, uint32_t seed, Palette palette,
+                   Particles* out);
 void q2_ion_trail(const double from[3], const double to[3], int& side, uint32_t seed,
                   Palette palette, Particles* out);
 inline constexpr int kSqTrailStart = 1024, kSqTrailFloor = 100, kSqTrailFade = 5;
