@@ -30,6 +30,16 @@
 //   four at once as a rocket does, turned -6.6, -3.3, 3.3 and 6.6 degrees in a deathmatch, or in
 //   single play with 80 and 40 units/s to each side; its plasma ball (progs/plasma.mdl) waits 0.1
 //   s 24 ahead and 16 up, then flies at 1250 along the aim.
+// - QUAKE II'S (off the rules our server runs, server/q2_combat.hpp's kSqWeapons and q2_fight's
+//   launch): a shot leaves from 8 under the eye, 24 ahead and 8 to the side for a blaster or a
+//   hyperblaster bolt, 8 and 8 for a grenade, a rocket or the BFG's ball (the side by the `hand`
+//   the player holds his gun in: right, left, or none when centred); a bolt flies at 1000, a rocket
+//   at 650, the ball at 400; a grenade at 600 along the view and 200 along its up, falls under the
+//   player's gravity, bounces keeping half its speed into a wall and rests on a floor once slower
+//   than 60. Its effect bits (the trail and the light: a bolt's 8, the hyperblaster's 64 on its
+//   glowing frames, a grenade's 32, a rocket's 16, the ball's 128) ride on it as the server's copy
+//   carries them. The server moves nothing ahead, so a stand-in shows at once and its copy, a round
+//   trip and up to a frame (0.1 s) behind, takes it on from its path.
 // - A WALL stops a nail, a bolt, a ball or a rocket: the stand-in goes (the server's hit is the
 //   one drawn).
 // - AT MOST `kOwnMissilesMost` fly; a new one replaces the one farthest from the player.
@@ -42,7 +52,7 @@
 //
 // ge:summary The player's own nails, rockets and grenades thrown ahead of the server, no GPU
 // ge:keywords own_missiles predicted-projectiles cl_predict_projectiles fake-missile nail rocket
-// ge:keywords grenade handover stand-in weapon-prediction
+// ge:keywords grenade handover stand-in weapon-prediction q2-own-missiles
 // ge:skill net shooter
 // ge:test tests/shooters_edge_own_missiles_test.cpp
 #pragma once
@@ -50,6 +60,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "brush/trace.hpp"
 #include "classic/weapon_predict.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/vec.hpp"
@@ -69,6 +80,11 @@ inline constexpr float kProxSpinDeg[3] = {100, 600, 100};
 inline constexpr float kMultiRocketYaw[4] = {-6.6f, -3.3f, 3.3f, 6.6f};
 inline constexpr float kMultiRocketSide[4] = {80, 40, -40, -80};
 inline constexpr float kGrenadeAheadU = 600, kGrenadeUpU = 200, kGrenadeSpinDeg = 300;
+inline constexpr float kQ2BoltSpeedU = 1000, kQ2RocketSpeedU = 650, kQ2BfgSpeedU = 400;
+inline constexpr float kQ2BoltAheadU = 24, kQ2MissileAheadU = 8, kQ2MissileSideU = 8;
+inline constexpr float kQ2EyeDropU = 8;          // the shot's start under the eye
+inline constexpr float kQ2RestSpeedU = 60;       // a grenade slower than this off a floor rests
+inline constexpr double kQ2FrameS = 0.1;         // the frame a Quake II server's copy may wait for
 inline constexpr float kGrenadeBounce = 1.5f;    // the share of its speed into a wall taken off
 inline constexpr float kOwnMissileHandU = 24;    // a server copy this near its path adopts one
 inline constexpr double kOwnMissileWaitS = 0.1;  // an unadopted one waits this past its copy's due
@@ -88,7 +104,11 @@ enum class OwnMissileKind : uint8_t {
   lava_nail,      // Dissolution of Eternity's lava nail (and the lava super nailgun's)
   multi_grenade,  // its multi grenade
   multi_rocket,   // one of its four multi rockets
-  plasma          // its plasma ball
+  plasma,         // its plasma ball
+  q2_bolt,        // Quake II's blaster and hyperblaster bolt
+  q2_grenade,     // its grenade launcher's grenade
+  q2_rocket,      // its rocket
+  q2_bfg          // its BFG's ball
 };
 
 // What a shot needs: its kind, the player's origin and view on its command, the nail's or the
@@ -102,6 +122,9 @@ struct OwnShot {
   double age_s = 0;
   int spread = 0;
   bool deathmatch = true;
+  // Quake II's: the eye's height over the origin, and the effect bits it flies with.
+  float view_height = 0;
+  int effects = 0;
 };
 
 struct OwnMissile {
@@ -109,7 +132,8 @@ struct OwnMissile {
   sh::Vec3f origin, velocity, angles;
   sh::Vec3f aim;       // the plasma ball's way once it goes
   double go_s = -1;    // the plasma ball waits still until then
-  bool stuck = false;  // a proximity grenade landed
+  bool stuck = false;  // a proximity grenade landed (or Quake II's came to rest)
+  int effects = 0;     // Quake II's effect bits, drawn as its copy's
   double at_s = 0;     // the time `origin` is for
   double show_s = 0, end_s = 0;
   int id = 0;
@@ -144,8 +168,11 @@ bool own_missile_fire(OwnMissiles& m, const OwnShot& shot, double now_s, double 
 
 // The stand-ins flown to `now_s` through `world` (hull 0 of the level's world; null: nothing
 // stops them) under `gravity` (units/s²); those past their end dropped (an adopted one's copy
-// hidden on, when it hit a wall first).
+// hidden on, when it hit a wall first). Quake II's level is its brushes (`brushes`: solid and
+// window contents stop a missile; null: nothing does).
 void own_missiles_step(OwnMissiles& m, const sh::Hull* world, float gravity, double now_s);
+void own_missiles_step_brushes(OwnMissiles& m, ge::brush::BrushTracer* brushes, float gravity,
+                               double now_s);
 
 // The server's missiles drawn in `s` adopt the stand-ins whose path they are on, and are hidden
 // while the stand-in flies (above); a stand-in whose copy is gone goes too.
