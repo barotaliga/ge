@@ -320,6 +320,8 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   double hint_check = -100;
   int hint_node = -1, hint_goal = -1;
   double hint_wait = 0;
+  // Ground Zero's target_anger: the entity it was set on (-1: none, or the anger spent).
+  int anger = -1;
 };
 
 // Ground Zero's bad area (q2_gz_tesla.cpp): the box round a tesla that hurt a monster, which
@@ -457,6 +459,10 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   // (`weaplast`) and the one held at the last frame's end, his chat's last ten times and the level
   // time his flood lock ends.
   bool god = false, notarget = false, noclip = false;
+  // Ground Zero's disguise (q2_gz.hpp): monsters take him for one of theirs; his shot unmasks him
+  // to their eyes till `violator_until` (level time).
+  bool disguised = false;
+  double violator_until = 0;
   bool skull = false;  // thrown apart, his head shows as the skull (else his own head)
   int last_weapon = -1, held_weapon = -1;
   double said_at[10] = {};
@@ -712,6 +718,7 @@ struct Q2Server : RulesCommon {
   int sight_entity = -1;
   int64_t sight_frame = -10;
   int sight_client = -1;
+  int gz_steam_id = 0;  // Ground Zero's lasting steam jets' next effect id (q2_gz_things.cpp)
   // The players' trail (single player and coop): 8 marks in a ring, one dropped where a player
   // stood last frame once he can no longer see the newest; `trail_head` the oldest. A monster that
   // lost sight of him follows the marks newer than its own last look (q2_monsters.cpp).

@@ -49,6 +49,8 @@ enum Class : uint8_t {
   kCrossTarget,
   kElevator,
   kSecretDoor,
+  kPlat2,  // Ground Zero's plat that goes either way (q2_gz_plat.cpp)
+  kPlat2Field,
 };
 
 // A mover's states: at rest at its first place, going to its second, at its second, coming back.
@@ -83,6 +85,9 @@ enum Act : uint8_t {
   kSecretBeside,
   kSecretHome,
   kSecretShut,
+  kPlat2Go,  // Ground Zero's plat2 (q2_gz_plat.cpp): off to its other end; there
+  kPlat2Arrive,
+  kSmartRise,  // Ground Zero's smart water (q2_gz_water.cpp): rising, steered each frame
 };
 
 struct Mover {
@@ -98,6 +103,8 @@ inline Class class_of_name(std::string_view c) {
       {"func_water", kDoor},  // a door of water
       {"func_button", kButton},
       {"func_plat", kPlat},
+      {"func_plat2", kPlat2},
+      {"plat2_field", kPlat2Field},
       {"func_train", kTrain},
       {"trigger_elevator", kElevator},
       {"misc_viper", kTrain},  // the fly-by ships run their path as a train

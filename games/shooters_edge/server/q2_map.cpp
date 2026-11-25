@@ -436,8 +436,11 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     else
       monster_damage(s, -2 - slot, -1, e.dmg, {});
   };
-  if (e.classname == "func_water") return;  // never blocked: it waits where it is
-  if (c == kRotating) {                     // crushes every blocked frame and never turns back
+  if (e.classname == "func_water") {  // never blocked: it waits where it is (smart water burns)
+    gz_smart_water_blocked(s, e, slot);
+    return;
+  }
+  if (c == kRotating) {  // crushes every blocked frame and never turns back
     if (e.dmg > 0) crush();
     return;
   }
@@ -449,6 +452,7 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     return;
   }
   gz_plat_blocked(s, e, slot);  // Ground Zero's: a dead body crushed first
+  if (c == kPlat2) return gz_plat2_blocked(s, e, slot);
   crush();
   if (c == kPlat) {
     if (e.state == kGoing)
@@ -513,6 +517,7 @@ void door_go_down(Q2Server& s, Q2Entity& e) {
 
 // A use of a door: the team opens (or, a toggle, closes when open or opening).
 void door_use(Q2Server& s, Q2Entity& e, int activator) {
+  if (gz_smart_water_use(s, e, activator)) return;  // Ground Zero's rising lava
   const int master = e.team_master >= 0 ? e.team_master : index_of(s, e);
   if (index_of(s, e) != master) return;  // a use on a slave does nothing
   const bool toggle = (e.spawnflags & 32) != 0;
@@ -663,6 +668,8 @@ void arrived(Q2Server& s, Q2Entity& e) {
       sound_at(s, row, e.origin, kPlatEnd, 1, kStatic);
       e.state = kAtFirst;
       return;
+    case kPlat2Arrive:
+      return gz_plat2_arrived(s, e);
     case kTrainCorner: {
       e.state = kAtSecond;
       if (!e.pathtarget.empty()) {
@@ -725,6 +732,8 @@ void think(Q2Server& s, Q2Entity& e) {
     case kPlatUp:
       if (e.state == kAtFirst) plat_go_up(s, e);
       return;
+    case kPlat2Go:
+      return gz_plat2_go(s, e);
     case kTrainFind: {
       const int c = corner_named(s, e.target);
       if (c < 0) {
@@ -898,6 +907,8 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
         plat.think_at = s.level_time + 1;  // held up while someone stands there
       return;
     }
+    case kPlat2Field:
+      return gz_plat2_touch(s, e, unpack(p.move.origin).z);
     case kRotating:  // touch pain while it spins
       if ((e.spawnflags & 16) == 0 || e.dmg <= 0) return;
       if (e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0) return;
@@ -918,6 +929,7 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
       button_press(s, e, slot);
       return;
     default:
+      gz_thing_touch(s, index_of(s, e), slot);  // Ground Zero's disguise
       return;
   }
 }
@@ -966,6 +978,8 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
     case kPlat:
       if (!e.moved && e.state == kGoing && e.arrive == kNoAct) plat_go_down(s, e);
       return;
+    case kPlat2:
+      return gz_plat2_use(s, e, activator);
     case kTrain:
       if (e.hidden && is_transport(e)) {  // already on its way: it shows itself where it is
         e.hidden = false;
@@ -1120,7 +1134,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
         q2_item_used(s, size_t(target));
         return;
       }
-      if (targets_use(s, target, activator)) return;
+      if (gz_thing_use(s, target, activator, other) || targets_use(s, target, activator)) return;
       monster_use(s, target, activator);
       return;
     case kHelp:  // the first or the second help message, and the news of it
@@ -1346,6 +1360,8 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       e.closed = e.origin;
       e.open = e.origin + e.dir * (span(e.dir) - e.lip);
       return;
+    case kPlat2:
+      return gz_plat2_spawn(s, e);
     case kPlat: {
       e.solid = true;
       e.speed = number(s, e, "speed", 200) * 0.1f;
@@ -1607,6 +1623,7 @@ void map_loops(Q2Server& s) {
         if (e.classname != "func_water" && e.sounds != 1) e.loop = sound_index(s, kDoorMove);
         break;
       case kPlat:
+      case kPlat2:
         sound_index(s, kPlatStart);
         sound_index(s, kPlatEnd);
         e.loop = sound_index(s, kPlatMove);
@@ -1643,6 +1660,7 @@ int loop_now(const Q2Entity& e, int i) {
     case kDoor:
     case kDoorRotating:
     case kPlat:
+    case kPlat2:
     case kTrain:
       if (e.team_master >= 0 && e.team_master != i) return 0;
       return e.arrive != kNoAct ? e.loop : 0;
@@ -1871,9 +1889,11 @@ void map_monster_touch(Q2Server& s, int entity) {
     const Class c = class_of(f);
     // The triggers a monster sets off: a trigger_multiple with MONSTER (1), facing its way when
     // it has one; a hurt; a push.
-    if (f.trigger && (c == kTriggerMultiple || c == kHurt || c == kPush)) {
+    if (f.trigger && (c == kTriggerMultiple || c == kHurt || c == kPush || c == kPlat2Field)) {
       if (!overlap(lo, hi, abs_min(f), abs_max(f))) continue;
-      if (c == kTriggerMultiple) {
+      if (c == kPlat2Field) {
+        gz_plat2_touch(s, f, b.origin.z);
+      } else if (c == kTriggerMultiple) {
         if ((f.spawnflags & 1) == 0) continue;
         if ((f.dir.x != 0 || f.dir.y != 0 || f.dir.z != 0) && sh::dot(facing, f.dir) < 0) continue;
         trigger_fire(s, f, -1);

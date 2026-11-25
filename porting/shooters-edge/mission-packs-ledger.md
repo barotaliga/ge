@@ -395,7 +395,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | gz.te.explosion1_np | an explosion with no specks (54) | done | 2 | client/q2_model_fx.hpp: the rocket's ball and light, no specks; rocklx1a; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
 | gz.te.flechette | a flechette's hit (55) | done | 1 | client/world_fx_q2.cpp: 40 specks of 0x6f.., the flare's skin 2 and a pale blue light; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
 | gz.dm | the fourteen deathmatch maps played by bots | missing | 2 |  |
-| gz.coop | co-op through the units (`info_player_coop_lava`) | missing | 2 |  |
+| gz.coop | co-op through the units (`info_player_coop_lava`) | done | 2 | server/q2_gz_things.cpp (the lava starts), server/q2_gz_rules.cpp (`coop_baseq2`, flag 4096 and the every-skill rule); the bosses' co-op health and helpers come with their monster rows |
 | gz.save | saves of the pack's campaign | done | 2 | server/q2_save.cpp chunk version 13: the mines', tesla's and disruptor's stages, double damage, the IR goggles, the chainfist's swing; tests/shooters_edge_q2_gz_test.cpp loads a game with mines in flight and stuck and plays it on bit for bit; `se-q2-save --mod=rogue` on rmine1 and rlava1 |
 | gz.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | gz.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the ETF rifle as rapid, the plasma beam (both names) as beam, the prox launcher as lobber, the disruptor as launcher, their ammunition beside them, double damage as damage; the chainfist, the tesla, the A-M bomb, the spheres, the decoy and the goggles drop (tests/shooters_edge_remix_test.cpp) |
@@ -436,7 +436,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | done | 2 | server/q2_gz_spheres.cpp (the chase in sight, the lurk where it lost him, 10 000 past armour, the 512 blast; the doppleganger's `gz_release_sphere`) |
 | gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | done | 2 | server/q2_gz_spheres.cpp (called by a blow leaving its owner under 25; Dissolution's runs in its own program, so nothing to lift) |
 | gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | done | 1 | server/q2_items.cpp (a key row) |
-| gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | missing | 1 | not in our rules |
+| gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | done | 1 | server/q2_items.hpp (a key row) |
 | gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.weapon_disintegrator | `weapon_disintegrator` | the disruptor: a slow bolt that tracks and disintegrates | 13 / 14 | done | 1 | server/q2_gz_weapons.cpp; left off unless `g_disruptor` |
 | gz.ent.weapon_etf_rifle | `weapon_etf_rifle` | the ETF rifle: fires flechettes | 18 / 25 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
@@ -469,16 +469,17 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.func_plat2 | `func_plat2` | a plat with more ways to move | 28 / 130 | missing | 1 | not in our rules |
+| gz.ent.func_plat2 | `func_plat2` | a plat with more ways to move | 28 / 130 | done | 1 | server/q2_gz_plat.cpp (called to either end, toggle, resting at the top, named, twice as quick in deathmatch; the bad area it lays for monsters and monsters riding it are not built) |
 | gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | done | 1 | server/q2_gz_ai.cpp (`gz_hint_spawn`, `gz_hints`: chains from each END node, up to 100, cut at a fork or a loop; taken after 5 s out of sight, at most every 10 s, from a node within 512 the monster sees to one within 512 its enemy sees; a node's `wait` held; off the path once it sees him); tests/shooters_edge_q2_gz_ai_test.cpp |
-| gz.ent.info_player_coop_lava | `info_player_coop_lava` | a co-op start used once the lava has risen | 1 / 26 | missing | 2 | not in our rules |
-| gz.ent.misc_nuke_core | `misc_nuke_core` | the reactor core of the finale | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.target_anger | `target_anger` | makes monsters angry at a target | 9 / 18 | missing | 2 | not in our rules |
-| gz.ent.target_blacklight | `target_blacklight` | a black light's look | 1 / 1 | missing | 3 | not in our rules |
-| gz.ent.target_killplayers | `target_killplayers` | kills every player (a failed objective) | 1 / 1 | missing | 2 | not in our rules |
-| gz.ent.target_orb | `target_orb` | an orb's look | 1 / 1 | missing | 3 | not in our rules |
-| gz.ent.target_steam | `target_steam` | a steam jet | 9 / 69 | missing | 2 | not in our rules |
-| gz.ent.trigger_disguise | `trigger_disguise` | gives the disguise: monsters take the player for one of them (the client's figure is done) | 2 / 2 | missing | 2 | not in our rules |
+| gz.ent.info_player_coop_lava | `info_player_coop_lava` | a co-op start used once the lava has risen | 1 / 26 | done | 2 | server/q2_gz_things.cpp `gz_lava_start` (rmine2, rmine2p), server/q2_campaign.cpp |
+| gz.ent.func_water_smart | `func_water` (flag 2) | smart water: the lava that rises after the lowest player once used | 1 / 8 | done | 1 | server/q2_gz_water.cpp (rises at the gap over `accel`, 5 to `speed`, stops at its `health` height, burns a blocker 100, fires its targets and opens its portals); tests/shooters_edge_q2_gz_things_test.cpp |
+| gz.ent.misc_nuke_core | `misc_nuke_core` | the reactor core of the finale | 1 / 1 | done | 1 | server/q2_gz_things.cpp |
+| gz.ent.target_anger | `target_anger` | makes monsters angry at a target | 9 / 18 | done | 2 | server/q2_gz_things.cpp; a point as a monster's foe in server/q2_monsters.cpp |
+| gz.ent.target_blacklight | `target_blacklight` | a black light's look | 1 / 1 | done | 3 | server/q2_gz_things.cpp |
+| gz.ent.target_killplayers | `target_killplayers` | kills every player (a failed objective) | 1 / 1 | done | 2 | server/q2_gz_things.cpp (players, then the monsters a player sees) |
+| gz.ent.target_orb | `target_orb` | an orb's look | 1 / 1 | done | 3 | server/q2_gz_things.cpp |
+| gz.ent.target_steam | `target_steam` | a steam jet | 9 / 69 | done | 2 | server/q2_gz_things.cpp; temporary entity 40 in server/q2_wire.cpp |
+| gz.ent.trigger_disguise | `trigger_disguise` | gives the disguise: monsters take the player for one of them (the client's figure is done) | 2 / 2 | done | 2 | server/q2_gz_things.cpp; the disguise in server/q2_monsters.cpp, q2_fight.cpp, the `disguise` command, saves v14 |
 
 ## Lift before port: what is shared
 

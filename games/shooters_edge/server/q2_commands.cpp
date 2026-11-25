@@ -676,6 +676,8 @@ bool commands_run(Q2Server& s, int slot, const std::string& line) {
     if (cheats_allowed(s, slot)) toggle(s, slot, p.notarget, "notarget");
   } else if (cmd == "noclip") {
     if (cheats_allowed(s, slot)) toggle(s, slot, p.noclip, "noclip");
+  } else if (cmd == "disguise" && s.opt.pack == Q2Pack::ground_zero) {
+    if (cheats_allowed(s, slot)) p.disguised = true;  // Ground Zero's, as its trigger gives it
   } else if (cmd == "teleport") {
     if (cheats_allowed(s, slot)) teleport(s, slot, w);
   } else if (cmd == "listentities") {

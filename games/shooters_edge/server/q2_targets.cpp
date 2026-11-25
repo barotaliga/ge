@@ -611,7 +611,9 @@ void turn_breach(Q2Server& s, int i) {
 }  // namespace
 
 bool targets_spawn(Q2Server& s, int i) {
-  if (reckoning_spawn(s, i) || gz_brain_spawn(s, i) || gz_hint_spawn(s, i)) return true;
+  if (reckoning_spawn(s, i) || gz_brain_spawn(s, i) || gz_hint_spawn(s, i) ||
+      gz_thing_spawn(s, i))
+    return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (k == kNone) return false;
@@ -1093,6 +1095,7 @@ void targets_frame(Q2Server& s) {
   reckoning_frame(s);
   gz_brains(s);
   gz_decoys_frame(s);
+  gz_things_frame(s);
   for (size_t n = 0; n < s.entities.size(); n++) {
     Q2Entity& e = s.entities[n];
     const int i = static_cast<int>(n);
@@ -1298,6 +1301,7 @@ void targets_turret(Q2Server& s, Q2Monster& m, int enemy) {
 void targets_rows(Q2Server& s) {
   reckoning_rows(s);
   gz_decoy_rows(s);
+  gz_things_rows(s);
   RulesWorld& w = s.world;
   for (size_t n = 0; n < s.entities.size(); n++) {
     const Q2Entity& e = s.entities[n];

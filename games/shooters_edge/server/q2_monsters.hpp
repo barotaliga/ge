@@ -67,6 +67,9 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
                     bool splash = false, const sh::Vec3f* point = nullptr);
 // Whether map entity `e` is a monster lasers do not hurt (the hornet: BFG beams, laser traps).
 bool monster_laser_proof(const Q2Server& s, int e);
+// Whether a monster may take player `slot` up as its enemy now: alive, playing, not under
+// `notarget`, and not in Ground Zero's disguise unless his shot just gave him away.
+bool monster_targetable(const Q2Server& s, int slot);
 // A use of map entity `e` (a monster waiting hidden appears). False when `e` is no monster.
 bool monster_use(Q2Server& s, int e, int activator);
 // Player `slot` made a noise a monster may hear (his weapon).

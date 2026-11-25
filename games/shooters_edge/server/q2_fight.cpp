@@ -1924,11 +1924,14 @@ void fight_gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t) { gib(s,
 
 // A player's noise the monsters hear (his shot, its impact), outside deathmatch.
 void monster_noise(Q2Server& s, int slot) {
+  if (slot >= 0 && slot < sh::kMaxClients && s.players[slot].disguised)
+    s.players[slot].violator_until = s.level_time + 0.5;  // Ground Zero's disguise: his shot shows
   monster_noise(s, slot, unpack(s.players[slot].move.origin), false);
 }
 
 void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
   if (slot < 0 || slot >= sh::kMaxClients || deathmatch(s) || s.players[slot].notarget) return;
+  if (s.players[slot].disguised) return;  // Ground Zero's disguise: his noises go unheeded
   Q2Player& p = s.players[slot];
   (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
   (impact ? p.impact_at : p.noise_at) = at;
