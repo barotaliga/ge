@@ -588,7 +588,9 @@ bool bench_end_report(ge::console::Console& c, const Timedemo& bench, const std:
                       const std::function<void(const std::string&)>& say) {
   // A run stopped before a frame was timed has no report, only its reason; playback times none.
   if (bench.paced) {
-    c.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
+    // Stopped by the player (another map, demo or server asked for): they know, nothing is said.
+    if (!by_player)
+      c.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
     return !by_player && !why.empty();
   }
   if (why.empty() || !bench.frame_s.empty()) {

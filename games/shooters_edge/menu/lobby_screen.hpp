@@ -1,6 +1,8 @@
 // THE LOBBY IN THE CLASSIC LOOK: the lobby (hud/lobby_panel.hpp's `LobbyView`) drawn in the
-// player's own pack's menu pictures (classic_art.hpp) when the packs carry them, on the classic
-// 320 x 200 screen scaled by a whole number and centred, as the main menu is. Two pictures:
+// player's own pack's menu pictures (classic_art.hpp) when the menu is drawn in them (Quake's
+// strips, or Quake II's letters with plain boxes for the pieces it has none of), on the classic
+// screen scaled by a whole number and centred: `lobby_scale`, or by the window a quarter smaller
+// than the menu. Two pictures:
 //
 // THE BANNER ON THE MAP (`draw_lobby_classic`), while the player warms up:
 // - a text box of the pack's box pieces at the top centre (y 4, 26 cells wide): the phase in the
@@ -23,12 +25,13 @@
 // more or less,
 //   ENTER start; or how many more players the match needs.
 //
-// The client draws these when the packs' menu art is loaded and the modern ones otherwise.
+// The client draws these when the menu is in the game's own look (menu_look) and the modern ones
+// otherwise.
 //
 // ge:summary The lobby drawn in the classic look: the banner on the map and the lobby's screen
 // ge:keywords lobby classic look warmup countdown roster text-box big-figures glyphs 320x200
 // ge:keywords draw_lobby_classic draw_lobby_page_classic lobby-screen team red blue ready host bot
-// ge:keywords pack menu-art frags
+// ge:keywords pack menu-art frags lobby_scale quake2-lobby
 // ge:skill ui
 // ge:test tests/shooters_edge_lobby_test.cpp
 #pragma once
@@ -46,6 +49,11 @@ void draw_lobby_classic(ge::ui::DrawList& dl, const ClassicArt& art,
 // The lobby's screen of `v` over a `width` x `height` frame, in `art`.
 void draw_lobby_page_classic(ge::ui::DrawList& dl, const ClassicArt& art,
                              const shooters_edge::hud::LobbyView& v, int width, int height);
+
+// The lobby in the look the menu is drawn in: the game's own (`classic`, in `art`) or the modern
+// one; `page` its screen, else the banner on the map.
+void draw_lobby_in(ge::ui::DrawList& dl, bool classic, const ClassicArt& art,
+                   const shooters_edge::hud::LobbyView& v, int width, int height, bool page);
 
 // How many rows each team's part of the screen's roster shows.
 int lobby_classic_rows();
