@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "core/output.hpp"
+#include "prof/zones.hpp"
 
 namespace ge::platform {
 
@@ -208,6 +209,7 @@ void pump(Window& window, InputSnapshot& in, Devices* devices, input::Queue* que
 void poll_input(Window& window, InputSnapshot& in) { pump(window, in, nullptr, nullptr); }
 
 void poll_input(Window& window, InputSnapshot& in, Devices& devices, input::Queue& queue) {
+  GE_ZONE("input");
   pump(window, in, &devices, &queue);
 }
 

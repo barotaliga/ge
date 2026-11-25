@@ -19,12 +19,14 @@
 // ge:keywords load-order startup-order search-order game-layout archives-over-loose pkz
 // ge:keywords pak-names underscore-off pack-order
 // ge:keywords load_order_of start-step defaults-in-packs root-archive q2game-kpf
+// ge:keywords new_game_map newgame-alias first-map
 // ge:skill classic shooter console vfs
 // ge:test tests/shooters_edge_install_configs_test.cpp
 #pragma once
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -65,5 +67,12 @@ struct LoadOrder {
 
 // The load order of the game whose content profile is `content` (Quake's for any other).
 const LoadOrder& load_order_of(const ge::classicenhance::Profile& content);
+
+// The map a game's own `newgame` starts on, read off a config's `newgame` alias: Quake II's
+// default.cfg (`alias newgame "killserver ; ... ; map *ntro.cin+base1"`) gives `base1`, and a
+// mission pack's own default.cfg, which wins on its folder's search path, names the pack's first
+// map. The level string's shows (`+` joined), its new-unit `*` and its spawn spot (`$...`) are
+// left off; "" when the text has no such alias.
+std::string new_game_map(std::string_view config);
 
 }  // namespace ge::classic::content

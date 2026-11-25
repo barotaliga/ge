@@ -9,6 +9,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "prof/zones.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooterbots/intercept.hpp"
@@ -437,6 +438,7 @@ void circle_keys(Bot& b, const Server& sv, const Edict& self, int me, float land
 }
 
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
+  GE_ZONE("bots");
   Bot& b = *static_cast<Bot*>(ctx);
   const int me = slot + 1;
   const Edict& self = sv.edicts[static_cast<size_t>(me)];
