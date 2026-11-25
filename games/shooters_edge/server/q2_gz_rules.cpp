@@ -13,6 +13,7 @@
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -38,6 +39,23 @@ void gz_cvars(Q2Server& s) {
        .flags = con::kServer | con::kServerInfo | con::kLatch,
        .help = "Whether a player killed from afar watches his hunter sphere chase his killer.",
        .values = "0: off; 1: on, unless players are forced to respawn (the default)"});
+  s.cvars.add({.name = "coop_baseq2",
+               .fallback = "0",
+               .flags = con::kServer | con::kLatch,
+               .help = "Whether co-op picks a map's entities by the base game's rules.",
+               .values = "0: the pack's, where some appear only in co-op and some never in it (the "
+                         "default); 1: the base game's, by skill alone"});
+}
+
+int gz_coop_left_out(const Q2Server& s, int flags) {
+  if (s.opt.pack != Q2Pack::ground_zero) return -1;
+  const auto* coop = s.cvars.find("coop");
+  if (coop == nullptr || !coop->on()) return -1;  // single player: the base game's rule
+  const auto* base = s.cvars.find("coop_baseq2");
+  if (base != nullptr && base->on()) return -1;
+  if ((flags & 4096) != 0) return 1;       // never in co-op
+  if ((flags & 0x700) == 0x700) return 0;  // in co-op only, at every skill
+  return -1;
 }
 
 std::string_view gz_classname(std::string_view classname) {
@@ -59,8 +77,10 @@ bool gz_left_out(const Q2Server& s, int item) {
   const auto* disruptor = s.cvars.find("g_disruptor");
   if ((name == "weapon_disintegrator" || name == "ammo_disruptor") &&
       (disruptor == nullptr || !disruptor->on()))
-    return true;  // every mode
-  if (!s.cvars.find("deathmatch")->on()) return false;
+    return true;                          // every mode
+  if (!s.cvars.find("deathmatch")->on())  // deathmatch's alone
+    return name == "ammo_nuke" || name == "item_doppleganger" || name == "item_sphere_hunter" ||
+           name == "item_sphere_vengeance";
   const int flags = s.cvars.find("dmflags")->integer();
   const bool sphere = name.starts_with("item_sphere_");
   return ((flags & 131072) != 0 && (name == "ammo_prox" || name == "ammo_tesla")) ||

@@ -198,8 +198,8 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23); re-run on the real pack 2026-11-23 (verification sweep): r1m1 loads and plays |
-| rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | a playthrough lab on the pack |
-| rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | verify | 1 | the base game's `b_` boxes load the same way |
+| rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | `labs se-q1-campaign --game=<dir> --mod=rogue --each=1 --episodes=start,r1m1,...` runs each map with its class census; r2m1 loads since a key's trailing spaces are dropped (its changelevel trigger spells `"map "`, plugins/progs/entity_text.cpp) |
+| rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | done |  | the census: the pack's boxes stand as models on 15 maps and are taken |
 | rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | done | 1 | net/qw_frame.cpp's `items_word` (`items2` from bit 23, in place of the runes), client/view.cpp's and client/timedemo.cpp's status; the se-client lab on r1m1; the word itself held by tests/shooters_edge_qw_server_test.cpp (the_items_stat_carries_items2_for_a_program_with_it_else_the_runes) |
 | rog1.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395); held by tests/shooters_edge_menu_test.cpp (episodes_for on the pack's maps) |
 | rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | done |  | menu/main_menu.cpp `teamplay_choices` (teamplay 3 to 6 offered when the packs hold r1m1); held by tests/shooters_edge_menu_test.cpp; facts in porting/shooters-edge/q1-qw-console-facts.md |
@@ -217,7 +217,7 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | rog1.dm | `ctf1` and the team modes played by bots | verify | 2 |  |
 | rog1.coop | co-op on the pack's program | verify | 2 |  |
 | rog1.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| rog1.remix | the pack's weapons and items as roles for remix | missing | 3 | plugins/classic/item_roles.hpp |
+| rog1.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: lava nails, multi rockets and plasma read as the ammunition of the same weapon; the shield, belt, sphere and random powerup have no part in another game and drop; held by tests/shooters_edge_remix_test.cpp |
 | rog1.ce | classic enhance's caches with the pack layered over the base packs | verify | 2 |  |
 
 ### What the maps place that the base game's maps never do
@@ -230,37 +230,37 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.dragon_corner | `dragon_corner` | a corner of the dragon's flight | 1 / 36 | verify | 1 | runs in the pack's program |
-| rog1.ent.info_overlord_destination | `info_overlord_destination` | a spot the Overlord teleports to | 4 / 25 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_dragon | `monster_dragon` | the dragon: flies a path of corners, breathes fire | 1 / 1 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_eel | `monster_eel` | the electric eel: swims and shocks | 6 / 58 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_lava_man | `monster_lava_man` | Hephaestus, the lava man: throws lava balls | 1 / 4 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_morph | `monster_morph` | the guardian that takes three looks | 3 / 3 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_mummy | `monster_mummy` | the mummy: a tougher zombie | 1 / 5 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_super_wrath | `monster_super_wrath` | the Overlord: a big wrath that teleports and throws seeking balls | 2 / 2 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_sword | `monster_sword` | the phantom swordsman: a knight statue come alive | 3 / 20 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_wrath | `monster_wrath` | the wrath: floats and throws seeking balls | 8 / 56 | verify | 1 | runs in the pack's program |
+| rog1.ent.dragon_corner | `dragon_corner` | a corner of the dragon's flight | 1 / 36 | done |  | runs in the pack's program; the census: the dragon on r2m8 flew its 36 corners |
+| rog1.ent.info_overlord_destination | `info_overlord_destination` | a spot the Overlord teleports to | 4 / 25 | verify | 1 | 25 markers kept (r1m7, r2m1, r2m4, r2m6); used only by a BossMode Overlord (spawnflag 2) teleporting and by the Guardian's copies on pain; not seen yet. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.monster_dragon | `monster_dragon` | the dragon: flies a path of corners, breathes fire | 1 / 1 | done |  | runs in the pack's program; the census (`se-q1-campaign --mod=rogue`, 2026-11-23): spawned on r2m8 and flew its corners |
+| rog1.ent.monster_eel | `monster_eel` | the electric eel: swims and shocks | 6 / 58 | done |  | runs in the pack's program; the census: 43 spawned on 6 maps, 9 swam |
+| rog1.ent.monster_lava_man | `monster_lava_man` | Hephaestus, the lava man: throws lava balls | 1 / 4 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m3: woken, it turned, animated, threw (made) and hurt |
+| rog1.ent.monster_morph | `monster_morph` | the guardian that takes three looks | 3 / 3 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m1, r2m4, r2m6: each woke, moved, turned, animated and hurt |
+| rog1.ent.monster_mummy | `monster_mummy` | the mummy: a tougher zombie | 1 / 5 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m4: all five moved, turned, animated and sounded |
+| rog1.ent.monster_super_wrath | `monster_super_wrath` | the Overlord: a big wrath that teleports and throws seeking balls | 2 / 2 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r1m7, r2m5: moved, turned, animated, made its shots and hurt |
+| rog1.ent.monster_sword | `monster_sword` | the phantom swordsman: a knight statue come alive | 3 / 20 | verify | 1 | 19 placed (r1m2, r1m7, r2m7); a normal monster that stands frozen for its "delay" (10 s) after it first sees its enemy, longer than the things lab's look; needs a playthrough. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.monster_wrath | `monster_wrath` | the wrath: floats and throws seeking balls | 8 / 56 | done |  | runs in the pack's program; the census: 32 spawned on 7 maps, 4 floated after the bot, 2 killed and removed |
 
 #### Weapons and items
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.item_lava_spikes | `item_lava_spikes` | lava nails: the nailguns fire lava spikes | 17 / 154 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_multi_rockets | `item_multi_rockets` | multi rockets: the launchers fire clusters | 17 / 103 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_plasma | `item_plasma` | plasma cells: the lightning gun becomes the plasma gun | 16 / 71 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_powerup_belt | `item_powerup_belt` | the anti-grav belt: low gravity for a while | 16 / 21 | verify | 1 | runs in the pack's program; HUD row rog1.hud.items; LIFT: the entity gravity factor |
-| rog1.ent.item_powerup_shield | `item_powerup_shield` | the power shield: takes damage in front | 17 / 24 | verify | 1 | runs in the pack's program; HUD row rog1.hud.items |
-| rog1.ent.item_random_powerup | `item_random_powerup` | a powerup chosen at random each time it comes back (deathmatch) | 8 / 12 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_sphere | `item_sphere` | the vengeance sphere: follows the player and strikes his killer | 15 / 27 | verify | 2 | runs in the pack's program; LIFT: Ground Zero's vengeance sphere |
-| rog1.ent.item_time_core | `item_time_core` | the time machine's core, carried to the finale | 1 / 1 | verify | 1 | runs in the pack's program |
-| rog1.ent.item_time_machine | `item_time_machine` | the time machine of the last level | 1 / 1 | verify | 1 | runs in the pack's program |
+| rog1.ent.item_lava_spikes | `item_lava_spikes` | lava nails: the nailguns fire lava spikes | 17 / 154 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 129 placed on 15 maps, 7 taken by the bot |
+| rog1.ent.item_multi_rockets | `item_multi_rockets` | multi rockets: the launchers fire clusters | 17 / 103 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 78 placed on 14 maps, 5 taken |
+| rog1.ent.item_plasma | `item_plasma` | plasma cells: the lightning gun becomes the plasma gun | 16 / 71 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 41 placed on 10 maps, 1 taken |
+| rog1.ent.item_powerup_belt | `item_powerup_belt` | the anti-grav belt: low gravity for a while | 16 / 21 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 7 placed on 6 maps (ctf1, r1m6, r1m7, r2m4, r2m6, r2m8), each taken on the touch and not shown again |
+| rog1.ent.item_powerup_shield | `item_powerup_shield` | the power shield: takes damage in front | 17 / 24 | done |  | runs in the pack's program; HUD row rog1.hud.items; the census: 13 placed on 11 maps, 1 taken |
+| rog1.ent.item_random_powerup | `item_random_powerup` | a powerup chosen at random each time it comes back (deathmatch) | 8 / 12 | verify | 2 | deathmatch only: removed at spawn in single player and co-op, as the things lab saw (none live on 17 maps); the pick of five wants a deathmatch look. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.item_sphere | `item_sphere` | the vengeance sphere: follows the player and strikes his killer | 15 / 27 | verify | 2 | deathmatch only: removed at spawn in single player and co-op, as the things lab saw (none live on 17 maps); the sphere's flight at a killer wants a deathmatch look. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.item_time_core | `item_time_core` | the time machine's core, carried to the finale | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: stands and turns |
+| rog1.ent.item_time_machine | `item_time_machine` | the time machine of the last level | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: stands and turns |
 
 #### Game modes
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | verify | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token) |
-| rog1.ent.func_ctf_wall | `func_ctf_wall` | a wall that stands only in some team modes | 14 / 185 | verify | 2 | runs in the pack's program |
+| rog1.ent.func_ctf_wall | `func_ctf_wall` | a wall that stands only in some team modes | 14 / 185 | verify | 2 | kept only at teamplay 4 to 6 (a plain solid wall), removed otherwise; single player (the things lab, r2m6) has none live; a CTF look still owed. Facts: porting/shooters-edge/q1-rogue-things.md. |
 | rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
 | rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
 | rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | verify | 2 | runs in the pack's program |
@@ -271,19 +271,19 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.buzzsaw | `buzzsaw` | a saw blade running a path | 2 / 17 | verify | 1 | runs in the pack's program |
-| rog1.ent.earthquake | `earthquake` | the earthquake a trigger starts | 2 / 2 | verify | 1 | runs in the pack's program; LIFT: one quake shake (hip.ent.func_earthquake) |
-| rog1.ent.func_elvtr_button | `func_elvtr_button` | an elevator's call button | 1 / 4 | verify | 1 | runs in the pack's program |
-| rog1.ent.func_new_plat | `func_new_plat` | a plat with more ways to move | 15 / 60 | verify | 1 | runs in the pack's program |
-| rog1.ent.info_notnull | `info_notnull` | a named point with no class of its own | 1 / 1 | verify | 2 | runs in the pack's program |
-| rog1.ent.light_candle | `light_candle` | a candle model with its light | 8 / 113 | verify | 3 | runs in the pack's program |
-| rog1.ent.light_lantern | `light_lantern` | a lantern model with its light | 1 / 13 | verify | 3 | runs in the pack's program |
-| rog1.ent.ltrail_end | `ltrail_end` | a lightning trail's last link | 11 / 44 | verify | 2 | runs in the pack's program |
-| rog1.ent.ltrail_relay | `ltrail_relay` | a lightning trail's middle link | 2 / 3 | verify | 2 | runs in the pack's program |
-| rog1.ent.ltrail_start | `ltrail_start` | a lightning trail's first link | 11 / 72 | verify | 2 | runs in the pack's program; LIFT: Quake's beam drawing |
-| rog1.ent.pendulum | `pendulum` | a swinging blade | 4 / 12 | verify | 1 | runs in the pack's program |
-| rog1.ent.trigger_earthquake | `trigger_earthquake` | starts the earthquake | 4 / 7 | verify | 1 | runs in the pack's program |
-| rog1.ent.trigger_earthquake_kill | `trigger_earthquake_kill` | stops the earthquake | 1 / 1 | verify | 2 | runs in the pack's program |
+| rog1.ent.buzzsaw | `buzzsaw` | a saw blade running a path | 2 / 17 | done |  | runs in the pack's program; the census: all 17 ran their paths |
+| rog1.ent.earthquake | `earthquake` | the earthquake a trigger starts | 2 / 2 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r1m4, r2m8: used, it sounds and removes itself |
+| rog1.ent.func_elvtr_button | `func_elvtr_button` | an elevator's call button | 1 / 4 | verify | 1 | r1m7: pressed only by a player's touch, moving a func_new_plat elevator by floors; the things lab touches triggers, not buttons. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.func_new_plat | `func_new_plat` | a plat with more ways to move | 15 / 60 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 60 on 15 maps: the used ones moved, sounded, made and hurt |
+| rog1.ent.info_notnull | `info_notnull` | a named point with no class of its own | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: a point the map names, kept |
+| rog1.ent.light_candle | `light_candle` | a candle model with its light | 8 / 113 | done |  | made static at spawn by the program, so no live entity is left to watch; drawn as a static model like the base game's torches. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.light_lantern | `light_lantern` | a lantern model with its light | 1 / 13 | done |  | made static at spawn by the program, so no live entity is left to watch; drawn as a static model like the base game's torches. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.ltrail_end | `ltrail_end` | a lightning trail's last link | 11 / 44 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 44 on 11 maps: the bolts made and hurting |
+| rog1.ent.ltrail_relay | `ltrail_relay` | a lightning trail's middle link | 2 / 3 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m1, r2m6: used, they sound, make the bolt, hurt and push |
+| rog1.ent.ltrail_start | `ltrail_start` | a lightning trail's first link | 11 / 72 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 72 on 11 maps: used, they sound and make their bolts, which hurt |
+| rog1.ent.pendulum | `pendulum` | a swinging blade | 4 / 12 | done |  | the things lab (17 maps, 2026-11-24): all 12 animated and sounded from the start; a pendulum swings by its model's frames, not by turning, and starts on its own unless spawnflag 8, as seen. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.trigger_earthquake | `trigger_earthquake` | starts the earthquake | 4 / 7 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 7 on 4 maps: touched, they sound, shake (push) and hurt |
+| rog1.ent.trigger_earthquake_kill | `trigger_earthquake_kill` | stops the earthquake | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: touched, it hurts |
 
 ## The Reckoning (Quake II, folder `xatrix`)
 
@@ -357,7 +357,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | --- | --- | --- | --- | --- |
 | gz.switch | the pack's rules behind one switch its profile sets, Quake II's own unchanged | done | 1 | server/q2_pack.hpp, server/q2_gz_rules.cpp: the folder `rogue` sets it; the cvars only under it |
 | gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | done | 1 | server/q2_gz_ai.cpp (section 1 of `gz-monsters.md`: the dodge, a high shot ducked and a low one side-stepped, by skill, the duck held by eta and 0.1 a skill below nightmare, the next no sooner than 0.5 s; walkers strafing four times in ten at 8 a frame, fliers six, the daedalus eight, never round a tesla; blind fire at the last sighting by the light soldier, gunner, maiden and tanks, rarer with each try; jumps down and up ledges; hint paths after 5 s out of sight; the medic's reach of 1024 (400 holding), the last two medics that gave up on a corpse, 10 s to raise it, a corpse too near torn apart, the raised out of the count; shots between the tanks, the medics, the turret or the raised start no fight, Jorg's and the Makron's do), server/q2_gz_base_monsters.cpp (the hover's and the others' section 2 changes); tests/shooters_edge_q2_gz_ai_test.cpp, tests/shooters_edge_q2_gz_base_monsters_test.cpp. Left in gz.ai.rest |
-| gz.ai.rest | the rest of the pack's shared monster changes: the co-op inhibit flags (the co-op filter, with the map things); the Makron's torso shell while a medic raises it | missing | 2 | plats ridden toward an enemy above or below, their bad area and the dead crushed under them in server/q2_gz_triggers.cpp (facts `gz-base6.md` § 7; tests/shooters_edge_q2_gz_triggers_test.cpp); the widow's power-up shells in server/q2_monster_rows.cpp (only she carries power-ups); a monster's rail held when its muzzle is inside a wall in server/q2_monster_shots.cpp; § 1.8's tesla in server/q2_gz_tesla.cpp (a tesla that hurt a monster marks its field for 30 s, monsters never step in and inside step only away; the monster turns on the tesla, a medic leaving its body, and fights it alone until it bursts, then goes back to the player it fought; its shots strike the tesla, the medic's bolt for 3; the tesla's health in server/q2_gz_weapons.cpp); facts `gz-monsters.md` § 1.4, 1.11 and 2. Done of § 2 in server/q2_gz_base_monsters.cpp: the soldiers' running fire and blind stand (spawn flag 8), the gunner's clear lob, the parasite's reach and its drain when blocked, the hover's flinch by skill, the maiden's `bitch2` model; the Makron's gibs already match (server/q2_gibs.cpp) |
+| gz.ai.rest | the rest of the pack's shared monster changes | done | 2 | the co-op spawn rule (4096 never in co-op, all three skill bits co-op only, `coop_baseq2`) in server/q2_gz_rules.cpp and server/q2_server.cpp; the Makron's torso red while a medic raises him in server/q2_monster_rows.cpp (tests/shooters_edge_q2_gz_triggers_test.cpp, tests/shooters_edge_q2_gz_bosses_test.cpp); plats ridden toward an enemy above or below, their bad area and the dead crushed under them in server/q2_gz_triggers.cpp (facts `gz-base6.md` § 7; tests/shooters_edge_q2_gz_triggers_test.cpp); the widow's power-up shells in server/q2_monster_rows.cpp (only she carries power-ups); a monster's rail held when its muzzle is inside a wall in server/q2_monster_shots.cpp; § 1.8's tesla in server/q2_gz_tesla.cpp (a tesla that hurt a monster marks its field for 30 s, monsters never step in and inside step only away; the monster turns on the tesla, a medic leaving its body, and fights it alone until it bursts, then goes back to the player it fought; its shots strike the tesla, the medic's bolt for 3; the tesla's health in server/q2_gz_weapons.cpp); facts `gz-monsters.md` § 1.4, 1.11 and 2. Done of § 2 in server/q2_gz_base_monsters.cpp: the soldiers' running fire and blind stand (spawn flag 8), the gunner's clear lob, the parasite's reach and its drain when blocked, the hover's flinch by skill, the maiden's `bitch2` model; the Makron's gibs already match (server/q2_gibs.cpp) |
 | gz.items_list | the item list grown by the pack's items, in its order | done | 1 | server/q2_bar.cpp (`kGroundZero`, 61 rows in the pack's order), server/q2_items.cpp |
 | gz.obits | the new weapons' and monsters' obituaries, word for word | done | 1 | server/q2_combat.cpp (`sq_obituary`): the six weapons and the A-M bomb; the monsters' with gz.ai |
 | gz.tesla | the tesla mine thrown from the inventory, its zaps | done | 1 | server/q2_gz_weapons.cpp; not yet shot down by damage (a partial: batch 2) |
@@ -412,7 +412,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | gz.base.func_plat | `func_plat` used by monsters; 100 crush to a dead blocker; the bad area while it rises | done | 2 | server/q2_gz_triggers.cpp (monsters ride toward an enemy; 100 crush to a dead blocker; the bad area while it rises) |
 | gz.base.misc_explobox | the barrel in liquids (no slime harm, no drowning) | done | 3 | server/q2_gz_triggers.cpp (burns in lava, splashes, no slime harm) |
 | gz.base.trigger_gravity | `trigger_gravity`'s TOGGLE and START_OFF; gravity as a fraction | done | 3 | server/q2_gz_triggers.cpp (TOGGLE, START_OFF, the fraction; the player's move takes it) |
-| gz.base.spawn_filter | co-op's "not in co-op" (4096) and the three skills at once | missing | 2 | the client UI rows thread's branch (`gz_coop_left_out`) |
+| gz.base.spawn_filter | co-op's "not in co-op" (4096) and the three skills at once | done | 2 | the co-op spawn rule in server/q2_gz_rules.cpp (gz.ai.rest's row) |
 
 ### What the maps place that the base game's maps never do
 
@@ -429,7 +429,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | gz.ent.ammo_nuke | `ammo_nuke` | the A-M bomb: thrown, a huge blast after a delay | 15 / 15 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.ammo_prox | `ammo_prox` | prox grenades | 32 / 179 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.ammo_tesla | `ammo_tesla` | the tesla mine: thrown, zaps whatever comes close | 32 / 114 | done | 1 | server/q2_items.cpp, server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
-| gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | missing | 2 | not in our rules; LIFT: Scourge of Armagon's decoy |
+| gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | done | 2 | server/q2_gz_decoy.cpp: set down 48 ahead where it fits over ground within 64, the player's figure standing and turning, 30 health and 30 s, a sphere at the one who wounded it; deathmatch only, one carried (tests/shooters_edge_q2_gz_decoy_test.cpp; facts `gz-weapons.md` § 15). Not drawn: the growth effect where it appears |
 | gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | done | 1 | server/q2_powers.cpp (`fight_multiplier`, the quad's timer lifted) |
 | gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | done | 2 | server/q2_powers.cpp, server/q2_server.cpp (the view bit) |
 | gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | done | 2 | server/q2_gz_spheres.cpp (the half before armour, the green bolt at the last attacker, the splash; one out at a time, the bar's timer); the second shell model not drawn |

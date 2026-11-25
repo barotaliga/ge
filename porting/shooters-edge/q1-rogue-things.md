@@ -1,0 +1,85 @@
+# Dissolution of Eternity: the placed things a scripted look saw do nothing
+
+The facts below were read from the pack's released game code (the GPL game code id Software published with the 2021 re-release of Quake) by a clean-room reader, 2026-11-24. WORKING AREA: deleted when porting ends. No code, no internal identifiers; tags say [read], [derived] or [open].
+
+What the look missed, in short: monster_sword is a normal monster that waits "delay" (10 s) after first sight; pendulums start on their own unless spawnflag 8 (and any spawnflags without 1 or 2 is a fatal error); elevator buttons only move a func_new_plat elevator; overlord markers serve only a BossMode Overlord (spawnflag 2) or the Guardian's copies; item_sphere and item_random_powerup exist only in deathmatch; candles and lanterns are static; func_ctf_wall exists only at teamplay 4, 5 or 6; the time machine needs 600 damage to start the ending.
+
+A monster "frame" below is one animation step; every monster step here lasts 0.1 s unless said otherwise [read].
+
+## 1. monster_sword (the Invisible Swordsman)
+
+- Spawns in single player and co-op; removed at spawn in deathmatch [read].
+- It is an ordinary walking monster, not a statue or prop: solid, step movement, box 32 by 32 by 64 units (16 each side, 24 below the origin, 40 above), health 150, counted in the level's monster total [read]. It draws the sword model; what the model itself shows was not read [open].
+- Asleep it stands still on one frame and looks for a target the way every standard monster does: by sight of a player, by hearing (a player's noise), by being hurt, or by being used (a trigger targeting it angers it at the activating player, unless that player is invisible, has notarget, or is not a player) [read]. It has no walk cycle: a path_corner target leaves it standing in place [derived].
+- Spawnflag 1 (Ambush) is the standard ambush flag: it then wakes only on sight, not on hearing [read: the flag is named in the editor note; derived: the standard monster code treats flag 1 that way]. No other spawnflag keeps it asleep [read].
+- Map key "delay": seconds it waits after it first acquires an enemy before it moves; default 10 [read]. During that wait it stays frozen on its standing frame and does nothing [read]. Being hurt during the wait ends the wait at once (0.1 s later it starts running) [read]. The wait happens only once; later re-acquisitions start running at once [derived].
+- Pain: the first hit after it is awake makes it run at once; after that it never reacts to pain again (no flinch) [read].
+- Awake: runs at 14 units per frame (140 units/s), and while running it carries a dim light (the standard dim-light effect) [read]. It has a melee attack only, no ranged attack [read].
+- The attack is ten frames (1 s): the sword swing sound on the first, charging forward 14 units per frame on frames 1 to 4 and 8 to 10, and a strike on each of frames 5, 6 and 7 [read]. Each strike hits its enemy only if the enemy is within 60 units of its origin, for a sum of three random numbers in 0 to 1 times 3, so 0 to 9 per strike, 4.5 on average, up to 27 per attack [read, derived].
+- Death: the light goes off; one of two death animations (even chance), 10 or 11 frames; it becomes non-solid on the third frame and plays an axe-hit sound at half volume on the seventh [read]. The obituary names the swordsman specially [read].
+
+## 2. pendulum
+
+- Spawns in every mode (no deathmatch removal) [read]. It is a model (the pendulum model), a touch trigger, not solid to movement and not damageable [read].
+- Spawnflags: 1 swings along the X axis, 2 along the Y axis, 8 waits to be triggered [read]. With no spawnflags at all it defaults to Y [read]. The angle key is ignored: facing is forced to 0 for Y and to 270 for X [read].
+- Edge case: any nonzero spawnflags without 1 or 2 (for example 8 alone, or 4, or only the skill-exclusion bits) stops the server with an "unimplemented pendulum type" error [derived]. The editor note lists its third checkbox as the trigger flag, which an editor writes as 4, but the code tests 8 [read]; a map that sets 4 with X or Y gets a pendulum that starts on its own [derived].
+- Start: without flag 8 it starts swinging "delay" seconds after spawn (default 1) [read]. With flag 8 it does nothing until used; each use starts it "delay" seconds later from the start of its cycle, so using it again while swinging restarts the cycle [read, derived]. Once started it swings forever; nothing stops it [derived].
+- Motion: thirteen model frames out and thirteen back, with a frame time of 0.17, 0.15, 0.13, 0.11, 0.09, 0.07 s down to 0.05 s at the bottom of the arc and back up symmetrically [read]. Each end frame is held twice (0.34 s at each end) [derived]. One full cycle (there and back) is 2.98 s; one pass from end to end about 1.49 s [derived].
+- Arc: the code moves a small hit box along with the frames. Its centre traces a circle of radius about 148 units around a pivot 88 units above the entity's origin: at each end the box is level with the pivot, 148 units to the side; at the bottom it is 148 units below the pivot [derived from the boxes]. So the blade swings through about 180 degrees, 90 to each side of straight down, in the vertical plane along the chosen axis [derived]. The box is 16 units thick across the swing and 56 to 80 units by 56 to 80 units in the plane [read]. Two frames on the way back have wider boxes than on the way out, by 10 and by 34 units on one side [read].
+- At spawn, before it starts, the box is the editor's 16 by 48 by 200 (100 above and below the origin) [read].
+- Sound: the swing sound at half volume twice a cycle (once each pass, near the bottom) [read].
+- Touch: a touching thing that has health of 1 or more and can take damage takes the "currentammo" key's damage (default 5) on every touch, with no rate limit; the hit sound plays at most once a second [read]. The victim's velocity is then set (not added): straight up to 200 units/s, and along the swing axis to 250 units/s; a blood spray is thrown [read].
+- Fling direction: one shared value for all pendulums records whether the last pendulum to pass an end was going out or coming back [read]. For X pendulums the push follows that direction; for Y pendulums it is the opposite sign [read, derived]. With several pendulums the direction comes from whichever reached an end last, and before any has, the sideways push is 0 [derived].
+
+## 3. func_elvtr_button
+
+- An elevator call button for func_new_plat with its ELEVATOR spawnflag (4) [read]. It is a brush button: it moves along its angle, fires its targets, waits, and returns [read].
+- Spawnflag 1 (ELVTR_DOWN) makes it a down button; without it, it is an up button [read].
+- Keys as a standard button: "angle" direction of travel; "speed" default 40; "wait" default 1 s (the note says -1 means never return) [read]; "lip" default 4 units left at the end of travel; "health" if set, the button is shot instead of touched and its health is restored for the next press; "sounds" 0 steam metal, 1 wooden clunk, 2 metallic click, 3 in-out [read]. The press sound plays at the start of the press [read].
+- Spawns in every mode [read]. Pressed by a player's touch only (not monsters), by being used, or by being killed when it has health [read]. A press while already moving in or held in is ignored [read]. If blocked while returning it simply stops trying [read].
+- Order: the button travels in; only when it arrives does it set the global "last button direction" to up or down, use its targets with the presser as activator, and switch to its pressed textures; after "wait" seconds it returns and shows its normal textures [read].
+- What the elevator does when used by a button [read, with derived consequences]:
+  - It ignores any use within 2 s of its last use or move start or stop [read].
+  - It ignores uses until some elevator button has finished a press at least once in the level (the shared direction starts unset) [read]. After that the direction stays set to the last button's, so another trigger targeting the elevator acts as that button would, measured from the triggering entity's height [derived].
+  - It compares the heights of its own centre and the button's centre. If the elevator is above the button, it goes down by the number of floors needed to reach the button (rounded up). If the button is more than one floor spacing above the elevator, it goes up by the whole number of floors between them (rounded down) [read]. These calls are not clamped to the elevator's floor range [derived].
+  - Otherwise (button at about the elevator's own level) a down button moves it one floor down if it is above floor 0, and an up button one floor up if it is below the top floor [read].
+- The elevator's own keys: "cnt" number of floors, "height" spacing between floors (all equal), speed default 150; spawnflag 8 (START_AT_TOP) says it is placed at the top floor; otherwise it is placed at the bottom floor [read]. There is no default for cnt in elevator mode: with cnt unset, an up button at its own level never moves it [derived]. With height unset it takes the plat's own height less 8 units [read]. Sounds key: 1 base fast, 2 chain slow (the default) [read]. If blocked, it turns round to the floor it last stopped at; it does no damage [read].
+
+## 4. info_overlord_destination
+
+- A marker with no model: it keeps its angles for later use and raises itself 27 units at spawn [read]. It stays in the level as an entity (not removed, not made static) and does nothing on its own [read].
+- Two monsters use the markers [read]:
+  - monster_super_wrath (the Overlord; removed in deathmatch; health 1000; flies), only when its spawnflag 2 (BossMode) is set. It may teleport at the end of each ranged attack (a 1.2 s sequence) and three frames into a pain animation. Each time, the chance is 75 percent [read]. Pain itself happens on only 20 percent of hits and at most once per 2 s [read].
+  - monster_morph (the Guardian; removed in deathmatch): at the end of a pain animation, and at skill 3 on half of all hits instead of pain animations, an original (not a copy) spawns a copy of itself at a marker, which rises 0.3 s later and counts as a new monster. An original stops making copies once it has made more than 1 plus the skill level [read, derived: at most 2 plus skill copies]. The copy takes the marker's angles [read].
+- Choosing a marker (both monsters) [read]: only markers with no monster, no player and no thinking entity within 64 units count. Measured from the first player in the level, the last such marker found that is more than 150 units away and lies within about 53 degrees of where that player faces (cosine 0.6) wins; if none does, the farthest one wins. With no free marker, nothing happens [read].
+- The Overlord's teleport: a teleport flash where it was, another 32 units ahead of the marker along the Overlord's facing, and anything at the marker is telefragged; it moves to the marker and leaves the ground [read]. Its powershield, which the editor note promises for BossMode, is not given in this release's code [read].
+
+## 5. item_sphere and item_random_powerup
+
+- Both are removed at spawn unless deathmatch is set: they never appear in single player or co-op (co-op is not deathmatch) [read].
+- item_sphere (the Vengeance Sphere): a player who touches it and does not already carry one gets a sphere that orbits 16 units out, 48 units above the player, for 30 s, with its sound every 4 s [read]. When the time runs out it is lost with a message [read]. If its owner dies while it lasts, it flies at the killer (a player, or the player who owns the killing projectile) at 650 units/s; on impact it does 1000 damage to the target and 300 radius damage to others, then explodes; if the killer is already dead it is lost with a message; if the killer was not a player it vanishes [read]. The item respawns after 180 s [read].
+- item_random_powerup: at spawn and at every respawn it picks one of five with equal chance: the power shield (30 s), the anti-grav belt (45 s, gravity quartered), the pentagram (30 s), the ring of shadows (30 s), or quad damage (30 s) [read]. It respawns 60 s after a shield or belt was taken and 30 s after one of the other three [read]. On respawn the model shown is the one saved at the previous pickup, which may not match the new pick [derived]. Its pickup fires the item's targets like any item [read].
+
+## 6. light_candle and light_lantern
+
+- Both are made static at spawn: no live entity remains [read]. They exist in every mode [read].
+- Each sets only its model (a candle model, a lantern model) [read]. The game code reads no light value: the editor note says default light 200 and style 0, which are for the map compiler's light tool, not the running game [read, derived].
+- Nothing animates them in the game code; whether the models themselves carry animated frames was not read [open].
+
+## 7. func_ctf_wall
+
+- Kept only when the teamplay setting is 4 (regular CTF), 5 (one-flag CTF) or 6 (three-team CTF); removed at spawn for any other teamplay value, in any mode [read].
+- Kept, it is simply a solid wall for everyone: solid brush, pushed by nothing, no team test, nothing ever moves or removes it [read]. The code reads teamplay from the setting itself at spawn [read].
+
+## 8. item_time_machine and item_time_core (the ending)
+
+- Both are removed at spawn in deathmatch; present in single player and co-op [read].
+- item_time_core: a decoration only. Its model spins 60 degrees/s about all three axes; it is not solid and cannot be touched, used or damaged [read]. At the ending it is blown up (a coloured explosion) and removed 0.1 s later [read].
+- item_time_machine: a flying, spinning (60 degrees/s yaw) damageable object with health 1600, a box 128 by 128 by 144 units hanging below its origin, flagged as a monster (so autoaim and monster checks treat it as one) but not counted in the monster total [read].
+  - When hurt: while above 1100 health at most once per 2 s, otherwise on every hit, a 40 percent chance of a delayed blast 0.2 to 0.5 s later at one of three spots on the machine [read]. Each blast fires the machine's own targets (on the map, for example, a shake), and fires them again 0.7 s later [read].
+  - Below 1500 health (first time) a chunk breaks off and falls and the machine shows its first damaged look; below 1250 it shows its second [read].
+  - Below 1000 health (so after 600 damage), or at 0, the ending starts: the machine stops reacting, and the next time a living player's per-frame update runs, the finale begins [read].
+- The finale in single player [read]: the view is locked (intermission never ends by itself); a cutscene starts; the player becomes an invisible camera at the entity named "cameraview" that keeps turning to follow an actor, a copy of the player model, at the player's spot. The actor runs (15 units per 0.1 s) to the entity named "point1" and on along its path until it reaches the one named "endpoint1"; if it is in lava it is put back at "point1". It then turns to the entity named "machine" and fires a rocket at the time machine, whose health is set to 1 so the hit (or failing that a timer 0.6 s later) makes it crash; the end text begins. 0.6 s after the shot the lightning trails ("ltrail_start" entities) are removed and the core blows up. After about 3 s more, the actor fires the targets named "timepod", runs to "point2" and on to "endpoint2", and 2 s after arriving teleports away. Missing "point1", "machine" or "point2" stops the server with an error; with no "cameraview" the co-op ending is used [read].
+- The crash [read]: the machine becomes non-solid and not damageable, falls at 50 units/s growing by 5 units/s every 0.1 s while tumbling, fires the targets named "timeramp", throws random explosions while falling, and makes a lava splash once it falls below height -20.
+- Co-op [read]: a 3 s intermission with the co-op end text, the core blown up, and the machine crashes.
+- Re-release only [read]: achievements for finishing the map (and at skill 3), and once the end text has finished, 5 s later the credits and a disconnect in single player, or a change to the start map in co-op. What the 1997 release does after the text was not read [open].
