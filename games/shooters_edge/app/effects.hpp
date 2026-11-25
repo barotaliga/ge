@@ -159,6 +159,19 @@ void q2_blast_specks(const double at[3], int colour, uint32_t seed, Palette pale
 //   colours (16, 104, 168, 144), living 0.625..1 s.
 void q2_bubbles(const double from[3], const double to[3], bool second, uint32_t seed,
                 Palette palette, Particles* out);
+// The same bubbles as the engine draws them under ce_bubbles (one bubble sprite each, as Quake's
+// bubbles are): each starts where `q2_bubbles` puts its speck and moves as it does, in MAP units
+// (z up) from `from` to `to`, with the same seed's numbers, so turning the switch changes the look
+// and never where or how many.
+struct RisingBubble {
+  double at[3] = {0, 0, 0};   // map units, where it starts
+  double vel[3] = {0, 0, 0};  // map units a second
+  double life = 1;            // s
+};
+void q2_rising_bubbles(const double from[3], const double to[3], bool second, uint32_t seed,
+                       std::vector<RisingBubble>* out);
+// Where `b` is `age` s after it started (map units).
+void rising_bubble_at(const RisingBubble& b, double age, double out[3]);
 void q2_force_wall(const double from[3], const double to[3], int colour, uint32_t seed,
                    Palette palette, Particles* out);
 void q2_steam(const double at[3], const double jet[3], int count, int colour, double fall,

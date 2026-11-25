@@ -16,8 +16,10 @@
 // (the press to its spin up heard, to its loop on) and a hand grenade held 0.5 s (the press to the
 // pin heard, the letting go to the throw heard), off and on. A third, at the first latency in a
 // hall with the launchers: the blaster's, the grenade launcher's, the rocket launcher's and the
-// hyperblaster's shot, the press to the missile drawn, off and on (the stand-in thrown ahead,
-// client/own_missiles.hpp), and how many stand-ins the server's copies took on.
+// hyperblaster's shot (a press of 0.2 s in every 1.6 s) and a hand grenade's throw (held 0.5 s in
+// every 4.5 s, timed from letting go), the press to the missile
+// drawn, off and on (the stand-in thrown ahead, client/own_missiles.hpp), and how many stand-ins
+// the server's copies took on.
 //
 // ge:summary Lab: Quake II's joined window's own shots predicted: press to shot heard, off and on
 // ge:keywords lab se-q2-weapon-predict weapon-prediction cl_nopred_weapon fire-delay latency q2
@@ -395,13 +397,16 @@ int missiles_drawn(const dc::DemoState& d) {
     if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= d.models.size()) continue;
     const std::string& name = d.models[static_cast<size_t>(e.model)];
     if (name == "models/objects/laser/tris.md2" || name == "models/objects/grenade/tris.md2" ||
-        name == "models/objects/rocket/tris.md2")
+        name == "models/objects/grenade2/tris.md2" || name == "models/objects/rocket/tris.md2")
       n++;
   }
   return n;
 }
 
-Missiles run_missiles(int key, double latency_ms, bool on, int fps, int cues) {
+// `hold_s` the press held, `cycle_s` the time from a press to the next; `from_release`: timed from
+// letting go (a hand grenade is thrown then).
+Missiles run_missiles(int key, double latency_ms, bool on, int fps, int cues, double hold_s,
+                      double cycle_s, bool from_release) {
   Missiles out;
   Session s;
   std::string error;
@@ -419,7 +424,7 @@ Missiles run_missiles(int key, double latency_ms, bool on, int fps, int cues) {
   const dc::OwnMissiles& m = s.remote.missiles;
   const int thrown = m.thrown, handed = m.handed, ended = m.ended, walled = m.walled;
   const dc::DemoState& d = s.remote.demo.state;
-  const int cycle = static_cast<int>(1.6 * fps), held = static_cast<int>(0.2 * fps);
+  const int cycle = static_cast<int>(cycle_s * fps), held = static_cast<int>(hold_s * fps);
   int cue_at = 0, before = missiles_drawn(d);
   bool seen = false;
   for (int i = 0; i < cycle * cues; i++) {
@@ -433,7 +438,7 @@ Missiles run_missiles(int key, double latency_ms, bool on, int fps, int cues) {
     const int now = missiles_drawn(d);
     if (now > before && !seen) {
       seen = true;
-      out.first_ms += static_cast<double>(i - cue_at) * 1000.0 / fps;
+      out.first_ms += static_cast<double>(i - cue_at - (from_release ? held : 0)) * 1000.0 / fps;
       out.seen++;
     }
     before = now;
@@ -620,18 +625,25 @@ void run(gl::Lab& lab) {
   // The missiles thrown ahead of the server (client/own_missiles.hpp), at the first latency.
   gl::LabTable flying{
       "the player's own missiles at " + to_fixed(ms, 0) +
-          " ms each way: a press of 0.2 s in every 1.6 s, off and on",
+          " ms each way: a press of 0.2 s in every 1.6 s (the hand grenade: held 0.5 s in every "
+          "4.5 s, timed from letting go), off and on",
       {"weapon", "weapon prediction", "press to the missile drawn (ms)", "seen", "thrown ahead",
        "taken on by the server's copy", "ended with no copy", "stopped by a wall"},
       {}};
   struct {
     int key;
     const char* name;
-  } guns[] = {{1, "blaster"}, {6, "grenade-launcher"}, {7, "rocket-launcher"}, {8, "hyperblaster"}};
+    double hold_s, cycle_s;
+  } guns[] = {{1, "blaster", 0.2, 1.6},
+              {6, "grenade-launcher", 0.2, 1.6},
+              {7, "rocket-launcher", 0.2, 1.6},
+              {8, "hyperblaster", 0.2, 1.6},
+              {11, "hand-grenade", 0.5, 4.5}};
   for (const auto& g : guns) {
     Missiles runs[2];
     for (const bool on : {false, true}) {
-      const Missiles r = run_missiles(g.key, ms, on, fps, presses);
+      const Missiles r =
+          run_missiles(g.key, ms, on, fps, presses, g.hold_s, g.cycle_s, g.key == 11);
       runs[on ? 1 : 0] = r;
       if (!r.ok || r.seen == 0) {
         lab.fail(std::string("se-q2-weapon-predict: the ") + g.name + (on ? " on" : " off") +

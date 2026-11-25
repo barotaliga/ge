@@ -94,13 +94,14 @@ struct Q2HandRun {
 // none); the level time and the server frame it is sent with (a frame's own step: that frame; a
 // move's: the frame after the one it falls in); the weapon that stepped.
 struct Q2HandShot {
-  bool shot = false;
-  bool quiet = false;
+  double at = 0;
   int flash = -1;
   int sound = -1;
   int weapon = 0;
-  double at = 0;
+  float speed = 0;  // the hand grenade's throw, units/s (0: none, or it went off in the hand)
   int32_t frame = 0;
+  bool shot = false;
+  bool quiet = false;
 };
 // The run over one move the server runs at level time `at`, attack `attack`: the frames that start
 // by then stepped first, then the move's own step; its shots written to `out` (at most `room`),
@@ -171,6 +172,7 @@ struct Q2Weapon {
   struct Fired {
     uint32_t move = 0;
     int weapon = 0, frame = 0;
+    float speed = 0;  // the hand grenade's throw (Q2HandShot's)
     double age_s = 0;
   };
   std::vector<Fired> fired;

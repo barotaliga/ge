@@ -25,6 +25,8 @@
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/face_hit.hpp"
+#include "shooters_edge/client/q2_enhance_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -1200,7 +1202,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (!against) against = l.map && surface_near(*l.map, boom, normal, &off);
       const size_t first = s.blasts.size();
       const size_t thrown = out.births.size();
-      fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
+      fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births,
+                l.q2 ? q2_blast_of(code) : fx::BlastOf::common);
       if (no_specks) out.births.resize(thrown);
       // What it throws that falls meets what the frame draws (the pool collides); one flung out of
       // the view has the floor under the blast to come down on, and hops there.
@@ -1402,7 +1405,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                  (h >> 8) % 628 / 100.0, h >> 24, t);
           }
         }
-        if (s.on.hits) {
+        if (s.on.hits && l.q2 && q2_enhance_pack_hit(s, e.code, p, normal, t, out)) {
+          // a mission pack's hit in its own colour (world_fx_q2.cpp)
+        } else if (s.on.hits) {
           // A gunshot's count is its pellets (a match's); each its own hit.
           fx::WallHit w;
           for (int k = 0; k < 3; ++k) {
@@ -1483,6 +1488,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_laser(s, e, t);
           break;
         }
+        if (l.q2 && s.on.beams && (e.code == 38 || e.code == 39)) {  // a heat beam: a hot strip
+          q2_enhance_heat_beam(s, e, t);
+          break;
+        }
         double normal[3], dir[3];
         face(e.at, normal, dir);
         const ge::camera::Vec3 root = engine_point(e.at);
@@ -1543,7 +1552,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_named_fx(s, e, p, s.on.warps && near_warp(s.warps, e.at, t), t, out);
           break;
         }
-        if (l.q2 && q2_pack_point(s, e, p, t, out)) break;   // Ground Zero's (world_fx_q2.cpp)
+        if (s.on.hits && l.q2) {  // a mission pack's hit in its own colour (world_fx_q2.cpp)
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          const int code = q2_pack_te_code(e.name);
+          if (code != 0 && q2_enhance_pack_hit(s, code, p, off_face, t, out)) break;
+        }
+        if (l.q2 && q2_pack_point(s, e, p, t, out)) break;  // Ground Zero's (world_fx_q2.cpp)
         if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
@@ -1581,7 +1595,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         put(engine_point(e.at), from);
         put(engine_point(e.end), to);
         // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
-        if (q2_named_trail(s, e, from, to, out)) break;
+        if (q2_named_trail(s, e, from, to, t, out)) break;
+        if (l.q2 && s.on.beams && (e.name == "te_heatbeam" || e.name == "te_monster_heatbeam")) {
+          q2_enhance_heat_beam(s, e, t);  // a hot strip under ce_beams
+          break;
+        }
         // Ground Zero's tesla bolts and heat beams, held by their sources (world_fx_q2.cpp).
         if (l.q2 && q2_held_line(s, e, t)) break;
         // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
@@ -1830,6 +1848,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   }
   q2_draw_model_fx(s, l.effect_models, l.me, l.own > 0 ? l.me.entity : 0, t, out);
   step_cases(l, s, t, dt, out);  // the guns' spent cases (ce_shells)
+  q2_place_bubbles(s, l.effect_models, t, out);
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.

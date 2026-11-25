@@ -133,6 +133,8 @@ std::vector<std::string> spawn_argv(const SpawnAsk& ask) {
   // The console a launcher writes to later (hosted_command).
   if (!ask.state.empty())
     argv.push_back("--commands=" + fs::absolute(commands_path(ask.state, ask.port)).string());
+  if (ask.open_port) argv.insert(argv.end(), {"+set", "sv_open_port", "1"});
+  if (!ask.gateway.empty()) argv.insert(argv.end(), {"+set", "sv_gateway", ask.gateway});
   argv.insert(argv.end(), ask.extra.begin(), ask.extra.end());
   // The cfg handed over runs after the flags, as the command line's last word.
   if (!ask.cfg.empty()) {
