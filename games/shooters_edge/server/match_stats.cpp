@@ -270,4 +270,66 @@ std::vector<std::string> stats_top_lines(const StatsGame& g, const ge::net::Matc
   return out;
 }
 
+bool stats_words(const StatsGame& g, const std::string& line, const StatsAsk& ask,
+                 std::string& out) {
+  const size_t sp = line.find(' ');
+  const std::string word = line.substr(0, sp);
+  const std::string rest = sp == std::string::npos ? std::string() : line.substr(sp + 1);
+  const bool last = word == "laststats" || word == "oldstats" || word == "lastscores";
+  if (word != "stats" && word != "teamstats" && !last) return false;
+  const bool old = last || ask.now == nullptr;  // between matches, the last one's
+  if (old && ask.last == nullptr) {
+    out = "There are no stats yet: no match has been played.";
+    return true;
+  }
+  const ge::net::MatchReport& r = old ? *ask.last : *ask.now;
+  const auto dmg = [&](const ge::net::ReportPlayer& p, StatRest k) -> int64_t {
+    const auto c = static_cast<size_t>(stat_rest(g, k));
+    return c < p.columns.size() ? p.columns[c] : 0;
+  };
+  if (word == "teamstats") {
+    std::vector<std::string> teams = ask.teams;
+    if (teams.empty())
+      for (const ge::net::ReportPlayer& p : r.players)
+        if (!p.team.empty() && std::find(teams.begin(), teams.end(), p.team) == teams.end())
+          teams.push_back(p.team);
+    out.clear();
+    for (const std::string& team : teams) {
+      int64_t kills = 0, deaths = 0, dealt = 0, received = 0;
+      for (const ge::net::ReportPlayer& p : r.players) {
+        if (p.team != team) continue;
+        kills += p.frags + p.suicides + p.team_kills;
+        deaths += p.deaths;
+        dealt += dmg(p, kStatDmgGiven);
+        received += dmg(p, kStatDmgTaken);
+      }
+      if (!out.empty()) out += "\n";
+      out += "Team '" + team + "': kills " + std::to_string(kills) + ", deaths " +
+             std::to_string(deaths) + ", damage dealt " + std::to_string(dealt) + ", received " +
+             std::to_string(received);
+    }
+    if (out.empty()) out = "There are no teams in those stats.";
+    return true;
+  }
+  const std::string& of = rest.empty() ? ask.me : rest;
+  const ge::net::ReportPlayer* p = nullptr;
+  for (const ge::net::ReportPlayer& q : r.players)
+    if (q.name == of) p = &q;
+  if (p == nullptr) {
+    const bool known =
+        of == ask.me || std::find(ask.present.begin(), ask.present.end(), of) != ask.present.end();
+    out = known ? "Nothing counted yet for " + of + "."
+                : "There is no player " + of + " in those stats.";
+    return true;
+  }
+  if (!old && of != ask.me && !ask.my_team.empty() && !p->team.empty() && p->team != ask.my_team) {
+    out = "The other team's stats are shown once the match is over.";
+    return true;
+  }
+  out.clear();
+  for (const std::string& said : stats_player_lines(g, r, *p)) out += said + "\n";
+  if (out.empty()) out = "Nothing counted yet for " + of + ".";
+  return true;
+}
+
 }  // namespace shooters_edge::server

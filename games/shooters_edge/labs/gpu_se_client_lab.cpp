@@ -81,6 +81,7 @@
 #include "console/ruleset.hpp"
 #include "core/math.hpp"
 #include "core/num_text.hpp"
+#include "detail/debris.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/chart.hpp"
@@ -573,6 +574,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     lab.note("the mod's game library " + lib.filename().string() + " plays the match");
   }
   lo.native_library = &library;
+  // `--lobby=1`: a deathmatch lobby, as `sv_lobby 1` starts one, so `--say=addbot` seats bots.
+  lo.lobby = lab.arg("lobby") == "1";
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
   // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.
@@ -1042,6 +1045,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       const int fire_film = static_cast<int>(lab.arg_num("fire-film"));
       std::vector<gl::Picture> shot_film;
       std::vector<std::string> shot_names;
+      size_t cases_most = 0;  // the most spent cases out at once during the film (anyone's)
       // The film's hand throws its spent cases as the window's does (ce_shells, the enhanced look).
       cl::HeldFire held_fire;
       if (fire_film > 0 && in_hand && held.hand.at_eye) {
@@ -1059,13 +1063,20 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
         cl::listen_frame(l, cmd);
         t += 0.013;
         cl::frame_view(l, shown, 1, t, 0.013);
-        if (fire_film > 0) fx_state.on = cl::fx_switches(looks[1]);
+        if (fire_film > 0) {
+          // The enhanced look's switches, and its models: whose flash throws a case (a soldier's
+          // gun, another player's shotgun) is read off the drawn model's kind.
+          fx_state.on = cl::fx_switches(looks[1]);
+          fx_state.models = &cl::world_models(*world[1]);
+        }
         cl::step_fx(l, shown, fx_state, t, 0.013, fx);
         if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
         if (fire_film > 0 && in_hand) {
           cl::fire_held(held_fire, hand, fx_state.on.muzzles, t, fx);
           cl::held_cases(fx_state.cases, held_fire, hand, fx_state.on.shells, t);
         }
+        if (fire_film > 0)
+          cases_most = std::max(cases_most, ge::detail::debris_count(fx_state.cases.pool));
         // --fire-film: the shot in the enhanced look, a frame every other host frame (1/38 s):
         // the flash, the kick, a spent case thrown out and landing.
         if (i < fire_film && i % 2 == 0) {
@@ -1081,6 +1092,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
         // --fire-after frames on (the default: the smoke settled, the gibs down).
         if (i == fire + static_cast<int>(lab.arg_num("fire-after"))) shoot("-fired");
       }
+      if (fire_film > 0)
+        lab.metric("fire.cases_most_" + std::to_string(v), static_cast<double>(cases_most), "count",
+                   gl::Det::measured);
       if (!shot_film.empty()) {
         std::vector<gl::Picture> picks;
         std::vector<std::string> pick_names;
@@ -1434,6 +1448,9 @@ const gl::LabSpec kSpec{
       "feed and the caption"},
      {"botinfo", "",
       "with --say=addbot: user info keys on every player but you, ';' between (`model cyborg`)"},
+     {"lobby", "0",
+      "with --game: 1 runs the deathmatch with a lobby (sv_lobby), where `--say=addbot` seats bots "
+      "who fight in the warmup"},
      {"server", "",
       "with --game: the server's lines before the map starts, ';' between (`coop 1`: a coop "
       "game, where `--say=addbot` seats a companion)"}},

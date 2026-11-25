@@ -759,7 +759,9 @@ bool teleporter_in_game(const ge::shooterbots::BotView& s, const ge::shooter::Ma
     if (d.free) continue;
     any = true;
     if (box.ok && near(d.absmin, box.mins, 2) && near(d.absmax, box.maxs, 2)) return true;
-    if (!model && org && near(d.origin, o, 1)) return true;
+    // A pad's own row, not a monster or player standing on its centre (rmine1's soldier).
+    if (!model && org && d.health <= 0 && d.solid != sh::kSolidSlidebox && near(d.origin, o, 1))
+      return true;
   }
   return !any || (model && !box.ok);  // nothing to tell by: it counts
 }

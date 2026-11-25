@@ -234,4 +234,31 @@ bool tally_end(MatchTally& t, const sv::RulesWorld& w, const TallyFacts& facts,
   return true;
 }
 
+bool tally_so_far(const MatchTally& t, double now, bool teams, gn::MatchReport& out) {
+  if (!t.counting || t.ended) return false;
+  out = {};
+  for (int k = 0; k < kMatchStats; k++) out.columns.emplace_back(stat_name(k));
+  for (const TallySeat& s : t.left) out.players.push_back(player_of(s, teams, now, true));
+  for (const TallySeat& s : t.seats)
+    if (s.on) out.players.push_back(player_of(s, teams, now, true));
+  return true;
+}
+
+bool qw_stats_words(const MatchTally& tally, const gn::MatchReport& last, const sv::RulesWorld& w,
+                    int slot, bool teams, const std::string& line, std::string& out) {
+  if (slot < 0 || slot >= ge::shooter::kMaxClients) return false;
+  gn::MatchReport now;
+  sv::StatsAsk ask;
+  if (tally_so_far(tally, w.time, teams, now)) ask.now = &now;
+  if (!last.players.empty()) ask.last = &last;
+  const sv::WorldClient& me = w.clients[static_cast<size_t>(slot)];
+  ask.me = me.name;
+  if (teams) ask.my_team = info(me, "team");
+  for (const sv::WorldClient& c : w.clients)
+    if (c.active && !c.spectator) ask.present.push_back(c.name);
+  if (!sv::stats_words(qw_stats_game(), line, ask, out)) return false;
+  while (out.ends_with('\n')) out.pop_back();
+  return true;
+}
+
 }  // namespace shooters_edge::net

@@ -36,10 +36,12 @@
 //   the player holds his gun in: right, left, or none when centred); a bolt flies at 1000, a rocket
 //   at 650, the ball at 400; a grenade at 600 along the view and 200 along its up, falls under the
 //   player's gravity, bounces keeping half its speed into a wall and rests on a floor once slower
-//   than 60. Its effect bits (the trail and the light: a bolt's 8, the hyperblaster's 64 on its
-//   glowing frames, a grenade's 32, a rocket's 16, the ball's 128) ride on it as the server's copy
-//   carries them. The server moves nothing ahead, so a stand-in shows at once and its copy, a round
-//   trip and up to a frame (0.1 s) behind, takes it on from its path.
+//   than 60. A hand grenade leaves as a grenade does, at the speed its hold gave it (400 to 800)
+//   along the view and 200 along its up, and falls as the launcher's. Its effect bits (the trail
+//   and the light: a bolt's 8, the hyperblaster's 64 on its glowing frames, a grenade's 32, a
+//   rocket's 16, the ball's 128) ride on it as the server's copy carries them. The server moves
+//   nothing ahead, so a stand-in shows at once and its copy, a round trip and up to a frame (0.1 s)
+//   behind, takes it on from its path.
 // - A WALL stops a nail, a bolt, a ball or a rocket: the stand-in goes (the server's hit is the
 //   one drawn).
 // - AT MOST `kOwnMissilesMost` fly; a new one replaces the one farthest from the player.
@@ -99,16 +101,17 @@ enum class OwnMissileKind : uint8_t {
   super_nail,
   rocket,
   grenade,
-  laser,          // Scourge of Armagon's laser bolt
-  prox,           // its proximity grenade
-  lava_nail,      // Dissolution of Eternity's lava nail (and the lava super nailgun's)
-  multi_grenade,  // its multi grenade
-  multi_rocket,   // one of its four multi rockets
-  plasma,         // its plasma ball
-  q2_bolt,        // Quake II's blaster and hyperblaster bolt
-  q2_grenade,     // its grenade launcher's grenade
-  q2_rocket,      // its rocket
-  q2_bfg          // its BFG's ball
+  laser,           // Scourge of Armagon's laser bolt
+  prox,            // its proximity grenade
+  lava_nail,       // Dissolution of Eternity's lava nail (and the lava super nailgun's)
+  multi_grenade,   // its multi grenade
+  multi_rocket,    // one of its four multi rockets
+  plasma,          // its plasma ball
+  q2_bolt,         // Quake II's blaster and hyperblaster bolt
+  q2_grenade,      // its grenade launcher's grenade
+  q2_rocket,       // its rocket
+  q2_bfg,          // its BFG's ball
+  q2_hand_grenade  // its hand grenade, thrown at the speed the hold gave it
 };
 
 // What a shot needs: its kind, the player's origin and view on its command, the nail's or the
@@ -125,6 +128,7 @@ struct OwnShot {
   // Quake II's: the eye's height over the origin, and the effect bits it flies with.
   float view_height = 0;
   int effects = 0;
+  float speed = 0;  // Quake II's hand grenade: its throw along the view, units/s
 };
 
 struct OwnMissile {

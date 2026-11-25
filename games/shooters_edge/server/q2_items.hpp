@@ -247,6 +247,8 @@ inline constexpr int kSqFliesEffect = 16384;
 inline constexpr int kSqRocketEffect = 16;
 // God mode's white shell: the colour-shell effect bit with the red, green and blue render bits.
 inline constexpr int kSqColourShellEffect = 256, kSqGodShellRender = 1024 | 2048 | 4096;
+// The red render bit alone: a red shell with the colour-shell effect.
+inline constexpr int kSqRedShellRender = 1024;
 // Power armour that has just taken a blow (for 0.2 s): a screen's green plate before its bearer
 // (the effect bit), a shield's green shell (the colour shell with the green render bit).
 inline constexpr int kSqPowerScreenEffect = 512, kSqShieldShellRender = 2048;

@@ -42,6 +42,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
@@ -145,6 +146,9 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // classic enhance (classicenhance/shells.hpp's `casing_model`, in the game's palette), in
 // classicenhance::Casing's order; never read from the packs.
 // `q2_fx` on: Quake II's model effects (q2_model_fx.hpp's Q2FxModel, in its order).
+// `bubble` after them: the bubble the engine draws under ce_bubbles (classicenhance's replace.hpp),
+// made at load when the pack has no such sprite, so a game whose bubbles are specks on the wire
+// (Quake II's trails) draws the same bubble as a game whose bubbles are sprites.
 enum class EffectModel : uint8_t {
   explosion,
   bolt,
@@ -156,7 +160,8 @@ enum class EffectModel : uint8_t {
   case_hull,
   case_brass,
   case_heavy,
-  q2_fx
+  q2_fx,
+  bubble = q2_fx + 7
 };
 inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
                                                 "progs/bolt.mdl",
@@ -174,7 +179,9 @@ inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
                                                 "models/objects/flash/tris.md2",
                                                 "models/monsters/parasite/segment/tris.md2",
                                                 "models/ctf/segment/tris.md2",
-                                                "sprites/s_bfg2.sp2"};
+                                                "sprites/s_bfg2.sp2",
+                                                "progs/s_bubble.spr"};
+static_assert(std::size(kEffectModels) == size_t(EffectModel::bubble) + 1);
 inline int effect_model(int listed, EffectModel m) { return listed + static_cast<int>(m); }
 inline int effect_model(const Listen& l, EffectModel m) {
   return effect_model(l.server ? static_cast<int>(l.server->models.size()) : 0, m);

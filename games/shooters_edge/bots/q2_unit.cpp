@@ -17,6 +17,7 @@
 
 #include "shooterbots/aim.hpp"
 #include "shooterbots/bot_arsenal.hpp"
+#include "shooterbots/buttons.hpp"
 #include "shooterbots/companion.hpp"
 #include "shooterbots/features.hpp"
 #include "shooterbots/map_nav.hpp"
@@ -122,6 +123,7 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
                  sb::traits_of(skill, sb::Temper::balanced), kHz,
                  opt.seed + 31u * static_cast<uint32_t>(entered) + 7919u * static_cast<uint32_t>(k),
                  q2_arsenal());
+    sb::exits_init(f, nav.graph, s, entities.c_str(), &spec);  // the exits' boxes from the map's
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;
@@ -344,7 +346,6 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           }
         }
         b.cmds[2] = fighter_command(b.f, s, k, kPilotMsec);
-        if (forced) b.cmds[2].angles = s.sv.edicts[static_cast<size_t>(me)].v_angle;
         way_dive(b.way, *m.nav, s, me, b.cmds[2]);
         way_reach_in(b.way, *m.nav, s, me, b.cmds[2]);
         if (way_break(*q, s, me, b.breaking, t, b.cmds[2])) {
@@ -361,6 +362,10 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
         if (opt.beside && k > 0 && sb::party_give_way(s, me, people.humans, b.cmds[2]))
           um.helper_gave_way++;
         if (opt.beside && k > 0 && exits_keep_off(b.f, s, me, b.cmds[2])) um.helper_exits_turned++;
+        // A turned view is taken as sent, whatever else turned him this step: the rules let go of
+        // the turn only when the command's view is the one they set (a helper at a co-op spot
+        // facing back, else ever turned half round from what he sends).
+        if (forced) b.cmds[2].angles = s.sv.edicts[static_cast<size_t>(me)].v_angle;
         // The intermission: a button now and then leaves for the next map.
         if (q->intermission_at > 0) b.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;
         sh::Packet& pk = packets[static_cast<size_t>(k)];

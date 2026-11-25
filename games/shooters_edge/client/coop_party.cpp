@@ -5,6 +5,8 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_campaign_view_test.cpp
 #include "shooters_edge/client/coop_party.hpp"
+
+#include <array>
 #include "shooters_edge/bots/quake_maps.hpp"
 
 namespace sb = ge::shooterbots;
@@ -106,7 +108,7 @@ bool party_remove(Party& p, sv::Campaign& c) {
 
 void party_enter(Party& p, sv::Campaign& c, const sv::MapSpec& map, std::string& error) {
   if (party_size(p) == 0 || !c.server) return;
-  p.share = sb::Party();  // the new map's steps
+  p.round.share = sb::Party();  // the new map's steps
   if (!ensure_graph(p, c, map, error)) {
     while (party_remove(p, c)) {
     }
@@ -119,32 +121,25 @@ void party_enter(Party& p, sv::Campaign& c, const sv::MapSpec& map, std::string&
 
 void party_packets(Party& p, const sv::RulesCommon& s, int msec, std::vector<sh::Packet>& out) {
   // The helpers' split of the map, round the people (every player not a companion).
-  p.members.clear();
-  p.people.humans.clear();
-  p.people.facing.clear();
-  p.people.leash = sb::kPartyLeash;
-  p.people.exit_held = true;
-  for (int i = 0; i < sh::kMaxClients && i < s.sv.set.maxclients; i++) {
-    if (!s.clients[i].active) continue;
-    const sh::Edict& e = s.sv.edicts[static_cast<size_t>(i) + 1];
-    const PartyMate* m = p.mates[static_cast<size_t>(i)].get();
-    if (m == nullptr) {
-      p.people.humans.push_back(e.origin);
-      p.people.facing.push_back(s.world.entities[static_cast<size_t>(i) + 1].view_angles.y);
-    } else if (m->work) {
-      p.members.push_back({&m->work->way, i + 1, e.health > 0});
+  std::array<bool, sh::kMaxClients> bot{};
+  std::array<sb::WayThrough*, sh::kMaxClients> helpers{};
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (const auto& m = p.mates[static_cast<size_t>(i)]; m) {
+      bot[static_cast<size_t>(i)] = true;
+      helpers[static_cast<size_t>(i)] = m->work ? &m->work->way : nullptr;
     }
-  }
-  if (!p.members.empty() && p.nav) sb::party_share(p.share, p.members, *p.nav, s, p.people);
+  sb::party_round(p.round, p.nav.get(), s, bot, helpers);
   for (int i = 1; i < sh::kMaxClients; i++) {
     if (!p.mates[static_cast<size_t>(i)] || !s.clients[i].active) continue;
     PartyMate& m = *p.mates[static_cast<size_t>(i)];
-    if (m.work) sb::party_work_plan(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.people);
+    if (m.work)
+      sb::party_work_plan(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.round.people);
     m.cmds[0] = m.cmds[1];
     m.cmds[1] = m.cmds[2];
     m.cmds[2] = bots::fighter_command(m.fighter, s, i, msec);
     if (m.work)
-      sb::party_work_command(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.people, m.cmds[2]);
+      sb::party_work_command(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.round.people,
+                             m.cmds[2]);
     sh::Packet pk;
     pk.client = i;
     pk.sequence = ++m.sequence;

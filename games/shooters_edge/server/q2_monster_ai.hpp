@@ -225,6 +225,12 @@ bool gz_tesla_alive(const Q2Server& s, int i);
 sh::Vec3f gz_tesla_at(const Q2Server& s, int i, float up);
 bool gz_tesla_holds(Q2Server& s, Q2Monster& m);
 bool gz_bad_area_refuses(const Q2Server& s, const Q2Monster& m, sh::Vec3f move);
+// Ground Zero's place for a body grown or set down at `p` (q2_gz_monsters.cpp): box `mins`..`maxs`
+// fits there (or dropped onto it from 32 above) over solid, dry, nearly flat ground within `depth`
+// below, its four corners within 18 of the middle; where it stands in `out`. The medic
+// commander's guards (256) and the Doppleganger (64).
+bool gz_spawn_spot(const Q2Server& s, int skip, sh::Vec3f mins, sh::Vec3f maxs, sh::Vec3f p,
+                   float depth, sh::Vec3f& out);
 const GzLedge* gz_ledge(std::string_view classname);
 const GzDodge* gz_dodge_of(std::string_view classname);
 const GzBlind* gz_blind_of(std::string_view classname);

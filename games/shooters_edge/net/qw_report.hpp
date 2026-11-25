@@ -97,5 +97,14 @@ std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t);
 
 bool tally_end(MatchTally& t, const shooters_edge::server::RulesWorld& w, const TallyFacts& facts,
                ge::net::MatchReport& out);
+// The match so far, for the stats words (`stats`, `teamstats`): every player counted yet with the
+// stats' columns, unsorted; false when no match is counting (the warmup, or one already reported).
+bool tally_so_far(const MatchTally& t, double now, bool teams, ge::net::MatchReport& out);
+// A player's stats words (`stats`, `teamstats`, `laststats`: server/match_stats.hpp `stats_words`)
+// answered off the match counting now (`tally`) and the last one's report (`last`, no players:
+// none), for `slot` on `w`; false for any other line.
+bool qw_stats_words(const MatchTally& tally, const ge::net::MatchReport& last,
+                    const shooters_edge::server::RulesWorld& w, int slot, bool teams,
+                    const std::string& line, std::string& out);
 
 }  // namespace shooters_edge::net
