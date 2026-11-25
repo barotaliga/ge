@@ -131,8 +131,8 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | hip.ent.func_rotate_entity | `func_rotate_entity` | a brush model that turns continuously (fans, gears) | 6 / 13 | done | 1 | the things lab: all 13 turn on 6 maps; drawn turned as func_rotate_door |
 | hip.ent.func_rotate_train | `func_rotate_train` | a train that turns as it follows its path | 5 / 12 | done | 1 | the things lab: all 11 run their paths, 10 turning, on 5 maps; drawn turned as func_rotate_door |
 | hip.ent.info_rotate | `info_rotate` | the point a rotating group turns about | 16 / 70 | done | 1 | the things lab: all 69 taken up by their groups at the start (removed), on 16 maps |
-| hip.ent.path_follow | `path_follow` | a path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program; the things lab: idle on its one map (nothing seen following it) |
-| hip.ent.path_follow2 | `path_follow2` | the second kind of path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program; the things lab: idle on its one map (nothing seen following it) |
+| hip.ent.path_follow | `path_follow` | a path corner a follower walks | 1 / 12 | done | 2 | the things lab: the nearest monster touched into one takes the path's corner as its new goal on hipend (the player's touch does nothing, as the facts say: porting/shooters-edge/q1-hipnotic-things.md) |
+| hip.ent.path_follow2 | `path_follow2` | the second kind of path corner a follower walks | 1 / 12 | done | 2 | the things lab: the nearest monster touched into one takes a new goal on hipend |
 | hip.ent.path_rotate | `path_rotate` | a path corner that also sets a rotating train's turn | 6 / 46 | done | 1 | the things lab: the rotate trains run along them (their 11 move and turn) |
 | hip.ent.rotate_object | `rotate_object` | a brush model turned by its group's centre | 16 / 77 | done | 1 | the things lab: all 76 turn with their groups on 16 maps; drawn turned as func_rotate_door |
 
@@ -166,8 +166,8 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | hip.ent.func_earthquake | `func_earthquake` | shakes everyone standing while it is on | 7 / 21 | done | 1 | the things lab: used on 7 maps, it shakes the player (his speed changed in 3 uses); LIFT left: one quake shake with Dissolution's and Quake II's |
 | hip.ent.func_exploder | `func_exploder` | an explosion when triggered | 7 / 94 | done | 1 | the things lab: all 94 appear, animate, sound and go when used, on 7 maps |
 | hip.ent.func_multi_exploder | `func_multi_exploder` | a run of explosions over an area | 2 / 3 | done | 2 | the things lab: all 3 throw their explosions (9 made) and go |
-| hip.ent.func_particlefield | `func_particlefield` | a field of sparkles while on (a force field's look) | 3 / 12 | verify | 2 | runs in the pack's program; the things lab: used, it made 4 things but no effect was seen near it |
-| hip.ent.info_startendtext | `info_startendtext` | where the end text starts | 1 / 1 | verify | 2 | runs in the pack's program; the things lab: used, it made 1 thing; with hip.endtext |
+| hip.ent.func_particlefield | `func_particlefield` | a field of sparkles while on (a force field's look) | 3 / 12 | verify | 2 | runs in the pack's program; the things lab: set off by its counters on 3 maps, but its sparkles go only to a player who sees it and the lab found no spot beside the fields to stand in (porting/shooters-edge/q1-hipnotic-things.md) |
+| hip.ent.info_startendtext | `info_startendtext` | where the end text starts | 1 / 1 | done | 2 | the things lab: used on hipend (set off by the finale), it writes the end text to every client (the finale message); with hip.endtext |
 | hip.ent.play_sound_triggered | `play_sound_triggered` | plays a sound when triggered | 5 / 16 | done | 2 | the things lab: all 16 sound when used |
 | hip.ent.random_thunder_triggered | `random_thunder_triggered` | thunder at random while on | 4 / 6 | done | 3 | the things lab: all 6 sound when used |
 
@@ -175,23 +175,23 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.func_counter | `func_counter` | counts its triggers and fires by the count | 11 / 25 | verify | 1 | runs in the pack's program; the things lab: used without its count, 7 of 25 go; its count not walked |
-| hip.ent.func_oncount | `func_oncount` | fires when a counter reaches its number | 8 / 62 | verify | 1 | runs in the pack's program; the things lab: used alone it does nothing; its counter not walked |
+| hip.ent.func_counter | `func_counter` | counts its triggers and fires by the count | 11 / 25 | done | 1 | the things lab: its ticks fire its targets on 7 maps (all 8 on hip2m5, 7 of them then removed at their count; start's looping counter fires its fields on its own) |
+| hip.ent.func_oncount | `func_oncount` | fires when a counter reaches its number | 8 / 62 | done | 1 | the things lab: set off by their counters on 5 maps (all 35 on hip2m5, 34 then fire their targets at the count; 6 of 10 on hip1m4, 4 of 4 on hip1m3, hip3m1); used by the player alone it does nothing, as the facts say |
 | hip.ent.func_spawn | `func_spawn` | spawns a monster or an item when triggered | 9 / 304 | done | 1 | the things lab: used, they make their monsters and items (9 uses made things), on 9 maps |
-| hip.ent.func_spawn_small | `func_spawn_small` | spawns a small thing when triggered | 2 / 3 | verify | 2 | runs in the pack's program; the things lab: 1 of 2 goes when used; nothing seen made |
+| hip.ent.func_spawn_small | `func_spawn_small` | spawns a small thing when triggered | 2 / 3 | done | 2 | the things lab: used on hip3m1, the spawner goes and brings out its hidden thing (a spike mine, silent as the map asks) |
 | hip.ent.info_notnull | `info_notnull` | a named point with no class of its own (a target) | 5 / 34 | done | 2 | the things lab: a named point the program's things aim at; nothing of its own to do |
 | hip.ent.trap_gods_wrath | `trap_gods_wrath` | lightning on everyone in its area when triggered | 1 / 2 | done | 2 | the things lab: strikes (its sound) when used |
-| hip.ent.trap_gravity_well | `trap_gravity_well` | pulls whoever is near toward it | 2 / 3 | verify | 2 | runs in the pack's program; the things lab: idle when used; whether it pulls is not seen |
+| hip.ent.trap_gravity_well | `trap_gravity_well` | pulls whoever is near toward it | 2 / 3 | verify | 2 | runs in the pack's program; the things lab: the player stood 176 units from the wells on hip1m2 and hip1m5 and no pull was seen; the wells are under water, and the pull needs a line that does not cross from air into water (porting/shooters-edge/q1-hipnotic-things.md) |
 | hip.ent.trap_lightning_switched | `trap_lightning_switched` | a lightning arc switched on and off | 2 / 19 | done | 2 | the things lab: 15 of 19 strike when switched, making their bolts |
 | hip.ent.trap_lightning_triggered | `trap_lightning_triggered` | a lightning arc fired when triggered | 5 / 17 | done | 2 | the things lab: all 17 strike when used; LIFT left: Quake's beam drawing |
-| hip.ent.trap_shooter | `trap_shooter` | a shooter of spikes or lasers on a timer | 1 / 2 | verify | 2 | runs in the pack's program; ours names it; the things lab: idle on its map |
+| hip.ent.trap_shooter | `trap_shooter` | a shooter of spikes or lasers on a timer | 1 / 2 | done | 2 | the things lab: both on start fire on their own from the start (335 shots made in the look, by their owner) |
 | hip.ent.trap_spike_mine | `trap_spike_mine` | a floating mine that drifts toward a player and bursts into spikes | 4 / 29 | done | 2 | the things lab: all 14 turn, animate and sound on 4 maps |
-| hip.ent.trap_tesla_coil | `trap_tesla_coil` | a coil that zaps whoever comes close | 1 / 2 | verify | 2 | runs in the pack's program; the things lab: used, made 1 thing; whether it zaps is not seen |
-| hip.ent.trigger_damagethreshold | `trigger_damagethreshold` | fires only after taking enough damage | 3 / 3 | verify | 2 | runs in the pack's program; the things lab: 2 of 3 go when used; not shot |
-| hip.ent.trigger_decoy_use | `trigger_decoy_use` | draws monsters to a decoy | 1 / 7 | verify | 2 | runs in the pack's program; LIFT: a decoy monsters chase, with Ground Zero's doppleganger; the things lab: 2 of 7 go when used; no decoy seen |
+| hip.ent.trap_tesla_coil | `trap_tesla_coil` | a coil that zaps whoever comes close | 1 / 2 | done | 2 | the things lab: both on hip2m5 (placed live) make their bolts and hurt the player in reach |
+| hip.ent.trigger_damagethreshold | `trigger_damagethreshold` | fires only after taking enough damage | 3 / 3 | done | 2 | the things lab: hit, it fires its target and goes on hip1m1 (its 5 breakaway walls removed) and hip2m1; hip1m3's was not hit by the scripted rocket |
+| hip.ent.trigger_decoy_use | `trigger_decoy_use` | fires its targets once when the finale's walking decoy reaches it | 1 / 7 | done | 2 | the things lab: 4 of 7 fire their targets and go on hipend as the finale's decoy walks through them; it does not touch monsters (facts: porting/shooters-edge/q1-hipnotic-things.md) |
 | hip.ent.trigger_setgravity | `trigger_setgravity` | sets the gravity of whoever is inside | 2 / 7 | done | 1 | the things lab: touched, it changes the player's gravity (4 touches) |
 | hip.ent.trigger_usekey | `trigger_usekey` | a trigger that needs a key | 1 / 2 | done | 1 | the things lab: touched without the key, it says so (its sound) |
-| hip.ent.trigger_waterfall | `trigger_waterfall` | pushes whoever is inside like falling water | 1 / 1 | verify | 2 | runs in the pack's program; the things lab: touched, the push on the player not seen |
+| hip.ent.trigger_waterfall | `trigger_waterfall` | pushes whoever is inside like falling water | 1 / 1 | done | 2 | the things lab: touched on hip3m3, its push changes the player's speed at once (angle -2, straight down) |
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
 
