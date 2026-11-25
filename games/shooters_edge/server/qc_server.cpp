@@ -12,6 +12,7 @@
 #include <cstdio>
 
 #include "classic/coop.hpp"
+#include "prof/zones.hpp"
 #include "server/overtime.hpp"
 #include "shooter/frame.hpp"
 #include "shooter/settings.hpp"
@@ -695,6 +696,7 @@ sh::RjumpReady qc_rocket_ready(void* rules, int slot, sh::MoveCmd& cmd, std::str
 }  // namespace
 
 void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
+  GE_ZONE("rules.frame");
   // The rocket jump helper rewrites the commands it acts on (rjump_rules.hpp).
   // The view a shot turned is put back after the frame, so no one sees it a frame longer and the
   // player's own view is never moved (his client keeps his angles).

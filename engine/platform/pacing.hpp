@@ -43,6 +43,7 @@
 
 #include "loop/pacing.hpp"
 #include "platform/window.hpp"
+#include "prof/frames.hpp"
 
 namespace ge::console {
 class Console;
@@ -60,12 +61,17 @@ struct Pacing {
   uint64_t last_ns = 0;  // when the last frame started
   std::string present;   // the present mode in use, for `framestats` ("fifo", "immediate")
   loop::SteadyClock steady;
-  loop::VsyncPhase phase;   // the late start's refreshes and frame costs
-  uint64_t acquire_ns = 0;  // this frame's wait in the swap chain's acquire (not its cost)
+  loop::VsyncPhase phase;      // the late start's refreshes and frame costs
+  uint64_t acquire_ns = 0;     // this frame's wait in the swap chain's acquire (not its cost)
+  prof::FrameProfile profile;  // `profile N`: the next N frames by zone (prof/frames.hpp)
 };
 
-// The pacing cvars over `p` (it must outlive `con`) and the `framestats` command.
+// The pacing cvars over `p` (it must outlive `con`), the `framestats` command and `profile`.
 void add_pacing_cvars(console::Console& con, Pacing& p);
+
+// At the TOP of the window's loop, before any zone opens: the frame before closed in a running
+// `profile`, and its report printed to `con` once the frames asked for are in.
+void profile_tick(console::Console& con, Pacing& p);
 
 // The start of a frame: the display's refresh read, the cap waited for, the interval since the
 // last frame recorded with the waits (`gpu_wait_s` the frame gate's). Returns the frame's start,

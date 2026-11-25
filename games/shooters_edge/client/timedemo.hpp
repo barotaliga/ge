@@ -92,6 +92,9 @@ bool bench_dump(const std::filesystem::path& path, const std::string& record, st
 // The local time now as YYYY-MM-DDTHH:MM:SS.
 std::string local_date_now();
 
+// The window's last line: its frames, their mean and the longest (a hitch a load or a stall made).
+std::string run_line(long frames, double seconds, double longest_s, int w, int h, unsigned errors);
+
 // The GPU's span of each timed frame over a run, ms, and each pass's own time by its name (the
 // frames it ran in; on a tiled GPU passes overlap, so they add up to more than the span).
 struct PassTimes {

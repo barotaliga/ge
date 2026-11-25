@@ -15,6 +15,7 @@
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "net/packet.hpp"
+#include "prof/zones.hpp"
 #include "server/feature.hpp"
 #include "server/guards.hpp"
 
@@ -680,9 +681,13 @@ void take_phase(Server& s) {
 }
 
 void server_frame(Server& s) {
+  GE_ZONE("server.frame");
   if (!s.state) return;
   if (s.own_protocol) {
-    s.game->net_frame(s.state, s.now_us);
+    {
+      GE_ZONE("server.game");
+      s.game->net_frame(s.state, s.now_us);
+    }
     take_report(s);
     if (!s.beat.config.masters.empty()) gn::master_beat_update(s.beat, *s.port, s.now_us);
     s.now_us = server_next_us(s);
@@ -691,7 +696,10 @@ void server_frame(Server& s) {
     if (s.features) features_frame(*s.features);
     return;
   }
-  s.game->frame(s.state);
+  {
+    GE_ZONE("server.game");
+    s.game->frame(s.state);
+  }
   take_report(s);
   s.now_us = server_next_us(s);
   s.frame++;
@@ -700,6 +708,7 @@ void server_frame(Server& s) {
     if (s.features) features_frame(*s.features);
     return;
   }
+  GE_ZONE("server.net");  // the node, the public answers, the session, hosting, the masters
   gn::node_update(s.node, s.now_us);
   answer_public(s);
   gn::session_host_update(s.session, s.now_us);
