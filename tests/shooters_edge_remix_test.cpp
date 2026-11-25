@@ -85,6 +85,11 @@ TEST(the_classic_games_weapons_take_q2_by_role) {
   CHECK(to_q2("item_health", 1) == "item_health");
   CHECK(to_q2("item_health", 0) == "item_health_large");
   CHECK(to_q2("item_armorInv", 0) == "item_armor_body");
+  // Dissolution of Eternity's ammunition for its weapons' second kinds.
+  CHECK(to_q2("item_lava_spikes", 0) == "ammo_bullets");
+  CHECK(to_q2("item_multi_rockets", 0) == "ammo_rockets");
+  CHECK(to_q2("item_plasma", 0) == "ammo_cells");
+  CHECK(!pf::remix_item("q1", "q2", "item_powerup_belt", 0).known);  // no part to play: dropped
   // Scourge of Armagon's, read by the same table (its program runs on Quake's).
   CHECK(to_q2("weapon_laser_gun", 0) == "weapon_hyperblaster");
   CHECK(to_q2("weapon_mjolnir", 0) == "weapon_bfg");
@@ -352,6 +357,7 @@ TEST(cr_expansions_lays_the_played_packs_weapons_and_reads_the_packs_items) {
   CHECK(pf::remix_item("q1", "q2", "weapon_laser_gun", 0).known);
   CHECK(!pf::remix_item("q1", "q2", "weapon_laser_gun", 0, {false, {}}).known);
   CHECK(!pf::remix_item("q2", "q1", "weapon_etf_rifle", 0, {false, {}}).known);
+  CHECK(!pf::remix_item("q1", "q2", "item_plasma", 0, {false, {}}).known);
   CHECK(pf::remix_item("q1", "q2", "weapon_nailgun", 0, {false, {}}).known);
   // The setting: on by default, a player's word.
   ge::console::Cvars cvars;

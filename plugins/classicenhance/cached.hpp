@@ -9,8 +9,10 @@
 //   when its textures' stage has finished there.
 // - `cached_texture`: textures/<name>/albedo.png at 1, 2, 4 or 8 times the pack's size, as sRGB
 //   RGBA with alpha 255 where emissive.png glows (the classic's fullbright texels: lit by nothing
-//   but themselves). The liquids' and the sky's textures (names starting '*' or "sky") are left
-//   to the pack: the renderers draw those their own way.
+//   but themselves). The liquids' and the sky's textures are left to the pack: the renderers
+//   draw those their own way. The BSP scene never asks for them (draw_data.cpp, by the kinds the
+//   map marks: a 38 map's warp and sky flags); this reader also refuses Quake's by name ('*' or
+//   "sky"), for a caller with no map.
 // - `cached_surface`: the same texture's relief for a modern renderer to light it with, packed into
 //   one RGBA picture the albedo's size: the normal's x and y (tangent space, +Y up the picture),
 //   the height (255 the top) and the roughness, from normal.png, height.png and roughness.png.

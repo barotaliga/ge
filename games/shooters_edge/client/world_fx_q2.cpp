@@ -17,12 +17,14 @@
 #include <algorithm>
 #include <cmath>
 #include <string_view>
+#include <vector>
 
 #include "brush/map.hpp"
 #include "core/num.hpp"
 #include "core/prng.hpp"
 
 #include "shooters_edge/app/effects.hpp"
+#include "shooters_edge/client/q2_enhance_fx.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/client/q2_model_fx.hpp"
 #include "shooters_edge/client/q2_temp_fx.hpp"
@@ -38,6 +40,10 @@ constexpr double kSqBeamOutS = 2.1;  // a widow beam-out's life
 constexpr double kSqNukeS = 1;       // an A-M bomb's blast's
 // The placed model effects' entity numbers (below every other effect's).
 constexpr int kQ2FxEntities = -(1 << 23);
+// The engine's bubbles for Quake II's (ce_bubbles): their own entity numbers, and as many alive at
+// once as the classic's particles could hold of them.
+constexpr int kBubbleEntities = -(1 << 24);
+constexpr size_t kOwnBubbles = 1024;
 
 void put_point(const sh::Vec3f& at, double p[3]) {
   const ge::camera::Vec3 e = engine_point(at);
@@ -234,6 +240,17 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
   }
 }
 
+bool q2_enhance_pack_hit(FxState& s, int code, const double p[3], const double normal[3], double t,
+                         FxFrame& out) {
+  Q2PackHit h;
+  if (!q2_pack_hit_of(code, &h)) return false;
+  fx::tinted_hit(p, normal, h.hit, s.seed++, &out.births);
+  if (h.flick)
+    s.sparked.push_back(
+        {{p[0] + normal[0] * 0.1, p[1] + normal[1] * 0.1, p[2] + normal[2] * 0.1}, t, {}});
+  return true;
+}
+
 bool q2_cable(FxState& s, const Effect& e, double t) {
   if (e.name == "te_heatbeam" || e.name == "te_monster_heatbeam") {  // kept by its source
     auto h = std::find_if(s.q2_heat_beams.begin(), s.q2_heat_beams.end(),
@@ -302,6 +319,30 @@ void q2_laser(FxState& s, const Effect& e, double t) {
   if (s.q2_lasers.size() < 256) s.q2_lasers.push_back(z);  // the classic's 256: one more dropped
 }
 
+void q2_enhance_heat_beam(FxState& s, const Effect& e, double t) {
+  FxState::Q2Laser z;
+  z.from = e.at;
+  z.to = e.end;
+  z.born = t;
+  for (int k = 0; k < 3; ++k) z.rgb[k] = kQ2HeatBeamRgb[k];
+  z.width_u = kQ2HeatBeamU;
+  if (s.q2_lasers.size() < 256) s.q2_lasers.push_back(z);
+}
+
+void q2_place_bubbles(FxState& s, int effect_models, double t, FxFrame& out) {
+  std::erase_if(s.own_bubbles,
+                [&](const FxState::OwnBubble& b) { return t - b.born >= b.b.life || t < b.born; });
+  for (const FxState::OwnBubble& b : s.own_bubbles) {
+    double at[3];
+    fx::rising_bubble_at(b.b, t - b.born, at);
+    Placed d;
+    d.entity = kBubbleEntities - static_cast<int>(b.id % (1u << 20));
+    d.modelindex = effect_models + static_cast<int>(EffectModel::bubble);
+    d.origin = {static_cast<float>(at[0]), static_cast<float>(at[1]), static_cast<float>(at[2])};
+    out.models.push_back(d);
+  }
+}
+
 void q2_draw_model_fx(FxState& s, const FxScene& l, double t, FxFrame& out) {
   const PlayerState& me = l.me;
   const int me_entity = l.own > 0 ? l.me.entity : 0;
@@ -356,7 +397,7 @@ void q2_draw_model_fx(FxState& s, const FxScene& l, double t, FxFrame& out) {
     HeldBeam b;
     b.entity = entity--;
     b.laser = true;
-    b.laser_m = static_cast<float>(4 * ge::brush::kUnitM);
+    b.laser_m = static_cast<float>(z.width_u * ge::brush::kUnitM);
     for (int k = 0; k < 3; ++k) b.laser_rgb[k] = z.rgb[k];
     b.shot.born_s = t - 1;  // long on: no swell
     b.shot.seed = static_cast<uint32_t>(-b.entity);
@@ -462,10 +503,22 @@ void q2_sustains(FxState& s, double t, FxFrame& out) {
                     &out.births);
 }
 
-bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
+bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3], double t,
                     FxFrame& out) {
   if (e.name == "sq_bubbles" || e.name == "sq_bubbles2") {
-    fx::q2_bubbles(from, to, e.name == "sq_bubbles2", s.seed++, s.palette, &out.births);
+    const bool second = e.name == "sq_bubbles2";
+    if (!s.on.bubbles) {
+      fx::q2_bubbles(from, to, second, s.seed++, s.palette, &out.births);
+      return true;
+    }
+    // The engine's bubbles, one sprite each where the classic's specks would rise.
+    const double a[3] = {e.at.x, e.at.y, e.at.z}, b[3] = {e.end.x, e.end.y, e.end.z};
+    std::vector<fx::RisingBubble> made;
+    fx::q2_rising_bubbles(a, b, second, s.seed++, &made);
+    for (const fx::RisingBubble& r : made) {
+      if (s.own_bubbles.size() >= kOwnBubbles) break;
+      s.own_bubbles.push_back({r, t, s.bubble_ids++});
+    }
     return true;
   }
   if (e.name == "sq_force_wall") {

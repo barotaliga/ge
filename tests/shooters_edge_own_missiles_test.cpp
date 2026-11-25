@@ -327,6 +327,10 @@ TEST(quake_ii_s_shots_leave_under_the_eye_by_the_gun_s_side_and_carry_their_bits
   CHECK(cl::own_missile_fire(m, shot, 10, 0.15, 150, kAt));
   CHECK(near(m.flying[3].velocity.x, cl::kGrenadeAheadU) &&
         near(m.flying[3].velocity.z, cl::kGrenadeUpU));
+  shot.kind = cl::OwnMissileKind::q2_hand_grenade;  // thrown at the speed its hold gave it
+  shot.speed = 640;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.15, 150, kAt));
+  CHECK(near(m.flying[4].velocity.x, 640) && near(m.flying[4].velocity.z, cl::kGrenadeUpU));
   // Drawn with the server's model and the bits its copy carries.
   cl::DemoState s;
   s.format = cl::DemoFormat::q2;

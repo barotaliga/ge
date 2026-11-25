@@ -126,6 +126,8 @@ struct ServerConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one,
   std::string rcon_password;     // rcon_password: the remote console's (empty: none offered)
   std::string rendezvous;        // sv_rendezvous: the rendezvous to list with (M17r)
   std::string masters;           // sv_master: the masters to beat to, space-separated
+  int32_t open_port = 0;         // sv_open_port: 1 asks the home router to forward the port
+  std::string gateway;           // sv_gateway: the router to ask ("": the default route's)
   std::string mod;               // sv_mod: the mods' directories, lowest first (read-only)
   double timeout_s = 65;         // sv_timeout: a client silent this long is dropped
   double countdown_s = 5;        // sv_countdown: everyone ready to the match, s (sv_lobby)

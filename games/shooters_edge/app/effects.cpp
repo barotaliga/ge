@@ -352,6 +352,33 @@ void q2_bubbles(const double from[3], const double to[3], bool second, uint32_t 
   }
 }
 
+void q2_rising_bubbles(const double from[3], const double to[3], bool second, uint32_t seed,
+                       std::vector<RisingBubble>* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  double way[3];
+  for (int k = 0; k < 3; ++k) way[k] = len > 1e-9 ? d[k] / len : 0;
+  const double step = second ? 8 : 32, drift = second ? 10 : 5, rise = second ? 20 : 6;
+  for (int i = 0; i * step < len; ++i) {  // the draws in q2_bubbles' order
+    const double at = i * step;
+    RisingBubble b;
+    b.at[0] = from[0] + at * way[0] + rnd(r, -2, 2);
+    b.at[1] = from[1] + at * way[1] + rnd(r, -2, 2);
+    b.at[2] = from[2] + at * way[2] + rnd(r, -2, 2) - (second ? 4 : 0);
+    b.vel[0] = rnd(r, -drift, drift);
+    b.vel[1] = rnd(r, -drift, drift);
+    b.vel[2] = rnd(r, -drift, drift) + rise;
+    b.life = second ? rnd(r, 1.0, 1.1) : rnd(r, 1.0, 1.2);
+    pick(r, 8);  // the speck's grey, drawn here too so both keep one stream
+    out->push_back(b);
+  }
+}
+
+void rising_bubble_at(const RisingBubble& b, double age, double out[3]) {
+  for (int k = 0; k < 3; ++k) out[k] = b.at[k] + b.vel[k] * age;
+}
+
 void q2_force_wall(const double from[3], const double to[3], int colour, uint32_t seed, Palette pal,
                    Particles* out) {
   Rng r = ge::core::make_rng(seed);

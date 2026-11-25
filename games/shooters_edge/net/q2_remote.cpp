@@ -140,10 +140,10 @@ int lerp_list(std::vector<client::DemoEntity>& drawn, const std::vector<client::
 }
 
 // THE PLAYER'S OWN MISSILES THROWN AHEAD (client/own_missiles.hpp, `cl_predict_projectiles`): each
-// bolt, grenade, rocket or BFG ball the weapon pass fired leaves from the player's drawn place
-// along the view his move sent (the server's turn added), the side by his `hand`; then every
-// stand-in flies to `now_s` through the level's brushes under the player's gravity, is handed to
-// the server's copy on its path and is drawn into the frame. The server moves nothing ahead, so
+// bolt, grenade, hand grenade, rocket or BFG ball the weapon pass fired leaves from the player's
+// drawn place along the view his move sent (the server's turn added), the side by his `hand`; then
+// every stand-in flies to `now_s` through the level's brushes under the player's gravity, is handed
+// to the server's copy on its path and is drawn into the frame. The server moves nothing ahead, so
 // its copy is a round trip late (`ping` the round trip itself).
 void q2_own_missiles(Remote& r, client::DemoState& st, double now_s, const sh::Vec3f& turn,
                      const sh::Vec3f& eye_up) {
@@ -171,6 +171,11 @@ void q2_own_missiles(Remote& r, client::DemoState& st, double now_s, const sh::V
         break;
       case server::SqWeapon::bfg:
         shot.kind = client::OwnMissileKind::q2_bfg;
+        break;
+      case server::SqWeapon::hand_grenade:  // thrown, not gone off in the hand
+        if (f.speed <= 0) continue;
+        shot.kind = client::OwnMissileKind::q2_hand_grenade;
+        shot.speed = f.speed;
         break;
       default:
         continue;
