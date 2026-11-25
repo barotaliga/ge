@@ -14,12 +14,15 @@
 // second table, at the first latency in a hall with a shotgun, a chaingun and hand grenades too:
 // a weapon change (the key to the old weapon lowering, to the new one drawn), the chaingun held
 // (the press to its spin up heard, to its loop on) and a hand grenade held 0.5 s (the press to the
-// pin heard, the letting go to the throw heard), off and on.
+// pin heard, the letting go to the throw heard), off and on. A third, at the first latency in a
+// hall with the launchers: the blaster's, the grenade launcher's, the rocket launcher's and the
+// hyperblaster's shot, the press to the missile drawn, off and on (the stand-in thrown ahead,
+// client/own_missiles.hpp), and how many stand-ins the server's copies took on.
 //
 // ge:summary Lab: Quake II's joined window's own shots predicted: press to shot heard, off and on
 // ge:keywords lab se-q2-weapon-predict weapon-prediction cl_nopred_weapon fire-delay latency q2
 // ge:keywords machinegun predicted-flash own_shots misplaced-shot weapon-change chaingun-spin
-// ge:keywords hand-grenade
+// ge:keywords hand-grenade own_missiles cl_predict_projectiles
 // ge:skill net labs
 // ge:test tests/shooters_edge_q2_weapon_test.cpp
 #include <memory>
@@ -64,9 +67,13 @@ br::Entity entity(std::vector<std::pair<std::string, std::string>> pairs) {
   return e;
 }
 
-// A hall of 2048 units with one start, a machinegun and bullets on it (`arsenal`: a shotgun, a
-// chaingun, shells, more bullets and hand grenades too).
-std::shared_ptr<const br::Map> hall(std::string& error, bool arsenal = false) {
+// What the hall's start holds besides a machinegun and bullets: `arsenal` a shotgun, a chaingun,
+// shells, more bullets and hand grenades; `launchers` the grenade and rocket launchers, the
+// hyperblaster and their ammunition.
+enum class Kit : uint8_t { machinegun, arsenal, launchers };
+
+// A hall of 2048 units with one start and the kit on it.
+std::shared_ptr<const br::Map> hall(std::string& error, Kit kit = Kit::machinegun) {
   br::BrushWorld w;
   w.models.resize(1);
   auto& m = w.models[0];
@@ -79,9 +86,14 @@ std::shared_ptr<const br::Map> hall(std::string& error, bool arsenal = false) {
       {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}}));
   w.entities.push_back(entity({{"classname", "weapon_machinegun"}, {"origin", "-400 -400 16"}}));
   w.entities.push_back(entity({{"classname", "ammo_bullets"}, {"origin", "-390 -400 16"}}));
-  if (arsenal)
+  if (kit == Kit::arsenal)
     for (const char* name :
          {"weapon_shotgun", "weapon_chaingun", "ammo_shells", "ammo_bullets", "ammo_grenades"})
+      w.entities.push_back(entity({{"classname", name}, {"origin", "-395 -395 16"}}));
+  if (kit == Kit::launchers)
+    for (const char* name :
+         {"weapon_grenadelauncher", "weapon_rocketlauncher", "weapon_hyperblaster", "ammo_grenades",
+          "ammo_grenades", "ammo_rockets", "ammo_rockets", "ammo_cells"})
       w.entities.push_back(entity({{"classname", name}, {"origin", "-395 -395 16"}}));
   std::vector<uint8_t> bytes;
   if (!br::write_brush_world(w, &bytes, &error)) return nullptr;
@@ -100,13 +112,13 @@ struct Session {
   int64_t now = 0, wall = 0;  // the server's host ticks, the window's clock
 };
 
-bool open_session(Session& s, double latency_ms, std::string& error, bool arsenal = false) {
+bool open_session(Session& s, double latency_ms, std::string& error, Kit kit = Kit::machinegun) {
   s.rules = sv::q2_runner(sv::make_q2_server({}));
   s.rules.console("deathmatch 1");
   s.rules.console("sv_fps 10");
   sv::MapSpec map;
   map.name = "hall";
-  map.brushes = hall(error, arsenal);
+  map.brushes = hall(error, kit);
   if (!map.brushes || !s.rules.start(map, error)) return false;
   gn::LinkConditions link;
   gn::conditions_preset("lan", link);
@@ -285,7 +297,7 @@ Times run_act(Act act, double latency_ms, bool on, int fps, int cues) {
   Times out;
   Session s;
   std::string error;
-  if (!open_session(s, latency_ms, error, true)) return out;
+  if (!open_session(s, latency_ms, error, Kit::arsenal)) return out;
   const int64_t window_us = 1000000 / fps;
   for (int i = 0; i < 6 * fps && (!s.remote.q2 || s.remote.q2->stage != cn::ClientStage::active);
        i++)
@@ -359,6 +371,78 @@ Times run_act(Act act, double latency_ms, bool on, int fps, int cues) {
   }
   out.a_ms /= out.a_n > 0 ? out.a_n : 1;
   out.b_ms /= out.b_n > 0 ? out.b_n : 1;
+  out.ok = true;
+  return out;
+}
+
+// THE MISSILES: a launcher's or the blaster's shot pressed for 0.2 s in every 1.6 s. The press to
+// the first missile drawn (one more drawn than the window frame before: the server's copy off,
+// the stand-in thrown ahead on), the mean over the presses; on, the stand-ins thrown, taken on by
+// the server's copy, ended with no copy and stopped by a wall.
+struct Missiles {
+  bool ok = false;
+  double first_ms = 0;
+  int seen = 0;
+  int thrown = 0, handed = 0, ended = 0, walled = 0;
+};
+
+// The missiles the window draws this frame: the stand-ins and the server's own (its other
+// entities with a bolt's, a grenade's or a rocket's model).
+int missiles_drawn(const dc::DemoState& d) {
+  int n = static_cast<int>(d.own_missiles.size());
+  for (size_t k = d.players.size() + 1; k < d.entities.size(); k++) {
+    const dc::DemoEntity& e = d.entities[k];
+    if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= d.models.size()) continue;
+    const std::string& name = d.models[static_cast<size_t>(e.model)];
+    if (name == "models/objects/laser/tris.md2" || name == "models/objects/grenade/tris.md2" ||
+        name == "models/objects/rocket/tris.md2")
+      n++;
+  }
+  return n;
+}
+
+Missiles run_missiles(int key, double latency_ms, bool on, int fps, int cues) {
+  Missiles out;
+  Session s;
+  std::string error;
+  if (!open_session(s, latency_ms, error, Kit::launchers)) return out;
+  const int64_t window_us = 1000000 / fps;
+  for (int i = 0; i < 6 * fps && (!s.remote.q2 || s.remote.q2->stage != cn::ClientStage::active);
+       i++)
+    window_frame(s, window_us);
+  if (!s.remote.q2 || s.remote.q2->stage != cn::ClientStage::active) return out;
+  for (int i = 0; i < fps; i++) window_frame(s, window_us);  // everything picked up
+  s.remote.hands.impulse = static_cast<uint8_t>(key);
+  for (int i = 0; i < 3 * fps; i++) window_frame(s, window_us);  // chosen and raised
+  s.remote.weapon.off = !on;
+  s.remote.missiles.on = on;
+  const dc::OwnMissiles& m = s.remote.missiles;
+  const int thrown = m.thrown, handed = m.handed, ended = m.ended, walled = m.walled;
+  const dc::DemoState& d = s.remote.demo.state;
+  const int cycle = static_cast<int>(1.6 * fps), held = static_cast<int>(0.2 * fps);
+  int cue_at = 0, before = missiles_drawn(d);
+  bool seen = false;
+  for (int i = 0; i < cycle * cues; i++) {
+    const int in_cycle = i % cycle;
+    if (in_cycle == 0) {
+      cue_at = i;
+      seen = false;
+    }
+    s.remote.hands.buttons = in_cycle < held ? sh::kButtonAttack : 0;
+    window_frame(s, window_us);
+    const int now = missiles_drawn(d);
+    if (now > before && !seen) {
+      seen = true;
+      out.first_ms += static_cast<double>(i - cue_at) * 1000.0 / fps;
+      out.seen++;
+    }
+    before = now;
+  }
+  out.first_ms /= out.seen > 0 ? out.seen : 1;
+  out.thrown = m.thrown - thrown;
+  out.handed = m.handed - handed;
+  out.ended = m.ended - ended;
+  out.walled = m.walled - walled;
   out.ok = true;
   return out;
 }
@@ -533,6 +617,46 @@ void run(gl::Lab& lab) {
                            std::to_string(r.b_n) + "/" + std::to_string(presses)});
     }
   lab.table(rest);
+  // The missiles thrown ahead of the server (client/own_missiles.hpp), at the first latency.
+  gl::LabTable flying{
+      "the player's own missiles at " + to_fixed(ms, 0) +
+          " ms each way: a press of 0.2 s in every 1.6 s, off and on",
+      {"weapon", "weapon prediction", "press to the missile drawn (ms)", "seen", "thrown ahead",
+       "taken on by the server's copy", "ended with no copy", "stopped by a wall"},
+      {}};
+  struct {
+    int key;
+    const char* name;
+  } guns[] = {{1, "blaster"}, {6, "grenade-launcher"}, {7, "rocket-launcher"}, {8, "hyperblaster"}};
+  for (const auto& g : guns) {
+    Missiles runs[2];
+    for (const bool on : {false, true}) {
+      const Missiles r = run_missiles(g.key, ms, on, fps, presses);
+      runs[on ? 1 : 0] = r;
+      if (!r.ok || r.seen == 0) {
+        lab.fail(std::string("se-q2-weapon-predict: the ") + g.name + (on ? " on" : " off") +
+                     ": the window never reached play, or no missile was drawn after a press",
+                 "next: build/debug/tests/shooters_edge_own_missiles_test");
+        return;
+      }
+      const std::string key = std::string("missile.") + g.name + (on ? ".on" : ".off");
+      lab.metric(key + ".drawn", r.first_ms, "ms");
+      if (on) {
+        lab.metric(key + ".thrown", r.thrown, "missiles");
+        lab.metric(key + ".handed", r.handed, "missiles");
+      }
+      flying.rows.push_back(
+          {g.name, on ? "on" : "off", to_fixed(r.first_ms, 1),
+           std::to_string(r.seen) + "/" + std::to_string(presses),
+           on ? std::to_string(r.thrown) : "-", on ? std::to_string(r.handed) : "-",
+           on ? std::to_string(r.ended) : "-", on ? std::to_string(r.walled) : "-"});
+    }
+    if (runs[1].first_ms >= runs[0].first_ms)
+      lab.fail(std::string("se-q2-weapon-predict: the ") + g.name +
+                   "'s missile thrown ahead was drawn no sooner than the server's",
+               "next: build/debug/tests/shooters_edge_own_missiles_test");
+  }
+  lab.table(flying);
 }
 
 const gl::LabSpec kSpec{
