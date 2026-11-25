@@ -102,7 +102,7 @@ TEST(the_mission_packs_flashes_play_their_own_shots) {
     return sounds.empty() || sounds[0].name == nullptr ? std::string() : sounds[0].name;
   };
   CHECK(heard(16, false) == "weapons/rippfire.wav");  // the ion ripper
-  CHECK(heard(17, false) == "weapons/hyprbf1a.wav");  // the blue hyperblaster
+  CHECK(heard(17, false).empty());                    // the blue hyperblaster: no pack sends it
   CHECK(heard(18, false) == "weapons/plasshot.wav");  // the phalanx
   CHECK(heard(30, false) == "weapons/nail1.wav");     // the flechettes
   CHECK(heard(32, false) == "weapons/shotg2.wav");    // the pack's shotgun

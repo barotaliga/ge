@@ -142,4 +142,22 @@ const std::vector<int32_t>& map_area_groups(const Q2Server& s);
 // its `delay` from now.
 void map_revisit(Q2Server& s);
 
+// Ground Zero's pushers, gravity triggers, barrels and plats (q2_gz_triggers.cpp), each nothing
+// outside the pack: a pusher's spawn, its use (true when it was switched), SILENT; a gravity
+// trigger's spawn and use (true for any trigger_gravity: its use is done), a player's touch after
+// his move; a barrel's liquids each frame; a dead blocker's crush, the rising plats' bad areas, a
+// blocked walker's ride (true when it sent a plat its way).
+struct Q2Entity;
+struct Q2Monster;
+void gz_push_spawn(Q2Server& s, Q2Entity& e);
+bool gz_push_use(Q2Server& s, Q2Entity& e);
+bool gz_push_silent(const Q2Server& s, const Q2Entity& e);
+void gz_gravity_spawn(const Q2Server& s, Q2Entity& e);
+bool gz_gravity_use(Q2Server& s, int i);
+void gz_gravity_touch(Q2Server& s, int slot);
+void gz_barrel_liquids(Q2Server& s, int i);
+void gz_plat_blocked(Q2Server& s, const Q2Entity& plat, int slot);
+void gz_plat_areas(Q2Server& s);
+bool gz_plat_ride(Q2Server& s, Q2Monster& m, sh::Vec3f move);
+
 }  // namespace shooters_edge::server
