@@ -34,9 +34,24 @@ namespace shooters_edge::server {
 
 enum class SqKind : uint8_t { armour, power_armour, weapon, ammo, health, powerup, key, pack };
 
-// The ammo kinds, in the HUD's order.
-enum class SqAmmo : uint8_t { none, shells, bullets, grenades, rockets, cells, slugs };
-inline constexpr int kSqAmmoKinds = 7;  // `none` included, so an `SqAmmo` indexes an array
+// The ammo kinds, in the HUD's order; then each pack's (q2_pack.hpp): The Reckoning's mag slugs
+// and traps, Ground Zero's flechettes, prox mines, teslas and the disruptor's rounds.
+enum class SqAmmo : uint8_t {
+  none,
+  shells,
+  bullets,
+  grenades,
+  rockets,
+  cells,
+  slugs,
+  magslugs,
+  traps,
+  flechettes,
+  prox,
+  tesla,
+  rounds
+};
+inline constexpr int kSqAmmoKinds = 13;  // `none` included, so an `SqAmmo` indexes an array
 
 // The armours, worse to better (0 none).
 enum class SqArmour : uint8_t { none, jacket, combat, body };
@@ -149,6 +164,63 @@ inline constexpr SqItem kSqItems[] = {
      "items/pkup.wav", SqKind::key},
     {"key_airstrike_target", "Airstrike Marker", "models/items/keys/target/tris.md2",
      "items/pkup.wav", SqKind::key},
+    // The Reckoning's (porting note: q2-reckoning-rules.md §§ 1, 3, 5, 8, 10, 11).
+    {"weapon_boomer", "Ionripper", "models/weapons/g_boom/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 50, SqAmmo::cells, 30, Q2Pack::reckoning},
+    {"weapon_phalanx", "Phalanx", "models/weapons/g_shotx/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 10, SqAmmo::magslugs, 30, Q2Pack::reckoning},
+    {"ammo_magslug", "Mag Slug", "models/objects/ammo/tris.md2", "misc/am_pkup.wav", SqKind::ammo,
+     10, SqAmmo::magslugs, 30, Q2Pack::reckoning},
+    {"ammo_trap", "Trap", "models/weapons/g_trap/tris.md2", "misc/am_pkup.wav", SqKind::ammo, 1,
+     SqAmmo::traps, 30, Q2Pack::reckoning},
+    {"item_quadfire", "DualFire Damage", "models/items/quadfire/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 30, SqAmmo::none, 60, Q2Pack::reckoning},
+    {"key_green_key", "Green Key", "models/items/keys/green_key/tris.md2", "items/pkup.wav",
+     SqKind::key, 0, SqAmmo::none, 0, Q2Pack::reckoning},
+    // What a fed trap leaves: health of its drop's count, past the maximum.
+    {"foodcube", "Health", "models/objects/trapfx/tris.md2", "items/m_health.wav", SqKind::health,
+     0, SqAmmo::none, 0, Q2Pack::reckoning},
+    // Ground Zero's: its five weapons, their ammo, its power-ups and keys.
+    {"weapon_etf_rifle", "ETF Rifle", "models/weapons/g_etf_rifle/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 50, SqAmmo::flechettes, 30, Q2Pack::ground_zero},
+    {"weapon_proxlauncher", "Prox Launcher", "models/weapons/g_plaunch/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 5, SqAmmo::prox, 30, Q2Pack::ground_zero},
+    {"weapon_plasmabeam", "Plasma Beam", "models/weapons/g_beamer/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 50, SqAmmo::cells, 30, Q2Pack::ground_zero},
+    {"weapon_chainfist", "Chainfist", "models/weapons/g_chainf/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 0, SqAmmo::none, 30, Q2Pack::ground_zero},
+    {"weapon_disintegrator", "Disruptor", "models/weapons/g_dist/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 15, SqAmmo::rounds, 30, Q2Pack::ground_zero},
+    {"ammo_flechettes", "Flechettes", "models/ammo/am_flechette/tris.md2", "misc/am_pkup.wav",
+     SqKind::ammo, 50, SqAmmo::flechettes, 30, Q2Pack::ground_zero},
+    {"ammo_prox", "Prox", "models/ammo/am_prox/tris.md2", "misc/am_pkup.wav", SqKind::ammo, 5,
+     SqAmmo::prox, 30, Q2Pack::ground_zero},
+    {"ammo_tesla", "Tesla", "models/ammo/am_tesl/tris.md2", "misc/am_pkup.wav", SqKind::ammo, 5,
+     SqAmmo::tesla, 30, Q2Pack::ground_zero},
+    {"ammo_nuke", "A-M Bomb", "models/weapons/g_nuke/tris.md2", "misc/am_pkup.wav", SqKind::powerup,
+     300, SqAmmo::none, 300, Q2Pack::ground_zero},
+    {"ammo_disruptor", "Rounds", "models/ammo/am_disr/tris.md2", "misc/am_pkup.wav", SqKind::ammo,
+     15, SqAmmo::rounds, 30, Q2Pack::ground_zero},
+    {"item_ir_goggles", "IR Goggles", "models/items/goggles/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 60, SqAmmo::none, 60, Q2Pack::ground_zero},
+    {"item_double", "Double Damage", "models/items/ddamage/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 30, SqAmmo::none, 60, Q2Pack::ground_zero},
+    {"item_compass", "compass", "models/objects/fire/tris.md2", "items/pkup.wav", SqKind::powerup,
+     60, SqAmmo::none, 60, Q2Pack::ground_zero},
+    {"item_sphere_vengeance", "vengeance sphere", "models/items/vengnce/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 60, SqAmmo::none, 60, Q2Pack::ground_zero},
+    {"item_sphere_hunter", "hunter sphere", "models/items/hunter/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 120, SqAmmo::none, 120, Q2Pack::ground_zero},
+    {"item_sphere_defender", "defender sphere", "models/items/defender/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 60, SqAmmo::none, 60, Q2Pack::ground_zero},
+    {"item_doppleganger", "Doppleganger", "models/items/dopple/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 90, SqAmmo::none, 90, Q2Pack::ground_zero},
+    {"dm_tag_token", "Tag Token", "models/items/tagtoken/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 0, SqAmmo::none, 0, Q2Pack::ground_zero},
+    {"key_nuke_container", "Antimatter Pod", "models/weapons/g_nuke/tris.md2", "items/pkup.wav",
+     SqKind::key, 0, SqAmmo::none, 0, Q2Pack::ground_zero},
+    {"key_nuke", "Antimatter Bomb", "models/weapons/g_nuke/tris.md2", "items/pkup.wav", SqKind::key,
+     0, SqAmmo::none, 0, Q2Pack::ground_zero},
 };
 inline constexpr int kSqItemCount = static_cast<int>(sizeof(kSqItems) / sizeof(kSqItems[0]));
 
@@ -162,6 +234,8 @@ inline constexpr int kSqTurnEffect = 1;
 // The effect bits a player's powers send (a client wears them as a blue and a red shell), and the
 // render bit that pulses an item's light where it lies.
 inline constexpr int kSqQuadEffect = 32768, kSqInvulnerableEffect = 65536;
+// Ground Zero's double damage shell.
+inline constexpr int kSqDoubleEffect = 0x08000000;
 inline constexpr int kSqGlowRender = 512;
 // A beam's render bits (a laser's): drawn from the origin to the row's far end, seen through.
 inline constexpr int kSqBeamRender = 128, kSqTranslucentRender = 32;
@@ -204,8 +278,8 @@ struct SqBody {
   int cubes = 0;     // in coop, the bits of the power cubes taken (bit n: the level's cube n)
 };
 
-// A fresh body: health 100 of 100, the blaster, the starting carry limits.
-SqBody sq_new_body();
+// A fresh body: health 100 of 100, the blaster, the starting carry limits (`pack`'s ammo too).
+SqBody sq_new_body(Q2Pack pack = Q2Pack::base);
 
 // Takes item row `item` into `body` by its kind's rule (`skill` 0..3; adrenaline raises the
 // maximum only outside `deathmatch`); true when it is taken (the item hides or goes), false when

@@ -12,6 +12,7 @@
 
 #include "brush/trace.hpp"
 #include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -56,19 +57,9 @@ void blend_frame(Q2Server& s, int slot) {
   else if ((at & kWater) != 0)
     lay(0.5f, 0.3f, 0.2f, 0.4f);
   // One power, the first held, blinking in its last 3 s.
-  struct Power {
-    double until;
-    float r, g, bl, a;
-  };
-  const Power powers[] = {{p.quad_until, 0, 0, 1, 0.08f},
-                          {p.invulnerable_until, 1, 1, 0, 0.08f},
-                          {p.suit_until, 0, 1, 0, 0.08f},
-                          {p.breather_until, 0.4f, 1, 0.4f, 0.04f}};
-  for (const Power& w : powers) {
-    const int64_t left = frames_left(w.until, s.level_time);
-    if (left <= 0) continue;
-    if (left > 30 || (left & 4) != 0) lay(w.r, w.g, w.bl, w.a);
-    break;
+  if (const SqPower* pw = sq_first_power(p, s.level_time)) {
+    const int64_t left = frames_left(p.*pw->until, s.level_time);
+    if (left > 30 || (left & 4) != 0) lay(pw->tint[0], pw->tint[1], pw->tint[2], pw->tint[3]);
   }
   // The blows this frame, then the flashes.
   const int real = p.blow_parts[0] + p.blow_parts[1] + p.blow_parts[2];
