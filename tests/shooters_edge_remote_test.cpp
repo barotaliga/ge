@@ -1103,6 +1103,44 @@ TEST(a_map_the_window_lacks_is_fetched_before_it_asks_to_spawn) {
   CHECK(!said_has(rig.said, "another version"));
 }
 
+// A file fetched out of one of the server's archives: the server tells its archive first (svc 123,
+// the client's alone) and the window's reader, which draws the stream, never sees it, so the join
+// goes on to the map instead of dropping at sign-on on a message it does not know.
+TEST(a_file_fetched_out_of_the_server_s_archive_never_drops_the_join) {
+  Rig rig;
+  rig.serve = [](cn::ServerConfig& sc) {
+    sc.map_check = true;
+    sc.read_file = [](const std::string& path, std::vector<uint8_t>* out) {
+      if (path != "maps/arena.bsp") return false;
+      *out = map_version(1);
+      return true;
+    };
+    sc.file_origin = [](const std::string&, ge::vfs::ArchiveOrigin* o) {
+      *o = {"pak1.pak", "id1", 3, 1, 4096, 12, 4000};
+      return true;
+    };
+  };
+  std::vector<std::string> fetched;
+  bool told_origin = false;
+  rig.join_with = [&](cn::ClientConfig& cc) {
+    cc.read_file = [&](const std::string&, const std::string& path) {
+      for (const std::string& f : fetched)
+        if (f == path) return map_version(1);
+      return std::vector<uint8_t>{};
+    };
+    cc.keep_file = [&](const std::string&, const std::string& path, const std::vector<uint8_t>&,
+                       const ge::vfs::ArchiveOrigin* origin) {
+      fetched.push_back(path);
+      told_origin = told_origin || (origin != nullptr && origin->archive == "pak1.pak");
+    };
+  };
+  CHECK(rig.start());
+  CHECK_MSG(rig.join(), "the window never played on the server");
+  CHECK(rig.remote.end.downloaded.count("maps/arena.bsp") == 1);
+  CHECK(told_origin);
+  CHECK(!said_has(rig.said, "not one this reader knows"));
+}
+
 // The server changes map while the window plays: it is told the map is changing, signs on again
 // and draws the new level, and its prediction and the correction it smooths start over on that
 // level, nothing predicted through the old one: walking there, each prediction
