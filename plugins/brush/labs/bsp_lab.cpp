@@ -26,6 +26,7 @@
 
 #include "assets/model.hpp"
 #include "brush/read.hpp"
+#include "brush/rebake.hpp"
 #include "brush/write.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
@@ -341,6 +342,43 @@ bool write_textures(lab::Lab& lab, const std::vector<Loaded>& maps,
   return true;
 }
 
+// A 38 map's surface lights in the rebake (rebake.hpp's lamp_emit), held by the digest: the
+// fixture's first ceiling made a lamp (write.hpp's kFixtureLamp), the room rebaked with every
+// texture an orange and no other light, and the light it gives counted: the luxels it reaches, the
+// brightest red and blue, and a hash of every luxel's packed bits.
+void lamp_rebake(lab::Lab& lab) {
+  br::Fixture fx = br::sample_fixture();
+  fx.rooms[0].ceiling = "lamp1";
+  std::vector<uint8_t> bytes;
+  std::string err;
+  br::Map m;
+  br::Rebaked out;
+  br::RebakeInput in;
+  br::RebakeOptions o;
+  o.atlas_width = 1024;
+  o.bake.samples = 8;
+  if (!br::write_bsp(fx, br::Family::v38, &bytes, &err) || !br::read_bsp(bytes, &m, &err) ||
+      (in.albedo.assign(m.textures.size(), {0.8f, 0.4f, 0.1f}),
+       !br::rebake_map(m, in, o, &out, &err))) {
+    lab.fail("bsp: the lamp fixture's rebake: " + err,
+             "next: fix plugins/brush/rebake.cpp; skill: brush");
+    return;
+  }
+  uint32_t hash = 2166136261u, lit = 0;
+  float most[3] = {0, 0, 0};
+  for (const uint32_t px : out.rgb9e5) {
+    hash = (hash ^ px) * 16777619u;
+    float c[3];
+    br::unpack_rgb9e5(px, c);
+    if (c[0] > 0 || c[1] > 0 || c[2] > 0) lit++;
+    for (int k = 0; k < 3; ++k) most[k] = std::max(most[k], c[k]);
+  }
+  lab.metric("rebake-lamp-v38.lit", double(lit), "luxels");
+  lab.metric("rebake-lamp-v38.red", double(most[0]), "lightmap");
+  lab.metric("rebake-lamp-v38.blue", double(most[2]), "lightmap");
+  lab.metric("rebake-lamp-v38.hash", double(hash), "fnv1a");
+}
+
 void run(lab::Lab& lab) {
   const int px = int(lab.arg_num("px"));
   const std::string path = lab.arg("map");
@@ -458,6 +496,7 @@ void run(lab::Lab& lab) {
   }
   lab.table(table);
   lab.table(times, Det::measured);
+  if (path.empty()) lamp_rebake(lab);
   const std::vector<std::pair<std::string, std::string>> inputs{
       {"map", path.empty() ? "the sample fixture" : path}};
 
