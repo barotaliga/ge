@@ -83,6 +83,8 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 // byte and payload. How each kind's bytes run: a point; a point and a direction byte; a count, a
 // point, a direction and a colour; two points (a line); an entity and two points; two entities
 // (the struck, then the striker in the event's level) and two points (the end, then the start).
+// A steam jet: its effect id (-1 a puff), count, point, direction, colour, speed and, with an id,
+// how long it lasts in ms.
 enum class TeBody : uint8_t {
   point,
   point_dir,
@@ -91,7 +93,8 @@ enum class TeBody : uint8_t {
   entity_line,
   count,
   lightning,
-  id_point
+  id_point,
+  steam
 };
 struct TeName {
   const char* name;
@@ -160,6 +163,7 @@ constexpr TeName kTeNames[] = {
     {"te_widowbeamout", 50, TeBody::id_point, 0},
     {"te_widowsplash", 52, TeBody::point, 0},
     {"te_explosion1_np", 54, TeBody::point, 0},
+    {"te_steam", 40, TeBody::steam, 0},  // target_steam's jet
 };
 
 }  // namespace
@@ -257,6 +261,15 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
       point(e.origin);
       point(end);
+      break;
+    case TeBody::steam:  // speed in dir.x, the length (ms) in dir.y
+      o.i16(e.ent);
+      o.u8(static_cast<uint32_t>(std::clamp(e.values[3], 0.0f, 255.0f)));
+      point(e.origin);
+      way();
+      o.u8(static_cast<uint32_t>(e.level & 0xff));
+      o.i16(static_cast<int>(e.dir.x));
+      if (e.ent != -1) o.i32(static_cast<int64_t>(e.dir.y));
       break;
   }
   return true;

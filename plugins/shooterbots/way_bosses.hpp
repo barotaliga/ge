@@ -37,4 +37,8 @@ void way_bolt_init(WayThrough& w, const Fighter& f, const ge::shooterbots::BotVi
 // the bolt's button.
 int way_bolt_pick(const WayThrough& w, const ge::shooterbots::BotView& s);
 
+// A trigger with health answers only a shot (its button spot, `way_shot_triggers`): never walked
+// into (e2m7's seven he stood in for minutes).
+bool way_shot_only(const EntityBlock& b);
+
 }  // namespace ge::shooterbots

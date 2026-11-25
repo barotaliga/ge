@@ -14,6 +14,7 @@
 
 #include "brush/map.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -221,7 +222,9 @@ void campaign_unnamed_starts(Q2Server& s) {
 
 const Q2Entity* campaign_spot(const Q2Server& s, int slot) {
   const std::string& name = s.spawn_name;
-  if (coop(s) && slot > 0) {  // the slot-th co-op spot of the name
+  if (coop(s))
+    if (const Q2Entity* lava = gz_lava_start(s)) return lava;  // Ground Zero's rising lava
+  if (coop(s) && slot > 0) {                                   // the slot-th co-op spot of the name
     int n = 0;
     for (const Q2Entity& e : s.entities)
       if (e.classname == "info_player_coop" && q2_same_name(e.targetname, name) && ++n == slot)

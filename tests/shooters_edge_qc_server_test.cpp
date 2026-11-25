@@ -19,6 +19,7 @@
 #include "check.hpp"
 #include "progs/assembler.hpp"
 #include "shooter/client.hpp"
+#include "shooters_edge/server/commands.hpp"
 #include "shooters_edge_qc_fixture.hpp"
 
 using qcfix::ent;
@@ -245,4 +246,46 @@ TEST(the_send_fields_are_kept_as_data) {
   fx.set_f(33, fx.field("hideentity"), 1);
   sv::qc_frame(*fx.s, nullptr, 0);
   CHECK(fx.f(33, fx.field("hideentity")) == 1.0f);  // nothing reads it yet; nothing clears it
+}
+
+TEST(the_single_player_form_takes_the_team_from_the_pants_colour) {
+  pg::Assembler a(pg::kSinglePlayerLayout);
+  a.begin_function("worldspawn", {}, 0);
+  a.emit(pg::kOpDone);
+  a.end_function();
+  pg::Progs mod;
+  std::string e;
+  CHECK_MSG(a.build(mod, e), e);
+  Fixture fx("{ \"classname\" \"worldspawn\" }", {}, &mod);
+  CHECK_MSG(fx.loaded, fx.error);
+  const int team = fx.field("team");
+  CHECK(team >= 0);
+  if (team < 0) return;
+  // Joined wearing pants 4: a team the program's join left at 0 is 5.
+  const int p = fx.join(0, "Ana");
+  sv::set_user_info(*fx.s, 0, "bottomcolor", "4");
+  CHECK(fx.f(p, team) == 5.0f);
+  // A colour the join came with leaves a team the program set at its join.
+  const int q = fx.join(1, "Bo");
+  fx.in_call([&] { fx.set_f(q, team, 14); });
+  sv::set_user_info(*fx.s, 1, "bottomcolor", "0");
+  CHECK(fx.f(q, team) == 14.0f);
+  // Later, every change of pants sets it; past 13 is 13.
+  sv::qc_frame(*fx.s, nullptr, 0);
+  sv::set_user_info(*fx.s, 1, "bottomcolor", "4");
+  CHECK(fx.f(q, team) == 5.0f);
+  sv::set_user_info(*fx.s, 0, "bottomcolor", "15");
+  CHECK(fx.f(p, team) == 14.0f);
+}
+
+TEST(the_multiplayer_form_keeps_its_own_team) {
+  const pg::Progs mod = spawn_mod();
+  Fixture fx("{ \"classname\" \"worldspawn\" }", {}, &mod);
+  const int team = fx.field("team");
+  CHECK(team >= 0);
+  if (team < 0) return;
+  const int p = fx.join(0, "Ana");
+  sv::qc_frame(*fx.s, nullptr, 0);
+  sv::set_user_info(*fx.s, 0, "bottomcolor", "4");
+  CHECK(fx.f(p, team) == 0.0f);
 }

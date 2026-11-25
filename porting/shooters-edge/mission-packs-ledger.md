@@ -207,14 +207,15 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | rog1.hud.ammo | their ammunition (`R_AMMOLAVA`, `R_AMMOMULTI`, `R_AMMOPLASMA`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); the main bar's icon off bits 26-28 |
 | rog1.hud.items | the power shield and the anti-grav belt (`R_SHIELD1`..`5`, `R_AGRAV1`..`5`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); only `R_SHIELD1` and `R_AGRAV1` are drawn, as the pack drew them |
 | rog1.hud.team | the team colour's border in team games (`R_TEAMBORD`) | done | 2 | hud/layout.cpp (`sbar_team`, `sbar_team_frags`): teamplay 4 to 6 in a game of more than one; the colours by the palette; tests/shooters_edge_hud_test.cpp |
-| rog1.runes | deathmatch's runes | verify | 2 |  |
-| rog1.grapple | the grappling hook in team games, its chain drawn | verify | 2 | the beam model is drawn (C465) |
+| rog1.runes | deathmatch's runes | done | 2 | the pack's program on the QC server, `gamecfg` the server's: the se-dissolution-dm lab (`--packs`) sees none at `gamecfg 0`, four out of the deathmatch spots at `gamecfg 1`, one taken with its name centre printed, a second refused, the held one falling where its holder dies, the untaken ones moved after two minutes (2026-11-24). The four effects are the program's own arithmetic |
+| rog1.grapple | the grappling hook in team games, its chain drawn | done | 2 | the se-dissolution-dm lab (`--packs`): none at `teamplay 0`; at `teamplay 4` impulse 22 and attack throw `progs/hook.mdl`, the chain sent as the beam temporary entity every frame, the player pulled across the arena to the wall, the hook gone on letting go (2026-11-24); the beam drawn by client/world_fx.cpp (C465) |
 | rog1.motd | the pack's message of the day on joining | done | 3 | the pack's own program shows it as a centre print, only with teamplay 3 to 6 (porting/shooters-edge/q1-rogue-team-modes.md § 1): `labs se-client --game=<dir>/rogue --map=ctf1 --progs=pack --server="deathmatch 1;teamplay 4" --say=...` notes the welcome four times in its first six seconds, the team it was put on, the teams' score line and the 50 green armour kit (2026-11-24) |
 | rog1.cfg | the pack's configs run at start | done |  | the pack ships no `default.cfg` or `quake.rc` (its pack read 2026-11-23), so the base game's start runs, as it does |
 | rog1.demos | the attract loop plays the pack's three demos | done |  | the pack's own demo1..3 win over the base's by the search path; the se-attract lab with `--game=rogue` plays its demo1 on r1m5 (2026-11-23) |
 | rog1.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (its logo at the right) drawn by the se-attract lab with `--game=rogue` (2026-11-23) |
 | rog1.endtext | `end1.bin`, `end2.bin`, the text screens on quitting | not taken |  | as hip.endtext |
 | rog1.dm | `ctf1` and the team modes played by bots | verify | 2 |  |
+| rog1.teams | the team modes on the server: capture the flag with two flags, one flag and three teams, tag; the program's colours stuffed and its team change refused | done | 2 | the pack's program on the QC server; the server sets a single-player-form program's `team` from the pants colour as it changes (server/commands.cpp `pants_team`; tests/shooters_edge_qc_server_test.cpp). The se-dissolution-dm lab (`--packs`): joiners put on red and blue, the enemy flag taken, captured for 15 and sent home, dropped by a killed carrier and returned, a change of pants refused, three teams at `teamplay 6`, the neutral flag captured at 5, the tag token at 3 (2026-11-24) |
 | rog1.coop | co-op on the pack's program | verify | 2 |  |
 | rog1.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | rog1.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: lava nails, multi rockets and plasma read as the ammunition of the same weapon; the shield, belt, sphere and random powerup have no part in another game and drop; held by tests/shooters_edge_remix_test.cpp |
@@ -259,13 +260,13 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | verify | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token) |
+| rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | done | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token); the se-dissolution-dm lab (`--packs`, 2026-11-24): the token stands at `teamplay 3` and a player takes it ("got the tag token!") |
 | rog1.ent.func_ctf_wall | `func_ctf_wall` | a wall that stands only in some team modes | 14 / 185 | verify | 2 | kept only at teamplay 4 to 6 (a plain solid wall), removed otherwise; single player (the things lab, r2m6) has none live; a CTF look still owed. Facts: porting/shooters-edge/q1-rogue-things.md. |
-| rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
-| rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_flag_team1 | `item_flag_team1` | team one's flag | 15 / 15 | verify | 2 | runs in the pack's program; LIFT: one capture the flag with Quake II's CTF |
-| rog1.ent.item_flag_team2 | `item_flag_team2` | team two's flag | 15 / 15 | verify | 2 | runs in the pack's program |
+| rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): red's spots, the red joiners' starts |
+| rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): blue's spots, the blue joiners' starts |
+| rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): the neutral flag stands at `teamplay 5`, the team flags gone to bases, and is taken and captured at the enemy base |
+| rog1.ent.item_flag_team1 | `item_flag_team1` | team one's flag | 15 / 15 | done | 2 | runs in the pack's program; LIFT: one capture the flag with Quake II's CTF; the se-dissolution-dm lab (`--packs`, 2026-11-24): red's flag at its base, a carrier's capture there for 15 |
+| rog1.ent.item_flag_team2 | `item_flag_team2` | team two's flag | 15 / 15 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): blue's flag taken, captured, sent home, dropped by a killed carrier and returned |
 
 #### Movers and traps
 
@@ -294,9 +295,9 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 | xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | done |  | server/q2_bar.cpp (`kReckoning`, its 47 items); tests/shooters_edge_q2_reckoning_test.cpp |
 | xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
-| xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
+| xat.campaign | the four units in order, the help computer's lines, the end | verify |  | NEW GAME in the pack's folder starts on `xswamp` (server/q2_pack.cpp `q2_pack_start_map`, client/game_folder.cpp); the maps' own level strings chain the six units through the base campaign (`xu1`..`xu4` between, `xout` and the victory picture at the end), help lines are the maps' `target_help`; `se-q2-unit --mod=xatrix` plays a unit by script; a full run on the release build settles it |
 | xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | done | 2 | NEW GAME takes the level default.cfg names (`*logo.cin+xin.cin+xswamp`: client/game_folder.hpp `new_game_level`); the unit ends' movies come from the maps' level strings (server/q2_campaign.hpp); all eight decoded to their end, frames and sound |
-| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
+| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | done |  | the rules' item table names each icon (server/q2_bar.cpp); the pack's pics/ hold them all and win by name over the base's (tests/shooters_edge_game_adapter_test.cpp) |
 | xat.menu | the pack's own pictures (console background, quit, victory) | done |  | the pack's folder over the base's (`open_game_dir`): its own `conback`, `quit` and `victory` win by name; held by tests/shooters_edge_game_adapter_test.cpp |
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp; held end to end by tests/shooters_edge_take_in_test.cpp (the window's music finds the remapped file; any case or a path) |
 | xat.sounds | the sounds the client plays itself for the pack: the ion ripper's and the phalanx's muzzle flashes, the hyper soldier's (the tank machine gun's five), none for its effect bits or its other temp entities | done |  | server/q2_flash.cpp (the player's blue hyperblaster flash made silent); tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
@@ -304,11 +305,11 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 | xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`); the marks drawn held by tests/shooters_edge_q2_world_fx_test.cpp |
 | xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | done |  | server/q2_wire.cpp (28), client/q2_temp_fx.hpp and client/listen.cpp (the rocket's explosion, as the stock client draws it) |
 | xat.te.greenblood | the gekk's green blood (temporary entity 26) | done |  | server/q2_wire.cpp (26), client/q2_temp_fx.hpp (30 green specks) |
-| xat.dm | the seven deathmatch maps played by bots | missing | 2 |  |
+| xat.dm | the seven deathmatch maps played by bots | done |  | games/shooters_edge/bots/arsenals.cpp `q2_arsenal(pack)`: the pack's items and ammunition in the bots' tables, the Ionripper and the Phalanx as bot weapons; `se-q2-bots --pack=xatrix` loads xdm1..xdm7, the bots pick up and hold the pack's guns and score frags on six of the seven in 30 s |
 | xat.coop | co-op through the units | missing | 2 |  |
-| xat.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
+| xat.save | saves of the pack's campaign | done |  | server/q2_save.cpp (v12: the pack's rows, the trap's state, dual fire); tests/shooters_edge_q2_reckoning_test.cpp saves a pack game mid-trap and plays on bit for bit (an item's row now follows its drop to the floor, which a loaded game showed and a running one did not) |
 | xat.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| xat.remix | the pack's weapons and items as roles for remix | missing | 3 |  |
+| xat.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the Ionripper as the energy weapon, the Phalanx as the launcher, mag slugs its ammunition, traps as grenades, DualFire as damage; listed in kPackItems so cr_expansions takes or leaves them |
 
 ### What the maps place that the base game's maps never do
 
@@ -395,7 +396,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | gz.te.explosion1_np | an explosion with no specks (54) | done | 2 | client/q2_model_fx.hpp: the rocket's ball and light, no specks; rocklx1a; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
 | gz.te.flechette | a flechette's hit (55) | done | 1 | client/world_fx_q2.cpp: 40 specks of 0x6f.., the flare's skin 2 and a pale blue light; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
 | gz.dm | the fourteen deathmatch maps played by bots | missing | 2 |  |
-| gz.coop | co-op through the units (`info_player_coop_lava`) | missing | 2 |  |
+| gz.coop | co-op through the units (`info_player_coop_lava`) | done | 2 | server/q2_gz_things.cpp (the lava starts), server/q2_gz_rules.cpp (`coop_baseq2`, flag 4096 and the every-skill rule); the bosses' co-op health and helpers come with their monster rows |
 | gz.save | saves of the pack's campaign | done | 2 | server/q2_save.cpp chunk version 13: the mines', tesla's and disruptor's stages, double damage, the IR goggles, the chainfist's swing; tests/shooters_edge_q2_gz_test.cpp loads a game with mines in flight and stuck and plays it on bit for bit; `se-q2-save --mod=rogue` on rmine1 and rlava1 |
 | gz.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | gz.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the ETF rifle as rapid, the plasma beam (both names) as beam, the prox launcher as lobber, the disruptor as launcher, their ammunition beside them, double damage as damage; the chainfist, the tesla, the A-M bomb, the spheres, the decoy and the goggles drop (tests/shooters_edge_remix_test.cpp) |
@@ -436,7 +437,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | done | 2 | server/q2_gz_spheres.cpp (the chase in sight, the lurk where it lost him, 10 000 past armour, the 512 blast; the doppleganger's `gz_release_sphere`) |
 | gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | done | 2 | server/q2_gz_spheres.cpp (called by a blow leaving its owner under 25; Dissolution's runs in its own program, so nothing to lift) |
 | gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | done | 1 | server/q2_items.cpp (a key row) |
-| gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | missing | 1 | not in our rules |
+| gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | done | 1 | server/q2_items.hpp (a key row) |
 | gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.weapon_disintegrator | `weapon_disintegrator` | the disruptor: a slow bolt that tracks and disintegrates | 13 / 14 | done | 1 | server/q2_gz_weapons.cpp; left off unless `g_disruptor` |
 | gz.ent.weapon_etf_rifle | `weapon_etf_rifle` | the ETF rifle: fires flechettes | 18 / 25 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
@@ -469,16 +470,17 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.func_plat2 | `func_plat2` | a plat with more ways to move | 28 / 130 | missing | 1 | not in our rules |
+| gz.ent.func_plat2 | `func_plat2` | a plat with more ways to move | 28 / 130 | done | 1 | server/q2_gz_plat.cpp (called to either end, toggle, resting at the top, named, twice as quick in deathmatch; the bad area it lays for monsters and monsters riding it are not built) |
 | gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | done | 1 | server/q2_gz_ai.cpp (`gz_hint_spawn`, `gz_hints`: chains from each END node, up to 100, cut at a fork or a loop; taken after 5 s out of sight, at most every 10 s, from a node within 512 the monster sees to one within 512 its enemy sees; a node's `wait` held; off the path once it sees him); tests/shooters_edge_q2_gz_ai_test.cpp |
-| gz.ent.info_player_coop_lava | `info_player_coop_lava` | a co-op start used once the lava has risen | 1 / 26 | missing | 2 | not in our rules |
-| gz.ent.misc_nuke_core | `misc_nuke_core` | the reactor core of the finale | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.target_anger | `target_anger` | makes monsters angry at a target | 9 / 18 | missing | 2 | not in our rules |
-| gz.ent.target_blacklight | `target_blacklight` | a black light's look | 1 / 1 | missing | 3 | not in our rules |
-| gz.ent.target_killplayers | `target_killplayers` | kills every player (a failed objective) | 1 / 1 | missing | 2 | not in our rules |
-| gz.ent.target_orb | `target_orb` | an orb's look | 1 / 1 | missing | 3 | not in our rules |
-| gz.ent.target_steam | `target_steam` | a steam jet | 9 / 69 | missing | 2 | not in our rules |
-| gz.ent.trigger_disguise | `trigger_disguise` | gives the disguise: monsters take the player for one of them (the client's figure is done) | 2 / 2 | missing | 2 | not in our rules |
+| gz.ent.info_player_coop_lava | `info_player_coop_lava` | a co-op start used once the lava has risen | 1 / 26 | done | 2 | server/q2_gz_things.cpp `gz_lava_start` (rmine2, rmine2p), server/q2_campaign.cpp |
+| gz.ent.func_water_smart | `func_water` (flag 2) | smart water: the lava that rises after the lowest player once used | 1 / 8 | done | 1 | server/q2_gz_water.cpp (rises at the gap over `accel`, 5 to `speed`, stops at its `health` height, burns a blocker 100, fires its targets and opens its portals); tests/shooters_edge_q2_gz_things_test.cpp |
+| gz.ent.misc_nuke_core | `misc_nuke_core` | the reactor core of the finale | 1 / 1 | done | 1 | server/q2_gz_things.cpp |
+| gz.ent.target_anger | `target_anger` | makes monsters angry at a target | 9 / 18 | done | 2 | server/q2_gz_things.cpp; a point as a monster's foe in server/q2_monsters.cpp |
+| gz.ent.target_blacklight | `target_blacklight` | a black light's look | 1 / 1 | done | 3 | server/q2_gz_things.cpp |
+| gz.ent.target_killplayers | `target_killplayers` | kills every player (a failed objective) | 1 / 1 | done | 2 | server/q2_gz_things.cpp (players, then the monsters a player sees) |
+| gz.ent.target_orb | `target_orb` | an orb's look | 1 / 1 | done | 3 | server/q2_gz_things.cpp |
+| gz.ent.target_steam | `target_steam` | a steam jet | 9 / 69 | done | 2 | server/q2_gz_things.cpp; temporary entity 40 in server/q2_wire.cpp |
+| gz.ent.trigger_disguise | `trigger_disguise` | gives the disguise: monsters take the player for one of them (the client's figure is done) | 2 / 2 | done | 2 | server/q2_gz_things.cpp; the disguise in server/q2_monsters.cpp, q2_fight.cpp, the `disguise` command, saves v14 |
 
 ## Lift before port: what is shared
 

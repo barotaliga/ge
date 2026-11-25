@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -49,6 +50,8 @@ enum Class : uint8_t {
   kCrossTarget,
   kElevator,
   kSecretDoor,
+  kPlat2,  // Ground Zero's plat that goes either way (q2_gz_plat.cpp)
+  kPlat2Field,
 };
 
 // A mover's states: at rest at its first place, going to its second, at its second, coming back.
@@ -83,6 +86,9 @@ enum Act : uint8_t {
   kSecretBeside,
   kSecretHome,
   kSecretShut,
+  kPlat2Go,  // Ground Zero's plat2 (q2_gz_plat.cpp): off to its other end; there
+  kPlat2Arrive,
+  kSmartRise,  // Ground Zero's smart water (q2_gz_water.cpp): rising, steered each frame
 };
 
 struct Mover {
@@ -98,6 +104,8 @@ inline Class class_of_name(std::string_view c) {
       {"func_water", kDoor},  // a door of water
       {"func_button", kButton},
       {"func_plat", kPlat},
+      {"func_plat2", kPlat2},
+      {"plat2_field", kPlat2Field},
       {"func_train", kTrain},
       {"trigger_elevator", kElevator},
       {"misc_viper", kTrain},  // the fly-by ships run their path as a train
@@ -155,6 +163,28 @@ void gz_train_teams(Q2Server& s);
 void gz_movers_frame(Q2Server& s);
 void gz_fan_spawn(const Q2Server& s, Q2Entity& e);
 bool gz_fan_use(Q2Server& s, Q2Entity& e, int activator);
+
+// The movers' samples (q2_map_sounds.cpp): starts, ends, the loops while they move, the pad's hum
+// and burst, a button's press.
+inline constexpr const char* kDoorStart = "doors/dr1_strt.wav";
+inline constexpr const char* kDoorEnd = "doors/dr1_end.wav";
+inline constexpr const char* kPlatStart = "plats/pt1_strt.wav";
+inline constexpr const char* kPlatEnd = "plats/pt1_end.wav";
+inline constexpr const char* kDoorMove = "doors/dr1_mid.wav";  // the loops while they move
+inline constexpr const char* kPlatMove = "plats/pt1_mid.wav";
+inline constexpr const char* kPadHum = "world/amb10.wav";  // a teleporter's pad
+inline constexpr const char* kTeleSound =
+    "misc/tele1.wav";  // its burst, at the pad and at the exit
+inline constexpr const char* kButtonSound = "switches/butn2.wav";
+
+// A door's start or end sample (q2_map_sounds.cpp); null when it moves quietly.
+const char* door_sample(const Q2Server& s, const Q2Entity& e, bool start);
+// The sound list's index of `name`, put on the list when it is not there; 0 for no name.
+int sound_index(Q2Server& s, const std::string& name);
+// Every entity's loop and the one-shots beside it put on the sound list, as the map starts.
+void map_loops(Q2Server& s);
+// The loop entity `e` (at `i`) makes this frame; 0 none.
+int loop_now(const Q2Entity& e, int i);
 
 // Starts team `master`'s frame: what to put back should a part be blocked.
 void team_begin(const Q2Server& s, TeamFrame& t, int master);

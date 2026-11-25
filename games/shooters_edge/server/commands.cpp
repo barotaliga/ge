@@ -303,10 +303,28 @@ static CommandResult run_client_command(QcServer& s, int slot, const std::string
   return CommandResult::bad;
 }
 
+// THE SINGLE-PLAYER FORM'S TEAM IS THE PANTS COLOUR PLUS ONE: a program of that form reads a
+// player's team off its `team` field, which the server sets from the bottom colour (0..13; a
+// colour past 13 is 13) whenever it changes, so a program can tell a player who changed colour.
+// A colour that comes with the player's join (the same server time as the connect) is the one he
+// joined wearing: it sets the team only where the program's join set none, as it is given before
+// the program's join in that form.
+static void pants_team(QcServer& s, int slot, const std::string& value) {
+  if (s.progs == nullptr || !pg::vm_layout(s.q.vm).single_player) return;
+  const pg::Def* d = pg::find_field(*s.progs, "team");
+  if (d == nullptr) return;
+  int bottom = std::atoi(value.c_str()) & 15;
+  if (bottom > 13) bottom = 13;
+  uint32_t* team = pg::entity_field(s.q.vm, slot + 1, d->offset);
+  if (s.clients[slot].entered_at == s.sv.time && pg::as_float(*team) != 0) return;
+  *team = pg::as_word(static_cast<float>(bottom + 1));
+}
+
 static void change_user_info(QcServer& s, int slot, const std::string& key,
                              const std::string& value) {
   std::string old;
   if (!set_info_value(s.clients[slot].userinfo, key, value, old)) return;
+  if (key == "bottomcolor") pants_team(s, slot, value);
   if (key == "name") set_netname(s, slot + 1, value);
   if (key == "cl_speedjump") s.sv.clients[slot].speedjump = value == "1";  // pm_speedjump's ask
   note_aim_help_info(s, slot, key, value);

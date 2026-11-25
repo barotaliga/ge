@@ -33,6 +33,18 @@ Q2Pack q2_pack_of_folder(std::string_view folder) {
   return Q2Pack::base;
 }
 
+std::string_view q2_pack_start_map(Q2Pack pack) {
+  switch (pack) {
+    case Q2Pack::reckoning:
+      return "xswamp";
+    case Q2Pack::ground_zero:
+      return "rmine1";
+    case Q2Pack::base:
+      break;
+  }
+  return "";
+}
+
 std::string_view q2_pack_name(Q2Pack pack) {
   switch (pack) {
     case Q2Pack::reckoning:
