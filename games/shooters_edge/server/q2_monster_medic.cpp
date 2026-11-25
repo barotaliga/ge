@@ -97,7 +97,7 @@ bool tend(Q2Server& s, Q2Monster& m) {
   if (m.patient < 0) return false;
   Q2Monster& c = s.monsters[size_t(m.patient)];
   Q2Entity& e = body(s, m);
-  const Q2Entity& b = body(s, c);
+  Q2Entity& b = body(s, c);
   const auto release = [&] {
     c.claimed = false;
     m.patient = -1;
@@ -107,6 +107,26 @@ bool tend(Q2Server& s, Q2Monster& m) {
   if (!c.dead || b.gone || !gz_patient_keep(s, m, c)) {
     release();
     return false;
+  }
+  if (kind(m).repairs) {  // the repair bot's healing beam: a point a frame within 128
+    if (s.level_time + 0.001 < m.busy_until) return true;
+    const sh::Vec3f mid = b.origin + (b.mins + b.maxs) * 0.5f;
+    turn(e, kind(m), yaw_to(b.origin - e.origin));
+    if (sh::length(b.origin - e.origin) > 128 || !sees_body(s, m, c)) {
+      go_to(s, m, b.origin, kind(m).run);
+      return true;
+    }
+    sh::Vec3f d = mid - e.origin;
+    sh::normalize(d);
+    sound(s, m.entity, "misc/lasfly.wav", 3);
+    beam_show(s, m, 0, e.origin + d * 16.0f, mid, true);
+    b.health += 1;
+    if (b.health > kind(c).mass / 10) {  // enough to stand again: up it comes, with no enemy
+      release();
+      revive(s, c, -1);
+      e.origin.z += 1;
+    }
+    return true;
   }
   const float reach = s.opt.pack == Q2Pack::ground_zero ? 410.0f : 256.0f;  // the pack's farther
   const bool near = sh::length(b.origin - e.origin) <= reach && sees_body(s, m, c);

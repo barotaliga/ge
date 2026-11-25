@@ -65,6 +65,18 @@ int slide_move(Mover& m) {
       s.velocity = {};
       break;
     }
+    // On a version 38 map a trace stops 1/32 short of a plane, so a slide along it can meet the
+    // same plane again at no distance: the velocity is pushed off it by its normal instead of the
+    // plane counted twice (two equal planes cross to nothing and would stop the player dead).
+    // A hull map's trace never does this, so its slide is left exactly as it was.
+    if (m.brush_world) {
+      int same = 0;
+      while (same < numplanes && dot(tr.plane.normal, planes[same]) <= 0.99f) same++;
+      if (same < numplanes) {
+        s.velocity = s.velocity + tr.plane.normal;
+        continue;
+      }
+    }
     planes[numplanes++] = tr.plane.normal;
 
     // The first plane whose clip leaves the velocity out of every other plane.
