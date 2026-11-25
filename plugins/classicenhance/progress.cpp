@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <chrono>
 
+#include "classicenhance/cache.hpp"
+
 namespace ge::classicenhance {
 
 namespace {
@@ -177,10 +179,18 @@ bool EnhanceJob::start_at(std::string path, std::filesystem::path root, RunOptio
         std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     board_.on(p, now);
   };
-  thread_ =
-      std::thread([this, path = std::move(path), root = std::move(root), opts = std::move(opts)] {
+  thread_ = std::thread(
+      [this, path = std::move(path), root = std::move(root), opts = std::move(opts)]() mutable {
         RunReport report;
         std::string error;
+        // The trained upscaler, when the cache holds the weights asked for; else the kernel.
+        if (!opts.cached_network.empty() && opts.textures.network == nullptr &&
+            opts.textures.scale == 4) {
+          std::string why;
+          if (open_cached_upscaler(root.empty() ? default_cache_root() : root, network_, &why,
+                                   opts.cached_network))
+            opts.textures.network = &network_;
+        }
         if (!path.empty() && !open_source(path, &source_, &error)) {
           Progress failed;
           failed.kind = Progress::Kind::failed;

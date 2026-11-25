@@ -132,13 +132,14 @@ struct Seat {
   bt::Fighter fighter;
   sh::MoveCmd cmds[3];
   uint32_t sequence = 0;
-  double held_s[10] = {};  // by weapon index: time in hand while alive
+  double held_s[sv::kSqWeaponCount] = {};  // by weapon index: time in hand while alive
   int deaths = 0;
   bool was_alive = false;
   gl::Trace path;
 };
 
-// The map asked for (`--game` and `--map`: the player's own packs), or the hall.
+// The map asked for (`--game` and `--map`, `--mod` a mission pack's folder: the player's own
+// packs), or the hall.
 std::shared_ptr<const br::Map> lab_map(gl::Lab& lab, std::string& name, std::string& error) {
   if (lab.arg("game").empty()) {
     name = "hall";
@@ -147,7 +148,9 @@ std::shared_ptr<const br::Map> lab_map(gl::Lab& lab, std::string& name, std::str
   const pf::GameProfile& game = *pf::find_game("q2");
   const ge::classicenhance::Profile& content = pf::content_of(game);
   cl::SearchPath files;
-  if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content))
+  const std::string& mod = lab.arg("pack");  // a mission pack's folder beside the base one
+  if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod, files,
+                         error, content))
     return nullptr;
   name = lab.arg("map");
   std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(files, name, error);
@@ -170,6 +173,7 @@ void run(gl::Lab& lab) {
   // player does: so its turn is spent, not added to every view they send after.
   sv::Q2ServerOptions opt;
   opt.clients_take_view = true;
+  opt.pack = sv::q2_pack_of_folder(lab.arg("pack"));  // the pack's rules on its own maps
   sv::RulesRunner r = sv::q2_runner(sv::make_q2_server(opt));
   r.console("deathmatch 1");
   sv::MapSpec spec;
@@ -188,7 +192,7 @@ void run(gl::Lab& lab) {
     return;
   }
   const std::string text = entity_text(*map);
-  const bt::BotArsenal& arsenal = bt::q2_arsenal();
+  const bt::BotArsenal& arsenal = bt::q2_arsenal(opt.pack);  // a pack's weapons on its maps
   std::vector<std::unique_ptr<Seat>> seats;
   for (int i = 0; i < kBots; i++) {
     r.connect(i, kNames[i], false, true);
@@ -233,7 +237,7 @@ void run(gl::Lab& lab) {
       s.was_alive = p.alive;
       if (!p.alive) continue;
       const int w = game.players[i].hand.weapon;
-      if (w >= 0 && w < 10) s.held_s[w] += dt;
+      if (w >= 0 && w < sv::kSqWeaponCount) s.held_s[w] += dt;
       if (frame % 8 == 0) {
         s.path.x.push_back(p.move.origin[0] / 8.0);
         s.path.y.push_back(p.move.origin[1] / 8.0);
@@ -251,7 +255,7 @@ void run(gl::Lab& lab) {
     const Seat& s = *seats[static_cast<size_t>(i)];
     const sv::Q2Player& p = game.players[i];
     int most = 0;
-    for (int w = 0; w < 10; w++) {
+    for (int w = 0; w < sv::kSqWeaponCount; w++) {
       if (s.held_s[w] > s.held_s[most]) most = w;
       alive += s.held_s[w];
       if (w != 0) off_blaster += s.held_s[w];
@@ -262,7 +266,7 @@ void run(gl::Lab& lab) {
     table.rows.push_back({kNames[i], fixed(p.frags, 0), std::to_string(s.deaths),
                           std::to_string(s.fighter.stats.pickups),
                           std::to_string(s.fighter.stats.shots),
-                          std::to_string(s.fighter.stats.switches), arsenal.weapons[most].name});
+                          std::to_string(s.fighter.stats.switches), sv::kSqWeapons[most].name});
     const std::string key = std::string("bot.") + kNames[i];
     lab.metric(key + ".frags", p.frags, "frags");
     lab.metric(key + ".deaths", s.deaths, "deaths");
@@ -271,12 +275,11 @@ void run(gl::Lab& lab) {
   }
   lab.table(table);
   gl::LabTable weapons{"time each weapon was in hand, all bots (s)", {"weapon", "s", "share"}, {}};
-  for (int w = 0; w < 10; w++) {
+  for (const bt::BotWeapon& bw : arsenal.weapons) {  // the arsenal's, by the impulse's index
     double t = 0;
-    for (const auto& s : seats) t += s->held_s[w];
-    weapons.rows.push_back({arsenal.weapons[static_cast<size_t>(w)].name, fixed(t, 1),
-                            fixed(alive > 0 ? 100 * t / alive : 0, 0) + "%"});
-    lab.metric(std::string("held.") + arsenal.weapons[static_cast<size_t>(w)].name, t, "s");
+    for (const auto& s : seats) t += s->held_s[bw.number - 1];
+    weapons.rows.push_back({bw.name, fixed(t, 1), fixed(alive > 0 ? 100 * t / alive : 0, 0) + "%"});
+    lab.metric(std::string("held.") + bw.name, t, "s");
   }
   lab.table(weapons);
   lab.metric("frags", frags, "frags");
@@ -341,7 +344,8 @@ const gl::LabSpec kSpec{
     "frags on a version 38 map under its rules?",
     {{"seconds", "120", "seconds of deathmatch"},
      {"game", "", "the folder holding Quake II's base folder (none: the hall built here)"},
-     {"map", "q2dm1", "the map played with --game"}},
+     {"map", "q2dm1", "the map played with --game"},
+     {"pack", "", "with --game: a mission pack's folder beside the base one (xatrix: its rules)"}},
     "--seconds=30",
     run,
 };

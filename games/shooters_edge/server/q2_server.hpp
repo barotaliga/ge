@@ -139,6 +139,7 @@ struct Q2Entity {
   sh::Vec3f avelocity, adest, closed_angles, open_angles, axis;
   bool hidden = false, gone = false;
   bool coop_taken = false;  // a staying weapon some coop player has taken (coop_pickup_weapons)
+  bool picked = false;      // taken, and to come back (Ground Zero's `randomrespawn` swaps it)
   bool solid = false;       // a brush that stops moves and shots (a mover, a wall present)
   bool trigger = false;     // touched when a living player's box overlaps it
   // Drawn as a teleporter's disc though a trigger or a point: 1 the pad (skin 1, its rising
@@ -320,6 +321,8 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   double hint_check = -100;
   int hint_node = -1, hint_goal = -1;
   double hint_wait = 0;
+  // Ground Zero's target_anger: the entity it was set on (-1: none, or the anger spent).
+  int anger = -1;
 };
 
 // Ground Zero's bad area (q2_gz_tesla.cpp): the box round a tesla that hurt a monster, which
@@ -457,6 +460,10 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   // (`weaplast`) and the one held at the last frame's end, his chat's last ten times and the level
   // time his flood lock ends.
   bool god = false, notarget = false, noclip = false;
+  // Ground Zero's disguise (q2_gz.hpp): monsters take him for one of theirs; his shot unmasks him
+  // to their eyes till `violator_until` (level time).
+  bool disguised = false;
+  double violator_until = 0;
   bool skull = false;  // thrown apart, his head shows as the skull (else his own head)
   int last_weapon = -1, held_weapon = -1;
   double said_at[10] = {};
@@ -656,6 +663,11 @@ struct Q2Server : RulesCommon {
   std::vector<std::string> obituaries;      // every death's line, in order (the tests, the lab)
   std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   Q2Drop drops[kQ2Drops];
+  // Ground Zero's tag game (q2_gz_tag.cpp): the token's holder (-1 none), his kills toward the next
+  // quad, and when a dropped token is moved to a far start (0 not due) and whether it was.
+  int tag_holder = -1, tag_kills = 0;
+  double tag_move_at = 0;
+  bool tag_moved = false;
   Q2Body bodies[kQ2Bodies];
   Q2Gib gibs[kQ2Gibs];
   int next_gib = 0;                   // the gib slot the next piece takes
@@ -712,6 +724,7 @@ struct Q2Server : RulesCommon {
   int sight_entity = -1;
   int64_t sight_frame = -10;
   int sight_client = -1;
+  int gz_steam_id = 0;  // Ground Zero's lasting steam jets' next effect id (q2_gz_things.cpp)
   // The players' trail (single player and coop): 8 marks in a ring, one dropped where a player
   // stood last frame once he can no longer see the newest; `trail_head` the oldest. A monster that
   // lost sight of him follows the marks newer than its own last look (q2_monsters.cpp).

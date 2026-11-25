@@ -47,7 +47,9 @@ namespace shooters_edge::server {
 namespace sh = ge::shooter;
 
 struct Q2Server;
+struct Q2Entity;
 struct Q2Missile;
+struct Q2Entity;
 
 // Ground Zero's own settings (`strong_mines`, `g_disruptor`, `huntercam`), registered only
 // when it is the pack played.
@@ -91,6 +93,58 @@ bool gz_missile(Q2Server& s, Q2Missile& m);
 bool gz_drawn(const Q2Missile& m);
 // Player `slot` uses an A-M bomb from the inventory: thrown.
 void gz_throw_nuke(Q2Server& s, int slot);
+
+// GROUND ZERO'S MAP THINGS (q2_gz_things.cpp): whether `classname` is one; map entity `i` set up
+// (false when it is none); a use of it by `activator` from entity `user`'s targets (-1 none);
+// player `slot` touching it; their tenth; their world rows.
+bool gz_thing(std::string_view classname);
+bool gz_thing_spawn(Q2Server& s, int i);
+bool gz_thing_use(Q2Server& s, int i, int activator, int user);
+void gz_thing_touch(Q2Server& s, int i, int slot);
+// The co-op start on the rising-lava maps (rmine2, rmine2p): the lowest free lava start above the
+// lava line (the highest rising liquid's top + 64); nullptr elsewhere or when none will do.
+const Q2Entity* gz_lava_start(const Q2Server& s);
+// Smart water (q2_gz_water.cpp): a func_door or func_water with flag 2 whose middle is in a liquid.
+bool gz_rising_liquid(const Q2Server& s, const Q2Entity& d);
+// A use of a smart water (Ground Zero's func_water with flag 2 in a liquid): it starts rising
+// after the lowest living player, its targets fired and its portals opened; false when `e` is no
+// smart water (the plain move then).
+bool gz_smart_water_use(Q2Server& s, Q2Entity& e, int activator);
+// A rising smart water steered for the frame: up toward the lowest living player's feet at the gap
+// over `accel` a second (5 to `speed`), held once its top is at its `health` key's height.
+void gz_smart_water_frame(Q2Server& s, Q2Entity& e);
+// A rising smart water blocked by a player's slot or a monster (-2 - its entity): 100 of lava's
+// harm, and it keeps rising; false when it is not rising (the plain water waits).
+bool gz_smart_water_blocked(Q2Server& s, Q2Entity& e, int slot);
+// A thing a `target_anger` set its monsters on (map entity `e`, their foe as -2 - e like another
+// monster's): there to fight while not gone and its health (300) above 0; where it stands.
+bool gz_anger_alive(const Q2Server& s, int e);
+ge::shooter::Vec3f gz_anger_at(const Q2Server& s, int e);
+// Its box about that middle (a point's is empty).
+void gz_anger_box(const Q2Server& s, int e, ge::shooter::Vec3f& mins, ge::shooter::Vec3f& maxs);
+// Whether monster `m` stays on its anger target whoever else hits it: the target still stands
+// and the monster's health is above a third of its most; else the anger is spent for good.
+struct Q2Monster;
+bool gz_anger_holds(const Q2Server& s, Q2Monster& m);
+// Whether `m` is set on an anger target with no size (a point): it fires at every chance.
+bool gz_anger_point(const Q2Server& s, const Q2Monster& m);
+void gz_things_frame(Q2Server& s);
+void gz_things_rows(Q2Server& s);
+
+// GROUND ZERO'S PLAT THAT GOES EITHER WAY (`func_plat2`, q2_gz_plat.cpp): the map's movers hand
+// it these. Spawned at its top (named: idle there until a first use sends it down; flag 4 rests
+// there; else at the bottom), twice as quick in deathmatch; its field 10 wider each side. A body in
+// the field at `z`, or a use, sends it to the end it wants (called: 0.1 s on, back 5 s after
+// arriving unless flag 2 keeps it there; riding: 0.3 s on in deathmatch, 0.5 s outside it), never
+// within 2 s of its last move; uncalled it goes back down 2 s after reaching the top (up again
+// from the bottom with flag 4). Its targets fire at each end. Blocked: a dead body takes 100
+// first, then `dmg` (2), and it turns back.
+void gz_plat2_spawn(Q2Server& s, Q2Entity& e);
+void gz_plat2_touch(Q2Server& s, Q2Entity& field, float z);
+void gz_plat2_use(Q2Server& s, Q2Entity& e, int activator);
+void gz_plat2_go(Q2Server& s, Q2Entity& e);
+void gz_plat2_arrived(Q2Server& s, Q2Entity& e);
+void gz_plat2_blocked(Q2Server& s, Q2Entity& e, int slot);
 
 // The hand's fire run for Ground Zero's weapons (q2_combat.cpp's step hands it over): the
 // chainfist's swings, the ETF rifle's and the plasma beam's loops, the tesla's hold and throw.
@@ -153,5 +207,40 @@ bool gz_sphere_view(const Q2Server& s, int slot);
 // A tenth of sphere `m`, or of a defender's bolt (`m` a green bolt a player owns); false for
 // anything else.
 bool gz_sphere_missile(Q2Server& s, Q2Missile& m);
+
+// TAG (`gamerules 2` in deathmatch, q2_gz_tag.cpp): one token on the map; its holder scores 3 a
+// kill (a quad every fifth), whoever kills him scores 5 and takes it at once, and a blow neither
+// he gives nor takes is a quarter less. Dead or gone without a killer to pass it to, he throws it:
+// nobody may take it for 1 s, and it is moved to the farthest deathmatch start 30 s later (3 s
+// when it lies in lava or slime). The holder trails the token's light and shows `tag3` on the
+// scoreboard. `randomrespawn 1`: an item taken comes back as another of its kind.
+inline constexpr int kGzTagTrailEffect = 0x20000000;
+
+// `gamerules` and `randomrespawn` (gz_cvars registers them).
+void gz_tag_cvars(Q2Server& s);
+// Whether the tag game is played: Ground Zero, deathmatch and `gamerules` 2.
+bool gz_tag_on(const Q2Server& s);
+// Whether item row `item` is the tag token.
+bool gz_tag_token(int item);
+// Whether item row `item` is left off the map: the token, whenever tag is not played.
+bool gz_tag_left_out(const Q2Server& s, int item);
+// Player `slot` touches item row `item`: true (and taken when he lives) when it is the token.
+bool gz_tag_take(Q2Server& s, int slot, int item);
+// The map's start (its items on the floor): a token at a start when the map placed none.
+void gz_tag_start(Q2Server& s);
+// Player `slot` died to `killer` (`by_killer`: the kill is the killer's): true when tag scored it;
+// the holder's token passed to his killer or thrown.
+bool gz_tag_kill(Q2Server& s, int slot, int killer, bool by_killer);
+// Player `slot` leaves: the token he holds thrown.
+void gz_tag_left(Q2Server& s, int slot);
+// A blow's `damage` under tag (the same outside it).
+int gz_tag_damage(const Q2Server& s, int target, int attacker, int damage);
+// Whether player `slot` holds the token.
+bool gz_tag_holder(const Q2Server& s, int slot);
+// A tenth: a thrown token looked at after 1 s and moved when its time comes.
+void gz_tag_frame(Q2Server& s);
+// An item `e` taken and shown again: under `randomrespawn`, another of its kind. True when it was
+// swapped.
+bool gz_random_respawn(Q2Server& s, Q2Entity& e);
 
 }  // namespace shooters_edge::server

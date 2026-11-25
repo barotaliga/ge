@@ -490,34 +490,43 @@ void item_cells(A& q) {
 
 // The old ammunition box kept for old maps: spawnflags 1 shells, 4 nails, 2 rockets (the last of
 // these that is set wins), 8 the big box; it lies in deathmatch 4 too. With no kind it gives
-// nothing and still says "You got the ".
+// nothing and still says "You got the " In another game's look
+// (`cr_items`) it is dressed as that game's box of its kind, as item_shells and the rest are.
 void item_weapon(A& q) {
   const int32_t me = q.self();
   const float flags = q.f(me, q.L.f.spawnflags);
   const bool big = on(band(flags, 8));
   int32_t mdl = q.s(s_empty);
   int32_t kind = q.s(s_empty);
+  int32_t look = q.s(s_empty);  // the remix's row for its kind ("" for none: no row is read)
   if (on(band(flags, 1))) {
     mdl = q.s(big ? s_b_shell1 : s_b_shell0);
+    look = q.s(s_arsenal_ammo1);
     kind = q.s(s_shells);
-    q.set_f(me, q.L.f.ammo_shells, big ? 40 : 20);
+    q.set_f(me, q.L.f.ammo_shells, big ? 40.0f : 20.0f);
   }
   if (on(band(flags, 4))) {
     mdl = q.s(big ? s_b_nail1 : s_b_nail0);
+    look = q.s(s_arsenal_ammo2);
     kind = q.s(s_spikes);
     q.set_f(me, q.L.f.ammo_shells, 0);
-    q.set_f(me, q.L.f.ammo_nails, big ? 40 : 20);
+    q.set_f(me, q.L.f.ammo_nails, big ? 40.0f : 20.0f);
   }
   if (on(band(flags, 2))) {
     mdl = q.s(big ? s_b_rock1 : s_b_rock0);
+    look = q.s(s_arsenal_ammo3);
     kind = q.s(s_rockets);
     q.set_f(me, q.L.f.ammo_shells, 0);
     q.set_f(me, q.L.f.ammo_nails, 0);
-    q.set_f(me, q.L.f.ammo_rockets, big ? 10 : 5);
+    q.set_f(me, q.L.f.ammo_rockets, big ? 10.0f : 5.0f);
   }
   q.set_i(me, q.L.f.netname, kind);  // its name when taken
   q.set_i(me, q.L.f.touch, q.fn(fn_ammo_touch));
-  item_start(q, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
+  if (q.is(look, "")) {
+    item_start(q, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
+  } else {
+    dressed_start(q, look, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
+  }
 }
 
 void weapon_touch(A& q) {
