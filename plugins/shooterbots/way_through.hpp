@@ -12,6 +12,9 @@
 // - else the nearest place he has not been (exploring: a way may open where he has not looked);
 //   one he spends `kWayGiveUp_s` on without getting there counts as seen;
 // - else any step left (a trigger that only lights a lamp or says a word);
+// - (`complete`) NO SHOT LEFT (no gun he carries loaded) with monsters to kill: the nearest gun or
+//   ammunition he can fire picked up first (`WayKind::arm`): from a fresh start e4m5's shells ran
+//   out in half a minute and he spent the rest of the map at hell knights with the axe;
 // - nothing at all for `kWayIdle_s` (a ledge a pool let him out on, its doors opened from the
 //   other side): back into the water, which leads him out to the map's main part.
 // The plan is his `objective` (fighter.hpp): he fights what he meets on the way like anyone, and
@@ -36,6 +39,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -74,8 +78,8 @@ constexpr double kWayHopeful_s = 20;  // (`complete`) and for this long the door
 constexpr int kWayTries = 2;  // (`complete`) a step or a monster left this often is given up
 constexpr double kWayForever = 1e30;  // the time a thing given up for good is left until
 
-enum class WayKind : uint8_t { exit, button, key, trigger, explore, monster, secret };
-inline constexpr int kWayKinds = 7;
+enum class WayKind : uint8_t { exit, button, key, trigger, explore, monster, secret, arm };
+inline constexpr int kWayKinds = 8;
 const char* way_kind_name(WayKind k);
 
 struct WayStep {
@@ -88,6 +92,7 @@ struct WayStep {
   std::vector<std::string> gate;
   bool repeats = false;  // a trigger_multiple: it fires each time he walks in
   int32_t node = -1;     // where it is reached from
+  double repick_at = 0;  // (a shot button's) when a node he reaches is looked for again, s
   int button = -1;       // a button's index in the fighter's spots
   int key_bit = 0;       // a key's item bit (Quake's), or
   int ent = -1;          // the key lying on the map (Quake II's: taken when it is gone)
@@ -218,7 +223,15 @@ struct WayThrough {
   // (`complete`) The monster he goes for (an entity, -1 none), since when, and each entity's
   // tries and the time it is left until.
   int prey = -1;
-  double prey_since = 0;
+  double prey_since = 0;  // (started again each plan its health fell: he is hurting it)
+  float prey_hp = 0;      // its health at the last plan
+  // (`complete`) The item he goes to for a gun or its shot (an entity, -1 none) at the last plan
+  // and when that was, each item's time gone to in all, and the items left for good: one he
+  // stands on and cannot take (full, or not what it seemed), or never reaches.
+  int arm_ent = -1;
+  double arm_tick = 0;
+  std::vector<double> arm_spent;
+  std::vector<uint8_t> arm_left;
   sh::Vec3f still_at;         // (`complete`) where he last moved from with work to do
   double still_since = -1;    // and since when (-1: no work, or moving)
   double hopeful_until = -1;  // (`complete`) nothing to do: every door taken as open until then
@@ -295,6 +308,18 @@ bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::
 // carries one before they wait.
 void way_blast_steps(WayThrough& w, const Fighter& f, const MapNav& nav,
                      const ge::shooterbots::BotView& s);
+
+// (`complete`) With monsters left (`preys`) and no shot left in any gun he holds: the nearest
+// reached (`reach`) gun or ammunition lying there that he can fire (its node; -1 none). An item
+// gone to past kWayGiveUp_s and twice the walk to it, in all, is left for good (`arm_left`).
+int32_t way_arm(WayThrough& w, const Fighter& f, const ge::shooterbots::BotView& s,
+                const ge::shooterbots::Stats& now, bool preys, double t,
+                const std::function<bool(int32_t)>& reach);
+
+// The monster he is after, for the way's log: its number, model and health, how long it has been
+// chased, and his weapon and ammunition.
+std::string way_prey_note(const WayThrough& w, const Fighter& f, const ge::shooterbots::BotView& s,
+                          int me);
 
 constexpr float kWayStuck = 24;
 constexpr double kWayStuck_s = 1.5;

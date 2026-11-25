@@ -7,6 +7,7 @@
 #include "shooterbots/way_through.hpp"
 #include "shooterbots/way_bosses.hpp"
 #include "shooterbots/way_gates.hpp"
+#include "shooterbots/way_shots.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -61,56 +62,6 @@ int edict_of(const ge::shooterbots::BotView& s, const char* model) {
     if (s.models[static_cast<size_t>(d.modelindex)] == model) return e;
   }
   return -1;
-}
-
-// Quake's doors that touch move as one, and a group with a name opens only to what fires it: an
-// unnamed leaf of a named group is as shut as its named mate (e4m1's flood gate, opened by the
-// button that fires its partner, kept him pressing on it for the whole map). Each unnamed leaf
-// takes its group's name. Quake II pairs doors by an explicit team instead.
-void name_linked_doors(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
-                       std::vector<sb::EntityBlock>& blocks) {
-  if (spec.brushes && spec.brushes->family != ge::brush::Family::v29 &&
-      spec.brushes->family != ge::brush::Family::bsp2)
-    return;
-  std::vector<size_t> door_block;
-  std::vector<int> door_ent;
-  for (size_t i = 0; i < blocks.size(); i++) {
-    const char* dc = sb::block_value(blocks[i], "classname");
-    const char* dm = sb::block_value(blocks[i], "model");
-    const char* sf = sb::block_value(blocks[i], "spawnflags");
-    if (!dc || !dm || std::strcmp(dc, "func_door") != 0) continue;
-    if (sf && (std::atoi(sf) & 4) != 0) continue;  // marked never to link
-    const int e = edict_of(s, dm);
-    if (e <= 0 || static_cast<size_t>(e) >= s.sv.edicts.size()) continue;
-    door_block.push_back(i);
-    door_ent.push_back(e);
-  }
-  std::vector<size_t> group(door_block.size());
-  for (size_t i = 0; i < group.size(); i++) group[i] = i;
-  const auto root = [&](size_t i) {
-    while (group[i] != i) i = group[i] = group[group[i]];
-    return i;
-  };
-  constexpr float kTouch = 2;  // boxes this near count as touching
-  for (size_t i = 0; i < door_ent.size(); i++)
-    for (size_t j = i + 1; j < door_ent.size(); j++) {
-      const sh::Edict& a = s.sv.edicts[static_cast<size_t>(door_ent[i])];
-      const sh::Edict& b = s.sv.edicts[static_cast<size_t>(door_ent[j])];
-      if (a.absmin.x <= b.absmax.x + kTouch && b.absmin.x <= a.absmax.x + kTouch &&
-          a.absmin.y <= b.absmax.y + kTouch && b.absmin.y <= a.absmax.y + kTouch &&
-          a.absmin.z <= b.absmax.z + kTouch && b.absmin.z <= a.absmax.z + kTouch)
-        group[root(i)] = root(j);
-    }
-  std::vector<std::string> group_name(door_block.size());
-  for (size_t i = 0; i < door_block.size(); i++) {
-    const char* dn = sb::block_value(blocks[door_block[i]], "targetname");
-    if (dn && group_name[root(i)].empty()) group_name[root(i)] = dn;
-  }
-  for (size_t i = 0; i < door_block.size(); i++) {
-    sb::EntityBlock& b = blocks[door_block[i]];
-    if (!sb::block_value(b, "targetname") && !group_name[root(i)].empty())
-      b.pairs.emplace_back("targetname", group_name[root(i)]);
-  }
 }
 
 // A player's box (origin at its middle, 16 across, 24 down and 32 up) touches the box.
@@ -347,6 +298,8 @@ const char* way_kind_name(WayKind k) {
       return "monster";
     case WayKind::secret:
       return "secret";
+    case WayKind::arm:
+      return "arm";
   }
   return "?";
 }
@@ -385,6 +338,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.prey_left.assign(s.sv.edicts.size(), -1);
   w.prey_tries.assign(s.sv.edicts.size(), 0);
   w.prey_spent.assign(s.sv.edicts.size(), 0);
+  w.arm_ent = -1;
+  w.arm_tick = 0;
+  w.arm_spent.assign(s.sv.edicts.size(), 0);
+  w.arm_left.assign(s.sv.edicts.size(), 0);
   w.prey_tick = -1;
   const sb::NavGraph& g = nav.graph;
   w.seen.assign(g.nodes.size(), 0);
@@ -409,7 +366,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   std::vector<sb::EntityBlock> blocks;
   std::string error;
   if (!sb::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
-  name_linked_doors(s, spec, blocks);
+  way_name_linked_doors(s, spec, blocks);
   // What opens a door only something else opens: a name a shut door answers to, or a counter's,
   // a relay's or a door's whose own target does (two hops).
   const auto names_door = [&](const std::string& t, std::vector<int>& out) {
@@ -586,7 +543,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       for (const std::string& was : w.been) st.revisit = st.revisit || goes == was;
       if (avoided(goes)) continue;
     } else if ((std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0) &&
-               brush && target && (!fired(name) || trigger_waits(b))) {
+               brush && target && (!fired(name) || trigger_waits(b)) && !way_shot_only(b)) {
       st.kind = WayKind::trigger;  // one fired by something else is not walked into, but one
       st.target = target;          // made live by it is, once it is
       st.repeats = std::strcmp(cn, "trigger_multiple") == 0;
@@ -1018,8 +975,9 @@ void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
   std::vector<sb::EntityBlock> blocks;
   std::string error;
   if (!sb::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
-  name_linked_doors(s, spec, blocks);
+  way_name_linked_doors(s, spec, blocks);
   const sb::NavGraph& g = nav.graph;
+  way_face_shot_buttons(f, nav, s, blocks);
   for (const sb::EntityBlock& b : blocks) {
     const char* cn = sb::block_value(b, "classname");
     const char* model = sb::block_value(b, "model");
@@ -1115,7 +1073,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       // A button that opens doors is done while they stand open (one that shuts again, a lift
       // called, is pressed again); one that opens none (a counter's) once it is pressed.
       const ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
-      const bool pressed = dist(s.sv.edicts[static_cast<size_t>(bs.ent)].origin, st.lo) > 0.5f;
+      const sh::Edict& be = s.sv.edicts[static_cast<size_t>(bs.ent)];
+      // A shot trigger (`model` kept) never moves: answered, it is removed or touches nothing.
+      const bool pressed = dist(be.origin, st.lo) > 0.5f ||
+                           (!bs.model.empty() && (be.free || be.solid == sh::kSolidNot));
       bool all = !bs.doors.empty();
       for (const int d : bs.doors) all = all && door_open(d);
       const bool now = pressed || all || (bs.doors.empty() && st.done);
@@ -1179,11 +1140,16 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   w.barred.clear();
   for (size_t k = 0; k < w.locked.size(); k++) {
     if (locked_moved(w, s, k)) continue;
-    bool held = false;  // a key door with its key held opens to his touch
+    // A key door with its key held opens to his touch; without it never, hopeful or not (e4m5's
+    // gold doors stood him at them for minutes).
+    bool held = false, keyed = false;
     for (const WayThrough::KeyDoor& kd : w.key_doors)
-      held = held || (kd.door == w.locked[k] && (items & kd.bit) != 0);
+      if (kd.door == w.locked[k]) {
+        keyed = true;
+        held = held || (items & kd.bit) != 0;
+      }
     held = held || way_touch_opened(w, s.sv.edicts[static_cast<size_t>(w.locked[k])], w.locked[k]);
-    if (!held && t >= w.hopeful_until) w.barred.push_back(w.locked[k]);
+    if (!held && (t >= w.hopeful_until || keyed)) w.barred.push_back(w.locked[k]);
   }
   // His own routes never through them either (a secret wall by its crossings, below: its sweep's
   // movers stood him still in front of it).
@@ -1326,6 +1292,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     return false;
   };
   reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
+  way_reach_shot_buttons(w, f, g, s, t);
   way_trigger_sides(w, g);
   // A place is gone to while he can come back from it, or go on from it to an exit: a one-way drop
   // into a pit to touch a trigger or look about held him there for the rest of the map (e1m6's
@@ -1356,7 +1323,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     return false;
   };
   for (const WayStep& st : w.steps)
-    strict_work = strict_work || (!st.done && st.kind != WayKind::exit &&
+    strict_work = strict_work || (!st.done && !st.ever && st.kind != WayKind::exit &&
                                   !(w.complete && carries(st)) && t >= st.left_until &&
                                   st.node >= 0 && w.search.reached(st.node) && round_trip(st.node));
   const auto reach = [&](int32_t n) {
@@ -1680,6 +1647,15 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         }
       }
       tour_plan(w.tour, w.tour_cost, n, {}, out >= 0 ? n : 0);
+      // The monster he is on stays first: a tour worked out again mid-fight sent him to the next
+      // nearest with the last one's health half gone.
+      if (w.prey >= 0)
+        for (size_t k = 0; k < w.tour.order.size(); k++)
+          if (w.tour_stops[static_cast<size_t>(w.tour.order[k] - 1)] == -1 - w.prey) {
+            std::rotate(w.tour.order.begin(), w.tour.order.begin() + static_cast<std::ptrdiff_t>(k),
+                        w.tour.order.begin() + static_cast<std::ptrdiff_t>(k) + 1);
+            break;
+          }
     }
     for (const int32_t k : w.tour.order) {
       const int32_t stop = w.tour_stops[static_cast<size_t>(k - 1)];
@@ -1708,15 +1684,25 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // Its time in all, over every spell he chased it: one he keeps turning to between others (e2m6's
   // monster past the pool's bridges, the plat out of the water between) restarts the clock below
   // each time and was chased for the whole map.
+  // ONE HE IS HURTING is no waste of time: a hell knight's 250 or a fiend's 300 take a shotgun
+  // half a minute, and both clocks stopped it at 16 left and went to the next (e4m5: 8 of 75 in
+  // the whole map). Each plan its health fell since the last, the clocks start again.
+  bool hurting = false;
+  if (chase && prey >= 0 && prey < s.sv.num_edicts) {
+    const float hp = s.sv.edicts[static_cast<size_t>(prey)].health;
+    hurting = prey == w.prey && hp < w.prey_hp;
+    w.prey_hp = hp;
+  }
   bool spent = false;
   if (chase && prey >= 0 && static_cast<size_t>(prey) < w.prey_spent.size()) {
     double& sp = w.prey_spent[static_cast<size_t>(prey)];
+    if (hurting) sp = 0;
     if (w.prey_tick >= 0 && t - w.prey_tick < 1) sp += t - w.prey_tick;
     spent = sp > kWayPreySpent_s;
     if (spent) sp = 0;
   }
   w.prey_tick = chase ? t : -1;
-  if (!spent && (!chase || prey != w.prey)) {
+  if (!spent && (!chase || prey != w.prey || hurting)) {
     w.prey = chase ? prey : -1;
     w.prey_since = t;
   } else if (spent || t - w.prey_since > kWayGiveUp_s) {
@@ -1827,8 +1813,15 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     w.step = -1;
     w.plan_at = -1;
   }
+  // (`complete`) No shot left with monsters to kill: the nearest gun or ammunition he can fire,
+  // unless a step to take first (a blast weapon on a zombie map) is already his.
+  const bool takes_first = w.step >= 0 && w.steps[static_cast<size_t>(w.step)].first;
+  const int32_t arm = takes_first ? -1 : way_arm(w, f, s, stats_now, !preys.empty(), t, reach);
   const int32_t was = f.objective;
-  if (w.step >= 0) {
+  if (arm >= 0) {
+    w.kind = WayKind::arm;
+    f.objective = arm;
+  } else if (w.step >= 0) {
     const WayStep& st = w.steps[static_cast<size_t>(w.step)];
     w.kind = st.kind;
     f.objective = st.node;
@@ -1971,7 +1964,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
                   way_kind_name(w.kind),
                   w.step >= 0 ? w.steps[static_cast<size_t>(w.step)].name.c_str() : "", at.x, at.y,
                   at.z, w.barred.size());
-    w.log->push_back(line);
+    std::string said = line;
+    if (w.kind == WayKind::monster) said += way_prey_note(w, f, s, me);
+    w.log->push_back(said);
   }
   w.stats.by_kind[static_cast<int>(w.kind)]++;
 }

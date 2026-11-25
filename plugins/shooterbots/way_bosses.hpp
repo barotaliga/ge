@@ -37,4 +37,15 @@ void way_bolt_init(WayThrough& w, const Fighter& f, const ge::shooterbots::BotVi
 // the bolt's button.
 int way_bolt_pick(const WayThrough& w, const ge::shooterbots::BotView& s);
 
+// A trigger with health answers only a shot (its button spot, `way_shot_triggers`): never walked
+// into (e2m7's seven he stood in for minutes).
+bool way_shot_only(const EntityBlock& b);
+
+// Quake's doors that touch move as one, and a group with a name opens only to what fires it: an
+// unnamed leaf of a named group is as shut as its named mate (e4m1's flood gate, opened by the
+// button that fires its partner, kept him pressing on it for the whole map). Each unnamed leaf
+// takes its group's name. Quake II pairs doors by an explicit team instead.
+void way_name_linked_doors(const BotView& s, const ge::shooter::MapSpec& spec,
+                           std::vector<EntityBlock>& blocks);
+
 }  // namespace ge::shooterbots

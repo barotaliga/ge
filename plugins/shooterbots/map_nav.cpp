@@ -218,6 +218,27 @@ bool floor_door(const sb::EntityBlock& b, const ModelBox& bm, const std::vector<
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
+// THE WALLS: a brush model that never moves (`func_wall`), solid now, is a solid of the nav's
+// world where it stands. Left out, the nav walked through it: e4m8's two posts beside its floor
+// button, too close together for a player, stood him still there for five minutes.
+void walls_as_solids(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                     ge::brush::BrushTracer* tracer, const std::vector<sb::EntityBlock>& blocks,
+                     sh::MoveWorld& world) {
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_wall") != 0) continue;
+    const int m = std::atoi(model + 1);
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
+      continue;
+    const int e = edict_of(s, model);
+    if (e < 0) continue;
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    if (d.free || d.solid == sh::kSolidNot) continue;  // one that appears later is left out
+    world.solids[world.count++] = model_solid(spec, tracer, m, d.origin);
+  }
+}
+
 // A SLIDE-OUT BRIDGE: a named plate drawn resting in its slot (not started open), sliding level
 // (an angle of 0, 90, 180 or 270) to where it spans a gap, with room to stand on it there and a
 // floor under where it rests (bunk1's over the hole between its two floors, run out by the button
@@ -1238,6 +1259,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   }
   out.bridges.clear();
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
+  walls_as_solids(s, spec, out.tracer.get(), blocks, out.world);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
   std::vector<sb::NavExtraLink> teleports = teleport_links(s, out.graph, spec, blocks);

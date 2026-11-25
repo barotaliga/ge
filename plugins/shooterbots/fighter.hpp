@@ -133,8 +133,10 @@ struct ButtonSpot {
   std::vector<int> doors;      // the door entities it opens
   std::vector<int32_t> opens;  // the items behind them (indices into the fighter's items)
   int ent = -1;
-  int32_t node = -1;   // where it is pressed (or shot) from
-  bool shoot = false;  // opened by a shot (health over 0), not a touch
+  int32_t node = -1;    // where it is pressed (or shot) from
+  bool shoot = false;   // opened by a shot (health over 0), not a touch
+  sh::Vec3f face{};     // (a shot button's) straight out from its face; zero: not known
+  bool refind = false;  // (a shot button's) its node behind it or on a bridge: looked for again
   float open_s =
       0;  // how long its doors stay open once fired (their shortest wait), s; 0: for good
   std::vector<int> way_doors;  // (`fields`) of `doors`, those that are a way once fired

@@ -11,6 +11,7 @@
 #include <cstring>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "brush/map.hpp"
 #include "shooter/trace.hpp"
@@ -118,7 +119,8 @@ void way_shot_triggers(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
         if (n == dn)
           if (const int door = edict_of(s, dm); door >= 0) bs.doors.push_back(door);
     }
-    if (bs.doors.empty()) continue;
+    // One that opens no door (e2m7's seven, counted by a trigger_counter that opens the way on)
+    // is still shot: done once it answered (gone, or touching nothing).
     // Shot from the nearest node whose eye line reaches it (a window is shot through the room).
     float best_d = kWayShotTriggerFrom;
     for (size_t n = 0; n < g.nodes.size(); n++) {
@@ -231,6 +233,63 @@ int way_bolt_pick(const WayThrough& w, const ge::shooterbots::BotView& s) {
     return best;
   }
   return b.fire;
+}
+
+bool way_shot_only(const EntityBlock& b) {
+  const char* hp = block_value(b, "health");
+  return hp != nullptr && std::atof(hp) > 0;
+}
+
+void way_name_linked_doors(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                           std::vector<EntityBlock>& blocks) {
+  if (spec.brushes && spec.brushes->family != ge::brush::Family::v29 &&
+      spec.brushes->family != ge::brush::Family::bsp2)
+    return;
+  std::vector<size_t> door_block;
+  std::vector<int> door_ent;
+  for (size_t i = 0; i < blocks.size(); i++) {
+    const char* dc = block_value(blocks[i], "classname");
+    const char* dm = block_value(blocks[i], "model");
+    const char* sf = block_value(blocks[i], "spawnflags");
+    if (!dc || !dm || std::strcmp(dc, "func_door") != 0) continue;
+    if (sf && (std::atoi(sf) & 4) != 0) continue;  // marked never to link
+    int e = -1;                                    // its entity, by its model
+    for (int k = s.sv.set.maxclients + 1; k < s.sv.num_edicts && e < 0; k++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(k)];
+      if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
+          s.models[static_cast<size_t>(d.modelindex)] == dm)
+        e = k;
+    }
+    if (e <= 0 || static_cast<size_t>(e) >= s.sv.edicts.size()) continue;
+    door_block.push_back(i);
+    door_ent.push_back(e);
+  }
+  std::vector<size_t> group(door_block.size());
+  for (size_t i = 0; i < group.size(); i++) group[i] = i;
+  const auto root = [&](size_t i) {
+    while (group[i] != i) i = group[i] = group[group[i]];
+    return i;
+  };
+  constexpr float kTouch = 2;  // boxes this near count as touching
+  for (size_t i = 0; i < door_ent.size(); i++)
+    for (size_t j = i + 1; j < door_ent.size(); j++) {
+      const sh::Edict& a = s.sv.edicts[static_cast<size_t>(door_ent[i])];
+      const sh::Edict& b = s.sv.edicts[static_cast<size_t>(door_ent[j])];
+      if (a.absmin.x <= b.absmax.x + kTouch && b.absmin.x <= a.absmax.x + kTouch &&
+          a.absmin.y <= b.absmax.y + kTouch && b.absmin.y <= a.absmax.y + kTouch &&
+          a.absmin.z <= b.absmax.z + kTouch && b.absmin.z <= a.absmax.z + kTouch)
+        group[root(i)] = root(j);
+    }
+  std::vector<std::string> group_name(door_block.size());
+  for (size_t i = 0; i < door_block.size(); i++) {
+    const char* dn = block_value(blocks[door_block[i]], "targetname");
+    if (dn && group_name[root(i)].empty()) group_name[root(i)] = dn;
+  }
+  for (size_t i = 0; i < door_block.size(); i++) {
+    EntityBlock& b = blocks[door_block[i]];
+    if (!block_value(b, "targetname") && !group_name[root(i)].empty())
+      b.pairs.emplace_back("targetname", group_name[root(i)]);
+  }
 }
 
 }  // namespace ge::shooterbots

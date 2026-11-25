@@ -193,6 +193,7 @@ void fighter_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
   std::vector<sb::EntityBlock> blocks;
   std::string error;
   f.items.clear();
+  std::vector<float> across;  // each item's distance across to the entity it took
   if (!sb::parse_entity_text(entities, blocks, error)) return;
   for (const sb::EntityBlock& b : blocks) {
     const char* cn = sb::block_value(b, "classname");
@@ -230,6 +231,21 @@ void fighter_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
     it.label = it.name + "@" + std::to_string(static_cast<int>(origin.x)) + "," +
                std::to_string(static_cast<int>(origin.y));
     f.items.push_back(it);
+    across.push_back(best);
+  }
+  // ONE ENTITY, ONE ITEM: a map's item the mode never spawns (e4m5's super nailgun, deathmatch
+  // only, 8 units from a box of nails) took the nearest one sent, and the box was believed to be
+  // the gun. The nearer of two that took one entity keeps it.
+  for (size_t i = 0; i < f.items.size(); i++)
+    for (size_t j = 0; j < f.items.size(); j++)
+      if (i != j && f.items[i].ent == f.items[j].ent &&
+          (across[j] < across[i] || (across[j] == across[i] && j < i)))
+        f.items[i].ent = -1;
+  {
+    size_t kept = 0;
+    for (size_t i = 0; i < f.items.size(); i++)
+      if (f.items[i].ent >= 0) f.items[kept++] = std::move(f.items[i]);
+    f.items.resize(kept);
   }
   // The map's item rules (the game's book, shooterbots/map_book.hpp): an item no goal while
   // another is to be had first.
