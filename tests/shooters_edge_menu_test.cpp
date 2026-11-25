@@ -245,28 +245,38 @@ TEST(new_game_start_runs_the_rules_then_the_map) {
   CHECK(!w.ran.empty() && w.ran.back() == "map dm1");
 }
 
-TEST(dissolution_of_eternitys_maps_add_its_team_games_to_teamplay) {
+TEST(dissolution_offers_its_team_games_on_the_teamplay_row) {
   World w;
   Menu m = sm::build_menu();
   ge::console::Cvars server(true);
   for (const char* c : {"deathmatch", "fraglimit", "timelimit", "teamplay"})
     server.add({.name = c, .fallback = "0"});
-  server.set("teamplay", "4", ge::console::Source::local);
-  sm::Host base{.console = &w.con, .server = &server, .maps = {"start", "e1m1"}};
+  // The base game's packs: off, no friendly fire, friendly fire.
+  sm::Host base{.console = &w.con, .server = &server, .maps = {"start", "dm1"}};
   sm::refresh(m, base);
-  const auto* row = item(m, "host", "teamplay");
-  CHECK(row->choices.size() == 3);  // the base game's three; 4 is not one of them: OFF
-  CHECK(row->choice == 0);
-  sm::Host pack{.console = &w.con, .server = &server, .maps = {"start", "r1m1", "r2m1"}};
-  sm::refresh(m, pack);
-  row = item(m, "host", "teamplay");
-  CHECK(row->choices.size() == 7);
-  CHECK(row->choices[3] == "TAG");
-  CHECK(row->choices[6] == "THREE TEAM CTF");
-  CHECK(row->choice == 4);  // CAPTURE THE FLAG
-  sm::Host both{.console = &w.con, .server = &server, .maps = {"start", "hip1m1", "r1m1"}};
-  sm::refresh(m, both);  // Scourge of Armagon's list wins, and with it the base three
   CHECK(item(m, "host", "teamplay")->choices.size() == 3);
+  // Dissolution of Eternity's: its tag and flag games too, left of off wrapping to the last.
+  sm::Host rogue{.console = &w.con, .server = &server, .maps = {"start", "r1m1", "ctf1"}};
+  sm::refresh(m, rogue);
+  const std::vector<std::string> want = {"OFF",           "NO FRIENDLY FIRE", "FRIENDLY FIRE",
+                                         "TAG",           "CAPTURE THE FLAG", "ONE FLAG CTF",
+                                         "THREE TEAM CTF"};
+  CHECK(item(m, "host", "teamplay")->choices == want);
+  m.open("multi");
+  for (const MenuEvent& e : press(m, "host")) sm::apply_event(e, m, rogue);
+  CHECK(m.focus("teamplay"));
+  MenuInput left;
+  left.left = true;
+  for (const MenuEvent& e : m.input(left)) sm::apply_event(e, m, rogue);
+  for (const MenuEvent& e : press(m, "start")) sm::apply_event(e, m, rogue);
+  CHECK_MSG(std::find(w.ran.begin(), w.ran.end(), "sv teamplay 6") != w.ran.end(),
+            w.ran.empty() ? std::string() : w.ran.front());
+  // Set to capture the flag, the row shows it; the base game's packs show it as off.
+  server.set("teamplay", "4", ge::console::Source::local);
+  sm::refresh(m, rogue);
+  CHECK(item(m, "host", "teamplay")->choice == 4);
+  sm::refresh(m, base);
+  CHECK(item(m, "host", "teamplay")->choice == 0 && sm::teamplay_choices(rogue.maps) == 7);
 }
 
 TEST(ranked_game_looks_for_a_duel_once_the_console_can) {

@@ -24,13 +24,13 @@ namespace {
 using ge::ui::ItemKind;
 
 constexpr Choice kGameType[] = {{"COOPERATIVE", "0"}, {"DEATHMATCH", "1"}};
-// The first three are every pack's; Dissolution of Eternity's program adds its team games (refresh
-// shows them only while its maps are in, `team_modes`).
+// Teamplay's words; Dissolution of Eternity's games past the first three (shown only when its maps
+// are the packs', `teamplay_choices`).
 constexpr Choice kTeamplay[] = {
     {"OFF", "0"},           {"NO FRIENDLY FIRE", "1"}, {"FRIENDLY FIRE", "2"},
     {"TAG", "3"},           {"CAPTURE THE FLAG", "4"}, {"ONE FLAG CTF", "5"},
     {"THREE TEAM CTF", "6"}};
-constexpr size_t kTeamplayBase = 3;
+constexpr size_t kBaseTeamplay = 3;
 constexpr Choice kSkill[] = {{"EASY", "0"}, {"NORMAL", "1"}, {"HARD", "2"}, {"NIGHTMARE", "3"}};
 constexpr Choice kFragLimit[] = {{"NONE", "0"}, {"10", "10"}, {"20", "20"},  {"30", "30"},
                                  {"40", "40"},  {"50", "50"}, {"60", "60"},  {"70", "70"},
@@ -834,6 +834,23 @@ constexpr Entry kEntries[] = {
      .needs = "ce_shadows",
      .target = Target::client},
     {.page = "ce_light",
+     .id = "ce_ao",
+     .text = "CONTACT SHADE",
+     .kind = ItemKind::toggle,
+     .hint = "Corners, creases and the floor under monsters and items darken.",
+     .needs = "ce_ao",
+     .target = Target::client},
+    {.page = "ce_light",
+     .id = "ce_ao_strength",
+     .text = "SHADE LEVEL",
+     .kind = ItemKind::slider,
+     .hint = "How dark the closed corners and the floor under figures grow.",
+     .needs = "ce_ao_strength",
+     .target = Target::client,
+     .min = 0.2,
+     .max = 1,
+     .step = 0.1},
+    {.page = "ce_light",
      .id = "ce_flicker",
      .text = "FLICKERING LIGHT",
      .kind = ItemKind::toggle,
@@ -1406,6 +1423,13 @@ std::vector<std::string> slot_names(const MenuTable& table) {
   return out;
 }
 
+namespace {}  // namespace
+
+size_t teamplay_choices(std::span<const std::string> maps) {
+  const bool dissolution = std::find(maps.begin(), maps.end(), "r1m1") != maps.end();
+  return dissolution ? std::size(kTeamplay) : kBaseTeamplay;
+}
+
 namespace {
 
 // The host page's EPISODE and LEVEL kept with its MAP row (episodes.hpp): `from` "map" sets the two
@@ -1482,6 +1506,17 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.choice = std::clamp(was, 0, static_cast<int>(it.choices.size()) - 1);
         continue;
       }
+      if (e->page == "host" && e->id == "teamplay") {  // Dissolution's games with its maps
+        const size_t n = teamplay_choices(host.maps);
+        it.choices.resize(n);
+        for (size_t i = 0; i < n; i++) it.choices[i] = std::string(e->choices[i].text);
+        if (it.choice >= static_cast<int>(n)) it.choice = 0;
+        if (it.disabled) continue;
+        const std::string v = host_value(host, cvar_of(*e));
+        for (size_t i = 0; i < n; i++)
+          if (same_value(v, e->choices[i].value)) it.choice = static_cast<int>(i);
+        continue;
+      }
       if (e->page == "host" && (e->id == "episode" || e->id == "level")) {
         it.choices.clear();  // filled from the map row's choice once it is known (below)
         continue;
@@ -1521,12 +1556,6 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.text = name.empty() ? std::string(e->text) : std::string(e->text) + "  " + name;
         continue;
       }
-      if (e->page == "host" && e->id == "teamplay") {  // the pack's team games past the base three
-        const size_t n = team_modes(host.maps) ? e->choices.size() : kTeamplayBase;
-        it.choices.clear();
-        for (size_t i = 0; i < n; i++) it.choices.emplace_back(e->choices[i].text);
-        if (it.choice < 0 || static_cast<size_t>(it.choice) >= n) it.choice = 0;  // reads OFF
-      }
       if (e->target == Target::none || it.disabled) continue;
       const std::string v = host_value(host, cvar_of(*e));
       if (e->kind == ItemKind::toggle) {
@@ -1536,7 +1565,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
             e->bit >= 0 ? number && (static_cast<long>(x) >> e->bit & 1) != 0 : number && x != 0;
         it.on = set != e->inverted;
       } else if (e->kind == ItemKind::choice) {
-        for (size_t i = 0; i < e->choices.size() && i < it.choices.size(); i++)
+        for (size_t i = 0; i < e->choices.size(); i++)
           if (same_value(v, e->choices[i].value)) it.choice = static_cast<int>(i);
       } else if (e->kind == ItemKind::slider) {
         double x = 0;

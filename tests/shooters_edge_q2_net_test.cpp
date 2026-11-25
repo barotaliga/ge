@@ -13,6 +13,7 @@
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -1714,9 +1715,17 @@ TEST(voice_on_our_server_of_q2_reaches_whom_the_first_games_rules_say) {
   cn::Q2ClientEnd& cb = join(*r, b);
   cn::Q2ClientEnd& cc = join(*r, c);
   cn::Q2ClientEnd& cd = join(*r, d);
+  std::vector<uint8_t> level;  // the level as a `record` keeps it
+  ca.level_record = &level;
   run(*r, 300);
   CHECK(ca.stage == cn::ClientStage::active && cd.stage == cn::ClientStage::active);
   CHECK(ca.voice_on && cb.voice_on && cc.voice_on && !cd.voice_on);
+  int own = 0;  // the talker's own voice in his recording, a block of its own each time
+  for (size_t at = 0, len = 0; at + 4 < level.size(); at += 4 + len) {
+    std::memcpy(&len, &level[at], 4);  // a block's length, little-endian (the hosts are)
+    own += len > 0 && level[at + 4] == cn::kSvcGeVoice;
+  }
+  CHECK_MSG(own > 0, "the talker's recording kept none of his own voice");
   const int sa = slot_named(*r, "a");
   CHECK(sa >= 0);
   if (sa < 0) return;
