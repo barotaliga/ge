@@ -252,3 +252,24 @@ TEST(the_second_stage_kills_every_stalker_and_settles_into_a_body) {
   CHECK(sv::monster_damage(h->s(), h->m(w).entity, -1, 1000, {}));
   CHECK(h->e(w).gone);  // thrown apart below -900
 }
+
+TEST(the_makron_s_torso_glows_red_while_a_medic_raises_him) {
+  auto h = open_hall({thing("monster_makron", "300 0 24", "180")});
+  run(*h, 10);
+  const int mk = find(*h, "monster_makron");
+  int torso = -1;
+  for (size_t i = 0; i < h->s().entities.size(); i++)
+    if (h->s().entities[i].classname == "makron_torso") torso = static_cast<int>(i);
+  CHECK(torso >= 0 && mk >= 0);
+  if (torso < 0 || mk < 0) return;
+  CHECK(sv::map_damage(h->s(), h->m(mk).entity, -1, h->e(mk).health));
+  run(*h, kSecond);
+  const auto row = [&] { return h->s().world.entities[size_t(sv::map_row(torso))]; };
+  CHECK(!row().free && row().effects == 0 && row().render_fx == 0);
+  h->m(mk).claimed = true;  // a medic's cable on him
+  run(*h, 10);
+  CHECK(row().effects == sv::kSqColourShellEffect && row().render_fx == sv::kSqRedShellRender);
+  h->m(mk).claimed = false;
+  run(*h, 10);
+  CHECK(row().effects == 0 && row().render_fx == 0);
+}
