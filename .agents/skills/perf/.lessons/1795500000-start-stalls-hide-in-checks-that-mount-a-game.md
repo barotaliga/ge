@@ -2,7 +2,7 @@
 title: A start-up stall can be a yes-or-no check that mounts a whole game; ask the archive's directory
 date: 2026-11-25
 scope: engine/prof/frames.cpp, engine/vfs/search.cpp, games/shooters_edge/client/installs.cpp
-concepts: [profile, frame-profile, start-stall, hitch, vfs, game_has_file, read_from_pack, perf-timeline]
+concepts: [profile, frame-profile, start-stall, hitch, vfs, game-has-file, read-from-pack, perf-timeline]
 ---
 
 - `profile N` (the console) names a slow frame's dearest zones, but a stall outside every zone
