@@ -138,6 +138,15 @@ std::string search_path_text(const SearchPath& path, bool totals = false);
 // with its content zip `pak0.pk3` first when it has no `pak0.pak` (the zip standing in for it):
 // what classic-enhance keys its cache by (classicenhance/cached.hpp's `find_cache`).
 std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path);
+// The same, then each mission pack's folder mounted over the base (classicenhance/profile.hpp's
+// `find_pack`, Quake's and Quake II's) with its numbered packs in order: the key of the cache made
+// from the mission pack laid over the base game (`classicenhance run <the pack's folder>`).
+// Equal to `content_packs` with no mission pack mounted.
+std::vector<std::span<const uint8_t>> content_packs_with_mission(const SearchPath& path);
+// The enhanced cache the game reads (classicenhance/cached.hpp's `find_cache` under `root`, the
+// default root when empty): the mission pack's cache laid over the base game's when it was made,
+// else the base game's own, else an empty path.
+std::filesystem::path content_cache(const SearchPath& path, const std::filesystem::path& root = {});
 
 // THE SAVES: ours `<game folder>/saves/<name>.save`; with `classic`, the classic text save
 // `<game folder>/<name>.sav`, where Quake keeps its own (the name letters, digits, `_`

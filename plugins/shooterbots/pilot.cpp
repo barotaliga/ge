@@ -304,6 +304,17 @@ static void hop_turn_need(Pilot& p, const PilotSense& s, float vh, float speed, 
   }
 }
 
+// Whether a flight at `s` comes down to `B`'s height short of it across: the time to fall there
+// under the move's gravity (the higher root), times the speed across.
+static bool air_short(const MoveSettings& move, const PilotSense& s, Vec3f B) {
+  const float g = move.gravity > 0 ? move.gravity : 800;
+  const float dz = s.origin.z - B.z, vz = s.velocity.z;
+  const float disc = vz * vz + 2 * g * dz;
+  if (disc < 0) return true;  // never comes down to it: short
+  const float t = (vz + root_of(disc)) / g;
+  return across({}, s.velocity) * t < across(s.origin, B);
+}
+
 MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   const float dt = static_cast<float>(msec) * 0.001f;
   const float t = static_cast<float>(p.stats.time_s);
@@ -1494,9 +1505,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.forward = 1;
           because = "in the air: toward the target";
         } else if (err_abs <= kAirHold) {
-          // On the line: the view along the velocity, no key (nothing taken off the speed).
+          // On the line: the view along the velocity, no key (nothing taken off the speed); in
+          // an air with no cap on the wish (Quake II's), forward while the flight lands short.
           w.yaw = unwrap(vh, p.yaw);
           because = "in the air: on the line";
+          if (air_carries(g.move) && air_short(g.move, s, B)) {
+            w.forward = 1;
+            because = "in the air: on the line, short of the target";
+          }
         } else {
           // Off the line: the side key toward the turn (the right side turns the velocity
           // clockwise), pressed by how far off, the view led on the velocity by the turn the

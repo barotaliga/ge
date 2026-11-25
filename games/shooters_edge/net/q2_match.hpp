@@ -29,6 +29,9 @@
 // (`g_tdm_allow_pick`) and remove. The teams' scores are their players' frags, those who left
 // included; overtime compares the teams, and the match's end says who won by how much.
 //
+// COACHES (engine/server/coach.hpp): a spectator elected by the players (`coach <team>`, `yes`)
+// coaches one team: its team chat both ways and his chase camera kept on its players.
+//
 // THE REFEREE (engine/server/referee.hpp): `referee` (or `admin`) and `g_admin_password` let a
 // player end the match, set the time limit, change the map, kick, ban, mute and shuffle the teams
 // without a vote. A muted player's chat is held back.
@@ -46,6 +49,7 @@
 // ge:keywords calltime hold overtime sudden-death sv_lobby sv_prewar sv_lockjoin match-phase
 // ge:keywords tdm team-match captains referee g_admin_password g_team_a_name g_team_a_skin
 // ge:keywords g_max_players_per_team g_tdm_allow_pick stats teamstats laststats team-score
+// ge:keywords coach q2-coach
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_match_test.cpp
 #pragma once
@@ -55,11 +59,13 @@
 #include <string>
 
 #include "server/captains.hpp"
+#include "server/coach.hpp"
 #include "server/login.hpp"
 #include "server/match.hpp"
 #include "server/referee.hpp"
 #include "server/server.hpp"
 #include "server/timeout.hpp"
+#include "server/vote.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/match_rules.hpp"
@@ -85,6 +91,8 @@ struct Q2Match {  // NOLINT(clang-analyzer-optin.performance.Padding): one a ser
   uint32_t held_out = 0;               // the slots kept on the sidelines (sv_lockjoin)
   std::string map;                     // the map the countdown restarts
   ge::server::Teams teams;
+  ge::server::Coaches coaches;
+  const ge::server::VoteBook* votes = nullptr;  // the players' votes (no coach election beside one)
   ge::server::Referee referee;
   bool teams_on = false;                         // a team match (`dmflags` 64 or 128)
   std::array<std::string, 2> team_names_set;     // the settings' names last read

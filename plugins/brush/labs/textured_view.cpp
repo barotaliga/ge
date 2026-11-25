@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -81,10 +82,39 @@ uint8_t sky(const Texture& t, const Cam& cam, const double* world) {
   return front != 0 ? front : at(s, v, half);
 }
 
+// A true-colour texel at (s, v) in the texture's own texels, bilinear and wrapping: its colour
+// into `rgb`, true when it glows (its nearest texel's alpha 255).
+bool true_texel(const TrueColour& t, const Texture& tex, double s, double v, double* rgb) {
+  const double x = s * double(t.width) / double(tex.width) - 0.5;
+  const double y = v * double(t.height) / double(tex.height) - 0.5;
+  const auto fx0 = int64_t(std::floor(x)), fy0 = int64_t(std::floor(y));
+  const double fx = x - double(fx0), fy = y - double(fy0);
+  const auto wrap = [](int64_t a, uint32_t n) {
+    const int64_t m = a % int64_t(n);
+    return size_t(m < 0 ? m + n : m);
+  };
+  const size_t xs[2] = {wrap(fx0, t.width), wrap(fx0 + 1, t.width)};
+  const size_t ys[2] = {wrap(fy0, t.height), wrap(fy0 + 1, t.height)};
+  const double wx[2] = {1 - fx, fx}, wy[2] = {1 - fy, fy};
+  for (int c = 0; c < 3; ++c) rgb[c] = 0;
+  for (int j = 0; j < 2; ++j) {
+    for (int i = 0; i < 2; ++i) {
+      const size_t at = (ys[j] * t.width + xs[i]) * 4;
+      for (int c = 0; c < 3; ++c) rgb[c] += t.rgba[at + size_t(c)] * wx[i] * wy[j];
+    }
+  }
+  return t.rgba[(ys[fy < 0.5 ? 0 : 1] * t.width + xs[fx < 0.5 ? 0 : 1]) * 4 + 3] == 255;
+}
+
 void fill(Target& tg, const Cam& cam, const Map& map, const Surface& surf,
-          std::span<const uint8_t> pal, const Corner* k) {
+          std::span<const uint8_t> pal, std::span<const TrueColour> replaced, const Corner* k) {
   const Texture& tex = map.textures[surf.texture];
   const bool pictured = !tex.indexed.empty() && tex.width > 0 && tex.height > 0;
+  const TrueColour* own = surf.texture < replaced.size() && !replaced[surf.texture].rgba.empty() &&
+                                  tex.width > 0 && tex.height > 0 &&
+                                  surf.kind != SurfaceKind::sky && surf.kind != SurfaceKind::liquid
+                              ? &replaced[surf.texture]
+                              : nullptr;
   double sx[3], sy[3], iz[3];
   for (int i = 0; i < 3; ++i) {
     iz[i] = 1 / k[i].c[2];
@@ -115,6 +145,25 @@ void fill(Target& tg, const Cam& cam, const Map& map, const Surface& surf,
       };
       uint8_t index = 0;
       double light[3] = {1, 1, 1};
+      if (own != nullptr) {
+        double rgb[3];
+        const bool glows = true_texel(*own, tex, mix([](const Corner& c) { return c.st; }, 0),
+                                      mix([](const Corner& c) { return c.st; }, 1), rgb);
+        if (!glows) {
+          const double lu = mix([](const Corner& c) { return c.lm; }, 0);
+          const double lv = mix([](const Corner& c) { return c.lm; }, 1);
+          for (int c = 0; c < 3; ++c) {
+            light[c] = (cam.rgb || c == 0 ? luxel(map, surf.lightmap, lu, lv, cam.rgb ? c : -1)
+                                          : light[0] * 128.0) /
+                       128.0;
+          }
+        }
+        tg.depth[at] = float(w);
+        for (int c = 0; c < 3; ++c) {
+          tg.rgb[at * 3 + size_t(c)] = float(std::min(255.0, rgb[c] * std::min(light[c], 2.0)));
+        }
+        continue;
+      }
       if (!pictured) {
         index = 8;  // a mid grey: a texture the map does not carry
       } else if (surf.kind == SurfaceKind::sky) {
@@ -148,6 +197,12 @@ void fill(Target& tg, const Cam& cam, const Map& map, const Surface& surf,
 
 size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& map,
                      std::span<const uint8_t> palette, const TexturedEye& eye) {
+  return draw_textured(p, x0, y0, w, h, map, palette, eye, {});
+}
+
+size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& map,
+                     std::span<const uint8_t> palette, const TexturedEye& eye,
+                     std::span<const TrueColour> replaced) {
   Cam cam{};
   const double yaw = eye.yaw_deg * kPi / 180, pitch = eye.pitch_deg * kPi / 180;
   for (int k = 0; k < 3; ++k) cam.eye[k] = eye.at[k];
@@ -225,7 +280,7 @@ size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& m
       }
       for (int i = 1; i + 1 < n; ++i) {
         const Corner tri[3] = {poly[0], poly[i], poly[i + 1]};
-        fill(tg, cam, map, surf, palette, tri);
+        fill(tg, cam, map, surf, palette, replaced, tri);
       }
       ++drawn;
     }
@@ -250,6 +305,30 @@ size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& m
     }
   }
   return drawn;
+}
+
+std::vector<std::pair<std::string, TexturedEye>> start_eyes(const Map& map) {
+  std::vector<std::pair<std::string, TexturedEye>> out;
+  std::vector<const Entity*> others;
+  const auto eye_at = [](const Entity& e) {
+    TexturedEye eye;
+    double o[3] = {0, 0, 0};
+    std::sscanf(e.get("origin").c_str(), "%lf %lf %lf", &o[0], &o[1], &o[2]);
+    for (int k = 0; k < 3; ++k) eye.at[k] = o[k];
+    eye.at[2] += 22;  // the eye over a start's origin
+    eye.yaw_deg = std::atof(e.get("angle").c_str());
+    return eye;
+  };
+  for (const Entity& e : map.entities) {
+    const std::string& c = e.get("classname");
+    if (c == "info_player_start" && out.empty()) out.push_back({"THE START", eye_at(e)});
+    if (c == "info_player_deathmatch" || c == "info_player_coop") others.push_back(&e);
+  }
+  for (size_t i = 0; i < 3 && i < others.size(); ++i) {
+    const size_t at = others.size() <= 3 ? i : i * (others.size() - 1) / 2;
+    out.push_back({"START " + std::to_string(at + 1), eye_at(*others[at])});
+  }
+  return out;
 }
 
 }  // namespace ge::brush::labs

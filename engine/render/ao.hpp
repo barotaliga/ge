@@ -18,6 +18,12 @@
 // shade onto the other. The frame group binds it as its binding 10; with AO off the frame group
 // binds the sky's 1 x 1 blank there and `sky_seen` is one dimension query.
 //
+// APPLIED AFTER THE FACT (`encode_ao_apply`, pass "ao.apply"): a renderer whose colour and depth
+// are drawn in one pass (the classic maps', plugins/brush) has no depth before its colour for the
+// search to read; it runs "ao" after its opaque passes and then multiplies the drawn colour by the
+// sky each pixel sees, read as `sky_seen` reads it. That darkens all of a pixel's light, not only
+// the sky's: the right look for a world lit by its lightmaps, whose light is all bounced.
+//
 // What it costs: one full-size depth load for the texel, four for its normal and
 // 2 x kAoSlices x kAoSteps along the slices, a half-size texel each, then nine loads to smooth it;
 // the far ground's texels, whose radius on screen is under two pixels, stop after the normal.
@@ -25,6 +31,7 @@
 // ge:summary Ambient occlusion: a half-size horizon search over the depth, read by the sky's light
 // ge:keywords render ambient-occlusion ao gtao horizon-based ssao sky-visibility half-size
 // ge:keywords create_ao_pipelines create_ao_targets encode_ao set_ao ao-settings r_ao
+// ge:keywords encode_ao_apply create_ao_apply ao-apply no-prepass
 // ge:skill render
 // ge:test tests/render_ao_test.cpp
 #pragma once
@@ -55,6 +62,11 @@ struct Ao {
   wgpu::BindGroupLayout layout, blur_layout;
   wgpu::BindGroup group, blur_group;
   uint32_t pipeline = 0, p_blur = 0;
+  // The pass applied after the fact (`create_ao_apply`): its layout, its group over the target and
+  // the depth, its pipeline (0: not made).
+  wgpu::BindGroupLayout apply_layout;
+  wgpu::BindGroup apply_group;
+  uint32_t p_apply = 0;
 };
 
 // The half size for a render target of `width` x `height`.
@@ -69,5 +81,13 @@ void set_ao(gpu::Device& device, const Ao& ao, const AoSettings& settings);
 // The pass ("ao"): the search, then the smoothing.
 void encode_ao(const Ao& ao, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                wgpu::CommandEncoder& encoder);
+
+// The pass applied after the fact, made once after `create_ao_pipelines` (its group is then made
+// by every `create_ao_targets`).
+void create_ao_apply(gpu::Device& device, gpu::PipelineSet& pipelines, Ao& ao);
+// The pass ("ao.apply"): the colour in `hdr` (kHdrFormat) times the sky each drawn pixel sees,
+// after `encode_ao` this frame; a pixel with no depth is left as it is.
+void encode_ao_apply(const Ao& ao, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                     wgpu::CommandEncoder& encoder, const wgpu::TextureView& hdr);
 
 }  // namespace ge::render

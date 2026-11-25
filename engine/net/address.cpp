@@ -236,6 +236,10 @@ std::string to_string(const Address& a) {
   return s + b;
 }
 
+bool same_host(const Address& a, const Address& b) {
+  return a.family == b.family && std::memcmp(a.bytes, b.bytes, sizeof a.bytes) == 0;
+}
+
 uint64_t address_hash(const Address& a) {
   uint64_t h = 0xcbf29ce484222325ull;
   const auto mix = [&h](uint8_t v) {

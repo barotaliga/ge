@@ -82,12 +82,15 @@ LevelString level_string(const std::string& text) {
     std::string part = text.substr(from, plus - from);
     from = plus + 1;
     if (part.empty()) continue;
+    // A `*` starts a new unit, on the map or on a show before it (`*ntro.cin+base1`).
+    if (part.front() == '*') {
+      out.unit = true;
+      part.erase(0, 1);
+    }
     if (part.ends_with(".cin") || part.ends_with(".pcx")) {
       out.shows += (out.shows.empty() ? "" : "+") + part;
       continue;
     }
-    out.unit = part.front() == '*';
-    if (out.unit) part.erase(0, 1);
     const size_t spot = part.find('$');
     out.spawn = spot == std::string::npos ? std::string() : part.substr(spot + 1);
     out.map = part.substr(0, spot);

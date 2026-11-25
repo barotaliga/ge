@@ -49,11 +49,11 @@
 #include <array>
 #include <cstdint>
 #include <deque>
-#include <map>
 #include <span>
 #include <string>
 #include <vector>
 
+#include "classic/protocol/challenges.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_delta.hpp"
@@ -142,7 +142,7 @@ struct QwTvUdp {
   int32_t count_raise = 0;  // added to every count read (a recording's rounds)
   int viewer_slot = 31;     // the slot every viewer is told is its own (one no player holds)
   std::array<UdpViewer, 32> viewers;
-  std::map<uint64_t, int32_t> challenges;  // by host
+  ge::classic::ChallengeBook challenges;  // classic/protocol/challenges.hpp
   uint32_t next_challenge = 0x5eb1;
   // Counts.
   int64_t refused = 0, dropped = 0, left_out = 0, switches = 0, bytes_out = 0;
