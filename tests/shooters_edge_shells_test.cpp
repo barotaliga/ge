@@ -57,6 +57,12 @@ TEST(each_games_guns_throw_their_own_cases) {
   CHECK(cl::q2_flash_ejection(39, true) == nullptr);
   CHECK(cl::q2_flash_ejection(4, true)->casing == ce::Casing::heavy);
   CHECK(cl::q2_flash_ejection(23, true) == nullptr);  // the tank's rocket
+  // The mission packs: the carrier's machine guns throw heavy brass; the packs' new guns (the
+  // ion ripper, the phalanx, the flechette rifle, the plasma beam, the disruptor) throw none.
+  for (const int v : {138, 139, 152, 153})
+    CHECK(cl::q2_flash_ejection(v, true)->casing == ce::Casing::heavy);
+  for (const int v : {16, 17, 18, 30, 35}) CHECK(cl::q2_flash_ejection(v, false) == nullptr);
+  for (const int v : {144, 147, 148, 151}) CHECK(cl::q2_flash_ejection(v, true) == nullptr);
 }
 
 TEST(a_case_leaves_the_port_to_the_guns_right_and_up) {

@@ -165,7 +165,7 @@ struct RconAway {
   bool opened = false;
 };
 
-struct Remote {
+struct Remote {  // NOLINT(clang-analyzer-optin.performance.Padding): one, the window's, by name
   // In the order that packs it (the lint holds the padding).
   gn::Transport* transport = nullptr;               // what it talks over (`own`, or remote_start's)
   const ge::console::Button* voip_key = nullptr;    // `+voip` (add_remote_commands)

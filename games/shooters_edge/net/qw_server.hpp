@@ -67,6 +67,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/protocol/challenges.hpp"
 #include "classic/protocol/lag_turn.hpp"
 #include "core/prng.hpp"
 #include "net/status.hpp"
@@ -364,12 +365,6 @@ struct ServerCounts {
   int64_t rcon_run = 0, rcon_refused = 0;  // remote console lines run; refused or not answered
 };
 
-struct Challenge {
-  gn::Address address;  // the port ignored
-  int32_t value = 0;
-  int64_t made = 0;  // the order it was made, for replacing the oldest
-};
-
 // The frag log (net/qw_fraglog.hpp): the rules' frag lines read so far, the file `fraglogfile`
 // opened, the buffer being filled and the last one filled, which the `log` query answers with.
 struct FragLog {
@@ -392,8 +387,7 @@ struct QwServer {
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
   QwClient clients[sh::kMaxClients];
-  Challenge challenges[64];
-  int64_t challenges_made = 0;
+  ge::classic::ChallengeBook challenges;  // classic/protocol/challenges.hpp
   ge::core::Rng rng{1};
   int spawncount = 1;
   int next_userid = 1;

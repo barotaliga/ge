@@ -287,32 +287,6 @@ double read_us(const std::vector<uint8_t>& bytes) {
   return best;
 }
 
-// Where to stand in a map to look at it: the player's start, then up to three other starts spread
-// through the entity list, each at eye height facing its `angle`.
-std::vector<std::pair<std::string, br::labs::TexturedEye>> eyes_of(const br::Map& map) {
-  std::vector<std::pair<std::string, br::labs::TexturedEye>> out;
-  std::vector<const br::Entity*> others;
-  const auto eye_at = [](const br::Entity& e) {
-    br::labs::TexturedEye eye;
-    double o[3] = {0, 0, 0};
-    std::sscanf(e.get("origin").c_str(), "%lf %lf %lf", &o[0], &o[1], &o[2]);
-    for (int k = 0; k < 3; ++k) eye.at[k] = o[k];
-    eye.at[2] += 22;  // the eye over a start's origin
-    eye.yaw_deg = std::atof(e.get("angle").c_str());
-    return eye;
-  };
-  for (const br::Entity& e : map.entities) {
-    const std::string& c = e.get("classname");
-    if (c == "info_player_start" && out.empty()) out.push_back({"THE START", eye_at(e)});
-    if (c == "info_player_deathmatch" || c == "info_player_coop") others.push_back(&e);
-  }
-  for (size_t i = 0; i < 3 && i < others.size(); ++i) {
-    const size_t at = others.size() <= 3 ? i : i * (others.size() - 1) / 2;
-    out.push_back({"START " + std::to_string(at + 1), eye_at(*others[at])});
-  }
-  return out;
-}
-
 // A texture's file name for the matcher: a leading '*' (a liquid) is `liq_`, a leading '+' (an
 // animation frame) `anim_`, and anything a file name cannot hold an underscore.
 std::string texture_file(const std::string& name) {
@@ -594,7 +568,7 @@ void run(lab::Lab& lab) {
     for (const Loaded& l : maps) {
       const br::Map& m = l.map;
       if (m.family != br::Family::v29 && m.family != br::Family::bsp2) continue;
-      const auto eyes = eyes_of(m);
+      const auto eyes = br::labs::start_eyes(m);
       if (eyes.empty()) continue;
       const int cw = px, ch = px * 5 / 8, cols = eyes.size() > 1 ? 2 : 1;
       const int rows = int((eyes.size() + size_t(cols) - 1) / size_t(cols));

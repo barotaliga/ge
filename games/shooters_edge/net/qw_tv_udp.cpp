@@ -36,16 +36,6 @@ void note(QwTvUdp& f, std::string line) {
   if (f.log.size() < kLogKept) f.log.push_back(std::move(line));
 }
 
-uint64_t host_key(gn::Address a) {
-  a.port = 0;
-  return gn::address_hash(a);
-}
-
-bool same_host(gn::Address a, gn::Address b) {
-  a.port = b.port = 0;
-  return a == b;
-}
-
 WireCtx plain_ctx() { return WireCtx{}; }
 
 void send_to(QwTvUdp& f, const gn::Address& to, const uint8_t* data, size_t size) {
@@ -307,12 +297,17 @@ void connect(QwTvUdp& f, const gn::Address& from, const std::string& text) {
   if (std::atoi(pg::word(w, 1)) != kProtocolVersion)
     return refuse(f, from, "Server is version " + std::to_string(kProtocolVersion) + ".");
   const auto qport = static_cast<uint16_t>(std::atoi(pg::word(w, 2)));
-  const auto at = f.challenges.find(host_key(from));
-  if (at == f.challenges.end()) return refuse(f, from, "No challenge for address.");
-  if (at->second != std::atoi(pg::word(w, 3))) return refuse(f, from, "Bad challenge.");
+  switch (ge::classic::challenge_check(f.challenges, from, std::atoi(pg::word(w, 3)))) {
+    case ge::classic::ChallengeCheck::none:
+      return refuse(f, from, "No challenge for address.");
+    case ge::classic::ChallengeCheck::bad:
+      return refuse(f, from, "Bad challenge.");
+    case ge::classic::ChallengeCheck::ok:
+      break;
+  }
   const std::string userinfo = pg::word(w, 4);
   for (const UdpViewer& v : f.viewers)
-    if (v.stage != UdpViewerStage::free && same_host(v.address, from) && v.qport == qport) {
+    if (v.stage != UdpViewerStage::free && gn::same_host(v.address, from) && v.qport == qport) {
       send_oob(f, from, "j");  // a repeat: its answer was lost
       return;
     }
@@ -348,14 +343,11 @@ void read_oob(QwTvUdp& f, const gn::Address& from, const uint8_t* data, size_t s
   pg::tokenize_words(text.substr(0, text.find('\n')).c_str(), w);
   const std::string cmd = pg::word(w, 0);
   if (cmd == "getchallenge") {
-    auto at = f.challenges.find(host_key(from));
-    if (at == f.challenges.end()) {
+    const int32_t number = ge::classic::challenge_issue(f.challenges, from, [&f] {
       f.next_challenge = f.next_challenge * 1103515245u + 12345u;
-      at = f.challenges
-               .emplace(host_key(from), static_cast<int32_t>((f.next_challenge >> 8) & 0x7FFFFFu))
-               .first;
-    }
-    send_oob(f, from, "c" + std::to_string(at->second));
+      return static_cast<int32_t>((f.next_challenge >> 8) & 0x7FFFFFu);
+    });
+    send_oob(f, from, "c" + std::to_string(number));
   } else if (cmd == "connect") {
     connect(f, from, text);
   } else if (cmd == "status") {
@@ -888,7 +880,7 @@ void udp_tv_frame(QwTvUdp& f, int64_t now_us) {
     if (!peek_qport(buf, size, qport)) continue;
     UdpViewer* v = nullptr;
     for (UdpViewer& c : f.viewers)
-      if (c.stage != UdpViewerStage::free && c.qport == qport && same_host(c.address, from)) {
+      if (c.stage != UdpViewerStage::free && c.qport == qport && gn::same_host(c.address, from)) {
         v = &c;
         break;
       }
