@@ -66,7 +66,7 @@ int32_t new_challenge(QwServer& s, const gn::Address& from) {
   });
 }
 
-void reply_challenge(QwServer& s, const gn::Address& from) {
+void reply_challenge(QwServer& s, const gn::Address& from, bool ask_native) {
   const int32_t value = new_challenge(s, from);
   uint8_t buf[128];
   gn::Writer w = gn::make_writer(buf, sizeof buf);
@@ -78,6 +78,12 @@ void reply_challenge(QwServer& s, const gn::Address& from) {
       gn::write_u32(w, family_magic(f));
       gn::write_u32(w, s.cfg.offered[f]);
     }
+  // Our client asked whether this server has the native link, and it is not on it yet: the
+  // link's own word says so (a classic client never asks, so never sees the family here).
+  if (ask_native && s.tunnel && !gn::tunnel_carried(*s.tunnel, from)) {
+    gn::write_u32(w, kMagicNative);
+    gn::write_u32(w, kGeNative);
+  }
   send_oob(s, from, buf, w.size);
 }
 
@@ -417,8 +423,8 @@ void handle_oob(QwServer& s, const gn::Address& from, const uint8_t* data, size_
   } else if (cmd == "status") {  // sv_status 0 or past sv_statusrate: no answer
     if (s.cfg.status.show > 0 && gs::limit_take(s.status_tries, s.now, s.cfg.status.rate))
       send_oob_print(s, from, status_text(s, std::atoi(pg::word(w, 1))));
-  } else if (cmd == "getchallenge") {
-    reply_challenge(s, from);
+  } else if (cmd == "getchallenge") {  // `getchallenge native`: our client asks for the link
+    reply_challenge(s, from, pg::word(w, 1) == std::string("native"));
   } else if (cmd == "connect") {
     handle_connect(s, from, text);
   } else if (cmd == "rcon") {
@@ -890,6 +896,14 @@ bool qw_start(QwServer& s, const sv::RulesRunner& rules, gn::Transport& t, const
   s.transport = &t;
   s.rng = ge::core::make_rng(cfg.seed);
   if (cfg.voice) s.cfg.offered[ExtFamily::x2] |= kX2Voice;
+  if (cfg.native) {  // our clients through the node, the rest plainly, on the one socket
+    s.tunnel = std::make_unique<gn::Tunnel>();
+    if (!gn::tunnel_host(*s.tunnel, t, native_config(cfg.seed))) {
+      error = "the server's socket could not take the native protocol's node";
+      return false;
+    }
+    s.transport = &s.tunnel->inner;
+  }
   if (!bind_map(s, rules, error)) return false;
   s.packets.reserve(static_cast<size_t>(sh::kMaxClients) * 4);
   return true;
@@ -1228,9 +1242,18 @@ uint32_t zone_events() {
   return id;
 }
 
+void frame_body(QwServer& s, int64_t now_us);
+
 }  // namespace
 
 void qw_frame(QwServer& s, int64_t now_us) {
+  if (s.tunnel) gn::tunnel_update(*s.tunnel, now_us);
+  frame_body(s, now_us);
+  if (s.tunnel) gn::tunnel_flush(*s.tunnel, now_us);
+}
+
+namespace {
+void frame_body(QwServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
   std::erase_if(s.zombies, [&s](const QwServer::Zombie& z) { return s.now > z.until; });
   if (s.started < 0) s.started = s.now;
@@ -1374,5 +1397,6 @@ void qw_frame(QwServer& s, int64_t now_us) {
   part.end();
   send_frames(s);
 }
+}  // namespace
 
 }  // namespace shooters_edge::net

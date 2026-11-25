@@ -1477,6 +1477,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.hand = std::atoi(cvar("hand", "0").c_str());
     cfg.gender = c.cvars().find("gender") != nullptr ? cvar("gender", "male") : "";
     cfg.gender_auto = !cfg.gender.empty() && cvar("gender_auto", "0") == "1";
+    cfg.native = cvar("cl_native", "1") != "0";  // through our server's node when it offers
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
     // qport: the number the server knows this client by when a NAT moves its port; 0 one

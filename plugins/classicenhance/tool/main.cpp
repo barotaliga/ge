@@ -289,7 +289,7 @@ bool network(const Flags& f, Upscaler* out, std::string* note, std::string* erro
   fs::path file = f.weights;
   if (file.empty()) {
     const fs::path root = f.cache.empty() ? default_cache_root() : fs::path(f.cache);
-    file = root / "weights" / std::string(kUpscalerWeights.file);
+    file = cached_weights(root);
     std::error_code ec;
     if (!fs::exists(file, ec)) {
       fs::create_directories(file.parent_path(), ec);

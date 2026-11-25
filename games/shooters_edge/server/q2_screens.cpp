@@ -14,6 +14,7 @@
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
 
@@ -96,7 +97,9 @@ std::string q2_scoreboard(const Q2Server& s, int viewer, int killer) {
     const int y = 32 + 32 * (r % 6);
     char row[160];
     int n = 0;
-    if (i == viewer || i == killer)
+    if (gz_tag_holder(s, i))  // Ground Zero's tag: the token's holder, over the others
+      n = std::snprintf(row, sizeof row, "xv %d yv %d picn tag3 ", x + 32, y);
+    else if (i == viewer || i == killer)
       n = std::snprintf(row, sizeof row, "xv %d yv %d picn %s ", x + 32, y,
                         i == viewer ? "tag1" : "tag2");
     const double in_game = std::max(0.0, s.level_time - s.clients[i].entered_at);
