@@ -157,6 +157,29 @@ bool liquid(int contents) {
          contents == sh::kContentsLava;
 }
 
+// The plain walls standing in the map (a func_wall nothing names: nothing turns it off or takes it
+// away) as solids of the nav's world: left out, its links ran through them (bunk1's walls that seal
+// its deathmatch shortcuts in single player sent him into one for minutes). A wall with a name is
+// the way's to bar until it is gone (way_through's gates).
+void add_walls(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+               ge::brush::BrushTracer* tracer, const std::vector<sb::EntityBlock>& blocks,
+               sh::MoveWorld& world) {
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    if (!cn || std::strcmp(cn, "func_wall") != 0 || !model || model[0] != '*' ||
+        sb::block_value(b, "targetname") != nullptr)
+      continue;
+    const int m = std::atoi(model + 1);
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
+      continue;
+    const int e = edict_of(s, model);  // none when the mode leaves it out
+    if (e < 0) continue;
+    world.solids[world.count++] =
+        model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);
+  }
+}
+
 // Those doors as solids of the nav's world, where they stand (the rest of the movers are left
 // out of it and tagged on the links they close).
 // A plate: no thicker than a step's height, wider than a player both ways.
@@ -1240,6 +1263,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   }
   out.bridges.clear();
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
+  add_walls(s, spec, out.tracer.get(), blocks, out.world);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
   std::vector<sb::NavExtraLink> teleports = teleport_links(s, out.graph, spec, blocks);

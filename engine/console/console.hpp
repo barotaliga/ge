@@ -289,6 +289,9 @@ class Console {
   // Printed as "file:line: what (next)" and kept; `where` is the running command's when empty.
   void error(std::string_view what, std::string_view next,
              Problem::Severity severity = Problem::Severity::error);
+  // Kept as a problem like `error`, but never printed: logged on the `console` channel at debug.
+  // For what the player can do nothing about (a server's stuffed line the game refuses).
+  void quiet_error(std::string_view what, std::string_view next);
 
   // KEYS: `key` (a name, normalize_key's form or any spelling of it) going down or up in `mode`.
   // A `+` bind runs on both edges. Unknown keys do nothing.

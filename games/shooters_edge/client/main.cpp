@@ -169,14 +169,12 @@
 #include "ui/draw.hpp"
 
 namespace {
-
 namespace out = ge::core::output;
 namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
 namespace sn = shooters_edge::net;
 namespace slm = shooters_edge::livemap;
 namespace sp = shooters_edge::profiles;
-
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
 }  // namespace
@@ -202,7 +200,6 @@ int run_main(int argc, char** argv) {
   if (!ge::play::apply_session_flags(session, nullptr, log_error))
     out::error("shooters_edge: the log file was not opened, the terminal only: " + log_error +
                "; next: name a file in a folder you can write");
-
   // The console: its lines on the terminal and in its scrollback; the client's commands.
   ge::console::Console console;
   ge::console::ConsoleView con_view(console);
@@ -536,10 +533,8 @@ int run_main(int argc, char** argv) {
     cl::draw_title_backdrop(overlay, con_look, w, h, no_night);  // a classic game's own
     if (lobby) {
       const se::LobbyView lv = cl::listen_lobby_view(listen);
-      if (game_menu.art().loaded())
-        shooters_edge::menu::draw_lobby_page_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby_page(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         true);
     }
     game_menu.draw(overlay, w, h, t);
     con_view.frame(dt);
@@ -857,19 +852,32 @@ int run_main(int argc, char** argv) {
     attract_at_start = false;
   }
   cl::TvWatch tv_watch{args.tv};  // `-tv <node>`: a live broadcast watched (client/tv_live.hpp)
-  // The world drawn again for `map`, with the models on `load` standing in it, through `from`
-  // (the demo's game folder while one plays, else the window's).
+  const auto window_at = [&](double t) {  // the new map's first view: where the player stands
+    cl::LoadWindow at{device.get(),
+                      static_cast<uint32_t>(w),
+                      static_cast<uint32_t>(h),
+                      surface.format(),
+                      &picture,
+                      weapons,
+                      &files,
+                      &adapter,
+                      &game_content,
+                      {}};
+    at.view = [&, t] {
+      cl::ViewState first;
+      return cl::frame_view(listen, first, 0, t, 0);
+    };
+    return at;
+  };
+  // The world drawn again for `map` and `load`'s models, through `from` (a demo's folder): `now`
+  // before the next frame, else read on a thread and built a step a frame (`keep`: the old drawn).
+  cl::MapLoad demo_load;
   const auto rebuild_world = [&](const cl::LoadedMap& map, const cl::ModelLoad& load,
-                                 const cl::SearchPath& from) {
-    world.reset();
-    world = cl::create_world_draw(*device, from, map, static_cast<uint32_t>(w),
-                                  static_cast<uint32_t>(h), surface.format(), picture, weapons,
-                                  error, load, adapter);  // the played game's palette and textures
-    if (!world)
-      out::error("shooters_edge: the world draw did not load: " + error +
-                 "; see docs/rendering.md");
-    if (world) cl::level_music(music, map.spec.entities);  // the level's own track
-    return world != nullptr;
+                                 const cl::SearchPath& from, bool now, bool keep = false) {
+    if (!keep) world.reset();
+    cl::load_world(demo_load, from, map, picture, load.names, adapter, 0, load.vweps);
+    cl::level_music(music, map.spec.entities);  // the level's own track
+    return !now || cl::step_demo_world(demo_load, window_at(0), true, world);
   };
   // The benchmark over: its report, vsync back, the listen server's world again.
   int bench_failed = 0;
@@ -948,7 +956,8 @@ int run_main(int argc, char** argv) {
       world.reset();
       return true;
     }
-    return rebuild_world(*listen.map, {listen.server->models, {}, listen.server->vwep}, files);
+    return rebuild_world(*listen.map, {listen.server->models, {}, listen.server->vwep}, files,
+                         true);
   };
 
   ge::input::Queue queue;
@@ -1158,6 +1167,7 @@ int run_main(int argc, char** argv) {
     const std::string map_before = next_map;
     const bool joined_before = remote.active;
     con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
+    con_keys.taken = cl::lobby_taken_keys(listen);  // the lobby's keys press no pack bind
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.typing() != text_on) {
       text_on = con_view.typing();
@@ -1165,7 +1175,7 @@ int run_main(int argc, char** argv) {
     }
     // The console's text selected with the mouse (Command-C copies it, ui/console_keys.hpp).
     ge::ui::select_with_pointer(
-        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, h,
+        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, w, h,
         input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
         (input.pointer_buttons & 1u) != 0 && con_view.open() && !game_menu.open(), selecting_text);
     // The main menu: Escape opens it and goes back out of it; while it is up it has the keys and
@@ -1391,22 +1401,9 @@ int run_main(int argc, char** argv) {
       next_map.clear();
     }
     if (!elsewhere) {
-      const cl::LoadWindow at{device.get(),
-                              static_cast<uint32_t>(w),
-                              static_cast<uint32_t>(h),
-                              surface.format(),
-                              &picture,
-                              weapons,
-                              &files,
-                              &adapter,
-                              &game_content,
-                              [&] {  // the new map's first view, from where the player stands
-                                cl::ViewState first;
-                                return cl::frame_view(listen, first, 0, t, 0);
-                              }};
       bool fresh = false;
-      if (const int code =
-              cl::take_load(loader, at, listen, console, measured, t, world, world_current, fresh))
+      if (const int code = cl::take_load(loader, window_at(t), listen, console, measured, t, world,
+                                         world_current, fresh))
         return code;
       if (fresh) forget_seen();
       if (fresh && listen.map) cl::level_music(music, listen.map->spec.entities);
@@ -1584,7 +1581,7 @@ int run_main(int argc, char** argv) {
           console.print(v);
           if (drawn_remote) console.append("disconnect");
         }
-        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
+        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from, !paced)) return 1;
         demo_world = true;
         demo_level_t = t;
         bench_models = ds.models.size();
@@ -1612,9 +1609,12 @@ int run_main(int argc, char** argv) {
       if (bench_map &&
           (ds.models.size() != bench_models || std::exchange(render_words.reload_asked, false))) {
         const cl::SearchPath& from = bench_folder.path ? *bench_folder.path : files;
-        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
+        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from, !paced, true))
+          return 1;
         bench_models = ds.models.size();
       }
+      if (cl::busy(demo_load) && !cl::step_demo_world(demo_load, window_at(t), false, world))
+        return 1;
       if (paced) {  // what the frames read carried: heard, and its lines shown
         synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
         std::vector<std::string> lines;
@@ -1792,8 +1792,8 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
-                               [&](const std::string& line) { tell(line, t); });
+      printed = cl::game_lines_joined(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                                      [&](const std::string& line) { tell(line, t); });
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1860,8 +1860,8 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
-                             [&](const std::string& line) { tell(line, t); });
+    printed = cl::game_lines_joined(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                                    [&](const std::string& line) { tell(line, t); });
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];
@@ -1934,10 +1934,8 @@ int run_main(int argc, char** argv) {
       se::LobbyView lv = cl::listen_lobby_view(listen);
       // A classic game counts down in its own centre print (server/announce.hpp).
       lv.count = shooters_edge::server::words_of(listen.server->localinfo, "count_head").empty();
-      if (game_menu.art().loaded())
-        shooters_edge::menu::draw_lobby_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         false);
     }
     const bool scores_on =  // the score keys (TAB: +showscores), unless scr_draw2d hides them
         !con_keys.held && !was_open && cl::shows_scores(q2_screen);

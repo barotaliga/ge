@@ -133,6 +133,8 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
     f.bot.pilot.pilot.set.under_plat = true;  // a raised lift is waited for out from under it
     // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
     f.features.set(sb::Feature::locked, false);
+    f.features.set(sb::Feature::pressface, true);  // a button set in a wall, from its face
+    f.features.set(sb::Feature::shotplace, true);  // a shot button, from where it is seen
     hunt_init(f, s);
     b.way.been = been;
     b.way.complete = opt.complete;

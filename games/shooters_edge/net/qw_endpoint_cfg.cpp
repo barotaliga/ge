@@ -44,6 +44,9 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: off (the default); 1: on"},
     {"sv_voipecho", "Whether a speaker hears his own voice back, to test it.", nullptr,
      "0: off (the default); 1: on"},
+    {"sv_native",
+     "Whether our own players join through the engine's secure link, the others as before.",
+     nullptr, "0: everyone the classic way; 1: our players through the link (the default)"},
     {"sv_earshot", "How near a player must stand to read nearby chat and hear a nearby voice.",
      nullptr, "0: no nearby chat or voice; 1..65536: that many map units (1000 the default)"},
     {"sv_rconcrypt", "Whether the remote console takes only a hashed password.", nullptr,
@@ -285,6 +288,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
   int maps = cfg.allow_maps ? 1 : 0, other = cfg.allow_other ? 1 : 0;
+  cfg.native = true;  // sv_native's default on a server (a lab's ServerConfig leaves it off)
   if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
       !endpoint_int(c, "sv_minrate", 0, 100000, cfg.minrate, error) ||
       !endpoint_int(c, "sv_lanrate", 0, 1, lan_rate, error) ||
@@ -293,6 +297,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_antilag_max", 0, 1000, cfg.antilag_max_ms, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
+      !endpoint_flag(c, "sv_native", cfg.native, error) ||
       !endpoint_int(c, "sv_earshot", 0, 65536, cfg.earshot, error) ||
       !endpoint_flag(c, "sv_antilagexact", cfg.antilag_exact, error) ||
       !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||

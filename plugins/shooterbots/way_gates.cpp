@@ -10,6 +10,9 @@
 #include <cstdlib>
 #include <string>
 
+#include "shooter/trace.hpp"
+#include "shooterbots/buttons.hpp"
+
 namespace ge::shooterbots {
 
 namespace sh = ge::shooter;
@@ -50,7 +53,9 @@ void way_wake_gates(WayThrough& w) {
 bool way_touch_opened(const WayThrough& w, const sh::Edict& de, int32_t e) {
   constexpr float kAcross = 32;  // the trigger's box this near the door's counts as on it
   for (const WayStep& st : w.steps) {
-    if (st.kind != WayKind::trigger || !st.repeats || !st.gate.empty() ||
+    // (Not one a key's lock answers: base3's blue door, walked to before its key and waited at
+    // for minutes.)
+    if (st.kind != WayKind::trigger || !st.repeats || st.keyed || !st.gate.empty() ||
         st.left_until >= kWayForever)
       continue;
     bool its = false;
@@ -85,6 +90,43 @@ void way_trigger_sides(WayThrough& w, const NavGraph& g) {
       }
     }
     if (best >= 0) st.node = best;
+  }
+}
+
+void way_shot_sides(WayThrough& w, Fighter& f, const NavGraph& g, const BotView& s, double t) {
+  constexpr double kSoughtEvery_s = 5;  // the search traces many lines: not at every plan
+  for (WayStep& st : w.steps) {
+    if (st.kind != WayKind::button || st.done || st.button < 0 || st.node < 0 ||
+        w.search.reached(st.node) || t - st.shot_sought < kSoughtEvery_s)
+      continue;
+    st.shot_sought = t;
+    ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
+    if (!bs.shoot) continue;
+    int32_t best = -1;
+    float best_d = kShotFrom * kShotFrom;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      if (!w.search.reached(static_cast<int32_t>(n))) continue;
+      const sh::Vec3f o = g.nodes[n].origin;
+      const sh::Vec3f d = o - bs.at;
+      const float dd = d.x * d.x + d.y * d.y + d.z * d.z;
+      if (dd >= best_d) continue;
+      // The eye and the muzzle either side of it see it, with room to spare: a line that grazes
+      // the door it is shot through misses (the shot leaves the gun, not the eye).
+      constexpr float kOffsets[5][3] = {
+          {0, 0, 22}, {8, 0, 14}, {-8, 0, 14}, {0, 8, 14}, {0, -8, 14}};
+      bool clear = true;
+      for (const auto& off : kOffsets) {
+        const sh::Vec3f from{o.x + off[0], o.y + off[1], o.z + off[2]};
+        const sh::HullTrace tr =
+            sh::trace_move(s.sv, from, {}, {}, bs.at, sh::kTraceNoMonsters, -1);
+        clear = clear && (tr.fraction >= 1 || tr.ent == bs.ent);
+        if (!clear) break;
+      }
+      if (!clear) continue;
+      best = static_cast<int32_t>(n);
+      best_d = dd;
+    }
+    if (best >= 0) st.node = bs.node = best;
   }
 }
 

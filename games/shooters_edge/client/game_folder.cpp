@@ -590,7 +590,13 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
   const bool fresh = content.rules_campaign && listen.opt.new_game;
   listen.opt.new_game = false;
   if (fresh) {  // the new game's companions seated once it runs (`coopgame <bots>`)
-    if (!listen_start(listen, content.progs, std::move(map), listen.opt, error)) return false;
+    // A campaign has no lobby (its companions are the game's own, client/q2_party.hpp): the
+    // server starts without one, and sv_lobby stays as the player set it for the next match.
+    const bool lobby = listen.opt.lobby;
+    listen.opt.lobby = false;
+    const bool started = listen_start(listen, content.progs, std::move(map), listen.opt, error);
+    listen.opt.lobby = lobby;
+    if (!started) return false;
     const std::string add = "addbot " + std::string(sb::aim_skill_name(listen.opt.companion_skill));
     for (int k = 0; k < listen.opt.companions; k++) listen_lobby(listen, add);
     return true;

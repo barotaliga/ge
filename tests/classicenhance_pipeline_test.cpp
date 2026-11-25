@@ -35,6 +35,7 @@
 #include "classicenhance/profile.hpp"
 #include "classicenhance/progress.hpp"
 #include "classicenhance/sound.hpp"
+#include "classicenhance/upscaler.hpp"
 #include "lab/png.hpp"
 #include "morph/write.hpp"
 #include "vfs/pak.hpp"
@@ -306,6 +307,47 @@ TEST(pipeline_reports_every_stage_and_stops_when_cancelled) {
   const ce::BoardView v = job.view();
   CHECK_MSG(v.finished && !v.failed, v.error);
   CHECK(job.report().stages.size() == 6);
+  fs::remove_all(root);
+}
+
+TEST(the_job_upscales_by_the_cache_s_weights_when_they_are_there) {
+  ce::Source src;
+  src.path = "fixture";
+  src.pack = fixture_pack();
+  std::string error;
+  CHECK_MSG(ce::verify_pack(&src, &error, {}), error);
+  const fs::path root = fs::temp_directory_path() / "ge_classicenhance_cached_network";
+  fs::remove_all(root);
+  // The job's run: the textures alone (one of them), at 4x.
+  const auto textures_note = [&](const std::string& sha) {
+    ce::EnhanceJob job;
+    ce::RunOptions opts;
+    opts.only = {ce::Stage::pack, ce::Stage::textures};
+    opts.texture_limit = 1;  // one texture shows which upscaler ran
+    opts.cached_network = sha;
+    CHECK(job.start(src, root, opts));
+    while (job.running()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    const ce::BoardView v = job.view();
+    CHECK_MSG(v.finished && !v.failed, v.error);
+    for (const ce::StageResult& r : job.report().stages)
+      if (r.stage == ce::Stage::textures) return r.note;
+    return std::string();
+  };
+  // No weights in the cache: the kernel, nothing fetched.
+  std::string note = textures_note(std::string(ce::kUpscalerWeights.sha256));
+  CHECK_MSG(note.find("by the kernel") != std::string::npos, note);
+  CHECK(!fs::exists(ce::cached_weights(root)));
+  // The weights asked for in the cache: the network, and the stage baked again by it.
+  const std::vector<uint8_t> bytes = ce::write_safetensors(ce::seeded_upscaler_weights(7));
+  fs::create_directories(ce::cached_weights(root).parent_path());
+  std::ofstream(ce::cached_weights(root), std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+  const std::string sha = ge::assets::sha256_hex(bytes);
+  note = textures_note(sha);
+  CHECK_MSG(note.find("by the trained network on the cpu") != std::string::npos, note);
+  // Other weights than the ones asked for: the kernel again.
+  note = textures_note(std::string(ce::kUpscalerWeights.sha256));
+  CHECK_MSG(note.find("by the kernel") != std::string::npos, note);
   fs::remove_all(root);
 }
 
