@@ -43,6 +43,27 @@ const kEdge = 4.0;
 struct VertexOut {
   @builtin(position) position: vec4f,
   @location(0) @interpolate(flat) blast: u32,
+  // The light the blast's smoke gets, the same at every pixel of it (`blast_light`): worked once
+  // a corner, not once a pixel.
+  @location(1) @interpolate(flat) sun_in: vec3f,
+  @location(2) @interpolate(flat) sky_in: vec3f,
+  @location(3) @interpolate(flat) fire_in: vec3f,
+  @location(4) @interpolate(flat) key: vec3f,
+}
+
+// The light the smoke of `b` gets: the sun at the ball's height, the sky's from above, the fire's
+// from inside it (the core's glow, by how much still burns). As far as the open sky reaches it,
+// and the room's own light (in whites: a white surface's luminance, so its irradiance is pi times
+// it). The way the gas is lit from: the sun as far as it reaches, else straight down from above
+// (a room's lamps and the open sky). The smoke between a point and its light shades it, so the
+// cloud's underside and far side go dark and its lit tops stand out: a volume, not a disc.
+fn blast_light(b: Blast, out: ptr<function, VertexOut>) {
+  let world_c = b.centre.xyz + frame.eye.xyz;
+  (*out).sun_in = sun_light(world_c.y, world_c.xz) * b.light.w;
+  (*out).sky_in =
+      sky_irradiance(vec3f(0.0, 1.0, 0.0)) * b.light.w + b.light.rgb * (PI * white_luminance());
+  (*out).fire_in = fire_light(mix(kBlackbodyLoK, b.state.x, 0.85)) * b.state.y * 0.35;
+  (*out).key = normalize(vec3f(0.0, 1.0, 0.0) + frame.sun.xyz * (2.0 * b.light.w));
 }
 
 const kCorners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),
@@ -54,6 +75,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   out.blast = iid;
   let b = blasts[iid];
   let c = kCorners[vid];
+  blast_light(b, &out);
   if (b.more.x > 0.5) {
     out.position = vec4f(c, 0.5, 1.0);
     return out;
@@ -193,20 +215,10 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let side_a = b.side.xyz;
   let side_b = cross(axis, side_a);
   let dt = (t1 - t0) / f32(kSteps);
-  let sun = frame.sun.xyz;
-  let world_c = centre + frame.eye.xyz;
-  // The light the smoke gets: the sun at the ball's height, the sky's from above, the fire's
-  // from inside it (the core's glow, by how much still burns).
-  // As far as the open sky reaches it, and the room's own light (in whites: a white surface's
-  // luminance, so its irradiance is pi times it).
-  let sun_in = sun_light(world_c.y, world_c.xz) * b.light.w;
-  let sky_in = sky_irradiance(vec3f(0.0, 1.0, 0.0)) * b.light.w +
-               b.light.rgb * (PI * white_luminance());
-  let fire_in = fire_light(mix(kBlackbodyLoK, core_k, 0.85)) * fire * 0.35;
-  // The way the gas is lit from: the sun as far as it reaches, else straight down from above (a
-  // room's lamps and the open sky). The smoke between a point and its light shades it, so the
-  // cloud's underside and far side go dark and its lit tops stand out: a volume, not a disc.
-  let key = normalize(vec3f(0.0, 1.0, 0.0) + sun * (2.0 * b.light.w));
+  let sun_in = in.sun_in;
+  let sky_in = in.sky_in;
+  let fire_in = in.fire_in;
+  let key = in.key;
 
   var trans = 1.0;
   var light = vec3f(0.0);
