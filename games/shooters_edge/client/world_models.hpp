@@ -161,7 +161,7 @@ enum class EffectModel : uint8_t {
   case_brass,
   case_heavy,
   q2_fx,
-  bubble = q2_fx + 7
+  bubble = q2_fx + 9
 };
 inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
                                                 "progs/bolt.mdl",
@@ -180,6 +180,8 @@ inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
                                                 "models/monsters/parasite/segment/tris.md2",
                                                 "models/ctf/segment/tris.md2",
                                                 "sprites/s_bfg2.sp2",
+                                                "models/proj/lightning/tris.md2",
+                                                "models/proj/beam/tris.md2",
                                                 "progs/s_bubble.spr"};
 static_assert(std::size(kEffectModels) == size_t(EffectModel::bubble) + 1);
 inline int effect_model(int listed, EffectModel m) { return listed + static_cast<int>(m); }

@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "classic/content/fs_words.hpp"
+#include "classic/content/load_order.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"

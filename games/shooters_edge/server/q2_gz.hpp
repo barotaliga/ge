@@ -65,6 +65,23 @@ bool gz_left_out(const Q2Server& s, int item);
 // rule decides (single player, another pack, `coop_baseq2` 1, or any other flags).
 int gz_coop_left_out(const Q2Server& s, int flags);
 
+// Its changes to the base game's map things (q2_gz_world.cpp), asked only while it is played:
+// whether `e` is a trigger_multiple with TOGGLE (8), which starts off; a use of `e` taken as a
+// toggle (that trigger: on or off, never fired); whether `e` makes no sound (a target_earthquake's
+// SILENT 1).
+// A func_door_rotating with INACTIVE (8192) not yet used: never shot and no touch field until
+// its first use wakes it (`kGzWoken` then marks it, and a named func_explosive woken by a use).
+struct Q2Entity;
+constexpr int kGzWoken = 0x40000;
+bool gz_toggled(const Q2Server& s, const Q2Entity& e);
+bool gz_inactive(const Q2Server& s, const Q2Entity& e);
+bool gz_used(Q2Server& s, Q2Entity& e);
+bool gz_silent(const Q2Server& s, const Q2Entity& e);
+
+// A player coming into the pack's last level (`rboss`) outside deathmatch: the A-M bomb his, and
+// selected in the inventory, for the boss.
+void gz_entered(Q2Server& s, int slot);
+
 // A shot of Ground Zero's weapon in `slot`'s hand (q2_fight.cpp's fire hands it over).
 void gz_fire(Q2Server& s, int slot, int shots);
 // A tenth of shot `m` when it is one of Ground Zero's (its flight, a mine's stages, the bomb's
