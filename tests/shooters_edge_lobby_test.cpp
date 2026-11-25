@@ -244,6 +244,30 @@ TEST(addbot_seats_bots_in_a_deathmatch_with_no_lobby) {
   CHECK(l.server->clients[2].active);
 }
 
+// A match running in its lobby, then `sv deathmatch 0` and a map: single player starts afresh on
+// the map, with no warmup; `deathmatch 1` and a map bring the lobby back.
+TEST(a_map_after_deathmatch_0_starts_without_the_lobby) {
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(cl::baseline_progs(progs, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.lobby = true;
+  cl::SearchPath none;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(l.room != nullptr && l.host->lobby);
+  l.opt.console.push_back("deathmatch 0");
+  std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(cl::listen_change(l, std::move(next), error), error);
+  CHECK(l.room == nullptr && !l.host->lobby);
+  l.opt.console.push_back("deathmatch 1");
+  std::unique_ptr<cl::LoadedMap> back = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(cl::listen_change(l, std::move(back), error), error);
+  CHECK(l.room != nullptr && l.host->lobby);
+}
+
 TEST(the_lobby_words_are_console_commands) {
   ge::console::Console con;
   cl::Listen l;

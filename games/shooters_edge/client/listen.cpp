@@ -847,7 +847,9 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
     l.map_changed = false;
     return true;
   }
-  if (!l.match) {
+  // No match yet, or one of the other kind (a deathmatch's lobby while `deathmatch 0` now asks
+  // for single player or coop, or the other way): the match started afresh on the map.
+  if (!l.match || l.host->lobby != (l.opt.lobby && !wants_campaign(l.opt))) {
     l.map = std::move(map);
     return start_map(l, error);
   }
