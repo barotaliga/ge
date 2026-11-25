@@ -9,6 +9,14 @@
 // With `--game` (the player's own release zip, pack or folder) the maps are the pack's; without it,
 // the coop hall (a button door before the exit) once: the smoke run.
 //
+// A MISSION PACK (`--mod=rogue`, `--mod=hipnotic`): the mod folder's packs beside the game's
+// `id1` are laid over its packs, the mod's program and maps winning, as the game mounts them, and
+// the maps are named in `--episodes` (`r1m1,r1m2`). THE CENSUS (`--census=1`, on with `--mod`): a
+// table of every class name the maps placed or the run made, how many stood, were made, moved,
+// went and had their model taken (an item picked up) (coop_episode.hpp `census`), so a pack's
+// monsters, items, movers and traps are seen at work;
+// `--classes` keeps the rows of those names alone.
+//
 // THE PARTY (`--party=1,2,3`): each map played again by a party of that many bots in co-op
 // (coop_episode.hpp's partners, plugins/shooterbots/party.hpp: each stop to the nearest bot, the
 // exit once nothing is left for any), so the table says how much sooner two or three clear it; a
@@ -24,12 +32,17 @@
 // ge:summary Lab: Quake's campaign played at 100% by a bot: kills, secrets and time to the exit
 // ge:keywords lab se-q1-campaign campaign single-player 100-percent complete kills secrets
 // ge:keywords exit-time episodes secret-level god play-through party co-op partners
+// ge:keywords mission-pack mod rogue hipnotic census class-names
 // ge:skill shooter bots labs
 // ge:test tests/shooters_edge_companion_test.cpp
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <map>
 #include <memory>
 #include <span>
 #include <sstream>
@@ -211,6 +224,50 @@ gl::Picture route_on_plate(const PackMaps& packs, const fb::EpisodeMap& m, bool&
   return out;
 }
 
+// The mod folder's packs (`<game>/<mod>/pak0.pak`, `pak1.pak` ... in order) laid over `base`:
+// every file of every pack once, the latest copy of a path winning. False with the reason.
+bool lay_mod(const std::string& game, const std::string& mod, std::vector<uint8_t>& base,
+             std::string& error) {
+  namespace fs = std::filesystem;
+  fs::path dir = fs::path(game) / mod;
+  if (!fs::is_directory(dir)) dir = fs::path(game).parent_path() / mod;
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
+  std::map<std::string, size_t> at;
+  const auto take = [&](std::span<const uint8_t> bytes) {
+    ge::vfs::Pak pak;
+    std::string why;
+    if (!ge::vfs::read_pak(bytes, &pak, &why)) return false;
+    for (const ge::vfs::PakEntry& e : pak.entries) {
+      const std::span<const uint8_t> b = ge::vfs::pak_file(bytes, e);
+      const auto [it, fresh] = at.emplace(e.path, files.size());
+      if (fresh)
+        files.emplace_back(e.path, std::vector<uint8_t>(b.begin(), b.end()));
+      else
+        files[it->second].second.assign(b.begin(), b.end());
+    }
+    return true;
+  };
+  take(base);
+  int read = 0;
+  for (int n = 0;; n++) {
+    const fs::path p = dir / ("pak" + std::to_string(n) + ".pak");
+    std::ifstream in(p, std::ios::binary);
+    if (!in) break;
+    const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                     std::istreambuf_iterator<char>());
+    if (!take(bytes)) {
+      error = p.string() + " does not read as a pack";
+      return false;
+    }
+    read++;
+  }
+  if (read == 0) {
+    error = "no pak0.pak in " + dir.string();
+    return false;
+  }
+  return ge::vfs::write_pak(files, &base, &error);
+}
+
 std::string of(int a, int b) {
   return a < 0 || b < 0 ? "-" : std::to_string(a) + "/" + std::to_string(b);
 }
@@ -228,6 +285,7 @@ void run(gl::Lab& lab) {
   o.tour = lab.arg("tour") != "0";
   o.god = lab.arg("god") != "0";
   o.stop = {"start", "end"};
+  o.census = lab.arg("census") == "1" || (lab.arg("census") != "0" && !lab.arg("mod").empty());
   PackMaps packs;
   const std::string& game = lab.arg("game");
   std::vector<Leg> legs;
@@ -242,6 +300,15 @@ void run(gl::Lab& lab) {
       return;
     }
     packs.content = src.content();
+    const std::string& mod = lab.arg("mod");
+    if (!mod.empty()) {
+      std::string why;
+      if (!lay_mod(game, mod, packs.content, why)) {
+        lab.fail("se-q1-campaign: the mod " + mod + ": " + why,
+                 "next: pass --game=<the game's folder> holding id1 and " + mod);
+        return;
+      }
+    }
     if (!ge::vfs::read_pak(packs.content, &packs.pak, &error)) {
       lab.fail("se-q1-campaign: the pack does not read: " + error, "next: check the --game path");
       return;
@@ -349,6 +416,50 @@ void run(gl::Lab& lab) {
     for (auto& row : t.rows) row.erase(row.begin() + 1);
   }
   lab.table(t);
+  if (o.census) {
+    // Every class name across the maps, in the order first seen; `--classes` keeps those alone.
+    std::vector<std::string> keep;
+    {
+      std::stringstream cs(lab.arg("classes"));
+      std::string w;
+      while (std::getline(cs, w, ','))
+        if (!w.empty()) keep.push_back(w);
+    }
+    struct Row {
+      fb::ClassCensus c;
+      int maps = 0;
+    };
+    std::vector<Row> rows;
+    for (const fb::EpisodeMap& m : maps)
+      for (const fb::ClassCensus& c : m.census) {
+        if (!keep.empty() && std::find(keep.begin(), keep.end(), c.name) == keep.end()) continue;
+        auto it = std::find_if(rows.begin(), rows.end(),
+                               [&](const Row& r) { return r.c.name == c.name; });
+        if (it == rows.end()) {
+          rows.push_back({{c.name}, 0});
+          it = rows.end() - 1;
+        }
+        it->maps++;
+        it->c.spawned += c.spawned;
+        it->c.made += c.made;
+        it->c.moved += c.moved;
+        it->c.gone += c.gone;
+        it->c.taken += c.taken;
+        it->c.most = std::max(it->c.most, c.most);
+      }
+    gl::LabTable ct{"the classes at work",
+                    {"class", "maps", "stood", "made", "moved", "went", "taken", "most"},
+                    {}};
+    for (const Row& r : rows)
+      ct.rows.push_back({r.c.name, std::to_string(r.maps), std::to_string(r.c.spawned),
+                         std::to_string(r.c.made), std::to_string(r.c.moved),
+                         std::to_string(r.c.gone), std::to_string(r.c.taken),
+                         std::to_string(r.c.most)});
+    for (const std::string& k : keep)
+      if (std::none_of(rows.begin(), rows.end(), [&](const Row& r) { return r.c.name == k; }))
+        ct.rows.push_back({k, "0", "0", "0", "0", "0", "0", "0"});
+    lab.table(ct);
+  }
   if (beside) {
     gl::LabTable h{"helpers beside the leader (a person's stand-in)",
                    {"map", "bots", "exit s", "kills: his/helpers'", "near share", "farthest",
@@ -438,6 +549,9 @@ const gl::LabSpec kSpec{
         {"complete", "1", "0: the way through alone, the exit as soon as it is open"},
         {"tour", "1", "0: the nearest stop each time rather than the tour's order (tour.hpp)"},
         {"root", ".", "the repository's root"},
+        {"mod", "", "a mission pack's folder beside id1 (`rogue`, `hipnotic`), laid over the game"},
+        {"census", "", "1: the classes at work (on with --mod; 0: off)"},
+        {"classes", "", "the census's class names to show, a comma list (none: every one)"},
         {"plan", "0", "1: each map's changes of plan as a table"},
         {"party", "1",
          "the party sizes each map is played by, a comma list (1..4: `1,2,3`); more than one bot, "
