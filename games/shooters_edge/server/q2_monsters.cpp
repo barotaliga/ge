@@ -1658,10 +1658,10 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
   if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;
   if (monster_pain_known(pain_class(k))) {  // its pains as data (q2_monster_pain.cpp)
-    const PainChoice c = monster_pain(gz_base_pain_class(s, m, pain_class(k)), damage,
-                                      k.pain_at_3 ? std::min(skill(s), 2) : skill(s), m.velocity.z,
-                                      m.pose.frame, m.pose.span.first,
-                                      m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
+    const PainChoice c =
+        monster_pain(gz_base_pain_class(s, m, pain_class(k)), damage,
+                     k.pain_at_3 ? std::min(skill(s), 2) : skill(s), m.velocity.z, m.pose.frame,
+                     m.pose.span.first, m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
     if (c.spent) m.pain_at = s.level_time;
     if (c.sound != nullptr) sound(s, e, c.sound, c.everywhere ? 0 : 1);
     if (!c.run.none()) {  // the flinch cuts what it was doing

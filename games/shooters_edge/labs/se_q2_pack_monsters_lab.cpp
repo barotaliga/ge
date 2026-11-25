@@ -14,8 +14,9 @@
 // for PRIVATE numbers only: without `--game` it notes that and stops, so CI never runs it.
 //
 // ge:summary Lab: a mission pack's monsters on every map of it, woken and watched: moved, attacked
-// ge:keywords lab se-q2-pack-monsters q2 mission-pack xatrix reckoning rogue ground-zero monsters census sweep
-// ge:keywords start-solid woken moved attacked monster-verification
+// ge:keywords lab se-q2-pack-monsters q2 mission-pack xatrix reckoning rogue
+// ge:keywords ground-zero monsters census sweep start-solid woken moved attacked
+// ge:keywords monster-verification
 // ge:skill shooter labs
 #include <algorithm>
 #include <cmath>
