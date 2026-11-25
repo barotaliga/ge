@@ -954,10 +954,24 @@ void read_oob(QwClientEnd& c, const uint8_t* data, size_t size) {
     gn::Reader r = gn::make_reader(data, size);
     r.at = 5;
     c.challenge = static_cast<int32_t>(std::atol(read_string(r).c_str()));
+    bool native = false;  // the server has the native link (kMagicNative)
     while (remaining(r) >= 8) {
       const uint32_t magic = gn::read_u32(r), bits = gn::read_u32(r);
       ExtFamily f{};
       if (family_of_magic(magic, f)) c.offered[f] = bits;
+      if (magic == kMagicNative) native = (bits & kGeNative) != 0;
+    }
+    if (c.cfg.native && !c.tunnel && native) {
+      // Our server: the handshake again through its node, which carries everything from now on.
+      c.tunnel = std::make_unique<gn::Tunnel>();
+      if (gn::tunnel_connect(*c.tunnel, *c.outer, c.server,
+                             native_config(static_cast<uint64_t>(c.cfg.seed) * 2654435761u + 7u),
+                             static_cast<int64_t>(c.now * 1e6))) {
+        c.transport = &c.tunnel->inner;
+        c.last_ask = -1;
+        return;
+      }
+      c.tunnel.reset();
     }
     c.stage = ClientStage::connect;
     c.last_ask = c.now;
@@ -1022,6 +1036,7 @@ void client_start(QwClientEnd& c, gn::Transport& t, const gn::Address& server,
   c = QwClientEnd{};
   c.cfg = cfg;
   c.transport = &t;
+  c.outer = &t;
   c.server = server;
   c.now = now;
   if (cfg.voice) {
@@ -1119,7 +1134,18 @@ bool client_hold_move(QwClientEnd& c, double move_s) {
   return false;
 }
 
+namespace {
+void tick_body(QwClientEnd& c, int64_t now_us);
+}
+
 void client_tick(QwClientEnd& c, int64_t now_us) {
+  if (c.tunnel) gn::tunnel_update(*c.tunnel, now_us);
+  tick_body(c, now_us);
+  if (c.tunnel) gn::tunnel_flush(*c.tunnel, now_us);
+}
+
+namespace {
+void tick_body(QwClientEnd& c, int64_t now_us) {
   c.now = static_cast<double>(now_us) / 1e6;
   c.tick++;
   c.heard.clear();
@@ -1171,7 +1197,7 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
       return;
     }
     const ClientConfig cfg = c.cfg;
-    client_start(c, *c.transport, to, cfg, c.now);
+    client_start(c, *c.outer, to, cfg, c.now);
     c.redirects = sent;
     return;
   }
@@ -1193,7 +1219,8 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
     case ClientStage::challenge:
       if (c.last_ask < 0 || c.now - c.last_ask >= kRetry) {
         c.last_ask = c.now;
-        send_oob_text(c, "getchallenge\n");
+        // Asking for the native link too: a server without it reads the plain ask.
+        send_oob_text(c, c.cfg.native && !c.tunnel ? "getchallenge native\n" : "getchallenge\n");
       }
       return;
     case ClientStage::connect:
@@ -1277,5 +1304,6 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
   const size_t n = channel_transmit(c.ch, payload, w.overflow ? 0 : w.size, c.now, packet);
   send_raw(c, packet, n);
 }
+}  // namespace
 
 }  // namespace shooters_edge::net

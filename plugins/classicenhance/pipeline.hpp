@@ -93,6 +93,12 @@ struct RunOptions {
   std::vector<Stage> only;  // empty: every stage
   // At most this many textures (0: all), for a quick look; recorded in the stage's key.
   uint32_t texture_limit = 0;
+  // The SHA-256 of the trained upscaler's weights to read from the cache's weights folder
+  // (`open_cached_upscaler`) when `textures.network` is unset and the scale is 4: an EnhanceJob
+  // (progress.hpp) opens them on its own thread and upscales by them, else by the kernel. Nothing
+  // is fetched. `apply_bakes` sets the published weights' while TRAINED UPSCALER is on; empty:
+  // the kernel.
+  std::string cached_network;
   // Called on the pipeline's thread with each report; none: no reports.
   std::function<void(const Progress&)> progress;
   // Checked between items: once true, the stage running fails with "cancelled".

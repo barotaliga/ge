@@ -336,6 +336,33 @@ TEST(the_old_ammunition_box_gives_its_kind_and_big_boxes_lie_as_the_big_model) {
   }
 }
 
+// Classic remix's other look (`cr_items`) dresses the old box as that game's box of its kind,
+// as it does item_shells and the rest; a box of no kind keeps no model.
+TEST(the_old_ammunition_box_wears_the_remixs_box_of_its_kind) {
+  const std::string boxes =
+      "{\n\"classname\" \"item_weapon\"\n\"spawnflags\" \"4\"\n\"origin\" \"64 -96 24\"\n}\n"
+      "{\n\"classname\" \"item_weapon\"\n\"spawnflags\" \"1\"\n\"origin\" \"-160 96 24\"\n}\n"
+      "{\n\"classname\" \"item_weapon\"\n\"origin\" \"-160 -96 24\"\n}\n";
+  Rig r(
+      quake(
+          {"deathmatch 1",
+           "set arsenal_ammo1 \"models/items/ammo/shells/medium/tris.md2 misc/am_pkup.wav 15\"",
+           "set arsenal_ammo2 \"models/items/ammo/bullets/medium/tris.md2 misc/am_pkup.wav 15\""}),
+      boxes);
+  r.join("a");
+  r.frames(3);
+  const int nails = r.first("item_weapon");
+  const int shells = r.first("item_weapon", nails);
+  const int none = r.first("item_weapon", shells);
+  CHECK(nails > 0 && shells > 0 && none > 0);
+  CHECK_MSG(r.fx.str_field(nails, r.fd("model")) == "models/items/ammo/bullets/medium/tris.md2",
+            r.fx.str_field(nails, r.fd("model")));
+  CHECK_MSG(r.fx.str_field(shells, r.fd("model")) == "models/items/ammo/shells/medium/tris.md2",
+            r.fx.str_field(shells, r.fd("model")));
+  CHECK(r.fx.str_field(none, r.fd("model")).empty());
+  r.no_fault();
+}
+
 TEST(the_octapower_says_its_own_name_wearing_off) {
   Rig r(quake({"deathmatch 4"}));
   const int a = r.join("a");

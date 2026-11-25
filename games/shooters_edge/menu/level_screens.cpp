@@ -154,7 +154,7 @@ void draw_intermission(ui::DrawList& dl, const ClassicArt& art, int width, int h
     draw_modern_level_card(dl, width, height, "LEVEL COMPLETE", "", s, true);
     return;
   }
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
   if (const ui::Image* complete = art.find("complete"))
@@ -170,7 +170,7 @@ void draw_level_stats(ui::DrawList& dl, const ClassicArt& art, int width, int he
     draw_modern_level_card(dl, width, height, title, "", s, false);
     return;
   }
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
   type.centred(title.substr(0, 40), kTitleY + 8);
@@ -183,7 +183,7 @@ void draw_solo_scorebar(ui::DrawList& dl, const ClassicArt& art, int width, int 
     draw_modern_solo_strip(dl, width, height, title, s);
     return;
   }
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
   if (const ui::Image* bar = art.find("scorebar"))
@@ -202,7 +202,7 @@ void draw_plaque(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                  std::string_view name) {
   const ui::Image* pic = art.find(name);
   if (pic == nullptr) return;
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const float h = static_cast<float>(pic->height) / art.density;
   pen.picture(pic, std::floor((kScreenW - art.width_of(*pic)) / 2),
@@ -211,7 +211,7 @@ void draw_plaque(ui::DrawList& dl, const ClassicArt& art, int width, int height,
 
 void draw_level_text(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                      std::string_view text, size_t typed, bool title) {
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = classic_screen(width, height, 200, art.scores_scale, 1);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
   if (title)

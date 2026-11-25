@@ -5,7 +5,9 @@
 // clock, and the bots' thinking (the clients' ticks) apart from it, since a real server carries
 // only its own frame. The table's counts (the frames, the frags, the bytes on the wire, each
 // match's digest) are deterministic; the times are measured: the server's frame mean, p99 and
-// worst against the players, and how many such servers one core holds at the frame's 13 ms.
+// worst against the players, and how many such servers one core holds at the frame's 13 ms. The
+// server's heap allocations a frame (counted by its zones) are held to a budget: past it the lab
+// fails, `make labs-smoke` with it.
 //
 // The map comes from `--basedir`'s game folder; without one, the fixture halls, which is what
 // `make labs-smoke` runs.
@@ -17,6 +19,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -24,6 +27,7 @@
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
+#include "prof/zones.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -61,6 +65,11 @@ std::string hex(uint64_t h) {
   for (int i = 15; i >= 0; i--, h >>= 4) s[static_cast<size_t>(i)] = k[h & 15];
   return s;
 }
+
+// The server's heap allocations a frame, a player, it may not pass (measured 3 to 6 on the fixture
+// halls with 2 to 8 players, 2026-11-25, the joins included): a hot path that starts allocating
+// a player a frame fails the smoke run.
+constexpr double kAllocBudget = 12;
 
 void run(gl::Lab& lab) {
   std::string error;
@@ -115,8 +124,16 @@ void run(gl::Lab& lab) {
                      {}};
   gl::Trace mean_trace{"the server's frame, mean", {}, {}};
   gl::Trace p99_trace{"the server's frame, p99 (worst server)", {}, {}};
+  std::vector<ge::prof::ZoneTotal> zone_sums;
+  gl::LabTable allocs{
+      "The server's heap allocations a frame (its zones: the network read and "
+      "events, the rules, the snapshots sent) against the budget",
+      {"players", "server a frame", "a player", "budget a player", "bots a frame"},
+      {}};
+  std::string over;
   for (const int count : players) {
     double mean_sum = 0, p99 = 0, worst = 0, bots = 0;
+    std::map<std::string, double> allocs_by_zone;
     for (int k = 0; k < servers; k++) {
       cn::TeamMatchOptions o;
       o.map = bytes;
@@ -135,7 +152,13 @@ void run(gl::Lab& lab) {
         const int side = t == 0 ? (count + 1) / 2 : count / 2;
         for (int i = 0; i < side; i++) o.teams[t].skills.push_back(cycle[i % 3]);
       }
+      ge::prof::start(static_cast<size_t>(o.frames) * 64);  // the zones' heap allocations
       const cn::TeamMatchReport r = cn::run_team_match(o);
+      ge::prof::stop();
+      ge::prof::totals(ge::prof::spans(), zone_sums);
+      for (const ge::prof::ZoneTotal& z : zone_sums)
+        allocs_by_zone[std::string(ge::prof::zone_name(z.name))] +=
+            static_cast<double>(z.excl_allocs) / std::max(1, r.frames) / servers;
       if (!r.ok) {
         lab.fail("se-load: " + r.error, "Run tests/shooters_edge_team_test.cpp.");
         return;
@@ -155,6 +178,17 @@ void run(gl::Lab& lab) {
       worst = std::max(worst, r.frame_us_max);
       bots += r.bots_us_mean;
     }
+    double server_allocs = 0;
+    for (const auto& [zone, a] : allocs_by_zone)
+      if (zone != "bots") server_allocs += a;  // the bots think in their clients, not the server
+    allocs.rows.push_back({std::to_string(count), to_fixed(server_allocs, 1),
+                           to_fixed(server_allocs / count, 2), to_fixed(kAllocBudget, 0),
+                           to_fixed(allocs_by_zone["bots"], 1)});
+    lab.metric(std::to_string(count) + "-players.server-allocs-a-frame", server_allocs, "allocs",
+               gl::Det::measured);
+    if (server_allocs > kAllocBudget * count)
+      over += " " + std::to_string(count) + " players: " + to_fixed(server_allocs, 1) +
+              " allocations a frame;";
     const double mean = mean_sum / servers;
     const std::string key = std::to_string(count);
     times.rows.push_back({key, std::to_string(servers), to_fixed(mean, 1), to_fixed(p99, 1),
@@ -171,6 +205,14 @@ void run(gl::Lab& lab) {
   }
   lab.table(played);
   lab.table(times, gl::Det::measured);
+  lab.table(allocs, gl::Det::measured);
+  if (!over.empty()) {
+    lab.fail("se-load: the server allocates past its budget of " + to_fixed(kAllocBudget, 0) +
+                 " a player a frame:" + over,
+             "Run `profile 600` in a listen game (or this lab) and cut the allocations in the zone "
+             "that grew; skill: perf.");
+    return;
+  }
   lab.note(
       "Each server is a match of bots on our server over the simulated network, every bot a "
       "classic-protocol client; the servers run one after another. frame: the server's own frame "

@@ -13,7 +13,7 @@
 // THE REPORT, a map a row: whether he got out and where to; the keys on the map and the ones he
 // took; the objectives (`target_goal`) and secrets (`target_secret`) the level counts and those
 // found; the help messages the rules gave (`target_help`); the monsters and those killed; the
-// buttons pressed and the steps of the plan done; his track, a point every half second, for the
+// buttons pressed and the steps of the plan done; his track, a point every 0.2 s, for the
 // pictures. A digest folds every frame (the time, his origin, view and health), so a run replays
 // to the bit.
 //
@@ -89,7 +89,7 @@ struct UnitMap {
   std::vector<std::string> took_keys;         // the keys he took, by their class
   sh::Vec3f lo, hi;                           // the nav's bounds
   std::vector<sh::Vec3f> nodes;               // every node (the picture's floor)
-  std::vector<sh::Vec3f> track;               // a point every half second
+  std::vector<sh::Vec3f> track;               // a point every 0.2 s
   std::vector<std::vector<sh::Vec3f>> party;  // each partner's, the same
   int64_t shares = 0, left_to_mates = 0;      // the party's splits; plans that left a stop to one
   std::vector<sh::Vec3f> exits;               // the exits' middles

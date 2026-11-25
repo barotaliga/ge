@@ -212,6 +212,9 @@ void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh
 // An item (`classname`) thrown up from `at`, as a monster drops it at death: its row, or null
 // when the item does not play here or every row is in use.
 Q2Drop* fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname);
+// Item row `item` thrown from player `slot`'s view as a dropped weapon is: its row, or null when
+// every row is in use.
+Q2Drop* fight_toss(Q2Server& s, int slot, int item);
 // A body thrown apart at `at`: entity row `ent`'s sound, the blood and the pieces `t` names.
 void fight_gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t);
 // A line printed to player `slot`, or to everyone with -1.
