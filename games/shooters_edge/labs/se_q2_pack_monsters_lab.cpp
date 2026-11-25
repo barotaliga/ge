@@ -262,12 +262,14 @@ void duels(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std
       x->saw += saw ? 1 : 0;
       x->attacked += attacked ? 1 : 0;
     }
-    if (!hurt)
-      lab.note("se-q2-pack-monsters: " + name + ": " + kind + " never hurt him (" +
-               (!saw        ? "never took him for its enemy"
-                : !attacked ? "saw him, never attacked"
-                            : "attacked, never landed") +
-               "; it at " + at(start_at) + ", him at " + at(stand) + ")");
+    if (!hurt) {
+      std::string why = "se-q2-pack-monsters: " + name + ": " + kind + " never hurt him (";
+      why += !saw        ? "never took him for its enemy"
+             : !attacked ? "saw him, never attacked"
+                         : "attacked, never landed";
+      why += "; it at " + at(start_at) + ", him at " + at(stand) + ")";
+      lab.note(why);
+    }
   }
 }
 
@@ -296,7 +298,7 @@ void run(gl::Lab& lab) {
   }
   std::vector<std::string> maps;
   if (!lab.arg("maps").empty()) {
-    const std::string list = lab.arg("maps");
+    const std::string& list = lab.arg("maps");
     for (size_t a = 0; a < list.size();) {
       const size_t b = std::min(list.find(',', a), list.size());
       if (b > a) maps.push_back(list.substr(a, b - a));

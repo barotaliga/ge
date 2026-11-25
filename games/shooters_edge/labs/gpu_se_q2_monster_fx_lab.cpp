@@ -74,7 +74,7 @@ constexpr double kTic = 0.013;
 
 // A kind: its classname, the maps it is looked for on (the first with one in the open), what the
 // lab calls its attack and the named effect that marks it ("te_monster_flash": any gun's).
-struct Kind {
+struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): a few rows, written in order
   const char* name;
   const char* classname;
   const char* maps;
@@ -584,7 +584,10 @@ void run(gl::Lab& lab) {
       if (name == c.name) k = &c;
     if (k == nullptr) {
       std::string all;
-      for (const Kind& c : kKinds) all += (all.empty() ? "" : ", ") + std::string(c.name);
+      for (const Kind& c : kKinds) {
+        if (!all.empty()) all += ", ";
+        all += c.name;
+      }
       lab.note("se-q2-monster-fx: no kind " + name + " (" + all + ")");
       continue;
     }
