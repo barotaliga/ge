@@ -27,12 +27,15 @@
 #include <cstdint>
 #include <string>
 
+#include "net/tunnel.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 
 namespace shooters_edge::net {
 
 enum class ExtFamily : uint8_t { x, x2, mvd, z, ge, count };
 constexpr uint32_t kMagicX = 0x58455446, kMagicX2 = 0x32455446, kMagicMvd = 0x3144564d;
+// The challenge's word for the native link (`getchallenge native` answered: kGeNative its bits).
+constexpr uint32_t kMagicNative = 0x4556544e;
 
 // The x family's bits.
 constexpr uint32_t kXScale = 0x2, kXTrans = 0x8, kXSoundDbl = 0x80, kXModelDbl = 0x1000,
@@ -70,11 +73,13 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // the server's settings sheet (engine/server/sheet.hpp), svc id 125 in answer to `ge_sheet`
 // (net/qw_sheet.hpp); the weapons the player holds and his ammunition of each kind on Quake II's
 // server, svc id 118 when they change (the window predicts a weapon change on them:
-// net/q2_weapon.hpp).
+// net/q2_weapon.hpp); the native link on the QuakeWorld server (`native_config`): our client asks
+// `getchallenge native`, and a server with the link answers kMagicNative with the bit in the
+// challenge, which sends the client back to join through the server's node; no one else sees it.
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
                    kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
                    kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024, kGeSettings = 2048,
-                   kGeArsenal = 4096;
+                   kGeArsenal = 4096, kGeNative = 8192;
 
 struct ExtBit {
   ExtFamily family;
@@ -106,5 +111,14 @@ Ext agree(const Ext& offered, const Ext& asked);
 Coords coords_of(const Ext& e);
 // The bit names set, comma separated ("none" for an empty set): a status line, a lab's table.
 std::string describe_ext(const Ext& e);
+
+// THE NATIVE LINK (kGeNative, M18x): the node both ends run when our client joins our server, the
+// QuakeWorld stream carried inside it (engine/net/tunnel.hpp) on the server's one port.
+inline ge::net::TunnelConfig native_config(uint64_t seed) {
+  ge::net::TunnelConfig c;
+  c.protocol = ge::net::protocol_id("shooters_edge-native", 1);
+  c.seed = seed;
+  return c;
+}
 
 }  // namespace shooters_edge::net
