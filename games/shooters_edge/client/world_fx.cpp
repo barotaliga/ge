@@ -1557,7 +1557,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           const int code = q2_pack_te_code(e.name);
           if (code != 0 && q2_enhance_pack_hit(s, code, p, off_face, t, out)) break;
         }
-        if (l.q2 && q2_pack_point(s, e, p, t, out)) break;  // Ground Zero's (world_fx_q2.cpp)
+        if (l.q2 && q2_pack_point(s, e, p, t, out)) break;   // Ground Zero's (world_fx_q2.cpp)
         if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
