@@ -154,6 +154,12 @@ struct RulesCommon {
   void* lag_ctx = nullptr;
   int lag_level = 0;
 
+  // A player's line neither the rules nor the server's own words took, asked of the host before
+  // "Bad user command" is printed (the match's `stats`, `teamstats`, `laststats`): true when the
+  // host answered it. Null: every such line is a bad command.
+  bool (*word_left)(void* ctx, int slot, const std::string& line) = nullptr;
+  void* word_left_ctx = nullptr;
+
   // What the rules show everyone else (rules_world.hpp): filled at the map's start and at the end
   // of each call that changes it.
   RulesWorld world;

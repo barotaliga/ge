@@ -91,11 +91,16 @@ TEST(a_bot_team_joins_a_server_sets_up_readies_and_takes_console_lines) {
   };
   run(2300);  // half a minute
   CHECK(team.nav != nullptr);
+  // A server with no lobby has no `ready`: none is said to it.
   for (const auto& s : team.seats) {
     CHECK(s->set_up);
-    CHECK(s->said_ready);
+    CHECK(!s->said_ready);
     CHECK(s->commands > 1000);
   }
+  // A lobby's warmup ("Standby" in the server's info): each bot says it is ready.
+  cn::qw_set_serverinfo(*server, "status", "Standby");
+  run(100);
+  for (const auto& s : team.seats) CHECK(s->said_ready);
   bool ready_line = false;
   for (const std::string& l : team.log) ready_line |= l.find(": ready") != std::string::npos;
   CHECK(ready_line);

@@ -85,6 +85,11 @@ inline RemixParts remix_parts(const RemixSettings& s) {
           s.monsters, s.menu,   s.charset};
 }
 
+// A remix setting changed while a map is played waits for the next map: the HUD and the held
+// weapons switch when the map's items do, not before. With no map in play (the title), or a map
+// asked for this frame, the change is taken at once.
+inline bool remix_waits(bool map_in_play, bool map_asked) { return map_in_play && !map_asked; }
+
 // `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods`, `cr_monsters`,
 // `cr_menu`, `cr_charset`, `cr_expansions` and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);

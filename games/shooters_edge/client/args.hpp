@@ -60,6 +60,7 @@ struct Args {
   long frames = 0;       // 0: until quit
   bool hidden = false;   // -hidden: the window never shown (a run that takes screenshots)
   bool recipes = false;  // -recipes: a recipe's commands (docs/console.md § Recipes)
+  bool help = false;     // -h, -help, --help: the usage printed, nothing started
   int width = 1280, height = 720;
   // Whether --fps, --codec and --size (--resolution) were given: -demovideo takes video.cfg's
   // demovideo_fps, demovideo_codec and demovideo_size for those that were not (video_cfg.hpp).
@@ -120,6 +121,8 @@ bool known_flag(std::string_view word);
 std::vector<ge::console::FlagDoc> flag_docs();
 // One line naming every flag, for a refused command line.
 std::string usage();
+// `--help`: the usage and every flag, one a line, on the terminal; 0, the exit code.
+int print_help();
 
 // `~` or `~/...` as the home folder (a shell leaves a quoted one as it is).
 std::string expand_home(const std::string& p);

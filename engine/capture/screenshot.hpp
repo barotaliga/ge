@@ -120,6 +120,9 @@ class Screenshots {
     asked_format_ = std::move(format);
     asked_quality_ = quality;
   }
+  // Whether a picture is asked for and not yet taken (a window keeps drawing until it is, so a
+  // `screenshot` just before `quit` is still written).
+  bool asked() const { return asked_; }
   // Whether this frame is the one to copy back; true once a request, then false until the next.
   bool due();
   // The frame's pixels (RGBA8, rows top to bottom, no padding) handed to the worker, named by the

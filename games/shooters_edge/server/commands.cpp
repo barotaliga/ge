@@ -297,6 +297,8 @@ static CommandResult run_client_command(QcServer& s, int slot, const std::string
     run_server_command(s, slot, w);
     return CommandResult::server;
   }
+  if (s.word_left != nullptr && s.word_left(s.word_left_ctx, slot, line))
+    return CommandResult::server;
   print_to(s, 1u << slot, 2, "Bad user command: " + cmd + "\n");
   return CommandResult::bad;
 }

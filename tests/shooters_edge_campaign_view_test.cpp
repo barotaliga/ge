@@ -276,7 +276,7 @@ TEST(a_companion_in_single_player_turns_the_game_cooperative_until_it_leaves) {
   CHECK(!l.companion_coop && !l.server->cvars.find("coop")->on());
   if (coop_global >= 0) CHECK(ge::progs::global_float(q.q.vm, coop_global) == 0.0f);
   CHECK(cl::listen_save_problem(l) == alone);
-  CHECK(l.prints.back() == "You play alone again.");
+  CHECK(l.prints.back() == "You play alone again.\n");
 }
 
 TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {

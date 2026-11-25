@@ -247,6 +247,21 @@ const DemoState& demo_drawn(Timedemo& t);
 bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& t,
                     std::string& error, const GameAdapter& game = qw_adapter());
 
+// WHAT A PLAYED DEMO GIVES WAY TO: something else asked for this frame (a map, a save, a game
+// folder, a server joined, another demo). A demo playing is stopped for it; a title demo asked
+// for and not started yet is never started, so a `map` typed or run from a cfg as the title's
+// demo is about to start is not held behind the whole demo.
+struct AskedElsewhere {
+  bool map = false;     // the map asked for changed this frame
+  bool save = false;    // a save asked for
+  bool folder = false;  // a game folder asked for
+  bool joined = false;  // a server joined this frame
+  bool demo = false;    // another demo asked for
+};
+inline bool demo_gives_way(const AskedElsewhere& a) {
+  return a.map || a.save || a.folder || a.joined || a.demo;
+}
+
 enum class TimedemoStep : uint8_t {
   frame,      // draw this frame
   new_level,  // load `t.demo.state.map`, then draw this frame

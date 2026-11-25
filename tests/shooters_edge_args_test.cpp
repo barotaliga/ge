@@ -127,3 +127,16 @@ TEST(a_broadcast_is_named_by_its_node) {
   CHECK(parse_words({"--tv", "10.0.0.2"}, b, why));
   CHECK(b.tv == "10.0.0.2");
 }
+
+TEST(help_asks_for_the_usage_instead_of_being_refused) {
+  for (const char* word : {"--help", "-help", "-h"}) {
+    cl::Args a;
+    std::string why;
+    CHECK_MSG(parse_words({word}, a, why), why);
+    CHECK(a.help);
+  }
+  cl::Args b;
+  std::string why;
+  CHECK(parse_words({"-classic", "q2"}, b, why));
+  CHECK(!b.help);
+}

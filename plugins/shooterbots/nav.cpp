@@ -13,8 +13,10 @@
 #include <cstring>
 #include <iterator>
 
+#include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/parallel.hpp"
 #include "shooter/slide.hpp"
 
 namespace ge::shooterbots {
@@ -392,14 +394,14 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   };
   // A column between a and b with no floor near the height of either, open at the higher one: a
   // gap (a ledge stepped down from is no gap, its foot at the lower end's height; nor is a wall).
-  auto gap_between = [&](Vec3f a, Vec3f b) {
+  auto gap_between = [&](const MoveWorld& on, Vec3f a, Vec3f b) {
     const float d = across(a, b);
     const int steps = static_cast<int>(d / (set.spacing * 0.5f));
     for (int k = 1; k < steps; k++) {
       const float f = static_cast<float>(k) / static_cast<float>(steps);
       const float x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
       if (!floor_near(x, y, a.z) && !floor_near(x, y, b.z) &&
-          box_free(world, {x, y, a.z > b.z ? a.z : b.z}))
+          box_free(on, {x, y, a.z > b.z ? a.z : b.z}))
         return true;
     }
     return false;
@@ -423,31 +425,75 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     NavKind kind;
     float speed;
   };
-  auto prove_in = [&](const MoveWorld& on, size_t a, int32_t b, const Try* tries, int n,
-                      std::vector<NavLink>& out) {
+  // A candidate's proof as a value, so the build can prove candidates side by side (each one a
+  // pure function of the map and the two nodes) and then take them in the serial order: the
+  // graph and its counts come out the same bits for any number of threads.
+  struct Proven {
+    NavLink link{};
+    bool kept = false;
+    int32_t proofs = 0, no_run_up = 0;
+    int64_t commands = 0;
+  };
+  auto prove_value = [&](const MoveWorld& on, size_t a, int32_t b, const Try* tries, int n) {
+    Proven p;
     const Vec3f from = g.nodes[a].origin, to = g.nodes[static_cast<size_t>(b)].origin;
     for (int q = 0; q < n; q++) {
       const NavProof pr = prove_link(on, move, from, to, tries[q].kind, tries[q].speed, set);
-      g.counts.proofs++;
-      g.counts.commands += pr.commands;
+      p.proofs++;
+      p.commands += pr.commands;
       if (!pr.reached) continue;
       if (tries[q].kind == NavKind::jump && tries[q].speed > 0 &&
           !room_to_run_up(on, from, to, set.run_up)) {
-        g.counts.no_run_up++;
+        p.no_run_up++;
         continue;
       }
       NavKind kind = tries[q].kind;
       if (kind == NavKind::walk && to.z < from.z - kStepHeight) kind = NavKind::drop;
       // A standing jump is the way of last resort: harder on a person's hands than a run's.
       const float cost = kind == NavKind::jump && tries[q].speed <= 0 ? kStandingJump_s : 0;
-      out.push_back({b, kind, pr.time_s + cost, mover_at(movers, pr.lo, pr.hi), tries[q].speed});
-      g.counts.by_kind[static_cast<int>(kind)]++;
+      p.link = {b, kind, pr.time_s + cost, mover_at(movers, pr.lo, pr.hi), tries[q].speed};
+      p.kept = true;
+      return p;
+    }
+    return p;
+  };
+  // One candidate's tries, in order, until one reaches; the link kept, or the refusal counted.
+  auto take = [&](const Proven& p, std::vector<NavLink>& out) {
+    g.counts.proofs += p.proofs;
+    g.counts.commands += p.commands;
+    g.counts.no_run_up += p.no_run_up;
+    if (!p.kept) {
+      g.counts.refused++;
       return;
     }
-    g.counts.refused++;
+    out.push_back(p.link);
+    g.counts.by_kind[static_cast<int>(p.link.kind)]++;
   };
+  auto prove_in = [&](const MoveWorld& on, size_t a, int32_t b, const Try* tries, int n,
+                      std::vector<NavLink>& out) { take(prove_value(on, a, b, tries, n), out); };
   auto prove = [&](size_t a, int32_t b, const Try* tries, int n, std::vector<NavLink>& out) {
     prove_in(world, a, b, tries, n, out);
+  };
+  // Every node's work on the calling thread and the pool's, node a on thread a % workers (the
+  // nodes of a room cost alike, so neighbours are spread over the threads). `body(a, scratch)`
+  // writes only what belongs to node a. A brush map's tracer keeps scratch of its own (its stack
+  // and stamps), so each thread traces `on`, the world with tracers of its own: copies of the
+  // map's, the same answers.
+  const size_t workers = ge::core::default_workers();
+  auto each_node_parallel = [&](size_t count, auto&& body) {
+    ge::core::parallel_bands(workers, workers, [&](size_t lo, size_t hi) {
+      ai::Search scratch;
+      MoveWorld on = world;
+      std::vector<ge::brush::BrushTracer> own;
+      own.reserve(static_cast<size_t>(on.count));
+      for (int i = 0; i < on.count; i++)
+        if (on.solids[i].tracer != nullptr) {
+          own.push_back(*on.solids[i].tracer);
+          on.solids[i].tracer = &own.back();
+        }
+      for (size_t k = lo; k < hi; k++)
+        for (size_t a = k; a < count; a += workers) body(a, scratch, on);
+    });
   };
   Try jumps[std::size(kJumpShares)];
   int njumps = 0;
@@ -468,8 +514,10 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     }
   };
 
-  // PASS 1: the neighbours, walked (or jumped onto when higher than a step).
-  for (size_t a = 0; a < g.nodes.size(); a++) {
+  // PASS 1: the neighbours, walked (or jumped onto when higher than a step). Proven side by side,
+  // then taken in node order.
+  std::vector<std::vector<Proven>> proven(g.nodes.size());
+  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search&, const MoveWorld& on) {
     const NavNode& na = g.nodes[a];
     each_column(na, 1, [&](int32_t, int32_t, int32_t b) {
       if (static_cast<size_t>(b) == a) return;
@@ -482,18 +530,22 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         for (int q = 0; q < njumps; q++) tries[n++] = jumps[q];
         tries[n++] = {NavKind::jump, 0};  // a standing jump: a stair's tread has no run-up
       }
-      prove(a, b, tries, n, out[a]);
+      proven[a].push_back(prove_value(on, a, b, tries, n));
     });
-  }
+  });
+  for (size_t a = 0; a < g.nodes.size(); a++)
+    for (const Proven& p : proven[a]) take(p, out[a]);
 
   // PASS 2: further jumps, only to a node the walks of pass 1 do not reach in about the time a
   // straight run would take (kDetour of it): onto something higher than a step within
-  // kUpAcross columns, or across a gap from an edge to an edge.
+  // kUpAcross columns, or across a gap from an edge to an edge. Node a's search sees the jumps
+  // kept for the nodes before it, so the candidates are found in node order; but a search over
+  // pass 1's links alone reaches less, so the candidates it finds are every one the ordered walk
+  // can find, in the same order: those are proven side by side first, and the ordered walk takes
+  // its own from them.
   const int32_t span = static_cast<int32_t>(set.reach / set.spacing) + 1;
   const double limit = kDetour * set.reach / move.maxspeed + kDetourSlack_s;
-  ai::Search walked(g.nodes.size());
-  for (size_t a = 0; a < g.nodes.size(); a++) {
-    const NavNode& na = g.nodes[a];
+  auto walk_from = [&](size_t a, ai::Search& walked) {
     walked.reset(g.nodes.size());
     walked.seed(static_cast<int32_t>(a));
     walked.run(
@@ -504,6 +556,9 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
           }
         },
         [](int32_t) { return false; });
+  };
+  auto candidates = [&](const MoveWorld& on, size_t a, const ai::Search& walked, auto&& fn) {
+    const NavNode& na = g.nodes[a];
     each_column(na, span, [&](int32_t i, int32_t j, int32_t b) {
       if (static_cast<size_t>(b) == a) return;
       if (i - na.col <= 1 && na.col - i <= 1 && j - na.row <= 1 && na.row - j <= 1) return;
@@ -514,8 +569,28 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       if (walked.reached(b) && walked.cost(b) <= kDetour * d / move.maxspeed + kDetourSlack_s)
         return;
       const bool up = rise > kStepHeight && d <= set.spacing * kUpAcross;
-      if (!up && (!edge[a] || !edge[static_cast<size_t>(b)] || !gap_between(na.origin, to))) return;
-      prove(a, b, jumps, njumps, out[a]);
+      if (!up && (!edge[a] || !edge[static_cast<size_t>(b)] || !gap_between(on, na.origin, to)))
+        return;
+      fn(b);
+    });
+  };
+  std::vector<std::vector<std::pair<int32_t, Proven>>> ahead(g.nodes.size());
+  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search& walked, const MoveWorld& on) {
+    walk_from(a, walked);
+    candidates(on, a, walked,
+               [&](int32_t b) { ahead[a].emplace_back(b, prove_value(on, a, b, jumps, njumps)); });
+  });
+  ai::Search walked(g.nodes.size());
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    walk_from(a, walked);
+    size_t next = 0;  // the ordered candidates are a subsequence of those proven ahead
+    candidates(world, a, walked, [&](int32_t b) {
+      while (next < ahead[a].size() && ahead[a][next].first != b) next++;
+      if (next < ahead[a].size()) {
+        take(ahead[a][next++].second, out[a]);
+      } else {
+        prove(a, b, jumps, njumps, out[a]);  // never: kept so a mistake costs time, not links
+      }
     });
   }
 
@@ -965,113 +1040,6 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
   }
   g.links = std::move(links);
   return cut;
-}
-
-bool nav_harm_near(const NavGraph& g, Vec3f p, float reach) {
-  if (g.harm.size() != g.nodes.size() || g.set.spacing <= 0 || g.cols == 0) return false;
-  const int32_t ci = static_cast<int32_t>((p.x - g.lo.x) / g.set.spacing);
-  const int32_t cj = static_cast<int32_t>((p.y - g.lo.y) / g.set.spacing);
-  const int32_t span = static_cast<int32_t>(reach / g.set.spacing) + 1;
-  for (int32_t i = ci - span; i <= ci + span; i++) {
-    if (i < 0 || i >= g.cols) continue;
-    for (int32_t j = cj - span; j <= cj + span; j++) {
-      if (j < 0 || j >= g.rows) continue;
-      const size_t c =
-          static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
-      for (int32_t k = 0; k < g.col_n[c]; k++) {
-        const auto n = static_cast<size_t>(g.col_first[c]) + static_cast<size_t>(k);
-        if (!g.harm[n]) continue;
-        const Vec3f o = g.nodes[n].origin;
-        if (o.z < p.z - kStepHeight && across(o, p) <= reach) return true;
-      }
-    }
-  }
-  return false;
-}
-
-int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach) {
-  if (harm.size() != g.nodes.size()) return 0;
-  g.harm.assign(harm.begin(), harm.end());
-  int64_t marked = 0;
-  for (size_t a = 0; a < g.nodes.size(); a++) {
-    const NavNode& n = g.nodes[a];
-    for (int32_t k = 0; k < n.links; k++) {
-      NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-      if ((l.kind != NavKind::walk && l.kind != NavKind::drop) || harm[a] ||
-          harm[static_cast<size_t>(l.to)])
-        continue;
-      // Along the link every 16 units, at the higher end's height (a drop's lip is its start).
-      const Vec3f A = n.origin, B = g.nodes[static_cast<size_t>(l.to)].origin;
-      const float len = across(A, B);
-      const int steps = 1 + static_cast<int>(len / 16);
-      for (int q = 0; q <= steps && !l.brink; q++) {
-        const float f = static_cast<float>(q) / static_cast<float>(steps);
-        const Vec3f p{A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f, A.z > B.z ? A.z : B.z};
-        l.brink = nav_harm_near(g, p, reach);
-      }
-      if (l.brink) marked++;
-    }
-  }
-  return marked;
-}
-
-namespace {
-
-// Whether the player's box swept from `p` to `to` (stopped by a wall; a stair's step climbed: the
-// sweep tried a step and two higher too, the furthest kept), then dropped to the floor (400 units
-// at most), stands in lava or slime.
-bool side_falls_in_(const MoveWorld& w, Vec3f p, Vec3f to) {
-  HullTrace go;
-  go.fraction = -1;
-  for (const float up : {0.f, kStepHeight, 2 * kStepHeight}) {
-    const HullTrace t = player_trace(w, {p.x, p.y, p.z + up}, {to.x, to.y, p.z + up});
-    if (!t.startsolid && !t.allsolid && t.fraction > go.fraction + 0.01f) go = t;
-    if (go.fraction >= 1) break;
-  }
-  if (go.fraction < 0) return false;
-  const Vec3f e = go.endpos;
-  const HullTrace down = player_trace(w, e, {e.x, e.y, e.z - 400});
-  if (down.fraction >= 1 || down.startsolid) return false;
-  const int c =
-      water_contents(w, {down.endpos.x, down.endpos.y, down.endpos.z + kPlayerMins.z + 2});
-  return c == kContentsLava || c == kContentsSlime;
-}
-
-}  // namespace
-
-bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to) {
-  return side_falls_in_(world, p, to);
-}
-
-int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side, float near) {
-  if (g.harm.size() != g.nodes.size()) return 0;
-  int64_t marked = 0;
-  for (size_t a = 0; a < g.nodes.size(); a++) {
-    const NavNode& n = g.nodes[a];
-    if (g.harm[a] || !nav_harm_near(g, n.origin, near)) continue;
-    for (int32_t k = 0; k < n.links; k++) {
-      NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-      if ((l.kind != NavKind::walk && l.kind != NavKind::drop) || g.harm[static_cast<size_t>(l.to)])
-        continue;
-      const Vec3f A = n.origin, B = g.nodes[static_cast<size_t>(l.to)].origin;
-      const float len = across(A, B);
-      if (len < 1) continue;
-      // Across the link: its right hand, flat.
-      const float rx = (B.y - A.y) / len, ry = -(B.x - A.x) / len;
-      const int steps = 1 + static_cast<int>(len / 16);
-      for (int q = 0; q <= steps && !l.brink_side; q++) {
-        const float f = static_cast<float>(q) / static_cast<float>(steps);
-        // A step over the line's height: over a ramp's rise and a stair's tread.
-        const Vec3f p{A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f,
-                      A.z + (B.z - A.z) * f + kStepHeight};
-        for (const float s : {side, -side})
-          if (!l.brink_side && side_falls_in_(world, p, {p.x + rx * s, p.y + ry * s, p.z}))
-            l.brink_side = true;
-      }
-      if (l.brink_side) marked++;
-    }
-  }
-  return marked;
 }
 
 void flip_keys(float way, float view, float& forward, float& side) {
