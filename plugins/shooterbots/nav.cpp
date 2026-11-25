@@ -13,6 +13,7 @@
 #include <cstring>
 #include <iterator>
 
+#include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/parallel.hpp"
@@ -393,14 +394,14 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   };
   // A column between a and b with no floor near the height of either, open at the higher one: a
   // gap (a ledge stepped down from is no gap, its foot at the lower end's height; nor is a wall).
-  auto gap_between = [&](Vec3f a, Vec3f b) {
+  auto gap_between = [&](const MoveWorld& on, Vec3f a, Vec3f b) {
     const float d = across(a, b);
     const int steps = static_cast<int>(d / (set.spacing * 0.5f));
     for (int k = 1; k < steps; k++) {
       const float f = static_cast<float>(k) / static_cast<float>(steps);
       const float x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
       if (!floor_near(x, y, a.z) && !floor_near(x, y, b.z) &&
-          box_free(world, {x, y, a.z > b.z ? a.z : b.z}))
+          box_free(on, {x, y, a.z > b.z ? a.z : b.z}))
         return true;
     }
     return false;
@@ -475,13 +476,23 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   };
   // Every node's work on the calling thread and the pool's, node a on thread a % workers (the
   // nodes of a room cost alike, so neighbours are spread over the threads). `body(a, scratch)`
-  // writes only what belongs to node a.
+  // writes only what belongs to node a. A brush map's tracer keeps scratch of its own (its stack
+  // and stamps), so each thread traces `on`, the world with tracers of its own: copies of the
+  // map's, the same answers.
   const size_t workers = ge::core::default_workers();
   auto each_node_parallel = [&](size_t count, auto&& body) {
     ge::core::parallel_bands(workers, workers, [&](size_t lo, size_t hi) {
       ai::Search scratch;
+      MoveWorld on = world;
+      std::vector<ge::brush::BrushTracer> own;
+      own.reserve(static_cast<size_t>(on.count));
+      for (int i = 0; i < on.count; i++)
+        if (on.solids[i].tracer != nullptr) {
+          own.push_back(*on.solids[i].tracer);
+          on.solids[i].tracer = &own.back();
+        }
       for (size_t k = lo; k < hi; k++)
-        for (size_t a = k; a < count; a += workers) body(a, scratch);
+        for (size_t a = k; a < count; a += workers) body(a, scratch, on);
     });
   };
   Try jumps[std::size(kJumpShares)];
@@ -506,7 +517,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   // PASS 1: the neighbours, walked (or jumped onto when higher than a step). Proven side by side,
   // then taken in node order.
   std::vector<std::vector<Proven>> proven(g.nodes.size());
-  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search&) {
+  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search&, const MoveWorld& on) {
     const NavNode& na = g.nodes[a];
     each_column(na, 1, [&](int32_t, int32_t, int32_t b) {
       if (static_cast<size_t>(b) == a) return;
@@ -519,7 +530,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         for (int q = 0; q < njumps; q++) tries[n++] = jumps[q];
         tries[n++] = {NavKind::jump, 0};  // a standing jump: a stair's tread has no run-up
       }
-      proven[a].push_back(prove_value(world, a, b, tries, n));
+      proven[a].push_back(prove_value(on, a, b, tries, n));
     });
   });
   for (size_t a = 0; a < g.nodes.size(); a++)
@@ -546,7 +557,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         },
         [](int32_t) { return false; });
   };
-  auto candidates = [&](size_t a, const ai::Search& walked, auto&& fn) {
+  auto candidates = [&](const MoveWorld& on, size_t a, const ai::Search& walked, auto&& fn) {
     const NavNode& na = g.nodes[a];
     each_column(na, span, [&](int32_t i, int32_t j, int32_t b) {
       if (static_cast<size_t>(b) == a) return;
@@ -558,22 +569,22 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       if (walked.reached(b) && walked.cost(b) <= kDetour * d / move.maxspeed + kDetourSlack_s)
         return;
       const bool up = rise > kStepHeight && d <= set.spacing * kUpAcross;
-      if (!up && (!edge[a] || !edge[static_cast<size_t>(b)] || !gap_between(na.origin, to))) return;
+      if (!up && (!edge[a] || !edge[static_cast<size_t>(b)] || !gap_between(on, na.origin, to)))
+        return;
       fn(b);
     });
   };
   std::vector<std::vector<std::pair<int32_t, Proven>>> ahead(g.nodes.size());
-  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search& walked) {
+  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search& walked, const MoveWorld& on) {
     walk_from(a, walked);
-    candidates(a, walked, [&](int32_t b) {
-      ahead[a].emplace_back(b, prove_value(world, a, b, jumps, njumps));
-    });
+    candidates(on, a, walked,
+               [&](int32_t b) { ahead[a].emplace_back(b, prove_value(on, a, b, jumps, njumps)); });
   });
   ai::Search walked(g.nodes.size());
   for (size_t a = 0; a < g.nodes.size(); a++) {
     walk_from(a, walked);
     size_t next = 0;  // the ordered candidates are a subsequence of those proven ahead
-    candidates(a, walked, [&](int32_t b) {
+    candidates(world, a, walked, [&](int32_t b) {
       while (next < ahead[a].size() && ahead[a][next].first != b) next++;
       if (next < ahead[a].size()) {
         take(ahead[a][next++].second, out[a]);

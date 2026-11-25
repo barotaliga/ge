@@ -43,7 +43,7 @@ struct DraftPick {
   int captain = -1;
 };
 
-enum class DraftRefusal { none, not_captain, not_your_turn, no_such_player };
+enum class DraftRefusal : uint8_t { none, not_captain, not_your_turn, no_such_player };
 
 // Starts it with the two captains and the pool (the captains are never in it).
 void draft_start(Draft& d, int captain_a, int captain_b, const std::vector<int>& pool,
