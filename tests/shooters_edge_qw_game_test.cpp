@@ -1073,3 +1073,22 @@ TEST(classic_game_the_moves_settings_reach_the_joined_client) {
       CHECK_MSG(r.client.movevars[i] == want[i],
                 "move value " + std::to_string(i) + " is " + std::to_string(r.client.movevars[i]));
 }
+
+// The match's stats words are the server's own: each is answered once, and never also called a
+// bad command after its answer.
+TEST(classic_game_the_stats_words_answer_and_are_not_bad_commands) {
+  Session r;
+  run_session(r, arena(), 700, "", -1,
+              {{500, "stats"}, {520, "teamstats"}, {540, "laststats"}, {560, "nosuchword"}});
+  bool bad_stats = false, bad_other = false;
+  std::string all;
+  for (const std::string& p : r.client.prints) {
+    all += p;
+    bad_stats |= p.find("Bad user command: stats") != std::string::npos ||
+                 p.find("Bad user command: teamstats") != std::string::npos ||
+                 p.find("Bad user command: laststats") != std::string::npos;
+    bad_other |= p.find("Bad user command: nosuchword") != std::string::npos;
+  }
+  CHECK_MSG(!bad_stats, all);
+  CHECK_MSG(bad_other, all);  // an unknown word is still refused
+}

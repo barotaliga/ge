@@ -1618,6 +1618,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   game.qw->game_command = game_words;
   game.qw->game_command_after = stats_after;
   game.qw->game_ctx = &game;
+  game.rules->word_left = stats_after;  // the first map's (bind_map sets each next one's)
+  game.rules->word_left_ctx = &game;
   game.qw->may_play = may_play;
   game.qw->buttons = move_buttons;
   qw_referee_hooks(*game.qw, game.referee);

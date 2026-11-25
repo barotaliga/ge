@@ -618,6 +618,8 @@ CommandResult qvm_client_command(QvmServer& s, int slot, const std::string& line
     set_words(s, line);  // the module may have tokenized something else
     run_server_command(s, slot);
     r = CommandResult::server;
+  } else if (s.word_left != nullptr && s.word_left(s.word_left_ctx, slot, line)) {
+    r = CommandResult::server;
   } else {
     print_to(s, 1u << slot, 2, "Bad user command: " + cmd + "\n");
   }

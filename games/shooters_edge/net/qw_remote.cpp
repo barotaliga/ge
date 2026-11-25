@@ -926,7 +926,11 @@ bool remote_rules_word(Remote& r, const std::string& line) {
   }
   if (!r.q2) {  // Quake's client sends on only its server's own words, never any unknown one
     const std::string word = line.substr(0, line.find_first_of(" \t"));
-    if (word != "kill" && word != "pause" && word != "serverinfo") return false;
+    // Our own server's match words (it agreed the ge set's settings bit): its stats.
+    const bool ours = r.end.ext.has(ExtFamily::ge, kGeSettings);
+    const bool stats_word = word == "stats" || word == "teamstats" || word == "laststats";
+    if (word != "kill" && word != "pause" && word != "serverinfo" && !(ours && stats_word))
+      return false;
   }
   remote_command(r, line);  // Quake II's: every word the window does not know (`use Railgun`)
   return true;
