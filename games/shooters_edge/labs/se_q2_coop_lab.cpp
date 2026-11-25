@@ -231,11 +231,12 @@ std::vector<std::pair<std::string, int>> holdings(const sv::SqBody& b) {
   out.emplace_back("health", b.health);
   out.emplace_back("armour", b.armour_count);
   for (int i = 0; i < sv::kSqItemCount; i++)
-    if (sv::kSqItems[i].kind == sv::SqKind::weapon)
+    if (sv::kSqItems[i].kind == sv::SqKind::weapon && sv::kSqItems[i].pack == sv::Q2Pack::base)
       out.emplace_back(sv::kSqItems[i].pickup, b.counts[i]);
-  constexpr const char* kAmmo[sv::kSqAmmoKinds] = {"",        "shells", "bullets", "grenades",
-                                                   "rockets", "cells",  "slugs"};
-  for (int a = 1; a < sv::kSqAmmoKinds; a++) out.emplace_back(kAmmo[a], b.ammo[a]);
+  constexpr const char* kAmmo[] = {"",        "shells", "bullets", "grenades",
+                                   "rockets", "cells",  "slugs"};
+  for (int a = 1; a <= static_cast<int>(sv::SqAmmo::slugs); a++)
+    out.emplace_back(kAmmo[a], b.ammo[a]);
   return out;
 }
 

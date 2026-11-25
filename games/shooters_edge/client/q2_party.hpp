@@ -66,9 +66,7 @@ struct Q2Party {
   int named = 0;                     // companions ever seated (their names count up)
   bool turned_coop = false;          // the game was single player until the first one came
   const sv::MapSpec* map = nullptr;  // the map the helpers' ways were read off
-  sb::Party share;                   // the helpers' split of the map (shooterbots/party.hpp)
-  std::vector<sb::PartyMember> members;
-  sb::PartyOptions people;
+  sb::PartyRound round;  // the helpers' people and split this frame (shooterbots/party.hpp)
 };
 
 // How many companions are seated.

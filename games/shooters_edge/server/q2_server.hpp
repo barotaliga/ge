@@ -157,6 +157,29 @@ struct Q2Entity {
 };
 
 // A monster of the single player (q2_monsters.hpp): its map entity and its mind.
+// Ground Zero's bosses (q2_gz_bosses.cpp: the carrier and the black widow's two stages): the move
+// it plays by hand (its `Move`, 0 none) and its frame there, the move's own clock (the spawn's,
+// the grenades', the blaster's end), when each weapon was last used, the choice's flags (blind,
+// the spawn bias, angered), its manual steering, the aim it saved (a rail's, a disruptor's) and
+// its enemy's place at the last beam, the 0.5 s step of a spawn, its answer to a player's
+// power-ups (the multiplier, invulnerable until), and after its death its own count of frames.
+struct Q2Boss {  // NOLINT(clang-analyzer-optin.performance.Padding): one a boss, by name
+  int move = 0;
+  int frame = 0;
+  double timer = 0;
+  double rail_at = -100, rockets_at = -100, blaster_end = -100, tongue_at = 0, coop_at = 0;
+  bool blind = false, bias = false, angered = false, manual = false;
+  sh::Vec3f saved, beam_last;
+  int step = 0;
+  int brood[2] = {-1, -1};  // the spares growing for it (monster rows), -1 none
+  int multiplier = 1;
+  double invulnerable_until = 0;
+  double quad_until = 0, double_until = 0;  // the shells its answer wears (the player's times)
+  int dying = -1;
+  int legs = -1;
+  double legs_at = 0;
+};
+
 struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   int entity = -1;
   int kind = 0;    // its row in the roster
@@ -240,6 +263,72 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   // A flier sliding sideways round its enemy instead of closing (`slide_left` its side).
   bool slide = false, slide_left = false;
   double flies_at = 0;  // flies on its corpse from then for 60 s (level time); 0 not yet, -1 none
+  // A mission pack's kinds (q2_reckoning_monsters.cpp): a power shield's points left and its
+  // shell shown till then; an amphibian swimming; chanting (spawn flag 8) till its first blow;
+  // its beams (laser eyes, a repair bot's) as rows of their own from entity `beam` on, shown from
+  // `beam_from` to `beam_to` till `beam_until`, blue for healing.
+  int shield = 0;
+  double shield_flash = 0;
+  bool swimming = false;
+  bool chant = false;
+  int beam = -1;
+  sh::Vec3f beam_from[2], beam_to[2];
+  double beam_until = 0;
+  bool beam_heal = false;
+  // The repair bot's own work: what it is doing (q2_reckoning_monsters.cpp's `Job`), the repair
+  // object it is going to (-1 none), the point it roams to, when the goal was made, the work's
+  // next step, until when repair objects are let be, and how many frames it has not moved.
+  int job = 0;
+  int job_target = -1;
+  sh::Vec3f job_goal;
+  double job_since = 0, job_until = 0, repair_rest = 0;
+  int still = 0;
+  sh::Vec3f still_at;
+  // Ground Zero's kinds (q2_gz_monsters.cpp): the reinforcements a medic commander has out, its
+  // call's step (-1 none) and whether it turned round for it; a reinforcement's commander (a
+  // monster row, -1 none) and the end of the grow it shows before it comes (level time; 0 none).
+  int called = 0;
+  int call = -1;
+  bool call_back = false;
+  int commander = -1;
+  double grow_until = 0;
+  // A turret's: its mounting (the facing's pitch and yaw), its stage (q2_gz_monsters.cpp's
+  // `Stage`, a stalker's `Stalk` too, till `stage_until` level time) and the model frame it shows.
+  sh::Vec3f mount;
+  int stage = 0;
+  double stage_until = 0;
+  int turret_frame = 0;
+  Q2Boss boss;  // Ground Zero's bosses' own (q2_gz_bosses.cpp)
+  // Ground Zero's strafing burst (q2_gz_base_monsters.cpp): the side it slides to while it fires
+  // (1 right, -1 left; 0 a burst stood still).
+  int strafe = 0;
+  // Ground Zero's shared AI (q2_gz_ai.cpp): a side-step dodge till then (level time; 0 none), the
+  // next duck's earliest time; blind fire's mark (where its enemy was last seen), its delay that
+  // grows with each try, and whether the attack in hand is one; a ledge jump in the air since
+  // (level time; 0 none); a medic's time with its patient, the last two medics that gave up on
+  // this corpse, and whether a medic raised it (out of the level's count, out of infighting).
+  double dodge_until = 0, next_duck = 0;
+  sh::Vec3f blind_at;
+  double blind_delay = 0;
+  bool blind = false;
+  double jump_at = 0;
+  double patient_since = 0;
+  int bad_medic[2] = {-1, -1};
+  bool revived = false;
+  // Hint paths: its last look for one (level time), the node it heads for and the chain's node it
+  // leaves the path at (entities; -1 none), and a node's wait held till then (level time).
+  double hint_check = -100;
+  int hint_node = -1, hint_goal = -1;
+  double hint_wait = 0;
+};
+
+// Ground Zero's bad area (q2_gz_tesla.cpp): the box round a tesla that hurt a monster, which
+// monsters keep out of until `until` (level time); `at` the tesla. Or the box over a rising plat
+// (q2_gz_triggers.cpp), `plat` its entity, kept until the plat is down again.
+struct Q2BadArea {
+  sh::Vec3f lo, hi, at;
+  double until = 0;
+  int plat = -1;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
@@ -254,6 +343,9 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   int32_t time_budget_ms = 0;
   bool alive = false;
   float health = 0;
+  // Ground Zero's gravity factor (q2_gz_triggers.cpp): the level gravity's share his move takes,
+  // set by the trigger he stood in last frame; 1 everywhere else.
+  float gravity = 1;
   float frags = 0;
   double spawned_at = 0, died_at = 0;  // level time, s
   // The time `kill` (and a change to spectating) counts 5 s from: his last respawn's, 0 (the map's
@@ -292,6 +384,17 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   // switched on, and the body's state the frame reads: his air, the next drowning blow and its
   // size, and his fall speed at the last frame's end.
   double quad_until = 0, invulnerable_until = 0, breather_until = 0, suit_until = 0;
+  // Ground Zero's double damage and IR goggles (q2_powers.hpp).
+  double double_until = 0, ir_until = 0;
+  // Ground Zero's spheres (q2_gz_spheres.cpp): his launched sphere's row in `missiles` (-1 none);
+  // who last hurt him, the defender's target (a slot, or a monster as -2 - its entity; -1 none);
+  // each sphere's end for the bar's timer (q2_powers.hpp); and the hunter's camera his view rides
+  // once he is dead (the sphere's row; -2 stopped where it was; -1 his own view).
+  int sphere = -1;
+  int hurt_by = -1;
+  double defender_until = 0, hunter_until = 0, vengeance_until = 0;
+  int hunter_cam = -1;
+  double dual_fire_until = 0;  // a pack's dual fire (q2_powers.hpp): the hand steps twice a frame
   int silencer_shots = 0;
   bool power_on = false;
   double power_flash = 0;  // the screen's plate or the shield's shell shown till then: a blow taken
@@ -366,9 +469,30 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
 // The loops a shot in flight or a player carries (q2_fight.cpp): a blaster bolt's hiss, a
 // rocket's roar, a hand grenade's fuse (thrown or held), the BFG's ball, the railgun's and the
 // BFG's hum while held, the hyperblaster's and the chaingun's spin while firing, a body in lava or
-// slime frying.
-enum class SqLoop : uint8_t { bolt, rocket, fuse, bfg_ball, rail_hum, bfg_hum, hyper, chain, fry };
-inline constexpr int kSqLoops = 9;
+// slime frying; The Reckoning's trap (thrown, or lit in the hand) and the phalanx's hum while held.
+enum class SqLoop : uint8_t {
+  bolt,
+  rocket,
+  fuse,
+  bfg_ball,
+  rail_hum,
+  bfg_hum,
+  hyper,
+  chain,
+  fry,
+  trap,
+  phalanx,
+  // Ground Zero's spheres': the defender's, the hunter's idle, hunting and lurking, the
+  // vengeance's.
+  defender,
+  hunter_idle,
+  hunter_active,
+  hunter_lurk,
+  vengeance,
+};
+inline constexpr int kSqLoops = 16;
+inline constexpr int kSqBaseLoops = 9;        // the base game's, registered in every game
+inline constexpr int kSqReckoningLoops = 11;  // then The Reckoning's two; Ground Zero's after
 
 struct Q2Missile {
   bool live = false;
@@ -386,6 +510,27 @@ struct Q2Missile {
   float reach = 1000;    // and its reach
   float fired_z = 0;     // a rocket's: the height its shooter stood at when he fired (midair)
   int effects = -1;      // its effect bits on the wire (its trail and light); -1: by its kind
+  // The Reckoning's trap (q2_reckoning.hpp): its frame, its next think, what it pulls (a slot, or
+  // an entity as -2 - its index; -1 none), and once it has caught: the feeding's count down (62,
+  // less 2 a think), the prey's mass and whether it was a gekk.
+  int frame = 0;
+  double think_at = 0;
+  int prey = -1;
+  int feed = 0;
+  int prey_mass = 0;
+  bool prey_gekk = false;
+  // Ground Zero's (q2_gz.hpp): its stage (0 in flight; a mine's 1 opening, 2 armed, 3 set off;
+  // a disruptor's 4 hurting what it struck, 5 the A-M bomb's quake), the multiplier it was fired
+  // with, the level time its stage ends, the face it stuck to.
+  int stage = 0;
+  int multiplier = 1;
+  double stage_at = 0;
+  sh::Vec3f stuck;
+  // A sphere's (q2_gz_spheres.cpp): the angles it is drawn at, and where its hunter last saw its
+  // prey.
+  sh::Vec3f facing, last_seen;
+  // A tesla's (q2_gz_weapons.cpp): what harm it takes before it bursts (30, 20 in deathmatch).
+  int health = 0;
 };
 inline constexpr int kQ2Missiles = 64;  // the rows the world keeps for shots in flight
 
@@ -562,6 +707,7 @@ struct Q2Server : RulesCommon {
   // The monsters (q2_monsters.hpp), the level's count, and who saw a player last: the map
   // entity and its frame, and the player the monsters look at this frame.
   std::vector<Q2Monster> monsters;
+  std::vector<Q2BadArea> bad_areas;  // Ground Zero's, round its teslas
   int monsters_total = 0, monsters_killed = 0;
   int sight_entity = -1;
   int64_t sight_frame = -10;
@@ -579,6 +725,8 @@ struct Q2Server : RulesCommon {
   // How the blow being dealt landed (`kSqHow*`, q2_fight.hpp): an obituary's words tell a rocket's
   // direct hit from its blast.
   int blow_how = 0;
+  // The monster dealing the blow (a map entity; -1 none or a player): a defender sphere's target.
+  int blow_from = -1;
   int midair_frags = 0;
   float midair_rise = 0;
   // The C++ mods' `self` and `other` while a hook runs (q2_mods.hpp's rows; 0 none).

@@ -65,9 +65,7 @@ struct Party {
   uint32_t seed = 1;
   int named = 0;                    // companions ever seated (their names count up)
   std::vector<sh::Packet> packets;  // a frame's, the player's first (reused)
-  sb::Party share;                  // the helpers' split of the map (shooterbots/party.hpp)
-  std::vector<sb::PartyMember> members;
-  sb::PartyOptions people;
+  sb::PartyRound round;  // the helpers' people and split this frame (shooterbots/party.hpp)
 };
 
 // How many companions are seated.

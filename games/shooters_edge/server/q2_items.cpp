@@ -74,13 +74,20 @@ bool take_pack(const SqItem& it, SqBody& b) {
   const auto raise = [&](SqAmmo a, int limit) {
     b.max_ammo[at(a)] = std::max(b.max_ammo[at(a)], limit);
   };
+  // The Reckoning's mag slugs are carried only under it (a limit of 0 elsewhere): raised there too.
+  const bool magslugs = b.max_ammo[at(SqAmmo::magslugs)] > 0;
   if (it.amount == 1) {  // the bandolier
     raise(SqAmmo::bullets, 250);
     raise(SqAmmo::shells, 150);
     raise(SqAmmo::cells, 250);
     raise(SqAmmo::slugs, 75);
+    if (magslugs) raise(SqAmmo::magslugs, 75);
     add_ammo(b, SqAmmo::bullets, 50);
     add_ammo(b, SqAmmo::shells, 10);
+    if (b.max_ammo[at(SqAmmo::flechettes)] > 0) {  // Ground Zero's body
+      raise(SqAmmo::flechettes, 250);
+      raise(SqAmmo::rounds, 150);
+    }
     return true;
   }
   raise(SqAmmo::bullets, 300);  // the ammo pack
@@ -89,8 +96,16 @@ bool take_pack(const SqItem& it, SqBody& b) {
   raise(SqAmmo::grenades, 100);
   raise(SqAmmo::cells, 300);
   raise(SqAmmo::slugs, 100);
+  if (magslugs) raise(SqAmmo::magslugs, 100);
+  if (b.max_ammo[at(SqAmmo::flechettes)] > 0) {  // Ground Zero's body
+    raise(SqAmmo::flechettes, 300);
+    raise(SqAmmo::rounds, 200);
+  }
+  // One box of each ammo but the traps and the mines (they keep their limit and count).
   for (const SqItem& ammo : kSqItems)
-    if (ammo.kind == SqKind::ammo) add_ammo(b, ammo.ammo, ammo.amount);
+    if (ammo.kind == SqKind::ammo && ammo.ammo != SqAmmo::traps && ammo.ammo != SqAmmo::prox &&
+        ammo.ammo != SqAmmo::tesla)
+      add_ammo(b, ammo.ammo, ammo.amount);
   return true;
 }
 
@@ -121,8 +136,18 @@ bool sq_turns(int item) {
   }
 }
 
-SqBody sq_new_body() {
+SqBody sq_new_body(Q2Pack pack) {
   SqBody b;
+  if (q2_pack_has(pack, Q2Pack::reckoning)) {
+    b.max_ammo[at(SqAmmo::magslugs)] = 50;
+    b.max_ammo[at(SqAmmo::traps)] = 5;  // nothing raises it
+  }
+  if (pack == Q2Pack::ground_zero) {  // its own carry limits
+    b.max_ammo[at(SqAmmo::flechettes)] = 200;
+    b.max_ammo[at(SqAmmo::prox)] = 50;
+    b.max_ammo[at(SqAmmo::tesla)] = 50;
+    b.max_ammo[at(SqAmmo::rounds)] = 100;
+  }
   b.max_ammo[at(SqAmmo::bullets)] = 200;
   b.max_ammo[at(SqAmmo::shells)] = 100;
   b.max_ammo[at(SqAmmo::rockets)] = 50;
@@ -150,8 +175,16 @@ bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now, int
     case SqKind::ammo:  // a map's `count` on ammo gives that many in place of the box's own
       return add_ammo(b, it.ammo, count > 0 ? count : it.amount);
     case SqKind::health:
+      if (std::string_view(it.classname) == "foodcube") {  // The Reckoning's: its count, past all
+        b.health += count;
+        return true;
+      }
       return take_health(it, item, b, deathmatch, now);
     case SqKind::powerup: {
+      const std::string_view name = it.classname;
+      if ((name == "ammo_nuke" || name == "item_doppleganger") && b.counts[item] >= 1)
+        return false;  // one at a time
+      if (name == "item_doppleganger" && !deathmatch) return false;
       const int hold = skill <= 1 ? 2 : 1;
       if (skill >= 1 && b.counts[item] >= hold) return false;
       b.counts[item]++;

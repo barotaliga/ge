@@ -373,6 +373,9 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   }
   for (size_t i = 0; i < m.textures.size() && source.replace; ++i) {
     if (i >= mips.size() || !mips[i].level[0] || !own[i].empty()) continue;
+    // The sky and the liquids are left to the pack whatever their names: the map says which they
+    // are (29 by a name's mark, 38 by its flags), and the renderers draw them their own way.
+    if (m.textures[i].sky || m.textures[i].liquid != Liquid::none) continue;
     const auto [w, h] = size_of(i);
     std::vector<uint8_t> rgba;
     if (!source.replace(source.user, m.textures[i].name, w, h, {mips[i].level[0], size_t(w) * h},

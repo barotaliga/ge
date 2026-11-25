@@ -631,7 +631,8 @@ bool commands_refuse_item(Q2Server& s, int slot, bool use, const std::string& na
   }
   const SqKind kind = w >= 0 ? SqKind::weapon : kSqItems[item].kind;
   const int row =
-      w >= 0 ? (kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item) : -1) : item;
+      w >= 0 ? (kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item, s.opt.pack) : -1)
+             : item;
   const bool able =
       use ? kind == SqKind::weapon || kind == SqKind::powerup || kind == SqKind::power_armour
           : fight_droppable(s, row);

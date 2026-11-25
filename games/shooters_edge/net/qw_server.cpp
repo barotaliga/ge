@@ -476,6 +476,10 @@ void read_move(QwServer& s, int slot, const ClcMsg& m, const uint8_t* payload, b
   }
   if (s.buttons != nullptr && !c.spectator)
     for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
+  if (s.impulse != nullptr && !c.spectator)
+    for (int i = 0; i < 3; i++)
+      if (p.cmds[i].impulse != 0)
+        p.cmds[i].impulse = s.impulse(s.move_ctx, slot, p.cmds[i].impulse, i == 2);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
   // His moves made before he saw the server's turn of him go where he now faces.
   c.moves_turned +=
@@ -1169,7 +1173,8 @@ void tell_frags(QwServer& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     QwClient& c = s.clients[i];
     if (!c.rules_active) continue;
-    const int frags = static_cast<int>(s.game->world.clients[i].numbers.frags);
+    const int frags = c.pick_number != 0 ? c.pick_number
+                                         : static_cast<int>(s.game->world.clients[i].numbers.frags);
     if (frags == c.frags_told) continue;
     c.frags_told = frags;
     SvcMsg m;

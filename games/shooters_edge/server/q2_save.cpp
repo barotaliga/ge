@@ -32,13 +32,14 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 11;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
+constexpr uint16_t kChunkVersion = 12;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
                                         // dropped silencer's shots; 5: a corpse's box; 6: a
                                         // monster's liquid; 7: the trail, a monster's hunt and
                                         // calls; 8: a soldier's run-and-shoot and head shot; 9:
                                         // coop power cubes, the Makron's torso; 10: a weapon
                                         // dropped bare; 11: the gun's lag, a lost
-                                        // combat point
+                                        // combat point; 12: the item and ammo tables by length
+                                        // (a pack's rows), dual fire, the trap's think
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -55,6 +56,22 @@ bool within(Io& io, int64_t v, int64_t least, int64_t most, const char* what) {
   io.fail("the save's " + std::string(what) + " is " + std::to_string(v) + ", outside " +
           std::to_string(least) + ".." + std::to_string(most) + ": the file is damaged");
   return false;
+}
+
+// A table that grows as packs add rows (the items held, the ammo): its length first from version
+// 12 (`old` before), the rows past it left empty on reading.
+template <class Io, class T, size_t N>
+void grown(Io& io, T (&rows)[N], uint32_t old) {
+  uint32_t n = N;
+  if (io.version() >= 12)
+    io(n);
+  else
+    n = old;
+  if constexpr (Io::kReading) {
+    if (!within(io, n, 0, int64_t(N), "table length")) return;
+    for (T& r : rows) r = T{};
+  }
+  for (uint32_t i = 0; i < n; i++) io(rows[i]);
 }
 
 // A vector's length, the vector sized to it on reading.
@@ -196,6 +213,13 @@ void missile(Io& io, Q2Missile& m) {
   io(m.burst);
   io(m.reach);
   io(m.fired_z);
+  io.since(12, m.effects, -1);
+  io.since(12, m.frame, 0);
+  io.since(12, m.think_at, 0.0);
+  io.since(12, m.prey, -1);
+  io.since(12, m.feed, 0);
+  io.since(12, m.prey_mass, 0);
+  io.since(12, m.prey_gekk, false);
 }
 
 template <class Io>
@@ -227,9 +251,9 @@ template <class Io>
 void body(Io& io, SqBody& b) {
   io(b.health);
   io(b.max_health);
-  io(b.counts);
-  io(b.ammo);
-  io(b.max_ammo);
+  grown(io, b.counts, 43);  // the base game's items before 12
+  grown(io, b.ammo, 7);     // its ammo kinds (none included)
+  grown(io, b.max_ammo, 7);
   io(b.armour);
   io(b.armour_count);
   io(b.blaster);
@@ -396,6 +420,7 @@ void player(Io& io, Q2Player& p) {
   io(p.stepped);
   io(p.killer);
   for (double* d : {&p.quad_until, &p.invulnerable_until, &p.breather_until, &p.suit_until}) io(*d);
+  io.since(12, p.dual_fire_until, 0.0);
   io(p.silencer_shots);
   io(p.power_on);
   io(p.air_until);

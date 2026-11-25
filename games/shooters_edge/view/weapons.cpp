@@ -67,6 +67,10 @@ constexpr WeaponLook kQ2Looks[] = {
     {"railgun",          0, {0, 0, 0}, 1.4, 1.5, 0.2, {0.45f, 0.6f, 1.0f}, 0.5f, 6.0f, Weapon(8), false, "", ""},
     {"bfg",              0, {0, 0, 0}, 1.8, 1.0, 0.3, {0.4f, 1.0f, 0.4f}, 0.7f, 8.0f, Weapon(9), false, "", ""},
     {"hand_grenade",     0, {0, 0, 0}, 0.5, 1.0, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon(10), false, "", ""},
+    // The Reckoning's: the ion ripper's yellow bolt, the phalanx's orange balls, the trap thrown.
+    {"ion_ripper",       0, {0, 0, 0}, 0.6, 0.3, 0.08, {1.0f, 0.78f, 0.3f}, 0.3f, 5.0f, Weapon(11), false, "", ""},
+    {"phalanx",          0, {0, 0, 0}, 1.0, 1.6, 0.12, {1.0f, 0.6f, 0.25f}, 0.45f, 6.0f, Weapon(12), false, "", ""},
+    {"trap",             0, {0, 0, 0}, 0.5, 1.0, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon(13), false, "", ""},
 };
 // clang-format on
 

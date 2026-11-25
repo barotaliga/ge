@@ -28,6 +28,7 @@
 // ge:summary Classic remix's item table: each game's map items as another game's, by role
 // ge:keywords remix classic-remix item-table item-swap class-name spawnflags cr_items
 // ge:keywords remix_item item-roles item-bits dropped by-role map-items other-game game_items
+// ge:keywords mission-pack lava-spikes multi-rockets plasma
 // ge:skill shooter
 // ge:test tests/shooters_edge_remix_test.cpp
 #pragma once
@@ -88,6 +89,13 @@ inline constexpr ItemReading kQ1Reads[] = {
     {"item_artifact_invulnerability", 0, ItemRole::invulnerable},
     {"item_artifact_envirosuit", 0, ItemRole::protect},
     {"item_artifact_invisibility", 0, ItemRole::stealth},
+    // Dissolution of Eternity's ammunition for its weapons' second kinds (its program turns the
+    // nailguns, the launchers and the lightning gun over to them): the ammunition of the same
+    // weapon. Its power shield, anti-grav belt, vengeance sphere and random powerup play no part
+    // another game has, so they drop.
+    {"item_lava_spikes", 0, ItemRole::ammo_rapid},
+    {"item_multi_rockets", 0, ItemRole::ammo_explosive},
+    {"item_plasma", 0, ItemRole::ammo_energy},
 };
 inline constexpr ItemSpawn kQ1Spawns[] = {
     {ItemRole::scatter, "weapon_supershotgun", 0},
@@ -386,6 +394,9 @@ inline constexpr PackItem kPackItems[] = {
     {"q1", "hipnotic", "weapon_mjolnir"},
     {"q1", "hipnotic", "weapon_proximity_gun"},
     {"q1", "hipnotic", "item_artifact_wetsuit"},
+    {"q1", "rogue", "item_lava_spikes"},
+    {"q1", "rogue", "item_multi_rockets"},
+    {"q1", "rogue", "item_plasma"},
     {"q2", "rogue", "weapon_etf_rifle"},
     {"q2", "rogue", "weapon_heatbeam"},
     {"q2", "rogue", "weapon_plasmabeam"},
