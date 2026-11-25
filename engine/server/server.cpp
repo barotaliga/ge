@@ -205,6 +205,8 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        kAny, "\"\": every interface (the default); TEXT: that address only", &c.ip);
   bind("net_port", port, latched, "The UDP port the game listens on.", CvarKind::integer, 1, 65535,
        "1..65535: that port", &c.port);
+  // A hosting window's name for its port (listen_console.cpp), so one cfg line serves both.
+  cvars.add_synonym("sv_port", "net_port");
   bind("net_ip6", ip6, latched, "The local IPv6 address the server listens on as well.",
        CvarKind::text, -kAny, kAny, "\"\": every interface (the default); TEXT: that address only",
        &c.ip6);

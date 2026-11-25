@@ -150,12 +150,19 @@ inline constexpr ge::shooterbots::SoundMeaning kQ1Sounds[] = {
 };
 
 // The monsters' models a co-op companion knows on sight (shooterbots/companion.hpp): a client is
-// sent each entity's model, and these are the ones that walk, fly or swim at the players.
+// sent each entity's model, and these are the ones that walk, fly or swim at the players. The
+// mission packs' model names are their own, so one list serves the game and both packs.
 inline constexpr std::string_view kQ1Monsters[] = {
-    "progs/soldier.mdl", "progs/dog.mdl",      "progs/knight.mdl",   "progs/hknight.mdl",
-    "progs/ogre.mdl",    "progs/zombie.mdl",   "progs/wizard.mdl",   "progs/fish.mdl",
-    "progs/demon.mdl",   "progs/shambler.mdl", "progs/shalrath.mdl", "progs/enforcer.mdl",
-    "progs/tarbaby.mdl", "progs/boss.mdl",     "progs/oldone.mdl"};
+    "progs/soldier.mdl", "progs/dog.mdl", "progs/knight.mdl", "progs/hknight.mdl", "progs/ogre.mdl",
+    "progs/zombie.mdl", "progs/wizard.mdl", "progs/fish.mdl", "progs/demon.mdl",
+    "progs/shambler.mdl", "progs/shalrath.mdl", "progs/enforcer.mdl", "progs/tarbaby.mdl",
+    "progs/boss.mdl", "progs/oldone.mdl",
+    // Scourge of Armagon's own: the scourge, the gremlin, Armagon.
+    "progs/scor.mdl", "progs/grem.mdl", "progs/armabody.mdl",
+    // Dissolution of Eternity's own: the eel, the wrath and its overlord, the mummy, the dragon,
+    // the guardians, the lava lord.
+    "progs/eel2.mdl", "progs/wrath.mdl", "progs/s_wrath.mdl", "progs/mummy.mdl", "progs/dragon.mdl",
+    "progs/morph_az.mdl", "progs/morph_eg.mdl", "progs/morph_gr.mdl", "progs/lavaman.mdl"};
 // Of those, the ones only a blast keeps down (a shot one gets up again), and the ones no weapon
 // kills at all (the map's own trap does): a player passes them rather than fights them.
 inline constexpr std::string_view kQ1BlastOnly[] = {"progs/zombie.mdl"};

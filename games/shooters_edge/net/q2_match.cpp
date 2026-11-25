@@ -3,7 +3,7 @@
 // ge:summary Our Quake II server's match: seats, the lobby's words, timeouts, overtime, the hold,
 // ge:summary teams and captains, the referee, the teams' scores and the stats words
 // ge:keywords q2_match_frame q2_match_open q2-lobby q2-timeout q2-overtime prewar lock
-// ge:keywords q2-teams q2-referee q2-stats team-skins team-score
+// ge:keywords q2-teams q2-referee q2-stats team-skins team-score q2-coach coach-chat
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_match_test.cpp
 #include "shooters_edge/net/q2_match.hpp"
@@ -14,6 +14,7 @@
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "server/overtime.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
 
@@ -441,6 +442,57 @@ bool stats_word(Q2Match& m, int slot, const std::string& line) {
   return true;
 }
 
+// A `say_team` the coaches are in (a coach's, or a player's on a team that has one): the engine's
+// chat route with the coach seated on his team (server/chat.hpp), printed here.
+bool coach_chat(Q2Match& m, int slot, const std::string& line) {
+  if (!m.teams_on || !line.starts_with("say_team ")) return false;
+  const gs::Team own = seat_team(m, slot);
+  const gs::Team coached = gs::coach_team(m.coaches, slot);
+  if (coached == gs::Team::none && (own == gs::Team::none || m.coaches.coach[team_index(own)] < 0))
+    return false;
+  std::string said = line.substr(9);
+  if (said.size() >= 2 && said.front() == '"' && said.back() == '"')
+    said = said.substr(1, said.size() - 2);
+  if (said.empty()) return true;
+  std::array<gs::ChatSeat, sh::kMaxClients> seats;
+  for (int i = 0; i < kSlots && i < sh::kMaxClients; i++) {
+    gs::ChatSeat& d = seats[static_cast<size_t>(i)];
+    d.active = m.net->clients[i].stage == Q2Slot::active;
+    if (!d.active) continue;
+    d.name = m.net->clients[i].name;
+    d.spectator = !playing(m, i);
+    const gs::Team coaches = gs::coach_team(m.coaches, i);
+    d.coach = coaches != gs::Team::none;
+    const gs::Team team = d.coach ? coaches : seat_team(m, i);
+    d.team = team != gs::Team::none ? std::string(gs::team_name(team)) : std::to_string(i);
+  }
+  const gs::ChatLine out = gs::chat_route(seats, slot, true, false, sv::chat_in_match(**m.rules),
+                                          gs::chat_settings((*m.rules)->cvars), said);
+  for (int i = 0; i < kSlots && i < sh::kMaxClients; i++)
+    if (((out.to >> i) & 1u) != 0 && m.net->clients[i].stage == Q2Slot::active)
+      q2_net_print(*m.net, i, out.text);
+  return true;
+}
+
+// Each coach's chase camera kept on his team's players: one on another player steps on to the
+// next of his team, or ends when the team has none.
+void coach_cameras(Q2Match& m) {
+  sv::Q2Server* game = sv::q2_of(*m.rules);
+  if (game == nullptr) return;
+  for (const int c : m.coaches.coach) {
+    if (c < 0 || c >= sh::kMaxClients) continue;
+    sv::Q2Player& p = game->players[c];
+    if (p.chase < 0 || gs::coach_may_follow(m.coaches, m.lobby, c, p.chase)) continue;
+    const int next = gs::coach_next_follow(m.coaches, m.lobby, c, p.chase);
+    if (next >= 0 && next < sh::kMaxClients && playing(m, next)) {
+      p.chase = next;
+    } else {
+      sv::spectate_stop(*game, c);
+      say(m, c, "Your team has no player to follow.");
+    }
+  }
+}
+
 bool hook(void* ctx, int slot, const std::string& line) {
   Q2Match& m = *static_cast<Q2Match*>(ctx);
   if (m.rules != nullptr && slot >= 0 && slot < kSlots && slot < sh::kMaxClients) {
@@ -478,6 +530,24 @@ bool hook(void* ctx, int slot, const std::string& line) {
     if (gs::timeout_command(m.timeout, who, in_match(m), timeout_word(m, slot, line), m.net->now)) {
       timeout_turn(m);
       return true;
+    }
+    if (m.on && c.stage == Q2Slot::active) {
+      if (coach_chat(m, slot, line)) return true;
+      if (m.coaches.candidate >= 0 && line.starts_with("vote ") && line != "vote yes" &&
+          line != "vote no") {
+        say(m, slot, "A coach election is under way. Call your vote when it ends.");
+        return true;
+      }
+      gs::CoachCaller cc;
+      cc.slot = slot;
+      cc.admin = gs::referee_is(m.referee, slot);
+      cc.spectator = !playing(m, slot);
+      cc.vote_open = m.votes != nullptr && m.votes->open;
+      cc.names = &all;
+      if (gs::coach_command(m.coaches, m.lobby, m.teams, cc, line, m.teams_on, rules_time(m))) {
+        say_book(m, m.coaches.said, m.coaches.to);
+        return true;
+      }
     }
     if (m.teams_on && c.stage == Q2Slot::active) {
       const gs::TeamsCaller tc{slot, gs::referee_is(m.referee, slot), &all};
@@ -548,10 +618,14 @@ void q2_match_frame(Q2Match& m, const std::string& map, double now) {
   if (m.on) {
     seats_turn(m);
     teams_turn(m);
+    gs::coach_tick(m.coaches, m.lobby, m.teams, names(m), m.teams_on, rules.sv.time);
+    say_book(m, m.coaches.said, m.coaches.to);
+    coach_cameras(m);
     if (gs::lobby_due(m.lobby, rules.sv.time) && rules.pending_map.empty()) {
       rules.pending_map = map;  // the match: the map again, every score new
       rules.pending_change = sv::MapChange::restart;
       gs::teams_match_began(m.teams);
+      gs::coach_match_began(m.coaches, m.teams);
     }
     gs::lobby_tick(m.lobby, rules.sv.time);
     std::vector<int> kicked;
@@ -645,7 +719,8 @@ void match_end(Q2Match& m) {
   m.end_said = true;
   say_result(m);
   if (!keep_stats(m)) return;
-  const ge::net::MatchReport r = stats_report(m, m.last_stats, m.last_names);
+  std::vector<int> slots;  // every player on the map, one who never fired or was hit too
+  const ge::net::MatchReport r = stats_report(m, m.last_stats, m.last_names, &slots);
   if (!r.players.empty())  // every player's stats, as each classic game shows them
     for (const std::string& line : sv::stats_lines(sv::q2_stats_game(), r)) say(m, -1, line);
   make_report(m, m.map);
