@@ -67,6 +67,9 @@ struct GridFace {
   float advance = 0.5f;    // the pen's step, a share of the cell's height
   uint32_t missing = 127;  // the code drawn for a code point past the grid
   int pixel_h = 0;         // a pixel face's grid height (16): drawn at its multiples; 0 drawn
+  // A grid drawn at whole multiples of `snap_h` px but filtered from more texels a cell (an
+  // upscaled glyph sheet: its classic 8 px cells drawn from 32): used when `pixel_h` is 0.
+  int snap_h = 0;
 };
 
 class Font {

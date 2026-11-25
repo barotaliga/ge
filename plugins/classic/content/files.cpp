@@ -15,6 +15,7 @@
 
 #include "classic/content/fs_words.hpp"
 #include "classic/content/load_order.hpp"
+#include "classicenhance/cached.hpp"
 #include "classicenhance/profile.hpp"
 #include "save/file.hpp"
 #include "vfs/zip.hpp"
@@ -334,6 +335,35 @@ std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path) {
   // takes it, keyed by the zip's own bytes.
   if (!first && !zip.empty()) out.insert(out.begin(), zip);
   return out;
+}
+
+std::vector<std::span<const uint8_t>> content_packs_with_mission(const SearchPath& path) {
+  std::vector<std::span<const uint8_t>> out = content_packs(path);
+  if (out.empty()) return out;
+  const ge::classicenhance::Profile& q1 = ge::classicenhance::q1_profile();
+  const ge::classicenhance::Profile* q2 = ge::classicenhance::find_profile("q2");
+  const std::string& game = path.vfs.sources.front().game;
+  for (const ge::vfs::Source& s : path.vfs.sources) {
+    if (s.game == game || s.kind != ge::vfs::SourceKind::pack) continue;
+    if (ge::classicenhance::find_pack(q1, s.game) == nullptr &&
+        (q2 == nullptr || ge::classicenhance::find_pack(*q2, s.game) == nullptr))
+      continue;
+    std::string n = fs::path(s.path).filename().string();
+    for (char& c : n) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+    if (n.starts_with(q1.pack_stem) && n.ends_with(q1.pack_ext)) out.emplace_back(s.bytes);
+  }
+  return out;
+}
+
+std::filesystem::path content_cache(const SearchPath& path, const std::filesystem::path& root) {
+  const std::vector<std::span<const uint8_t>> base = content_packs(path);
+  if (base.empty()) return {};
+  const std::vector<std::span<const uint8_t>> laid = content_packs_with_mission(path);
+  if (laid.size() > base.size()) {
+    const std::filesystem::path dir = ge::classicenhance::find_cache(laid, root);
+    if (!dir.empty()) return dir;
+  }
+  return ge::classicenhance::find_cache(base, root);
 }
 
 namespace {

@@ -34,6 +34,7 @@
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
+#include "render/ao.hpp"
 #include "render/beams.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
@@ -91,6 +92,7 @@ struct WorldDraw {
   gr::Bloom bloom;
   // The scene kept a frame for the faces' reflections (ce_reflections), and the last frame's camera
   // its march steps through.
+  gr::Ao ao;  // the contact shade (ce_ao): its passes run only while it is on
   gr::Mirror mirror;
   gr::FrameHistory history;
   gr::Post post[2];
@@ -207,6 +209,7 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   gr::bind_haze_targets(d, f.haze, f.targets);
   if (f.has_map) ba::create_bsp_targets(d, f.bsp, f.targets);
   if (f.extras) bind_extras_targets(d, *f.extras, f.targets);
+  if (f.ao.p_apply != 0) gr::create_ao_targets(d, f.ao, f.w, f.h, f.uniforms, f.targets.depth_view);
 }
 
 // The pack's textures as classic-enhance left them in its cache (`user` the pack's cache folder):
@@ -461,9 +464,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   // The enhanced cache, when this pack's were enhanced (the in-game menu's ENHANCE): keyed by the
   // packs' bytes, looked up once for the textures, the rebake and the skins.
   const bool any = picture.ce.textures || picture.ce.rebake || picture.ce.models;
-  const std::filesystem::path cache = any && !content_packs(files).empty()
-                                          ? ge::classicenhance::find_cache(content_packs(files))
-                                          : std::filesystem::path{};
+  const std::filesystem::path cache = any ? content_cache(files) : std::filesystem::path{};
   // ce_textures: the enhanced textures.
   ba::TextureSource source;
   if (picture.ce.textures && !cache.empty()) {
@@ -562,6 +563,8 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::create_sky(d, f.pipelines, f.skypass, f.uniforms, f.layout);
     gr::create_clouds(d, f.pipelines, f.clouds, f.layout);
     gr::create_mirror(d, f.pipelines, f.mirror);
+    gr::create_ao_pipelines(d, f.pipelines, f.ao);  // ce_ao's, run only while it is on
+    gr::create_ao_apply(d, f.pipelines, f.ao);
     gr::BloomSettings bs;
     bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
     gr::create_bloom_pipelines(d, f.pipelines, f.bloom, bs);
@@ -829,6 +832,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.picture) set_extras_flames(*f.extras, f.picture->draw_flame);
     dress_extras(*f.extras, view, o, dt);
   }
+  // The contact shade (ce_ao): its passes made the first frame it is on, off with no map.
+  const bool ao = o.ao > 0 && f.has_map;
+  if (ao) gr::set_ao(d, f.ao, {.strength = o.ao, .radius_m = o.ao_radius_m});
   // From above (the live map's dive): faces seen from behind left out, every leaf's faces drawn.
   o.from_above = f.from_above;
   if (f.from_above) o.pvs = false;
@@ -1069,6 +1075,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
     if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
+    if (ao) {  // over the map and its models as drawn, before the sky and what is see-through
+      gr::encode_ao(f.ao, f.pipelines, f.rec, e);
+      gr::encode_ao_apply(f.ao, f.pipelines, f.rec, e, f.targets.hdr_view);
+    }
     gr::encode_far_land(f.far, f.pipelines, f.rec, e, f.targets, f.frame, false);
     gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
     // The map's cloud from the skies' medium stop up (none to fill under the pack's own sky).

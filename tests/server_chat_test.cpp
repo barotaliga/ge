@@ -1,7 +1,8 @@
 // engine/server/chat: who reads a say or a say_team and with which prefix: a player's say to
 // everyone, team chat to the team; a spectator's team chat to the spectators, a say muted to the
 // players during a match when sv_spectalk is 0; a player's team report to the spectators who follow
-// the team, by sv_sayteam_to_spec and the phase; a line typed by hand stays private.
+// the team, by sv_sayteam_to_spec and the phase; a line typed by hand stays private; a team's
+// coach in its team chat both ways.
 //
 // ge:summary Test: the chat route: say, say_team, spectators, sv_spectalk, sv_sayteam_to_spec
 // ge:keywords test chat chat_route sv_spectalk sv_sayteam_to_spec spectator-chat team-report
@@ -69,4 +70,17 @@ TEST(the_settings_are_read_from_the_console) {
   cvars.set("sv_spectalk", "0", ge::console::Source::code);
   cvars.set("sv_sayteam_to_spec", "3", ge::console::Source::code);
   CHECK(!chat_settings(cvars).spectalk && chat_settings(cvars).sayteam_to_spec == 3);
+}
+
+TEST(a_coach_is_in_his_teams_team_chat_both_ways) {
+  auto seats = room();
+  seats[3].coach = true;  // dee coaches red
+  seats[3].team = "red";
+  seats[3].follows = -1;
+  CHECK(chat_route(seats, 0, true, false, true, {}, "low").to == 0xBu);  // ann's line reaches dee
+  CHECK(chat_route(seats, 2, true, false, true, {}, "x").to == 0x4u);    // blue's never
+  const ChatLine told = chat_route(seats, 3, true, false, true, {}, "stack mid");
+  CHECK(told.to == 0xBu && told.text == "(Coach dee): stack mid\n");
+  const ChatSettings off{false, 1};  // his say is a spectator's: muted to players in a match
+  CHECK(chat_route(seats, 3, false, false, true, off, "gg").to == 0x8u);
 }

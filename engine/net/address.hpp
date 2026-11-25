@@ -4,7 +4,7 @@
 // hash and print it; parse one typed by a person or a flag.
 //
 // ge:summary A peer's address: IPv4, IPv6 or a simulated node, with its port; parse and print
-// ge:keywords net network address ipv4 ipv6 port endpoint peer parse format sim-address
+// ge:keywords net network address ipv4 ipv6 port endpoint peer parse format sim-address same_host
 // ge:skill net
 // ge:test tests/net_address_test.cpp
 #pragma once
@@ -45,5 +45,7 @@ bool parse_address(std::string_view text, Address& out);
 std::string to_string(const Address& a);
 // FNV-1a over the family, the bytes the family uses and the port: a key for a host's tables.
 uint64_t address_hash(const Address& a);
+// The host part of two addresses the same, their ports set aside (players behind one router).
+bool same_host(const Address& a, const Address& b);
 
 }  // namespace ge::net

@@ -39,6 +39,10 @@ const SwitchSpec kSwitches[] = {
      &S::flicker, false},
     {"shadows", "LIGHT", "SHADOWS",
      "Live lights and the monsters cast shadows. Off: no cast shadows.", &S::shadows, false},
+    {"ao", "LIGHT", "CONTACT SHADE",
+     "Corners, creases and the floor under the monsters and items darken where little light "
+     "reaches. Off: the light as the map has it.",
+     &S::ao, false},
     {"decals", "WORLD", "DECALS",
      "Scorch marks, bullet holes and blood that age on the walls. Off: no marks.", &S::decals,
      false},

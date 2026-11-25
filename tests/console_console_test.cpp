@@ -179,6 +179,23 @@ TEST(buttons_follow_keys) {
   CHECK(jump.down());
 }
 
+// A server's stuffed text may let go of a button (`-attack`), never press one (`+attack`).
+TEST(a_server_lets_go_of_a_button_but_never_presses_one) {
+  Console c;
+  Button& attack = c.add_button("attack", "attack while held");
+  c.execute("+attack");
+  c.run();
+  CHECK(attack.down());
+  c.append("-attack", Source::server);
+  c.run();
+  CHECK(!attack.down());
+  CHECK(c.problems().empty());
+  c.append("+attack", Source::server);
+  c.run();
+  CHECK(!attack.down());
+  CHECK(c.problems().size() == 1);
+}
+
 TEST(command_line_plus_commands) {
   Console c;
   c.cvars().add({.name = "r_x", .fallback = "0"});

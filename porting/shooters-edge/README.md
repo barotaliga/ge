@@ -48,6 +48,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `q2-sp-fixes.md` | Single player's built-in map repairs (fact1, fact2, command, the eight maps' unnamed starts), item teams, the item and cheat commands' exact lines, `cycleweap` and `prefweap` (read) |
 | `q2-client-fx2.md` | The temporary entities left undrawn (bubbles, force wall, welding and tunnel sparks, steam, flashlight, the mission packs' bursts), the CTF and mission-pack effect bits, the layout's `rstring`, `rstring2` and `color`, the area bits (read) |
 | `q2-client-te.md` | The base game's temporary entities as the client draws and plays them: each kind's fields, its specks, models and lights, the sounds the client plays itself, light styles from the settings strings (read, M18v's effects slice) |
+| `q2-pack-sounds.md` | The mission packs' sounds the client plays itself: the pack players' and monsters' muzzle flashes, the temp entities and effect bits that make none, the loops the game sets; a disc copier's `.mds` sheet measured (read, measured, M63) |
 | `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `chat-ignore.md` | The ignore lists and chat filters: how a chat line's speaker is found, what each setting drops (clean-room answers, M18k4) |
 | `client-mouse-and-q2-player.md` | The mouse (filter, acceleration, raw input), Quake II's player settings (hand, gender, visible weapons, skins, prediction, autosens), its chat filters and command spellings (clean-room answers, M18k4) |
@@ -131,6 +132,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `hub.md` | The classic community's live-game and demo website (clean-room answers): its pages and API, the master and status queries, modes and match state, the broadcaster's advert, watching in a browser, the demo index (M56, `docs/hub.md`) |
 | `accounts.md` | Logins and match stats on the classic servers and both games' stock clients (clean-room answers): the console login, the accounts file, the web login and its token, the status and scoreboard keys, the match stats file, `lastscores`, frag logs (M59, `docs/accounts.md`) |
 | `team-messages.md` | Team messages at the modern client's extent (clean-room answers, M18k): each fun sequence's byte and the stock sheet's glyph there, the `^` rule, every percent code's text and its words' settings, the bracketed forms, field widths, hidden counts and message marks, the expansion order, each `f_` trigger's moment and gate, every canned message's text |
+| `ktx-coach.md` | The QuakeWorld match mod's coach (clean-room facts): who may ask, the spectator's election, tracking only the team, chat, what a coach blocks, stepping down, the map change, what is shown |
 
 The recorded-game formats are built (M18h, `games/shooters_edge/client/demo.hpp`) and their note
 retired. Every fact marked `verify` is checked by a lab before code depends on it.

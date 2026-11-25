@@ -38,6 +38,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/load_line.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
@@ -91,21 +92,14 @@ bool busy(const MapLoad& load);
 // "" when nothing is in flight.
 std::string load_caption(const MapLoad& load);
 
-// A CLASSIC GAME LOADS A MAP IN ITS CONSOLE, as the classic games did: the console held down over
-// the screen and its last line "Loading base1... 3.6s", rewritten as the time goes (the spinner
-// and the title's night are Shooter's Edge's own).
-struct LoadLine {
-  std::string what;   // the map the line is for
-  uint64_t n = 0;     // the line's number in the scrollback
-  bool held = false;  // the console is held down for it
-};
-// While `load` is busy at `now_s`: the line printed or rewritten on `con`/`view` and the console
-// held. False when nothing loads.
+// A classic game's map loading in its console (load_line.hpp): while `load` is busy at `now_s`,
+// its line printed or rewritten and the console held. False when nothing loads.
 bool console_load_line(const MapLoad& load, LoadLine& line, ge::console::Console& con,
                        ge::console::ConsoleView& view, double now_s);
-// Once `load` is done: the console it held let go, unless `keep` (a game's start still holds it).
+// Once `load` is done, or at once while the world shown is another's (`elsewhere`): the console it
+// held let go, unless `keep` (a game's start or a demo's first frames still hold it).
 void release_load_line(const MapLoad& load, LoadLine& line, ge::console::ConsoleView& view,
-                       bool keep);
+                       bool keep, bool elsewhere = false);
 // What a load in flight shows over the frame: a single-player game in its pack's pictures the
 // loading plaque (gfx/loading) for up to kPlaqueMostS; anything else the spinner and its caption.
 void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
