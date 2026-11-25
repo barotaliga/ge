@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "core/prng.hpp"
+#include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_poses.hpp"
 
 namespace shooters_edge::server {
@@ -25,6 +26,10 @@ struct PainChoice {
 
 // Whether kind `classname` has its pains as data.
 bool monster_pain_known(std::string_view classname);
+
+// The class whose pain and death rows kind `k` reads: its own when it has any (a pack's kind
+// with its own cries), else the kind it looks like.
+const char* pain_class(const roster::Kind& k);
 
 // The pain of kind `classname` hurt by `damage` at `skill`, rising at `up` units/s, showing
 // `frame` of a run that starts at `first` (`act_pain` when that run is a pain). `waiting` when the

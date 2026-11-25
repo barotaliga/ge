@@ -1292,11 +1292,13 @@ void write_items_back(const Q2NetServer& s, Q2NetClient& c, std::vector<uint8_t>
 
 std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body) {
   std::vector<uint8_t> out;
+  out.reserve(5 + 2 * (sv::kSqAmmoKinds - 1));
+  static_assert(sv::kSqWeaponCount <= 32, "the arsenal's mask holds 32 weapon rows");
   uint32_t held = 0;
   for (int w = 0; w < sv::kSqWeaponCount; w++)
     if (sv::sq_holds(body, w)) held |= 1u << w;
-  out.push_back(static_cast<uint8_t>(held & 255));
-  out.push_back(static_cast<uint8_t>(held >> 8));
+  for (int k = 0; k < 4; k++) out.push_back(static_cast<uint8_t>(held >> (8 * k)));
+  out.push_back(static_cast<uint8_t>(sv::kSqAmmoKinds));
   for (int k = 1; k < sv::kSqAmmoKinds; k++) {
     const int n = std::clamp(body.ammo[k], 0, 32767);
     out.push_back(static_cast<uint8_t>(n & 255));

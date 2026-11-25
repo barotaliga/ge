@@ -322,3 +322,24 @@ TEST(the_windows_own_game_lines_fire_the_triggers) {
   CHECK(cl::game_lines(g, lines, {}, next, 51, [&](const std::string&) { CHECK(false); }) ==
         lines.size());
 }
+
+// A program's line printed in pieces (a name, the rest; a team's name in its own letters) is shown
+// whole, once; a piece with no line end left at the end of the look is shown as it is.
+TEST(the_windows_own_game_lines_are_whole_when_printed_in_pieces) {
+  cl::QwIgnore g;
+  std::vector<std::string> shown;
+  const std::vector<std::string> lines{
+      "mate3",  " entered the game\n", "You have been assigned to ",
+      "RED",    " team.\nA\nB",        "bob: hi\n",
+      "no room"};
+  const size_t next = cl::game_lines(g, lines, {2, 2, 2, 2, 2, 3, 2}, 0, 50,
+                                     [&](const std::string& l) { shown.push_back(l); });
+  CHECK(next == lines.size());
+  const std::vector<std::string> want{"mate3 entered the game\n",
+                                      "You have been assigned to RED team.\n",
+                                      "A\n",
+                                      "B",
+                                      "bob: hi\n",
+                                      "no room"};
+  CHECK_MSG(shown == want, std::to_string(shown.size()) + " lines");
+}

@@ -213,16 +213,17 @@ inline int q2_model_fx_of(int code, uint32_t pick, const float at[3], const floa
 }
 
 // The kind byte of our rules' blast `name` (0: none of these): explosion1 5, explosion2 6, a
-// rocket's (and our rules' plain blast) 7, a grenade's 8, the BFG ball's burst 20 and its big one
-// 21.
+// rocket's (our rules' plain blast and the plasma burst) 7, a grenade's 8, the BFG ball's burst 20
+// and its big one 21.
 constexpr int q2_blast_code(std::string_view name) {
-  return name == "te_explosion1"                                   ? 5
-         : name == "te_explosion2"                                 ? 6
-         : name == "te_rocket_explosion" || name == "te_explosion" ? 7
-         : name == "te_grenade_explosion"                          ? 8
-         : name == "te_bfg_explosion"                              ? 20
-         : name == "te_bfg_bigexplosion"                           ? 21
-                                                                   : 0;
+  return name == "te_explosion1"   ? 5
+         : name == "te_explosion2" ? 6
+         : name == "te_rocket_explosion" || name == "te_explosion" || name == "te_plasma_explosion"
+             ? 7
+         : name == "te_grenade_explosion" ? 8
+         : name == "te_bfg_explosion"     ? 20
+         : name == "te_bfg_bigexplosion"  ? 21
+                                          : 0;
 }
 // Which of cl_disable_explosions' and cl_disable_particles' kinds blast `code` is: a rocket's (in
 // the air or in water), a grenade's, or neither (0).
