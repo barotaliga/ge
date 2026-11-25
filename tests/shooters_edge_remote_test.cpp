@@ -1278,6 +1278,8 @@ TEST(the_window_joins_classically_where_the_server_offers_no_node) {
   CHECK(rig.start());
   CHECK(rig.join());
   CHECK(rig.remote.end.tunnel == nullptr);
+}
+
 // Typed plainly in the window, the stats words go to our own QuakeWorld server (it agreed the ge
 // set's settings bit), and stay with the window on another server, as any unknown word does.
 TEST(the_stats_words_go_to_our_own_server_alone) {
