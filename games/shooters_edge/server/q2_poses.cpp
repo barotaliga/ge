@@ -288,7 +288,7 @@ void pose_player(Q2Server& s, int slot) {
 
 void pose_monster(Q2Server& s, Q2Monster& m) {
   using Act = SqMonsterPose::Act;
-  const SqMonsterPoses* t = sq_monster_poses(roster::kKinds[m.kind].classname);
+  const SqMonsterPoses* t = sq_monster_poses(roster::looks_like(roster::kKinds[m.kind]));
   SqMonsterPose& p = m.pose;
   const Q2Entity& e = s.entities[size_t(m.entity)];
   const int cue = p.cue_attack;
@@ -321,10 +321,16 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
       if (n == 0) return;  // none: it keeps its frame (a flier's crash)
       int run = m.death_run >= 0 && m.death_run < n ? m.death_run : pick(m.entity, now, n);
       // A soldier's third death is its head shot's: the others are picked among the five left.
-      const std::string_view name = roster::kKinds[m.kind].classname;
+      const std::string_view name = roster::looks_like(roster::kKinds[m.kind]);
       if (n == 6 && name.substr(0, 15) == "monster_soldier") {
         run = pick(m.entity, now, 5);
         if (run >= 2) run++;
+        // The Reckoning's laser guard never takes the first (it has no dying shots): the second,
+        // fourth, fifth or sixth.
+        if (roster::kKinds[m.kind].classname == std::string_view("monster_soldier_lasergun")) {
+          constexpr int kLaserDeaths[4] = {1, 3, 4, 5};
+          run = kLaserDeaths[pick(m.entity, now, 4)];
+        }
         if (m.head_shot) run = 2;
       }
       begin(Act::death, t->death[run]);

@@ -139,6 +139,70 @@ int lerp_list(std::vector<client::DemoEntity>& drawn, const std::vector<client::
   return n;
 }
 
+// THE PLAYER'S OWN MISSILES THROWN AHEAD (client/own_missiles.hpp, `cl_predict_projectiles`): each
+// bolt, grenade, rocket or BFG ball the weapon pass fired leaves from the player's drawn place
+// along the view his move sent (the server's turn added), the side by his `hand`; then every
+// stand-in flies to `now_s` through the level's brushes under the player's gravity, is handed to
+// the server's copy on its path and is drawn into the frame. The server moves nothing ahead, so
+// its copy is a round trip late (`ping` the round trip itself).
+void q2_own_missiles(Remote& r, client::DemoState& st, double now_s, const sh::Vec3f& turn,
+                     const sh::Vec3f& eye_up) {
+  const Q2ClientEnd& c = *r.q2;
+  if (r.missiles_level != st.levels) {
+    client::own_missiles_clear(r.missiles);
+    r.missiles_level = st.levels;
+  }
+  const int me = st.player;
+  const bool placed = me >= 0 && static_cast<size_t>(me) < st.players.size();
+  const auto ping = static_cast<int>(std::lround(c.latency * 1000));
+  for (const Q2Weapon::Fired& f : r.q2_weapon.fired) {
+    if (!placed) break;
+    client::OwnShot shot;
+    switch (static_cast<server::SqWeapon>(f.weapon)) {
+      case server::SqWeapon::blaster:
+      case server::SqWeapon::hyperblaster:
+        shot.kind = client::OwnMissileKind::q2_bolt;
+        break;
+      case server::SqWeapon::grenade_launcher:
+        shot.kind = client::OwnMissileKind::q2_grenade;
+        break;
+      case server::SqWeapon::rocket_launcher:
+        shot.kind = client::OwnMissileKind::q2_rocket;
+        break;
+      case server::SqWeapon::bfg:
+        shot.kind = client::OwnMissileKind::q2_bfg;
+        break;
+      default:
+        continue;
+    }
+    const auto shot_kind = static_cast<size_t>(server::kSqWeapons[f.weapon].shot);
+    shot.effects = server::kSqShotEffects[shot_kind];
+    if (static_cast<server::SqWeapon>(f.weapon) == server::SqWeapon::hyperblaster)
+      shot.effects = f.frame == 6 || f.frame == 9 ? 64 : 0;  // its 7th and 10th frames glow
+    shot.origin = st.players[static_cast<size_t>(me)].origin;
+    shot.view_height = eye_up.z;
+    shot.angles = c.sent[f.move & (kSqSentRing - 1)].angles + turn;
+    shot.side = c.cfg.hand == 1 ? -1 : c.cfg.hand == 2 ? 0 : 1;
+    shot.age_s = f.age_s;
+    client::own_missile_fire(r.missiles, shot, now_s, c.latency, ping, shot.origin);
+  }
+  const int gravity = r.demo.last_frame >= 0
+                          ? r.demo.views[static_cast<size_t>(r.demo.last_frame & 15)].gravity
+                          : 800;
+  client::own_missiles_step_brushes(r.missiles, r.q2_ahead.tracer.get(),
+                                    static_cast<float>(gravity), now_s);
+  // The copies hidden last step shown as the newest frame has them before they are matched again.
+  const auto restore = [&](int n) {
+    if (n > 0 && static_cast<size_t>(n) < r.ents_new.size() &&
+        static_cast<size_t>(n) < st.entities.size())
+      st.entities[static_cast<size_t>(n)].present = r.ents_new[static_cast<size_t>(n)].present;
+  };
+  for (const client::OwnMissile& o : r.missiles.flying) restore(o.adopted);
+  for (const int n : r.missiles.hidden) restore(n);
+  client::own_missiles_handover(r.missiles, st);
+  client::own_missiles_draw(r.missiles, st, now_s);
+}
+
 }  // namespace
 
 bool q2_user_info_moved(Q2ClientConfig& q,
@@ -290,6 +354,8 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   }
   sh::Vec3f drawn;
   ahead.teleports = r.predict_teleports;  // cl_predict_teleport
+  ahead.pushes = r.predict_pushes;        // cl_predict_push
+  ahead.movers = r.predict_movers;        // cl_predict_movers
   const bool predicted = !r.nopred && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
   // A teleport the prediction foresaw turns the view with it (the server's own delta angles,
@@ -319,6 +385,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size() && !st.intermission)
       st.eye = st.players[static_cast<size_t>(st.player)].origin + eye_up;
   }
+  q2_draw_movers_ahead(ahead, st);  // cl_predict_movers
   if (predicted) {
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
       st.players[static_cast<size_t>(st.player)].origin = drawn;
@@ -333,6 +400,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
     q2_weapon_predict(r.q2_weapon, r.weapon, r.nopred, c, d,
                       st.players[static_cast<size_t>(st.player)].origin);
+  q2_own_missiles(r, st, now_s, turn, ahead.eye_up);
   // The other players run forward from the moves our server sent (none from a stock server).
   // A stock server's run on from its last two frames instead.
   r.others = r.predict_players ? q2_predict_others(ahead, c, d, now_s, &r.others_msec) : 0;
