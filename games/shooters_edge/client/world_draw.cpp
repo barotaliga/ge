@@ -600,11 +600,13 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
   } else if (!f.has_map) {
     f.built = kBuildSteps;  // no map: nothing more to make
   } else if (step == 2) {
+    GE_ZONE("load.bsp");
     ba::create_bsp(d, f.pipelines, f.bsp, f.scene, f.layout);
     gr::create_far_land(d, f.pipelines, f.far, f.layout);
     if (read.far_kind != nullptr)
       gr::set_far_land(d, f.far, *read.far_kind, read.far_site, read.far_mesh);
   } else if (step == 3) {
+    GE_ZONE("load.models");
     create_models(d, f.pipelines, f.models, f.layout, std::move(read.models));
   } else {
     // The live switches and weather (read every frame), not the snapshot the world was made in.
@@ -649,9 +651,11 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
 bool world_compiled(ge::gpu::Device& d, WorldDraw& f) {
   if (!f.build_error.empty()) return true;  // finish_world says it
   if (f.built < kBuildSteps) {
+    GE_ZONE("load.build_step");  // one step of the world's GPU half a frame
     build_step(d, f);
     return false;
   }
+  GE_ZONE("load.pipelines");  // asking whether the pipelines compiled
   return f.pipelines.ready(d);
 }
 
