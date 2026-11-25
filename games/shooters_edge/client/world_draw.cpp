@@ -690,6 +690,23 @@ const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
 std::span<const ba::Mover> world_movers(const WorldDraw& w) { return w.movers; }
 
+std::span<const BehindMover> behind_movers(const WorldDraw* w,
+                                           const std::vector<ge::shooter::BrushModel>* models,
+                                           std::vector<BehindMover>& scratch) {
+  scratch.clear();
+  if (w == nullptr || models == nullptr) return {};
+  for (const ba::Mover& m : w->movers) {
+    if (m.hidden || m.model >= models->size()) continue;
+    BehindMover b{.model = &(*models)[m.model]};
+    const double unit = ge::brush::kUnitM;  // engine x, z, y to map x, y, z
+    b.offset[0] = m.offset[0] / unit;
+    b.offset[1] = m.offset[2] / unit;
+    b.offset[2] = m.offset[1] / unit;
+    scratch.push_back(b);
+  }
+  return scratch;
+}
+
 std::span<const ba::PointLight> world_lights(const WorldDraw& w) { return w.scene.lights; }
 
 std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {

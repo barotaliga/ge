@@ -198,13 +198,7 @@ int run_main(int argc, char** argv) {
                "; next: rerun with only those flags.");
     return 2;
   }
-  if (args.help) {  // the usage and every flag, one a line, and nothing started
-    std::printf("%s\n", cl::usage().c_str());
-    for (const ge::console::FlagDoc& f : cl::flag_docs())
-      std::printf("  %s%s%s  %s\n", f.name.c_str(), f.arg.empty() ? "" : " ", f.arg.c_str(),
-                  f.help.c_str());
-    return 0;
-  }
+  if (args.help) return cl::print_help();  // the usage and every flag, nothing started
   // Every line on the terminal, and in `-logfile <file>` too when it is named.
   if (!ge::play::apply_session_flags(session, nullptr, log_error))
     out::error("shooters_edge: the log file was not opened, the terminal only: " + log_error +
@@ -740,18 +734,7 @@ int run_main(int argc, char** argv) {
   // cl_thirdperson's doors and platforms: the map's brush models where the last frame drew them.
   std::vector<cl::BehindMover> behind_scratch;
   const auto behind_movers = [&](const std::vector<ge::shooter::BrushModel>* models) {
-    behind_scratch.clear();
-    if (world == nullptr || models == nullptr) return std::span<const cl::BehindMover>();
-    for (const ge::brush::app::Mover& m : cl::world_movers(*world)) {
-      if (m.hidden || m.model >= models->size()) continue;
-      cl::BehindMover b{.model = &(*models)[m.model]};
-      const double unit = ge::brush::kUnitM;  // engine x, z, y to map x, y, z
-      b.offset[0] = m.offset[0] / unit;
-      b.offset[1] = m.offset[2] / unit;
-      b.offset[2] = m.offset[1] / unit;
-      behind_scratch.push_back(b);
-    }
-    return std::span<const cl::BehindMover>(behind_scratch);
+    return cl::behind_movers(world.get(), models, behind_scratch);
   };
   cl::WornHud worn_hud;
   worn_hud.bar.files = &remix.files;
@@ -760,9 +743,9 @@ int run_main(int argc, char** argv) {
   in_hand.hand.at_eye = weapons_at_eye;
   // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
   // other game's weapons: the server's rows and files, the weapons in the hand.
-  const auto remix_wear = [&] {
+  const auto remix_wear = [&] {  // true: the remix is worn as its settings say
     remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
-    if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
+    if (!cl::remix_dress(remix, remix_settings, args.profile)) return true;
     cl::worn_hud_reset(worn_hud, remix);       // read again from the files now open
     pictures_enhanced = !picture.ce.pictures;  // the pictures read again (cr_menu, cr_charset)
     cl::wear_lines(listen.opt, remix, game_content.arsenal);
@@ -771,22 +754,19 @@ int run_main(int argc, char** argv) {
     in_hand.hand.at_eye = cl::load_worn_held(adapter, remix, files, model_dirs, weapons);
     picture.all_figures = remix.figure != nullptr ? std::string(remix.figure->folder) : "";
     console.print(cl::worn_line(remix));
+    return true;
   };
   std::pair<bool, bool> remix_open{false, true};  // cr_enabled and cr_expansions as opened
   std::string remix_for;
-  cl::RemixParts remix_items{};  // remix.hpp's `remix_parts`
-  // True once the remix is in step with its settings (false: the loader is busy, try next frame).
-  const auto remix_sync = [&]() -> bool {
+  cl::RemixParts remix_items{};              // remix.hpp's `remix_parts`
+  const auto remix_sync = [&]() -> bool {    // false: the loader is busy, in step next frame
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     const auto open = std::pair(remix_settings.enabled, remix_settings.expansions);
     const bool same_files = open == remix_open && remix_for == args.basedir;
     if (same_files && cl::remix_parts(remix_settings) == remix_items) return true;
     if (cl::busy(loader)) return false;  // its threads may read the other game's files: next frame
     remix_items = cl::remix_parts(remix_settings);
-    if (same_files) {
-      remix_wear();
-      return true;
-    }
+    if (same_files) return remix_wear();
     remix_open = open;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
@@ -802,8 +782,7 @@ int run_main(int argc, char** argv) {
     } else if (!st.why.empty()) {
       console.print(st.why);
     }
-    remix_wear();
-    return true;
+    return remix_wear();
   };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;
@@ -1130,8 +1109,7 @@ int run_main(int argc, char** argv) {
     cl::hear_swap(synth, under_ear);                      // s_swapstereo
     cl::hear_ears(synth, under_ear);                      // s_hrtf
     picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
-    // The title's first demo, unless a map was asked for before it (`+map`, a cfg's `map`).
-    if (std::exchange(attract_at_start, false) && !remote.active && next_map.empty() &&
+    if (std::exchange(attract_at_start, false) && !remote.active && next_map.empty() &&  // +map
         !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
@@ -1253,8 +1231,8 @@ int run_main(int argc, char** argv) {
       }
     }
     // Something else asked for while a played demo is up (a map, a save, a game folder, a server,
-    // another demo): the demo stopped, so it is not held behind what comes next.
-    // The same asked as the title's demo was about to start: that demo is not started.
+    // another demo): the demo stopped, so it is not held behind what comes next; a title demo
+    // about to start is not started.
     const cl::AskedElsewhere elsewhere_ask{next_map != map_before, !load_ask.empty(),
                                            !folder_ask.empty(), remote.active && !joined_before,
                                            bench_ask != demo_before};
@@ -1410,10 +1388,9 @@ int run_main(int argc, char** argv) {
       next_map = listen.pending_map;
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
     if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
-    // The remix in step before the map asked for is read (its items, HUD and weapons together).
     const bool remix_ready =
         cl::remix_waits(listen.map != nullptr, !next_map.empty()) || remix_sync();
-    if (!next_map.empty() && !loader.map.valid() && !elsewhere && remix_ready) {
+    if (!next_map.empty() && !loader.map.valid() && !elsewhere && remix_ready) {  // remix first
       cl::load_map(loader, files, next_map, t);
       next_map.clear();
     }

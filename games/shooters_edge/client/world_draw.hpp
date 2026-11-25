@@ -30,6 +30,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "console/console.hpp"
 #include "gpu/device.hpp"
@@ -39,6 +40,7 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/q2_session.hpp"
 #include "shooters_edge/client/room_ear.hpp"
 
 namespace ge::audio {
@@ -97,6 +99,12 @@ void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_
 const WorldModels& world_models(const WorldDraw& w);
 // Where the map's own brush models (doors, platforms) stood at the last frame drawn (engine m).
 std::span<const ge::brush::app::Mover> world_movers(const WorldDraw& w);
+// The same as cl_thirdperson's camera stops at them (q2_session.hpp's `BehindMover`): each one
+// shown with its model among `models` and its offset in map units, written into `scratch`; empty
+// with no world or no models.
+std::span<const BehindMover> behind_movers(const WorldDraw* w,
+                                           const std::vector<ge::shooter::BrushModel>* models,
+                                           std::vector<BehindMover>& scratch);
 // The map's light entities as it draws them (brush/app/draw_data.hpp's PointLight), each one's
 // `seen` set: for a lab to stand by a light whose source shows.
 std::span<const ge::brush::app::PointLight> world_lights(const WorldDraw& w);

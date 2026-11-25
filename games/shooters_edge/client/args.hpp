@@ -121,6 +121,8 @@ bool known_flag(std::string_view word);
 std::vector<ge::console::FlagDoc> flag_docs();
 // One line naming every flag, for a refused command line.
 std::string usage();
+// `--help`: the usage and every flag, one a line, on the terminal; 0, the exit code.
+int print_help();
 
 // `~` or `~/...` as the home folder (a shell leaves a quoted one as it is).
 std::string expand_home(const std::string& p);
