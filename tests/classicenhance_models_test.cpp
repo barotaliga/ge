@@ -169,3 +169,14 @@ TEST(q2_models_keep_their_own_names_and_their_outside_skins_and_frames) {
   }
   fs::remove_all(dir);
 }
+
+// Quake II's explosion models and the BFG's burst are the engine's explosion's to draw in their
+// place, as Quake's explosion sprite is.
+TEST(quake_two_s_explosions_are_the_engine_s) {
+  for (const char* path : {"models/objects/r_explode/tris.md2", "models/objects/explode/tris.md2",
+                           "sprites/s_bfg2.sp2"}) {
+    const ce::Replacement* r = ce::replacement_of(path);
+    CHECK(r != nullptr && r->effect == "explosion" && r->keep_glowing);
+  }
+  CHECK(ce::replacement_of("models/objects/smoke/tris.md2") == nullptr);  // a hit's puff: its own
+}
