@@ -42,6 +42,13 @@ better. Rank 3 is code only, with no player-visible change.
 | A3 | 3 | A face's datagram out, its out-of-band text and its refusal (`send_to`, `send_oob`, `refuse`) | 4: both servers and both TV faces | The refusal text differs by game (`print` against `n`). It stays each game's, and only the framing would be shared. | kept apart: three lines each over the shared transport and channel; the framing and words are each game's, so a shared one would only add a parameter for every difference |
 | A4 | 3 | A viewer's reliable queue (`queue`, `transmit`, `drop`) | 2: the TV node's two faces | Quake II's holds back the signon until echoed (`go`); QuakeWorld's sends a datagram with it | kept apart: two mechanisms around the shared channel (`plugins/classic/protocol/channel.hpp`) |
 | A5 | 2 | A player's own voice in the client's recording | QuakeWorld has it (`record_own_voice`); Quake II's client does not | Quake II's recordings missed your own voice | done: a block of its own in the level's recording, the server's voice message (`net/q2_client.cpp`), so `record` while joined keeps the whole talk |
+| A6 | 2 | `skins` typed | 1: Quake II's, registered for every game | QuakeWorld's typed `skins` was refused ("Must be in a level") while joined, because the command only knew Quake II | done: the one command reads every game's skins again and lists QuakeWorld's skins too (`net/q2_remote.cpp`) |
+
+A second pass (2026-11-23, after #1412) read every pair of `q2_`/`qw_` files under `net/` and
+`server/` (admin, login, the TV recorders, the remotes, the saves, the weapons). Each pair is game
+glue over code already shared (`engine/server`'s logins, rcon and status, the TV recorder), except
+`skins` (A6). The weapon pair's matching belongs to the smooth weapon thread. No rank 1 or 2 is
+left.
 
 ## The spellings the verification sweep found
 
@@ -52,6 +59,24 @@ camera's height above the eye (default 0, as before). Two stay unregistered: `sl
 NetQuake servers, which are not joined (C107 not taken; `pingservers` asks Quake II's servers
 only), and QuakeWorld's `cl_chasecam` has no off state of ours to map (a tracked player is always
 seen through his eyes, or from behind by `cam_thirdperson`).
+
+## The mission packs, audited for things built twice (2026-11-23)
+
+Read against main and the open pack branches (#1415, #1420, #1426, #1428, #1432, #1433, #1435).
+Quake's two packs run their own programs in the QC VM, so their weapons, mines, spheres and tag
+are the program's and nothing of ours is built for them twice; the meeting points are the client,
+the content and the remix tables.
+
+| Feature | Where | Finding |
+| --- | --- | --- |
+| Beams (Ground Zero's plasma beam and tesla, Quake's bolts, cl_fakeshaft) | `client/chain.hpp`, `beam_trace` | shared already: #1433 draws the pack beams as a `Chain` with a link length, roll and frame, and aims the plasma beam by the same trace as Quake's beam |
+| Timed powerups (quad, The Reckoning's dual fire, Ground Zero's double damage) | `server/q2_powers.hpp` | shared already: one table, The Reckoning's PR builds it and Ground Zero's sits on it |
+| Pack detection | `classicenhance/profile.hpp` (the import), `server/q2_pack.cpp` (the rules' switch) | two lists, kept in step by a test now (`the_rules_switch_knows_every_pack_the_import_knows`) |
+| A pack's items in remix and `cr_expansions` | `profiles/remix.hpp` `kPackItems` | one list for all four packs: #1432 adds Scourge's and Ground Zero's, the Dissolution and Reckoning threads add theirs, with a test over every profile's packs |
+| `te_plasma_explosion` | #1415 (28), #1428 (7) | one number: 28, settled between the two threads |
+| Proximity mine, tag, spheres, decoy | Scourge's and Dissolution's programs, Ground Zero's C++ | nothing to share: one side is the pack's own QC |
+| The packs' hits and heat beams drawn (Quake II's look and classic enhance's) | #1450 (`q2_pack_hit` by effect, the heat beam kept by its source as a `Chain`), #1462 (`q2_pack_hit` by code, the heat beam as a laser strip) | two of each in `client/world_fx_q2.cpp` (second pass, 2026-11-24): one dispatch, each look its own drawing; classic enhance's renamed `q2_enhance_pack_hit` and the heat beam kept once, by its source, drawn by whichever look is on (both threads told) |
+| Rotating brushes (Scourge's `func_rotate_*` and `rotate_object`, Quake II's `func_rotating` and `func_door_rotating`) | `plugins/shooter/turned.hpp`, `brush/app/bsp_draw.hpp`'s `Mover::rotation` | LIFTED: Quake II's turned trace was written three times in the server and missing from its client's prediction; now one frame, the one every game draws a turned brush in (the picture by #1464, held to the frame by a test). Scourge's collision stays its program's movewalls |
 
 ## The mission packs' settings
 

@@ -19,7 +19,6 @@ namespace sh = ge::shooter;
 namespace sb = ge::shooterbots;
 
 constexpr float kWayShotAcross = 900;  // a shot button is shot from this near, units
-constexpr double kWayRepick_s = 10;    // an unreached one's node looked for again after this, s
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;

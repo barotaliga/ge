@@ -27,7 +27,10 @@ struct Rig {
   con::Console c;
   cl::Q2Session s;
   std::vector<std::string> said;
+  double host_framerate = 0;  // the window's (window_cvars.hpp), every game's
   Rig() {
+    c.cvars().bind({.name = "host_framerate", .fallback = "0", .min = 0, .max = 1},
+                   &host_framerate);
     {
       con::CvarLayer classic(c.cvars(), "classic");  // every game's, then Quake II's over them
       cl::add_shared_session_cvars(c.cvars(), s);
@@ -47,7 +50,11 @@ struct Rig {
     for (const std::string& w : said) out += (out.empty() ? "" : " ") + w;
     return out;
   }
-  std::string value(const char* name) { return c.cvars().find(name)->value; }
+  std::string value(const char* name) {
+    if (const con::Cvar* v = c.cvars().find(name)) return v->value;
+    const con::Synonym* syn = c.cvars().synonym(name);  // a game's spelling in its own unit
+    return syn != nullptr ? c.cvars().synonym_value(*syn) : std::string();
+  }
 };
 
 }  // namespace
@@ -86,12 +93,21 @@ TEST(timescale_and_fixedtime_are_cheats_over_the_frame) {
   Rig r;
   CHECK(cl::q2_game_dt(r.s, 0, 0.02) == 0.02);
   r.c.execute("timescale 2; fixedtime 10");  // refused while sv_cheats is 0
-  CHECK(r.s.timescale == 1 && r.s.fixed_ms == 0);
+  CHECK(r.s.timescale == 1 && r.host_framerate == 0);
   r.s.timescale = 2;
   CHECK(cl::q2_game_dt(r.s, 0, 0.02) == 0.04);
-  r.s.fixed_ms = 10;
-  CHECK(cl::q2_game_dt(r.s, 0, 0.02) == 0.02);    // 10 ms, twice as fast
-  CHECK(cl::q2_game_dt(r.s, 0.05, 0.02) == 0.1);  // host_framerate first
+  CHECK(cl::q2_game_dt(r.s, 0.05, 0.02) == 0.1);  // host_framerate's seconds
+}
+
+TEST(fixedtime_is_host_framerate_in_milliseconds) {
+  Rig r;
+  r.c.execute("sv_cheats 1; fixedtime 10");
+  CHECK(r.host_framerate == 0.01);  // the window's clock, every game's, in seconds
+  CHECK(cl::q2_game_dt(r.s, r.host_framerate, 0.02) == 0.01);
+  r.c.execute("host_framerate 0.025");
+  CHECK(r.value("fixedtime") == "25");  // read back in its own unit
+  r.c.execute("sv_cheats 0");           // cheats off: the fixed frame goes with them
+  CHECK(r.host_framerate == 0);
 }
 
 TEST(the_state_cvars_follow_the_game_and_refuse_the_player) {

@@ -62,6 +62,7 @@ build, check and survey maps. The player meets it as every level they walk; remi
 | --- | --- |
 | Collision only on three fixed hull sizes | hulls built from brushes for any box (`brush_hull.hpp`) |
 | Each game's rules only on its own family | one trace: Quake's rules run on Quake II's maps by tracing its models as brushes |
+| A turned brush model traced in one frame and drawn in another, or not drawn turned | one frame for both (`plugins/shooter/turned.hpp`): the server's trace, the client's prediction and the picture (`brush/app/bsp_draw.hpp`'s `Mover::rotation`), held to the same frame by `tests/shooter_turned_test.cpp` |
 | Map loading stalls the window | read and decoded on a thread, compiled while drawing |
 | A server whose map is another version of the player's refuses him (a later release rebuilt the stock maps) | the client keeps every version it meets by checksum and joins each server with the version it plays (`map_versions.hpp`); a map rebuilt only in its visibility (a water-vis build) has the same checksum and needs no version |
 
@@ -69,7 +70,6 @@ build, check and survey maps. The player meets it as every level they walk; remi
 
 - The nav and the bots' world built from a 38 map: Quake's move run on one (M18v2c).
 - The 46 family's patches in collision, its shaders.
-- Turned brush hulls for rotating movers on Quake II's maps.
 - A map's versions named by release (original, rerelease) where a list shows both: no list shows
   them yet, and the rerelease's checksums are not measured.
 - Quake II's protocol carries a map checksum too; its client does not keep versions yet.

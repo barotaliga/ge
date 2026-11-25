@@ -6,7 +6,10 @@
 // ge:keywords test q2 mission-pack pack-switch xatrix rogue item-number
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_q2_pack_test.cpp
+#include <string>
+
 #include "check.hpp"
+#include "classicenhance/profile.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_pack.hpp"
@@ -28,6 +31,21 @@ TEST(each_pack_plays_from_its_own_folder) {
   CHECK(sv::q2_pack_name(Q2Pack::ground_zero) == "Ground Zero");
   CHECK(sv::q2_pack_name(Q2Pack::reckoning) == "The Reckoning");
   CHECK(sv::q2_pack_name(Q2Pack::base) == "Quake II");
+}
+
+// The rules' switch and the content's list of packs agree: every Quake II pack the import knows
+// (classicenhance/profile.hpp) plays its own rules under the same name, and no Quake pack's folder
+// (Dissolution of Eternity is `rogue` too) is read by Quake II's switch from Quake's list.
+TEST(the_rules_switch_knows_every_pack_the_import_knows) {
+  const ge::classicenhance::Profile* q2 = ge::classicenhance::find_profile("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  CHECK(!q2->packs.empty());
+  for (const ge::classicenhance::MissionPack& p : q2->packs) {
+    const Q2Pack pack = sv::q2_pack_of_folder(p.folder);
+    CHECK_MSG(pack != Q2Pack::base, std::string(p.folder));
+    CHECK_MSG(sv::q2_pack_name(pack) == p.name, std::string(p.name));
+  }
 }
 
 TEST(a_pack_s_rows_play_only_under_that_pack) {

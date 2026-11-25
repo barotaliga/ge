@@ -877,6 +877,9 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
   for (const auto& [k, v] : s.cfg.info)
     if (!v.empty()) info_set(s.serverinfo, k, v, kServerInfoBytes);
+  // The game's words the rules leave (its `stats`): answered before the rules call them bad.
+  qc.word_left = s.game_command_after;
+  qc.word_left_ctx = s.game_ctx;
   if (s.cfg.antilag > 0) {
     qc.lag_rewind = &lag_rewind;
     qc.lag_ctx = &s;
@@ -914,6 +917,7 @@ bool qw_change(QwServer& s, const sv::RulesRunner& next, std::string& error) {
     s.game->lag_ctx = nullptr;
     s.game->sv.lag_push = nullptr;
     s.game->bot_seat = nullptr;
+    s.game->word_left = nullptr;
   }
   for (int i = 0; i < sh::kMaxClients; i++)  // the old rules' own bots go with their map
     if (s.clients[i].rules_bot) {
@@ -945,6 +949,7 @@ void qw_unbind(QwServer& s) {
     s.game->lag_ctx = nullptr;
     s.game->sv.lag_push = nullptr;
     s.game->bot_seat = nullptr;
+    s.game->word_left = nullptr;
   }
   s.game = nullptr;
   s.rules = nullptr;

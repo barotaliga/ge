@@ -44,8 +44,8 @@ void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
                             "game this many seconds instead of the time that passed.",
                     .kind = ge::console::CvarKind::number,
                     .min = 0,
-                    .max = 0.1,
-                    .values = "0: the real time (the default); up to 0.1: seconds a frame"},
+                    .max = 1,
+                    .values = "0: the real time (the default); up to 1: seconds a frame"},
                    &w.host_framerate);
   con.cvars().bind({.name = "scr_printspeed",
                     .fallback = "8",

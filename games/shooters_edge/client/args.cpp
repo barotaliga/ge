@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <iterator>
 
@@ -124,6 +125,10 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       why = std::string(arg) + " was renamed: use -timedemo <demo>.";
       return false;
     }
+    if (arg == "-h" || arg == "-help" || arg == "--help") {
+      a.help = true;
+      continue;
+    }
     if (flag_like(arg) && !known_flag(arg)) {
       why = "unknown flag " + std::string(arg) +
             (a.plus.empty() ? std::string()
@@ -223,6 +228,14 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     }
   }
   return true;
+}
+
+int print_help() {
+  std::printf("%s\n", usage().c_str());
+  for (const ge::console::FlagDoc& f : flag_docs())
+    std::printf("  %s%s%s  %s\n", f.name.c_str(), f.arg.empty() ? "" : " ", f.arg.c_str(),
+                f.help.c_str());
+  return 0;
 }
 
 }  // namespace shooters_edge::client

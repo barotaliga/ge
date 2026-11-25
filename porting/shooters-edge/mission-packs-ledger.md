@@ -500,7 +500,7 @@ here:
 | A decoy monsters chase | Scourge's `trigger_decoy_use`, Ground Zero's doppleganger | none | one decoy target in the monsters' choice of enemy |
 | A view shake over an area | `func_earthquake`, `earthquake`, `trigger_earthquake` | Quake II's `target_earthquake` (server/q2_lines.cpp) | one shake, its strength and length as data |
 | A gravity factor per thing | `trigger_setgravity`, the anti-grav belt | the entity's gravity field (plugins/shooter/entity.hpp), Quake II's `trigger_gravity` | already shared: verify |
-| Rotating brushes that push and block | Scourge's `func_rotate_*`, `rotate_object` | Quake II's `func_rotating` (server/q2_map.hpp); a rotating brush's own hull is the open gap in `docs/porting/rules.md` | one rotating pusher with an exact hull, for every game |
+| Rotating brushes that push and block | Scourge's `func_rotate_*`, `rotate_object` | Quake II's `func_rotating` (server/q2_map.hpp) | LIFTED: one turned frame (`plugins/shooter/turned.hpp`) for Quake II's server trace and client prediction, the frame every game draws it in; Scourge's collision stays its program's movewalls |
 | Breakable walls and debris | `func_breakawaywall`, `func_rubble*`, `func_exploder` | Quake II's `func_explosive` | the debris thrown as data |
 | A powerup's multiplier and timer | Ground Zero's double damage, The Reckoning's dual fire | the quad in both games | one timed powerup with its HUD icon and its end warning |
 | A soldier with another gun | The Reckoning's three guards, the beta monsters | Quake II's soldier, iron maiden, gladiator and super tank | the base monster's code with the gun as data |

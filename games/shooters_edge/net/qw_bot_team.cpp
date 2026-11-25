@@ -37,6 +37,13 @@ namespace shooters_edge::net {
 
 namespace {
 
+// A nav's hash as 16 hex digits, for the line that says the map's nav was built.
+std::string nav_hex(uint64_t h) {
+  char b[17];
+  std::snprintf(b, sizeof b, "%016llx", static_cast<unsigned long long>(h));
+  return b;
+}
+
 namespace cl = shooters_edge::client;
 namespace sv = shooters_edge::server;
 namespace pg = ge::progs;
@@ -187,7 +194,9 @@ bool load_map(BotTeam& t, const QwClientEnd& c, const std::string& file) {
   t.maps++;
   say(t, "bots: on " + file + ": " + std::to_string(t.nav->nav.graph.nodes.size()) +
              " nav nodes, " + std::to_string(t.nav->nav.movers.size()) + " movers, " +
-             std::to_string(t.nav->given.points.size()) + " place names");
+             std::to_string(t.nav->given.points.size()) + " place names (built in " +
+             std::to_string(static_cast<int64_t>(t.nav->nav.build_ms)) + " ms, nav " +
+             nav_hex(ge::shooterbots::nav_hash(t.nav->nav.graph)) + ")");
   return true;
 }
 
@@ -527,7 +536,10 @@ void bot_team_tick(BotTeam& t, int64_t now_us) {
       say(t, line);
     }
     s.last_health = health;
-    if (t.cfg.ready && !s.said_ready && s.commands * bt::kPilotMsec * 1000 >= kReadyAfterUs) {
+    // Ready only in a lobby's warmup (the server says "Standby"): a server with no lobby has no
+    // `ready` and answers it as a bad command.
+    if (t.cfg.ready && !s.said_ready && s.commands * bt::kPilotMsec * 1000 >= kReadyAfterUs &&
+        info_get(s.c.serverinfo, "status") == "Standby") {
       client_command(s.c, "ready");
       s.said_ready = true;
       say(t, s.name + ": ready");

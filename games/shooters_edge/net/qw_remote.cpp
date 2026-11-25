@@ -926,7 +926,11 @@ bool remote_rules_word(Remote& r, const std::string& line) {
   }
   if (!r.q2) {  // Quake's client sends on only its server's own words, never any unknown one
     const std::string word = line.substr(0, line.find_first_of(" \t"));
-    if (word != "kill" && word != "pause" && word != "serverinfo") return false;
+    // Our own server's match words (it agreed the ge set's settings bit): its stats.
+    const bool ours = r.end.ext.has(ExtFamily::ge, kGeSettings);
+    const bool stats_word = word == "stats" || word == "teamstats" || word == "laststats";
+    if (word != "kill" && word != "pause" && word != "serverinfo" && !(ours && stats_word))
+      return false;
   }
   remote_command(r, line);  // Quake II's: every word the window does not know (`use Railgun`)
   return true;
@@ -1221,7 +1225,11 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
-      r.why = "the server's message did not read: " + error;
+      // The reader's words are a recording's; a live server's message is the server's.
+      if (const size_t cut = error.find(": the recording is damaged"); cut != std::string::npos)
+        error.resize(cut);
+      r.why = "the server sent a message this game cannot read (" + error +
+              "); the server may be newer than the game";
       said.push_back("dropped: " + r.why);
       remote_disconnect(r);
       return RemoteStep::dropped;

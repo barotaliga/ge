@@ -69,8 +69,10 @@ companions, and saves.
 ## Gaps
 
 A game library's single player (a mission pack's) keeps its levels in the unit and saves by the
-library's own files packed into the engine's save; its rotating brush models' hulls and a frame
-cut to what a client sees are open. Quake II's single-player playthrough stuck at breakable glass; the third game's module VM
+library's own files packed into the engine's save; a frame cut to what a client sees is open.
+A rotating brush model is one turned brush in every game (`plugins/shooter/turned.hpp`): Quake II's
+server and its client's prediction trace it in its own frame, the frame every game draws it
+turned in (Scourge of Armagon's spinners, Quake II's fans and hinged doors). Quake II's single-player playthrough stuck at breakable glass; the third game's module VM
 server for its mods' client half and menus. Quake's single player against the original: the
 ranked list in `porting/shooters-edge/q1-sp-gaps.md`, every row landed but the two kept by
 choice (the fixed 1/72 s step and co-op switched on during a map). Co-op on every campaign map

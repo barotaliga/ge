@@ -46,6 +46,13 @@ namespace shooters_edge::client {
 
 namespace pg = ge::progs;
 
+// A line of the window's own (an answer to the player's words): ended, so the next line printed
+// (a server's "bot1 entered the game") is not joined onto it.
+static void say(Listen& l, std::string text) {
+  if (text.empty() || text.back() != '\n') text += '\n';
+  l.prints.push_back(std::move(text));
+}
+
 void listen_print(Listen& l, int level, const std::string& text) {
   l.print_levels.resize(l.prints.size(), 2);
   l.print_levels.push_back(level);
@@ -490,9 +497,8 @@ bool open_logins(Listen& l, ge::server::ServerConfig& c, std::string& error) {
     return false;
   }
   if (l.accounts->hosted)
-    l.prints.push_back("This game keeps its own player accounts (" +
-                       std::to_string(l.accounts->host.svc.store.accounts.size()) +
-                       " registered).");
+    say(l, "This game keeps its own player accounts (" +
+               std::to_string(l.accounts->host.svc.store.accounts.size()) + " registered).");
   return true;
 }
 
@@ -511,6 +517,8 @@ bool start_map(Listen& l, std::string& error) {
   h->load = std::move(l.load);  // a Quake II's save the first map loads
   h->load_name = l.load_name;
   h->lines = l.opt.item_names;
+  h->worn = l.opt.arsenal;
+  h->worn_over = l.opt.over_mod;
   // A mod's module sets its own weapons and physics: classic remix's lines for them
   // (`worn_lines`: cr_items, cr_physics) are left out, the mod's boundaries standing, but for
   // those `cr_over_mods` sets over them (`over_mod`, below).
@@ -598,12 +606,12 @@ void campaign_entered(Listen& l) {
   if (l.party) {
     std::string error;
     party_enter(*l.party, *l.campaign_host, l.map->spec, error);
-    if (!error.empty()) l.prints.push_back(error);
+    if (!error.empty()) say(l, error);
   }
   entered(l);
   // The console's banner for the level: a rule and its title (the window keeps a line that starts
   // with a blank one out of the HUD's feed).
-  l.prints.push_back("\n" + std::string(38, '-') + "\n\n" + map_title(l) + "\n");
+  say(l, "\n" + std::string(38, '-') + "\n\n" + map_title(l) + "\n");
 }
 
 bool coop_on(const Listen& l) {
@@ -618,7 +626,7 @@ bool seat_companion(Listen& l, sb::AimSkill skill, bool helper = false) {
   if (turned) {
     sv::campaign_set_coop(*l.campaign_host, true);
     if (!coop_on(l)) {
-      l.prints.push_back("This game has no room for a companion.");
+      say(l, "This game has no room for a companion.");
       return false;
     }
   }
@@ -630,22 +638,21 @@ bool seat_companion(Listen& l, sb::AimSkill skill, bool helper = false) {
   const int slot = party_add(*l.party, *l.campaign_host, l.map->spec, skill, error, helper);
   if (slot < 0) {
     if (turned) sv::campaign_set_coop(*l.campaign_host, false);
-    l.prints.push_back("addbot: " + error);
+    say(l, "addbot: " + error);
     return false;
   }
   const std::string& name = l.party->mates[static_cast<size_t>(slot)]->name;
   if (l.door != nullptr && !l.door_calls->seat(l.door, slot, name, true, error)) {
     party_remove(*l.party, *l.campaign_host);
     if (turned) sv::campaign_set_coop(*l.campaign_host, false);
-    l.prints.push_back("addbot: " + error);
+    say(l, "addbot: " + error);
     return false;
   }
   if (turned) {
     l.companion_coop = true;
-    l.prints.push_back("The game is cooperative while you have company.");
+    say(l, "The game is cooperative while you have company.");
   }
-  l.prints.push_back(name + " (" + sb::aim_skill_name(skill) + (helper ? ", helper" : "") +
-                     ") joins the game");
+  say(l, name + " (" + sb::aim_skill_name(skill) + (helper ? ", helper" : "") + ") joins the game");
   return true;
 }
 
@@ -656,14 +663,14 @@ void let_companion_go(Listen& l) {
   for (int i = 1; l.party && i < sh::kMaxClients; i++)
     if (l.party->mates[static_cast<size_t>(i)]) last = i;
   if (!l.party || !party_remove(*l.party, *l.campaign_host)) {
-    l.prints.push_back("removebot: no companion is seated");
+    say(l, "removebot: no companion is seated");
     return;
   }
   if (l.door != nullptr) l.door_calls->unseat(l.door, last);
   if (l.companion_coop && party_size(*l.party) == 0) {
     sv::campaign_set_coop(*l.campaign_host, false);
     l.companion_coop = false;
-    l.prints.push_back("You play alone again.");
+    say(l, "You play alone again.");
   }
 }
 
@@ -755,8 +762,8 @@ void open_door(Listen& l) {
   if (o.transport == nullptr) {
     const auto at = static_cast<uint16_t>(o.port);
     if (!ge::net::open_udp_transport(*port, ge::net::ipv4(0, 0, 0, 0, at), &error)) {
-      l.prints.push_back("coop: the port " + std::to_string(o.port) + " did not open: " + error +
-                         ". Pick another sv_port, or 0 to play alone.");
+      say(l, "coop: the port " + std::to_string(o.port) + " did not open: " + error +
+                 ". Pick another sv_port, or 0 to play alone.");
       return;
     }
   }
@@ -766,7 +773,7 @@ void open_door(Listen& l) {
   l.door =
       o.door->open(*l.campaign_host, t, o.hostname, o.seed, kPartyMost + 1, door_tap, &l, error);
   if (l.door == nullptr) {
-    l.prints.push_back("coop: others cannot join: " + error);
+    say(l, "coop: others cannot join: " + error);
     return;
   }
   // The logins on the coop game, as on a match.
@@ -774,18 +781,18 @@ void open_door(Listen& l) {
   if (l.door_calls->logins != nullptr &&
       (!open_logins(l, c, error) || ((c.accounts != nullptr || c.account_link != nullptr) &&
                                      !l.door_calls->logins(l.door, c, error))))
-    l.prints.push_back("coop: logins are off: " + error);
+    say(l, "coop: logins are off: " + error);
   l.net_s = 0;
   bool seated = l.door_calls->seat(l.door, 0, o.player, false, error);
   for (int i = 1; seated && l.party && i < sh::kMaxClients; i++)
     if (const auto& m = l.party->mates[static_cast<size_t>(i)])
       seated = l.door_calls->seat(l.door, i, m->name, true, error);
   if (!seated) {
-    l.prints.push_back("coop: others cannot join: " + error);
+    say(l, "coop: others cannot join: " + error);
     close_door(l);
     return;
   }
-  l.prints.push_back("coop: others may join on port " + std::to_string(o.port) + "\n");
+  say(l, "coop: others may join on port " + std::to_string(o.port) + "\n");
 }
 
 }  // namespace
@@ -875,14 +882,19 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
       return false;
     }
     if (l.door != nullptr && !l.door_calls->rebind(l.door, error)) {
-      l.prints.push_back("coop: others cannot join: " + error);
+      say(l, "coop: others cannot join: " + error);
       close_door(l);
     }
     campaign_entered(l);
     l.map_changed = false;
     return true;
   }
-  if (!l.match) {
+  // No match yet, or one of the other kind (a deathmatch's lobby while `deathmatch 0` now asks
+  // for single player or coop, or the other way), or one on the remix's old items, files or
+  // moves (`cr_items` changed since it started): the match started afresh on the map.
+  if (!l.match || l.host->lobby != (l.opt.lobby && !wants_campaign(l.opt)) ||
+      l.host->worn != l.opt.arsenal || l.host->worn_over != l.opt.over_mod ||
+      l.host->files != l.opt.files) {
     l.map = std::move(map);
     return start_map(l, error);
   }
@@ -1257,8 +1269,8 @@ bool listen_lobby(Listen& l, std::string_view line) {
     bool helper = false;
     std::string bad;
     if (!companion_words(arg, skill, helper, bad)) {
-      l.prints.push_back("addbot: unknown word \"" + bad +
-                         "\" (use novice, average or expert, and escort or helper)");
+      say(l, "addbot: unknown word \"" + bad +
+                 "\" (use novice, average or expert, and escort or helper)");
       return true;
     }
     seat_companion(l, skill, helper);
@@ -1282,18 +1294,25 @@ bool listen_lobby(Listen& l, std::string_view line) {
     catch_up(l);
     if (taken) return true;
   }
+  // A deathmatch with no lobby: its first `addbot` opens the room the bots are seated in.
+  if (word == "addbot" && !l.room && l.server != nullptr && l.host != nullptr &&
+      l.host->words != nullptr && l.host->game != nullptr) {
+    l.host->ctx = &l;
+    const bool taken = l.host->words(l.host->game, std::string(line));
+    catch_up(l);
+    if (taken) return true;
+  }
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||
         word == "toggleready" || word == "team" || word == "start" || word == "lobby" ||
         word == "warmup" || word == "sitout" || word == "togglewarmup") {
-      l.prints.push_back(std::string(word) +
-                         ": there is no lobby. Lobbies run in deathmatch with sv_lobby 1.");
+      say(l, std::string(word) + ": there is no lobby. Lobbies run in deathmatch with sv_lobby 1.");
       return true;
     }
     return false;
   }
-  if (word == "addbot" && l.room->lobby.phase == sv::LobbyPhase::match) {
-    l.prints.push_back("addbot: the match has started. Add bots during the warmup.");
+  if (word == "addbot" && l.host->lobby && l.room->lobby.phase == sv::LobbyPhase::match) {
+    say(l, "addbot: the match has started. Add bots during the warmup.");
     return true;
   }
   l.host->ctx = &l;

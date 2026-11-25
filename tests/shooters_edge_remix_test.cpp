@@ -1080,3 +1080,12 @@ TEST(a_joined_q2_server_s_status_carries_its_own_weapon_keys) {
   CHECK(s.keyed.ready == ((1u << 1) | (1u << 9)));  // the shotgun has no shells
   CHECK(s.keyed.ammo[9] == 5 && s.keyed.ammo[2] == 0 && s.keyed.ammo[1] == -1);
 }
+
+// cr_items changed mid-map: the HUD and the held weapons wait for the next map, so they switch
+// with the map's items; at the title, or with a map asked for, the change is taken at once.
+TEST(a_remix_change_mid_map_waits_for_the_next_map) {
+  CHECK(shooters_edge::client::remix_waits(true, false));
+  CHECK(!shooters_edge::client::remix_waits(true, true));
+  CHECK(!shooters_edge::client::remix_waits(false, false));
+  CHECK(!shooters_edge::client::remix_waits(false, true));
+}
