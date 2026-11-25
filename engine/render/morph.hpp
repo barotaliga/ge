@@ -73,7 +73,9 @@ namespace ge::render {
 
 inline constexpr uint32_t kTintSteps = 16;       // a ramp's colours
 inline constexpr uint32_t kMaxMorphDraws = 256;  // drawn a frame
-inline constexpr uint32_t kMorphAtlasSize = 2048;
+// The atlas's width and its tallest height: a mission pack's models over the base game's fill more
+// than 2048 square (only the height used is allocated).
+inline constexpr uint32_t kMorphAtlasSize = 4096;
 // THE SLOTS: skins written while the scene runs (a player's own picture, read the first time it
 // is worn), each kMorphSlotSize square in a layer of their own, stretched over the coordinates of
 // the model that wears it (`MorphDraw::slot`).

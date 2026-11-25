@@ -102,13 +102,14 @@ struct PlayerNumbers {
   // The same without the damage flash, and the flash alone, for a window that draws the flash
   // apart (as a frame round the view's edge); a rules that keeps none apart leaves both 0.
   float blend_apart[4] = {}, damage_blend[4] = {};
-  float fov = 0;  // the field of view the rules hold him to, degrees; 0 his own
+  float fov = 0;    // the field of view the rules hold him to, degrees; 0 his own
+  int rdflags = 0;  // the view's refresh flags the rules lay (Quake II's: 4 infrared)
   float frags = 0;
   // A runner's own weapons and ammunition, for the bots (shooterbots/bot_arsenal.hpp), where
   // Quake's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
   // runner's own weapon index, and every ammunition by its own index.
   int32_t held = 0, carried = 0;
-  float stock[8] = {};
+  float stock[16] = {};
   // A layout game's 32 stats, the numbers its status bar program reads (Quake II's: health,
   // ammo, armour, their icons as indices into `RulesWorld::images`, the pickup, the timer, ...).
   int16_t stats[32] = {};
