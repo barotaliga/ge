@@ -84,6 +84,10 @@ bool take_pack(const SqItem& it, SqBody& b) {
     if (magslugs) raise(SqAmmo::magslugs, 75);
     add_ammo(b, SqAmmo::bullets, 50);
     add_ammo(b, SqAmmo::shells, 10);
+    if (b.max_ammo[at(SqAmmo::flechettes)] > 0) {  // Ground Zero's body
+      raise(SqAmmo::flechettes, 250);
+      raise(SqAmmo::rounds, 150);
+    }
     return true;
   }
   raise(SqAmmo::bullets, 300);  // the ammo pack
@@ -93,8 +97,14 @@ bool take_pack(const SqItem& it, SqBody& b) {
   raise(SqAmmo::cells, 300);
   raise(SqAmmo::slugs, 100);
   if (magslugs) raise(SqAmmo::magslugs, 100);
-  for (const SqItem& ammo : kSqItems)  // every kind but the traps (a limit of 0 gives none)
-    if (ammo.kind == SqKind::ammo && ammo.ammo != SqAmmo::traps)
+  if (b.max_ammo[at(SqAmmo::flechettes)] > 0) {  // Ground Zero's body
+    raise(SqAmmo::flechettes, 300);
+    raise(SqAmmo::rounds, 200);
+  }
+  // One box of each ammo but the traps and the mines (they keep their limit and count).
+  for (const SqItem& ammo : kSqItems)
+    if (ammo.kind == SqKind::ammo && ammo.ammo != SqAmmo::traps && ammo.ammo != SqAmmo::prox &&
+        ammo.ammo != SqAmmo::tesla)
       add_ammo(b, ammo.ammo, ammo.amount);
   return true;
 }
@@ -132,6 +142,12 @@ SqBody sq_new_body(Q2Pack pack) {
     b.max_ammo[at(SqAmmo::magslugs)] = 50;
     b.max_ammo[at(SqAmmo::traps)] = 5;  // nothing raises it
   }
+  if (pack == Q2Pack::ground_zero) {  // its own carry limits
+    b.max_ammo[at(SqAmmo::flechettes)] = 200;
+    b.max_ammo[at(SqAmmo::prox)] = 50;
+    b.max_ammo[at(SqAmmo::tesla)] = 50;
+    b.max_ammo[at(SqAmmo::rounds)] = 100;
+  }
   b.max_ammo[at(SqAmmo::bullets)] = 200;
   b.max_ammo[at(SqAmmo::shells)] = 100;
   b.max_ammo[at(SqAmmo::rockets)] = 50;
@@ -165,6 +181,7 @@ bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now, int
       }
       return take_health(it, item, b, deathmatch, now);
     case SqKind::powerup: {
+      if (std::string_view(it.classname) == "ammo_nuke" && b.counts[item] >= 1) return false;
       const int hold = skill <= 1 ? 2 : 1;
       if (skill >= 1 && b.counts[item] >= hold) return false;
       b.counts[item]++;

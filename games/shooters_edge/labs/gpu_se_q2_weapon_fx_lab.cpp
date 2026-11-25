@@ -19,6 +19,7 @@
 // ge:summary Lab: Quake II's weapons fired, classic beside modern: bolts, smoke, rail, BFG
 // ge:keywords lab se-q2-weapon-fx q2 weapon-effects blaster hyperblaster railgun bfg
 // ge:keywords rocket grenade sparks glow-trail rail-beam modern-look screenshot spent-shells
+// ge:keywords ground-zero etf-rifle plasma-beam disruptor prox-mine tesla
 // ge:skill render labs
 // ge:test tests/shooters_edge_listen_test.cpp
 #include <cmath>
@@ -52,6 +53,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -78,7 +80,9 @@ struct Shot {
   bool held = false;
   // Fired, and the picture from the eye: the shot's flash, light and kick on the weapon in hand.
   bool eye = false;
-  int hold = 4;  // `wall`: the frames the trigger is held
+  int hold = 4;  // `wall` or `release`: the frames the trigger is held
+  // Let go after `hold` frames though not at a wall: a thrown mine, a single shot watched land.
+  bool release = false;
   // With `wall`: the picture from half a metre above the spent shells the gun threw, wherever
   // they came to lie (ce_shells).
   bool shells = false;
@@ -126,11 +130,35 @@ constexpr Shot kShots[] = {
      sv::SqWeapon::bfg, true, false, false, 2},
     // The spent shells (ce_shells): the brass a burst throws, the hulls a break drops.
     {"machinegun-shells", "the burst's brass thrown out to the right, bounced and lying", 160,
-     sv::SqWeapon::machinegun, true, false, false, 50, true},
+     sv::SqWeapon::machinegun, true, false, false, 50, false, true},
     {"chaingun-shells", "the chain gun's brass, a heap of it beside the player", 160,
-     sv::SqWeapon::chaingun, true, false, false, 60, true},
+     sv::SqWeapon::chaingun, true, false, false, 60, false, true},
     {"super-shotgun-shells", "the two red hulls dropped as the gun broke open", 140,
-     sv::SqWeapon::super_shotgun, true, false, false, 4, true},
+     sv::SqWeapon::super_shotgun, true, false, false, 4, false, true},
+};
+// Ground Zero's weapons (`--mod=rogue`): the shots its own rules fire (server/q2_gz.hpp).
+constexpr Shot kGroundZeroShots[] = {
+    {"etf-rifle", "a stream of flechettes in flight down the line", 16, sv::SqWeapon::etf_rifle},
+    {"plasma-beam", "the beam's straight line from the gun to the wall", 16,
+     sv::SqWeapon::plasma_beam},
+    {"disruptor", "the disruptor's bolt in flight", 10, sv::SqWeapon::disruptor},
+    {"prox-launcher", "a prox mine arcing out of the launcher", 20, sv::SqWeapon::prox_launcher,
+     false, false, false, 2, true},
+    {"prox-mine-armed", "the mine stuck where it landed, opened and armed", 260,
+     sv::SqWeapon::prox_launcher, false, false, false, 2, true},
+    {"tesla", "the tesla thrown, tumbling", 40, sv::SqWeapon::tesla, false, false, false, 8, true},
+    {"tesla-open", "the tesla at rest, opened, its prongs up", 500, sv::SqWeapon::tesla, false,
+     false, false, 8, true},
+};
+// The Reckoning's (`--mod=xatrix`).
+constexpr Shot kPackShots[] = {
+    {"ion-ripper", "a glowing bolt in flight, bouncing off the walls", 14,
+     sv::SqWeapon::ion_ripper},
+    {"ion-ripper-flash", "the ripper's flash at the muzzle, the gun kicked", 40,
+     sv::SqWeapon::ion_ripper, false, false, true},
+    {"phalanx", "two orange balls side by side in flight", 6, sv::SqWeapon::phalanx},
+    {"phalanx-burst", "the balls' bursts against the far wall", 40, sv::SqWeapon::phalanx},
+    {"trap", "the trap on the floor, opening", 180, sv::SqWeapon::trap, true, false, false, 2},
 };
 // The Reckoning's (`--mod=xatrix`).
 constexpr Shot kPackShots[] = {
@@ -187,7 +215,7 @@ bool arm(cl::Listen& l, const Shot& shot) {
   if (s == nullptr) return false;
   const sv::SqWeaponRow& row = sv::kSqWeapons[static_cast<int>(shot.weapon)];
   sv::SqBody& body = s->players[0].body;
-  if (row.item != nullptr) body.counts[sv::sq_item(row.item, s->opt.pack)] = 1;
+  if (row.item != nullptr) body.counts[sv::sq_item(row.item, row.pack)] = 1;
   if (row.ammo != sv::SqAmmo::none) body.ammo[static_cast<int>(row.ammo)] = 200;
   if (shot.weapon != sv::SqWeapon::blaster)
     l.rules->client_command(0, std::string("use ") + row.name);
@@ -347,6 +375,8 @@ void run(gl::Lab& lab) {
       shots.push_back({held_ids[size_t(k)].c_str(),
                        "the weapon at rest in the right hand, in its own skin, at the eye", 30,
                        static_cast<sv::SqWeapon>(k), false, true});
+  } else if (sv::q2_pack_of_folder(mod) == sv::Q2Pack::ground_zero) {
+    shots.assign(std::begin(kGroundZeroShots), std::end(kGroundZeroShots));
   } else {
     shots.assign(std::begin(kShots), std::end(kShots));
     if (sv::q2_pack_of_folder(mod) == sv::Q2Pack::reckoning)
@@ -438,7 +468,8 @@ void run(gl::Lab& lab) {
       int fired_at = -1;
       for (int i = 0; i < shot.ticks; i++) {
         sh::MoveCmd cmd = aim;
-        if (!shot.held && (!shot.wall || i < shot.hold)) cmd.buttons = sh::kButtonAttack;
+        if (!shot.held && ((!shot.wall && !shot.release) || i < shot.hold))
+          cmd.buttons = sh::kButtonAttack;
         cl::listen_frame(l, cmd);
         step(i);
         // From the eye: the picture a frame after the shot leaves the muzzle (the flash lasts a
@@ -528,7 +559,8 @@ const gl::LabSpec kSpec{
     "the modern look add glows, the rail's beam and the BFG's burst over the classic one?",
     {{"size", "640,400", "the screen's width and height, px"},
      {"game", "", "the folder holding Quake II's base folder (empty: a hall, counts only)"},
-     {"mod", "", "with --game: a mission pack's folder beside the base one (xatrix: its weapons)"},
+     {"mod", "",
+      "with --game: a mission pack's folder beside the base one (xatrix, rogue: its weapons)"},
      {"held", "0", "1: every weapon at rest in hand from the eye, in place of the shots"},
      {"weapon", "", "only this weapon's pictures, by its id (blaster, railgun, ...; empty: all)"},
      {"map", "q2dm1", "the map to fire on (with --game)"},

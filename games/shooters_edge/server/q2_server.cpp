@@ -32,6 +32,7 @@
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
@@ -492,7 +493,8 @@ bool dm_left_out(const Q2Server& s, int item) {
          (fight_dmflag(s, 2) && it.kind == SqKind::powerup) ||
          (fight_dmflag(s, 2048) &&
           (it.kind == SqKind::armour || it.kind == SqKind::power_armour)) ||
-         (fight_dmflag(s, 8192) && (it.kind == SqKind::ammo || name == "weapon_bfg"));
+         (fight_dmflag(s, 8192) && (it.kind == SqKind::ammo || name == "weapon_bfg")) ||
+         (s.opt.pack == Q2Pack::ground_zero && gz_left_out(s, item));
 }
 
 // Whether the map's entity is left out in this mode by its spawn flags.
@@ -606,6 +608,7 @@ void touch_items(Q2Server& s, int slot) {
     if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
       count = std::atoi(s.map->entities[size_t(item.block)].get_any_case("count").c_str());
     const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
+    if (s.opt.pack == Q2Pack::ground_zero && gz_sphere_refused(s, slot, item.item)) continue;
     if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time, count)) continue;
     p.health = static_cast<float>(p.body.health);
     if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
@@ -662,7 +665,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   if (s.clients[slot].spectator && s.intermission_at <= 0 && spectate_command(s, slot, c)) return;
   ge::classic::Q2Move pm;
   pm.s = p.move;
-  if (s.intermission_at > 0)
+  if (s.intermission_at > 0 || (!p.alive && p.hunter_cam != -1))  // or riding a hunter sphere
     pm.s.type = ge::classic::Q2Type::freeze;
   else if (p.noclip && p.alive)  // `noclip` (q2_commands.hpp): the spectator's flight, no walls
     pm.s.type = ge::classic::Q2Type::spectator;
@@ -670,7 +673,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
     pm.s.type = p.alive    ? ge::classic::Q2Type::normal
                 : p.gibbed ? ge::classic::Q2Type::gib  // his head: the gib's box, no input
                            : ge::classic::Q2Type::dead;
-  pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
+  pm.s.gravity = static_cast<int16_t>(float(s.cvars.find("sv_gravity")->integer()) * p.gravity);
   pm.cmd = ge::classic::q2_command(c);  // the jump button the up move (q2_move.hpp)
   if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
       pm.cmd.angles[1] == p.forced_angles[1] && pm.cmd.angles[2] == p.forced_angles[2]) {
@@ -703,6 +706,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
     p.old_fall = 0;
   }
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
+  gz_gravity_touch(s, slot);  // Ground Zero's gravity triggers, for his next move
   if (p.noclip) {
     if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
     if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
@@ -1020,6 +1024,13 @@ void fill_rows(Q2Server& s) {
       wc.numbers.gun_angles[k] = still ? 0 : guns[k + 3];
     }
     wc.numbers.fov = fight_fov(s, i);
+    if (gz_sphere_view(s, i)) {  // riding a hunter sphere: its wide eye, 8 up
+      wc.numbers.fov = 140;
+      wc.numbers.view_z = 8;
+      wc.numbers.view_offset[0] = wc.numbers.view_offset[1] = 0;
+      wc.numbers.view_offset[2] = 8;
+    }
+    wc.numbers.rdflags = sq_power_shown(p.ir_until - s.level_time) ? 4 : 0;  // IR goggles
     for (int k = 0; k < 4; k++) {
       const bool none = s.intermission_at > 0;
       wc.numbers.blend[k] = none ? 0 : p.blend[k];
@@ -1050,6 +1061,8 @@ void fill_rows(Q2Server& s) {
     } else if (p.gibbed) {
       e.modelindex = 0;
     }
+    if (!p.alive && p.hunter_cam != -1) e.modelindex = 0;          // his view rides a hunter sphere
+    if (s.opt.pack == Q2Pack::ground_zero) e.render_fx |= 0x8000;  // seen through IR goggles
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
       for (const SqPower& pw : sq_powers())
         if ((pw.effects | pw.render) != 0 && sq_power_shown(p.*pw.until - s.level_time)) {
@@ -1278,6 +1291,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     if (q2_same_name(s.map_name, "fact2") && e.classname == "target_spawner" &&
         e.origin.x == -1504 && e.origin.y == 512 && e.origin.z == 72)
       e.origin.z = 64;
+    if (s.opt.pack == Q2Pack::ground_zero) e.classname = std::string(gz_classname(e.classname));
     e.item = sq_item(e.classname, s.opt.pack);
     if (e.item >= 0) e.team = b.get_any_case("team");
     inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
@@ -1517,6 +1531,7 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
     Q2Player& p = s.players[slot];
     if (p.alive && s.level_time >= p.respawn_time + kKillAfter) {
       p.god = false;
+      if (s.opt.pack == Q2Pack::ground_zero) gz_sphere_remove(s, slot);  // his sphere goes too
       fight_kill(s, slot, slot, -1);
     }
     fill_rows(s);
@@ -1676,6 +1691,7 @@ std::unique_ptr<Q2Server> make_q2_server(const Q2ServerOptions& opt) {
   s->opt = opt;
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
+  if (opt.pack == Q2Pack::ground_zero) gz_cvars(*s);
   add_aim_help(*s);
   s->console.push_back("==== InitGame ====");
   return s;

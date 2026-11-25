@@ -93,13 +93,17 @@ int16_t ammo_icon(hud::Weapon w) {
 // view models): the blaster the shotgun, the shotguns the double, the machinegun and chaingun the
 // nailguns, the launchers theirs, the hyperblaster, railgun and BFG the beam, the hand grenades
 // the grenade launcher; The Reckoning's ion ripper the beam, its phalanx the rocket launcher, its
-// trap the grenade launcher.
+// trap the grenade launcher; Ground Zero's chainfist the shotgun (as the blaster), its ETF rifle
+// the nailgun, its prox launcher and tesla the grenade launcher, its plasma beam and disruptor the
+// beam.
 constexpr hud::Weapon kWorn[server::kSqWeaponCount] = {
     hud::Weapon::shotgun,         hud::Weapon::double_shotgun,   hud::Weapon::double_shotgun,
     hud::Weapon::nailgun,         hud::Weapon::heavy_nailgun,    hud::Weapon::grenade_launcher,
     hud::Weapon::rocket_launcher, hud::Weapon::beam_gun,         hud::Weapon::beam_gun,
     hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher, hud::Weapon::beam_gun,
-    hud::Weapon::rocket_launcher, hud::Weapon::grenade_launcher};
+    hud::Weapon::rocket_launcher, hud::Weapon::grenade_launcher, hud::Weapon::shotgun,
+    hud::Weapon::nailgun,         hud::Weapon::grenade_launcher, hud::Weapon::beam_gun,
+    hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher};
 
 }  // namespace
 

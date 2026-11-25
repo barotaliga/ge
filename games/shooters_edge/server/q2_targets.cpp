@@ -610,7 +610,7 @@ void turn_breach(Q2Server& s, int i) {
 }  // namespace
 
 bool targets_spawn(Q2Server& s, int i) {
-  if (reckoning_spawn(s, i)) return true;
+  if (reckoning_spawn(s, i) || gz_brain_spawn(s, i) || gz_hint_spawn(s, i)) return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (k == kNone) return false;
@@ -668,6 +668,7 @@ bool targets_spawn(Q2Server& s, int i) {
     case kGravity:
       if (key(s, e, "gravity").empty()) e.gone = true;  // said at load (q2_lines.cpp)
       e.random = static_cast<float>(std::atoi(key(s, e, "gravity").c_str()));  // whole numbers
+      gz_gravity_spawn(s, e);  // Ground Zero's: a fraction, and its flags
       return true;
     case kTempEntity:
       e.sounds = static_cast<int>(number(s, e, "style", 0));  // which effect
@@ -856,7 +857,8 @@ bool targets_spawn(Q2Server& s, int i) {
 }
 
 bool targets_use(Q2Server& s, int i, int activator) {
-  if (reckoning_use(s, i, activator)) return true;
+  if (reckoning_use(s, i, activator) || gz_brain_use(s, i, activator) || gz_gravity_use(s, i))
+    return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (k == kNone) return false;
@@ -1088,6 +1090,7 @@ bool targets_damage(Q2Server& s, int i, int attacker, int damage) {
 
 void targets_frame(Q2Server& s) {
   reckoning_frame(s);
+  gz_brains(s);
   for (size_t n = 0; n < s.entities.size(); n++) {
     Q2Entity& e = s.entities[n];
     const int i = static_cast<int>(n);
@@ -1101,6 +1104,7 @@ void targets_frame(Q2Server& s) {
         if (e.on && e.tick_at > 0 && s.level_time + 0.001 >= e.tick_at) clock_think(s, i);
         break;
       case kBarrel:
+        gz_barrel_liquids(s, i);  // Ground Zero's: lava sets it off
         if (e.tick_at > 0 && s.level_time + 0.001 >= e.tick_at) {
           e.tick_at = 0;
           blow(s, i, e.activator, kSqByBarrel);
@@ -1196,7 +1200,7 @@ void targets_monster_touch(Q2Server& s, Q2Monster& m) {
   for (const Q2Entity& e : s.entities) {
     if (e.gone) continue;
     const Kind k = kind_of(e);
-    if (k != kMonsterJump && k != kGravity) continue;
+    if ((k != kMonsterJump && k != kGravity) || e.hidden) continue;
     if (!overlap(lo, hi, e.origin + e.mins, e.origin + e.maxs)) continue;
     if (k == kGravity) {
       m.gravity = e.random;
@@ -1212,13 +1216,50 @@ void targets_monster_touch(Q2Server& s, Q2Monster& m) {
   }
 }
 
-void targets_turret(Q2Server& s, Q2Monster& m, int enemy) {
-  Q2Entity& d = s.entities[size_t(m.entity)];
+int targets_breach_of(const Q2Server& s, const Q2Entity& d) {
   int breach = -1;
   for (size_t t = 0; t < s.entities.size(); t++)
     if (!d.target.empty() && s.entities[t].targetname == d.target &&
         kind_of(s.entities[t]) == kBreach)
       breach = static_cast<int>(t);
+  return breach;
+}
+
+sh::Vec3f targets_breach_muzzle(const Q2Server& s, int breach) {
+  const Q2Entity& b = s.entities[size_t(breach)];
+  const auto ax = sh::angle_vectors(b.angles);
+  return b.origin + ax.forward * b.closed.x + ax.right * b.closed.y + ax.up * b.closed.z;
+}
+
+void targets_breach_aim(Q2Server& s, int breach, sh::Vec3f at) {
+  Q2Entity& b = s.entities[size_t(breach)];
+  const sh::Vec3f to = at - targets_breach_muzzle(s, breach);
+  const double flat = double(sh::length(sh::Vec3f{to.x, to.y, 0}));
+  float want_yaw = static_cast<float>(ge::core::libm::atan2(double(to.y), double(to.x)) * kDegrees);
+  if (want_yaw < 0) want_yaw += 360;
+  float want_pitch = static_cast<float>(-ge::core::libm::atan2(double(to.z), flat) * kDegrees);
+  want_pitch = std::clamp(want_pitch, b.lip, b.wait);
+  if (want_yaw < b.decel || want_yaw > b.random) {  // outside its arc: the nearer limit
+    const float to_min = std::abs(wrap180(want_yaw - b.decel));
+    const float to_max = std::abs(wrap180(want_yaw - b.random));
+    want_yaw = to_min < to_max ? b.decel : b.random;
+  }
+  b.open = {want_pitch, want_yaw, 0};
+}
+
+void targets_breach_fire(Q2Server& s, int breach, int from, int cause) {
+  const Q2Entity& b = s.entities[size_t(breach)];
+  const sh::Vec3f muzzle = targets_breach_muzzle(s, breach);
+  const int skill = std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
+  const int damage = 100 + static_cast<int>(ge::core::next(s.rng) * 50);
+  sound_at(s, from, muzzle, "weapons/rocklf1a.wav");
+  fight_monster_launch(s, from, SqShot::rocket, muzzle, sh::angle_vectors(b.angles).forward, damage,
+                       550.0f + 50.0f * float(skill), cause);
+}
+
+void targets_turret(Q2Server& s, Q2Monster& m, int enemy) {
+  Q2Entity& d = s.entities[size_t(m.entity)];
+  const int breach = targets_breach_of(s, d);
   if (breach < 0) return;
   Q2Entity& b = s.entities[size_t(breach)];
   if (b.count < 0) {  // first: its seat, kept at its offset as the breach turns
@@ -1241,33 +1282,15 @@ void targets_turret(Q2Server& s, Q2Monster& m, int enemy) {
     b.open = b.angles;
     return;
   }
-  const auto ax = sh::angle_vectors(b.angles);
-  const sh::Vec3f muzzle =
-      b.origin + ax.forward * b.closed.x + ax.right * b.closed.y + ax.up * b.closed.z;
   const Q2Player& p = s.players[enemy];
-  const sh::Vec3f eye = unpack(p.move.origin) + sh::Vec3f{0, 0, p.view_height};
-  const sh::Vec3f to = eye - muzzle;
-  const double flat = double(sh::length(sh::Vec3f{to.x, to.y, 0}));
-  float want_yaw = static_cast<float>(ge::core::libm::atan2(double(to.y), double(to.x)) * kDegrees);
-  if (want_yaw < 0) want_yaw += 360;
-  float want_pitch = static_cast<float>(-ge::core::libm::atan2(double(to.z), flat) * kDegrees);
-  want_pitch = std::clamp(want_pitch, b.lip, b.wait);
-  if (want_yaw < b.decel || want_yaw > b.random) {  // outside its arc: the nearer limit
-    const float to_min = std::abs(wrap180(want_yaw - b.decel));
-    const float to_max = std::abs(wrap180(want_yaw - b.random));
-    want_yaw = to_min < to_max ? b.decel : b.random;
-  }
-  b.open = {want_pitch, want_yaw, 0};
+  targets_breach_aim(s, breach, unpack(p.move.origin) + sh::Vec3f{0, 0, p.view_height});
   // Fire once it has seen him for (3 - skill) s, then every (3 - skill) + 1 s.
   const int skill = std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
   if (m.fire_at < 0) m.fire_at = s.level_time;
   if (s.level_time + 0.001 < m.fire_at + (3 - skill) || s.level_time + 0.001 < m.attack_finished)
     return;
   m.attack_finished = s.level_time + (3 - skill) + 1;
-  const int damage = 100 + static_cast<int>(ge::core::next(s.rng) * 50);
-  sound_at(s, m.entity, muzzle, "weapons/rocklf1a.wav");
-  fight_monster_launch(s, m.entity, SqShot::rocket, muzzle, ax.forward, damage,
-                       550.0f + 50.0f * float(skill), kSqByMonster + m.kind);
+  targets_breach_fire(s, breach, m.entity, kSqByMonster + m.kind);
 }
 
 void targets_rows(Q2Server& s) {

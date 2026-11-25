@@ -5,8 +5,10 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_combat_test.cpp
 #include "shooters_edge/server/q2_combat.hpp"
+
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 
 #include <algorithm>
 
@@ -131,7 +133,7 @@ int sq_item_named(std::string_view name) {
 bool sq_holds(const SqBody& body, int w) {
   if (w < 0 || w >= kSqWeaponCount) return false;
   if (kSqWeapons[w].item == nullptr) return body.blaster;
-  const int item = sq_item(kSqWeapons[w].item, kSqWeapons[w].pack);  // its own pack's row
+  const int item = sq_item(kSqWeapons[w].item, kSqWeapons[w].pack);
   if (item >= 0 && kSqItems[item].kind == SqKind::ammo)  // the hand grenade: held while stocked
     return ammo_of(body, kSqItems[item].ammo) > 0;
   return item >= 0 && body.counts[item] > 0;
@@ -144,6 +146,7 @@ bool sq_can_fire(const SqBody& body, int w) {
 }
 
 int sq_best_weapon(const SqBody& body) {
+  if (body.max_ammo[static_cast<int>(SqAmmo::flechettes)] > 0) return gz_best_weapon(body);
   constexpr SqWeapon kOrder[] = {SqWeapon::railgun,    SqWeapon::hyperblaster,  SqWeapon::chaingun,
                                  SqWeapon::machinegun, SqWeapon::super_shotgun, SqWeapon::shotgun};
   for (SqWeapon w : kOrder)
@@ -206,7 +209,8 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
         h.frame = h.frame >= r.last_idle ? r.last_fire + 1 : h.frame + 1;
         return out;
       }
-      if ((!infinite || h.weapon == int(SqWeapon::trap)) && !sq_can_fire(body, h.weapon)) {
+      if ((!infinite || h.weapon == int(SqWeapon::trap) || h.weapon == int(SqWeapon::disruptor)) &&
+          !sq_can_fire(body, h.weapon)) {
         if (now >= h.click_at + 1) {
           out.click = true;
           h.click_at = now;
@@ -220,6 +224,7 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
       h.held_shots = 0;
       [[fallthrough]];
     case SqHandState::firing:
+      if (r.pack == Q2Pack::ground_zero) return gz_hand_fire(h, body, attack, now, infinite);
       if (sq_thrown(h.weapon)) return grenade_step(h, body, attack, now, infinite);
       if (h.frame > r.last_fire) {
         h.state = SqHandState::ready;
@@ -469,6 +474,43 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
       break;
     case kSqByTelefrag:
       words = "tried to invade", tail = "'s personal space";
+      break;
+    // Ground Zero's (q2_gz.hpp).
+    case int(SqWeapon::chainfist):
+      words = "was shredded by", tail = "'s ripsaw";
+      break;
+    case int(SqWeapon::etf_rifle):
+      words = "was perforated by";
+      break;
+    case int(SqWeapon::plasma_beam):
+      words = "was scorched by", tail = "'s plasma beam";
+      break;
+    case int(SqWeapon::tesla):
+      words = "was enlightened by", tail = "'s tesla mine";
+      break;
+    case int(SqWeapon::prox_launcher):
+      words = "got too close to", tail = "'s proximity mine";
+      break;
+    case kSqByAmBomb:
+      words = "was nuked by", tail = "'s antimatter bomb";
+      break;
+    case kSqByVengeance:
+      words = "was purged by", tail = "'s vengeance sphere";
+      break;
+    case kSqByDefender:
+      words = "had a blast with", tail = "'s defender sphere";
+      break;
+    case kSqByHunter:
+      words = "was killed like a dog by", tail = "'s hunter sphere";
+      break;
+    case kSqByDoppleVengeance:
+      words = "was purged by", tail = "'s doppleganger";
+      break;
+    case kSqByDoppleHunter:
+      words = "was hunted down by", tail = "'s doppleganger";
+      break;
+    case int(SqWeapon::disruptor):
+      words = "was annihilated by", tail = "'s disruptor";
       break;
     default:
       break;

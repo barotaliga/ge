@@ -19,10 +19,9 @@ namespace shooters_edge::server {
 namespace {
 
 bool player(int slot) { return slot >= 0 && slot < 32 && slot < sh::kMaxClients; }
-// The base game's eleven weapons: a mission pack's own (the ion ripper, the phalanx, the trap)
-// are not counted, so every Quake II match report keeps one layout.
-constexpr int kStatQ2Weapons = int(SqWeapon::hand_grenade) + 1;
-bool weapon(int w) { return w >= 0 && w < kStatQ2Weapons; }
+// The base game's guns (blaster to hand grenade) are counted; a mission pack's are not columns.
+constexpr int kCounted = int(SqWeapon::hand_grenade) + 1;
+bool weapon(int w) { return w >= 0 && w < kCounted; }
 
 Q2SlotStats& of(Q2Server& s, int slot) {
   Q2SlotStats& p = s.stats.slot[static_cast<size_t>(slot)];
@@ -37,7 +36,7 @@ constexpr int kRocket = int(SqWeapon::rocket_launcher), kGrenade = int(SqWeapon:
 const StatsGame& q2_stats_game() {
   static const StatsGame g = [] {
     StatsGame out;
-    out.weapons = kStatQ2Weapons;
+    out.weapons = kCounted;
     out.label = {"bl", "sg", "ssg", "mg", "cg", "gl", "rl", "hb", "rg", "bfg", "hg", nullptr};
     out.rl = kRocket;
     out.gl = kGrenade;

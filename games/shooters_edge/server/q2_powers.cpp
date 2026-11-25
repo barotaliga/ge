@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_q2_fight_test.cpp
 #include "shooters_edge/server/q2_powers.hpp"
 
+#include "shooters_edge/server/q2_fight_kit.hpp"
+
 #include <string_view>
 
 namespace shooters_edge::server {
@@ -35,6 +37,16 @@ constexpr SqPower kPowers[] = {
      0,
      nullptr,
      65536},
+    // Ground Zero's double damage: a gold tint and its own shell (q2_fight_kit.hpp's multiplier).
+    {"item_double",
+     &Q2Player::double_until,
+     {0.9f, 0.7f, 0, 0.08f},
+     "misc/ddamage2.wav",
+     "misc/ddamage1.wav",
+     kSqDoubleEffect,
+     0,
+     nullptr,
+     0},
     {"item_invulnerability",
      &Q2Player::invulnerable_until,
      {1, 1, 0, 0.08f},
@@ -62,6 +74,44 @@ constexpr SqPower kPowers[] = {
      0,
      "sv_dropbreather",
      0},
+    // Ground Zero's spheres: no tint, only the bar's timer while one is out (q2_gz_spheres.cpp).
+    {"item_sphere_defender",
+     &Q2Player::defender_until,
+     {0, 0, 0, 0},
+     nullptr,
+     nullptr,
+     0,
+     0,
+     nullptr,
+     0},
+    {"item_sphere_hunter",
+     &Q2Player::hunter_until,
+     {0, 0, 0, 0},
+     nullptr,
+     nullptr,
+     0,
+     0,
+     nullptr,
+     0},
+    {"item_sphere_vengeance",
+     &Q2Player::vengeance_until,
+     {0, 0, 0, 0},
+     nullptr,
+     nullptr,
+     0,
+     0,
+     nullptr,
+     0},
+    // Ground Zero's IR goggles: a red tint while the client draws the living bright; last.
+    {"item_ir_goggles",
+     &Q2Player::ir_until,
+     {1, 0, 0, 0.2f},
+     nullptr,
+     "misc/ir_start.wav",
+     0,
+     0,
+     nullptr,
+     0},
 };
 
 }  // namespace
@@ -78,6 +128,18 @@ const SqPower* sq_first_power(const Q2Player& p, double now) {
   for (const SqPower& w : kPowers)
     if (p.*w.until > now) return &w;
   return nullptr;
+}
+
+int fight_multiplier(const Q2Server& s, const Q2Player& p) {
+  const bool quad = p.quad_until > s.level_time;
+  if (p.double_until <= s.level_time) return quad ? 4 : 1;
+  const bool dm = s.cvars.find("deathmatch")->on();
+  if (quad && (!dm || (s.cvars.find("dmflags")->integer() & 262144) != 0)) return 4;
+  return quad ? 8 : 2;
+}
+
+const char* fight_multiplier_sound(int m) {
+  return m >= 4 ? "items/damage3.wav" : m == 2 ? "misc/ddamage3.wav" : nullptr;
 }
 
 bool sq_power_on(const Q2Player& p, const char* item, double now) {

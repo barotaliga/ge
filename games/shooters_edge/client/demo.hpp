@@ -402,6 +402,14 @@ struct DemoState {
   int64_t frames = 0;  // frames read
 };
 
+// Whether a model index names one of the level's own brush models ("*1", "*2", ...): a door, a
+// lift, a train, never a player, a missile or an item.
+inline bool brush_model(const DemoState& st, int model) {
+  return model > 0 && static_cast<size_t>(model) < st.models.size() &&
+         st.models[static_cast<size_t>(model)].size() > 1 &&
+         st.models[static_cast<size_t>(model)][0] == '*';
+}
+
 // An item coming back told (svc 119): kept in place of what was told of the same entity; those a
 // second past their time let go.
 void take_item_back(DemoState& s, const DemoItemBack& b);
@@ -518,11 +526,13 @@ struct Demo {
   bool feel_told = false;
   ge::classic::Q2Feel feel;
   // The weapons the player holds (a bit by Quake II's weapon row) and his ammunition of each kind
-  // (shells, bullets, grenades, rockets, cells, slugs from 1) our server of Quake II last told
-  // (svc 118), when it told them: the weapon prediction's knowledge of a change.
+  // (shells, bullets, grenades, rockets, cells, slugs from 1, then the mission packs' kinds) our
+  // server of Quake II last told (svc 118), when it told them: the weapon prediction's knowledge
+  // of a change. Kinds past `kArsenalAmmo` are read and passed over.
+  static constexpr int kArsenalAmmo = 16;
   bool arsenal_told = false;
-  uint16_t arsenal_weapons = 0;
-  int16_t arsenal_ammo[7] = {};
+  uint32_t arsenal_weapons = 0;
+  int16_t arsenal_ammo[kArsenalAmmo] = {};
   // Our server of Quake II takes this client's voice (svc 121's empty message as it entered);
   // the voices it relays go into `DemoState::voice` as Quake's do.
   bool voice_taken = false;
