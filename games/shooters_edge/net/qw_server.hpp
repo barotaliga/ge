@@ -325,6 +325,7 @@ struct QwClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fields b
   bool carried = false;
   float parms[16] = {};
   int frags_told = 0;    // the frags every client was last sent
+  int pick_number = 0;   // captain mode's number, shown as his frags while he waits (0: frags)
   gs::FloodGuard flood;  // its chat lines' times and its silence
   // Its voice (qw_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),
   // whether it hears voice at all (`unmuteall`, `muteall`) and the talkers it ignores, a bit each.
@@ -426,6 +427,14 @@ struct QwServer {
   // A client's move's buttons as the game lets them through (fire and jump held before a match);
   // null: all of them.
   uint8_t (*buttons)(void* ctx, int slot, uint8_t buttons) = nullptr;
+  // A client's move's impulse as the game lets it through (0: the game took it, as captain mode's
+  // pick); `fresh` for the newest move, false for the two older ones a packet repeats. Null: all.
+  uint8_t (*impulse)(void* ctx, int slot, uint8_t impulse, bool fresh) = nullptr;
+  // A client's `setinfo` before it is taken: false refuses it (the game told him why and put his
+  // own key back). Null: every key.
+  bool (*info_rule)(void* ctx, int slot, const std::string& key,
+                    const std::string& value) = nullptr;
+  void* move_ctx = nullptr;  // `impulse`'s and `info_rule`'s
   void* game_ctx = nullptr;
   std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
   // A listen server's own player, a local seat: the rules' frame handed to the game before the
