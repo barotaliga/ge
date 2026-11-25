@@ -208,9 +208,17 @@ fi
 # The labs the change reaches, each against its committed digest, side by side. As in CTest's
 # labs_smoke (tests/CMakeLists.txt), the leak check is off: the software GPU driver's worker
 # threads keep allocations past exit, which LeakSanitizer would report as the lab's.
+# A world lab under ASan takes up to about 5 GB (tarn, village-look), so the side by side runs
+# are as many as the memory holds at that, at most one a core, at least one.
 labs_digests() {
+  local cores mem_gb lab_jobs
+  cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+  mem_gb=$(awk '/MemAvailable/ {print int($2 / 1048576)}' /proc/meminfo 2>/dev/null || echo 0)
+  lab_jobs=$((mem_gb / 5))
+  ((mem_gb == 0 || lab_jobs > cores)) && lab_jobs=$cores
+  ((lab_jobs < 1)) && lab_jobs=1
   printf '%s\n' "$@" | ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" \
-    xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -I{} \
+    xargs -P "$lab_jobs" -I{} \
     "$build/labs" {} --smoke --quiet --check-digests=tests/digests
 }
 mapfile -t labs < <("$build/ge" digest --affected --list --preset="$preset" --base="$base" 2>/dev/null |

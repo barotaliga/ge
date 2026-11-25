@@ -728,8 +728,7 @@ int run_main(int argc, char** argv) {
     if (console.cvars().find("scr_chathud_x") == nullptr) se::restore_chat(hud, kept);  // remix
     hud.layout.draw(overlay, f, se::hud_style(chat_art)), se::restore_chat(hud, kept);
   };
-  // cl_thirdperson's doors and platforms: the map's brush models where the last frame drew them.
-  std::vector<cl::BehindMover> behind_scratch;
+  std::vector<cl::BehindMover> behind_scratch;  // cl_thirdperson's doors and platforms
   const auto behind_movers = [&](const std::vector<ge::shooter::BrushModel>* models) {
     return cl::behind_movers(world.get(), models, behind_scratch);
   };
