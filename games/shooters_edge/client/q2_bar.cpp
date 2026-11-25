@@ -419,7 +419,7 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
   in.height = height / scale;
   in.frame = frame;
   in.self = slot;
-  if (bar.cross != nullptr) {
+  if (bar.cross) {
     in.scope_scale = static_cast<float>(bar.cross->size);
     in.scope_x = static_cast<int>(bar.cross->offset[0]);
     in.scope_y = static_cast<int>(bar.cross->offset[1]);
@@ -482,7 +482,7 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
                        int width, int height, int health) {
-  bar.cross = &s;  // the next layout's scope follows the same settings
+  bar.cross = s;  // the next layout's scope follows the same settings
   // Quake II's own `crosshair` numbers its pictures (client/cvar_layers.hpp); Quake's
   // over Quake II's bar (remix) takes its first picture as the game's own mark.
   const int32_t number = s.pictures ? std::clamp(s.mark, 1, 3) : 1;

@@ -426,6 +426,11 @@ std::vector<FoundPack> find_packs(const Tree& tree, const classicenhance::Profil
     }
   }
   std::vector<const TreeFile*> unnamed;  // first packs in no pack's folder
+  struct Undecided {
+    std::vector<std::pair<const classicenhance::Profile*, const classicenhance::MissionPack*>> by;
+    std::string root;
+  };
+  std::vector<Undecided> undecided;  // in a folder two games' packs are named, neither told apart
   for (const TreeFile& f : tree.files) {
     const std::string l = lower(f.path);
     const std::string name = last_part(l);
@@ -471,9 +476,24 @@ std::vector<FoundPack> find_packs(const Tree& tree, const classicenhance::Profil
       pick = by[0].first;
       pack = by[0].second;
     }
-    if (pick == nullptr || have(pack)) continue;
     const std::string root = parent_of(l);
+    if (pick == nullptr) undecided.push_back({std::move(by), root.empty() ? "" : root + "/"});
+    if (pick == nullptr || have(pack)) continue;
     out.push_back({pick, pack, root.empty() ? "" : root + "/", "", "", "", true});
+  }
+  // A pack two games name alike with neither base folder beside it and an unknown digest (the
+  // Quake packs' disc, its second pack patched): the game of the other packs beside it, when they
+  // all agree on one.
+  const classicenhance::Profile* beside = nullptr;
+  bool agreed = !out.empty();
+  for (const FoundPack& f : out) {
+    agreed = agreed && (beside == nullptr || beside == f.game);
+    beside = f.game;
+  }
+  for (const Undecided& u : undecided) {
+    if (!agreed) break;
+    for (const auto& [p, m] : u.by)
+      if (p == beside && !have(m)) out.push_back({p, m, u.root, "", "", "", true});
   }
   // Under another folder's name (a disc's `Data/all/pak0.pak`): known by its digest, its other
   // files from the shallowest folder named after it, its patches to the base game from a
