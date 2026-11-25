@@ -7,7 +7,7 @@
 #include "prof/frames.hpp"
 
 #include <algorithm>
-#include <cstdarg>
+#include <cmath>
 #include <cstdio>
 #include <numeric>
 
@@ -21,19 +21,15 @@ double ms(int64_t ns) { return static_cast<double>(ns) * 1e-6; }
 int64_t rank_of(std::vector<int64_t> v, double q) {
   if (v.empty()) return 0;
   std::sort(v.begin(), v.end());
-  const auto i = static_cast<size_t>(q * static_cast<double>(v.size() - 1) + 0.5);
+  const auto i = static_cast<size_t>(std::llround(q * static_cast<double>(v.size() - 1)));
   return v[std::min(i, v.size() - 1)];
 }
 
-#if defined(__GNUC__)
-__attribute__((format(printf, 2, 3)))
-#endif
-void line(std::string& out, const char* fmt, ...) {
+// One report line: `fmt` is always one of this file's literals, never outside text.
+template <class... Args>
+void line(std::string& out, const char* fmt, Args... args) {
   char buf[256];
-  va_list args;
-  va_start(args, fmt);
-  std::vsnprintf(buf, sizeof buf, fmt, args);
-  va_end(args);
+  std::snprintf(buf, sizeof buf, fmt, args...);
   out += buf;
   out += '\n';
 }
@@ -151,10 +147,11 @@ std::string frames_report(const FrameProfile& fp, int worst) {
   std::stable_sort(order.begin(), order.end(),
                    [&](size_t a, size_t b) { return fp.frame_ns[a] > fp.frame_ns[b]; });
   const size_t shown = std::min(n, static_cast<size_t>(std::max(worst, 0)));
-  if (shown > 0) line(out, "  the slowest frames:");
+  if (shown > 0) out += "  the slowest frames:\n";
   for (size_t k = 0; k < shown; k++) {
     const size_t f = order[k];
     std::vector<std::pair<int64_t, std::string>> parts;
+    parts.reserve(rows.size());
     for (const Row& r : rows) parts.emplace_back((*r.v)[f], r.name);
     std::stable_sort(parts.begin(), parts.end(),
                      [](const auto& a, const auto& b) { return a.first > b.first; });

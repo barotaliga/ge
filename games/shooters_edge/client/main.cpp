@@ -1735,6 +1735,7 @@ int run_main(int argc, char** argv) {
                       ? nullptr
                       : &hand;
       cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
+      ge::render::gpu_watch_frame(gpu_debug.watch, cl::world_stats(*world), wall, console);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);
