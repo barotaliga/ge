@@ -41,10 +41,12 @@ constexpr gs::GameMeta kMetas[] = {
 constexpr gs::SettingName kSettingNames[] = {
     {"hostname", "sv_hostname"},
     {"maxclients", "sv_maxclients"},
+    {"maxplayers", "sv_maxclients"},  // Quake's word for the next map's player count
     {"maxspectators", "sv_maxspectators"},
     {"password", "sv_password"},
     {"spectator_password", "sv_spectatorpassword"},
     {"timeout", "sv_timeout"},
+    {"net_messagetimeout", "sv_timeout"},  // Quake's: seconds of silence before a drop
     {"floodprot", "sv_floodprot"},
     {"floodprotmsg", "sv_floodprotmsg"},
     {"sv_maplist", "sv_maprotation"},

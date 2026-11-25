@@ -7,6 +7,11 @@
 // the sky picture's two layers seen along the view's direction; liquids are drawn unlit. Trigger
 // volumes (brush models of a `trigger_` entity) are left out, as a game leaves them out.
 //
+// A texture may be handed in true colour in place of its palette picture (`TrueColour`: an
+// enhanced copy at any multiple of its size, a renderer's replacement): sampled bilinear, lit the
+// same way, its texels of alpha 255 glowing at full brightness. Sky and liquids keep the pack's.
+// `start_eyes` names the views a map is looked at from: its starts at eye height.
+//
 // A perspective-correct software raster with a depth buffer, triangles cut at the near plane,
 // drawn at twice the size and filtered down. A lab tool, not a renderer: the GPU's own map pass
 // is docs/goals.md M18's.
@@ -20,6 +25,9 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "brush/map.hpp"
 #include "lab/raster.hpp"
@@ -45,5 +53,23 @@ struct TexturedEye {
 // bytes (256 RGB triples). Returns the triangles drawn.
 size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& map,
                      std::span<const uint8_t> palette, const TexturedEye& eye);
+
+// A texture in true colour: `width` x `height` RGBA, alpha 255 where it glows, 0 where its light
+// falls on it. An empty one leaves the texture to the palette.
+struct TrueColour {
+  uint32_t width = 0, height = 0;
+  std::vector<uint8_t> rgba;
+};
+
+// The same with `replaced[k]` (when not empty) drawn in place of texture k's palette picture on
+// every surface but sky and liquids; `replaced` may be shorter than the map's textures.
+size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& map,
+                     std::span<const uint8_t> palette, const TexturedEye& eye,
+                     std::span<const TrueColour> replaced);
+
+// Where to stand in a map to look at it, each view named: the player's start ("THE START"), then
+// up to three deathmatch or co-op starts spread through the entity list ("START <n>"), each at eye
+// height facing its `angle`.
+std::vector<std::pair<std::string, TexturedEye>> start_eyes(const Map& map);
 
 }  // namespace ge::brush::labs

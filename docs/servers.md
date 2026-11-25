@@ -37,6 +37,10 @@ are local seats of its classic endpoint: shown to every client as players, sent 
 lines, a countdown run out restarts the map into the match, and the match's end brings the next
 map up in warmup. With `LobbySettings::humans` set (a dedicated server's 1) bots alone never
 count down, and a bot never leads while a player is seated (the `se-dedicated-lobby` lab).
+Quake II's server seats `sv_bots` too, in deathmatch on its own rules: the same bot seats
+(`games/shooters_edge/bots/bot_seats.hpp`, which QuakeWorld's lobby keeps its bots in), their nav
+built off the map's brushes, Quake II's arsenal, their moves run after the clients' each frame, a
+client never given a bot's slot, and the status listing them as bots.
 The lobby and the warmup are apart: with `LobbySettings::warm_on_join` off (a game that has a
 lobby screen of its own, as Shooter's Edge's window does) a player waits on that screen, off the
 map, until `warmup` puts him in the warmup (`sitout` takes him back, `lobby_on_map` says where a
@@ -528,6 +532,18 @@ and a captain who leaves ends it. Our QuakeWorld server's captain mode is both i
 words (`games/shooters_edge/net/qw_captains.hpp`): `captain` before a match in team play, the
 numbers shown as frags, a pick by the number keys, each pick taking the captain's team name and
 colours, nobody firing and nobody changing team while they pick.
+
+## Coaches
+
+`engine/server/coach.hpp`. A spectator who wants to help one team asks for it in the warmup of a
+team match (`coach <team>`); the seated players answer `yes` (`no` takes it back) and he is elected
+when the yes reach 51 % of them, 2 at least, within 60 s. One coach a team, at least 3 players on
+the server, one election at a time and never beside a vote; a candidate who withdraws or runs out
+of time waits 30 s. A coach is in his team's team chat both ways (his lines read "(Coach <name>)",
+`engine/server/chat.hpp`) and his chase camera follows only his team's players; nothing else: no
+captain's word. He stops with `coach` again, by leaving or by taking a seat; he stays through the
+match and the map's change. The referee names one with no vote (`coach <team> <player>`) and takes
+one off (`uncoach <team>`); `coaches` lists them. Quake II's server plays it.
 
 ## The referee
 
