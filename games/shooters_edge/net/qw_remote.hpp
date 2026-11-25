@@ -236,7 +236,7 @@ struct Remote {  // NOLINT(clang-analyzer-optin.performance.Padding): one, the w
   bool console_held =
       false;  // the console held over the screen while joining (remote_console_foot)
   bool ahead_from_held = false;  // the acknowledged state's jump button was held
-  client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
+  client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp), both games
   int missiles_level = -1;       // the level they fly in (DemoState::levels)
   bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
   // cl_predict_teleport: the level's teleporters (classic/teleporters.hpp, `remote_teleporters`)
@@ -244,11 +244,23 @@ struct Remote {  // NOLINT(clang-analyzer-optin.performance.Padding): one, the w
   // player walks in; the guess the server has not answered (shooter/teleport_ahead.hpp). On, the
   // high-lag teleport is not asked for: the moves after the teleport are made the new way already.
   bool predict_teleports = true;
+  bool predict_pushes = true;  // cl_predict_push: the level's push triggers taken the same way
+  // cl_predict_movers: doors, plats and trains run on by their speed between the last two frames
+  // while the moves are replayed, carrying the player (shooter/predict.hpp, `advance_movers`).
+  bool predict_movers = true;
+  // The movers the last two predictions ran over (and their level): a new frame's correction
+  // predicts the newest command from the old frame over the old movers.
+  std::vector<sh::ClientModel> movers_last, movers_prev;
+  sh::MoverTrack movers_track;  // the brush models' motion over the frames (shooter/predict.hpp)
+  float movers_ahead_s = 0;     // how far on the newest move runs them (they are drawn there)
+  int movers_last_level = -1, movers_prev_level = -1;
   uint32_t jump_played_to = 0;  // the newest command whose jump has played
   int jumps_played = 0;         // jumps whose sound the prediction played (for the labs)
+  int64_t misses = 0;           // frames the server's word moved the prediction (for the labs)
+  float miss_units = 0;         // the last one's size, units, before any smoothing
   int tele_hit_cmd = -1;        // the last main prediction's teleport: its place in the replay
   int tele_hit_index = -1;
-  sh::Teleporters tele;
+  sh::TeleTables tele;  // the teleporters, and the push triggers (cl_predict_push) after them
   sh::TeleGuess tele_guess;
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.

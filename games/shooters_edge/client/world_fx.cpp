@@ -1544,8 +1544,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_model_fx(s, 2, e.at, e.way, t);
           break;
         }
-        if (e.name == "te_blaster") {  // Quake II's bolt landing: yellow sparks
-          fx::blaster_hit(p, s.seed++, &out.births);
+        if (e.name == "te_blaster" || e.name == "te_blaster2") {
+          // Quake II's bolt landing: yellow sparks; Ground Zero's green bolt's are green.
+          fx::blaster_hit(p, s.seed++, &out.births, e.name == "te_blaster2");
           // On a wall: a small glowing mark, the bolt's heat left in it.
           double normal[3], dir[3];
           const ge::detail::SurfaceClass sc = face(eye_map, normal, dir);

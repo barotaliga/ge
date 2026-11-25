@@ -141,8 +141,24 @@ bool game_line(QwIgnore& g, std::string_view text, int level, double now_s) {
 size_t game_lines(QwIgnore& g, const std::vector<std::string>& lines,
                   const std::vector<int>& levels, size_t from, double now_s,
                   const std::function<void(const std::string&)>& show) {
-  for (size_t i = from; i < lines.size(); ++i)
-    if (game_line(g, lines[i], i < levels.size() ? levels[i] : kHighLevel, now_s)) show(lines[i]);
+  // A program prints a line in pieces (a name, then " entered the game\n"): the pieces of one
+  // level are joined up to each line's end, and what is left at the end of the look is a line too.
+  std::string joined;
+  int level = kHighLevel;
+  const auto done = [&] {
+    if (!joined.empty() && game_line(g, joined, level, now_s)) show(joined);
+    joined.clear();
+  };
+  for (size_t i = from; i < lines.size(); ++i) {
+    const int at = i < levels.size() ? levels[i] : kHighLevel;
+    if (!joined.empty() && at != level) done();
+    level = at;
+    for (const char c : lines[i]) {
+      joined += c;
+      if (c == '\n') done();
+    }
+  }
+  done();
   return lines.size();
 }
 

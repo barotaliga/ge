@@ -28,17 +28,21 @@
 // The quantizing is the protocol's and the move is the server's, so a prediction differs from the
 // server only by what the grid dropped from the acknowledged state (under 1/8 unit and 1 unit/s,
 // grown by the commands replayed over it) and by what the client could not know (a command the
-// speed check cut, a door's or another player's place): the se-loop lab charts it.
+// speed check cut, another player's place): the se-loop lab charts it. A door's, a plat's or a
+// train's place is run on with the replay (`advance_movers`, below); the se-control lab charts what
+// is left.
 //
 // ge:summary The client's prediction: the protocol's player state, replayed commands, smoothing
 // ge:keywords prediction predict client reconcile replay acknowledged quantize grid net-player
 // ge:keywords smoothing correction decay other-players extrapolate latency predict_player
+// ge:keywords advance_movers mover-ahead rider plat door
 // ge:keywords predict_other client_world net_player_of net_msec other_msec
 // ge:skill shooter net
 // ge:test tests/shooter_predict_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "shooter/server.hpp"
 
@@ -67,16 +71,59 @@ MoveState unquantize_player(const NetPlayer& n, const MoveSettings& set);
 NetPlayer net_player_of(const Server& sv, int slot);
 int net_msec(const Server& sv, int slot);
 
-// A brush model where the client last saw it.
+// A brush model where the client last saw it, and how fast it was going there (units/s: its move
+// between the last two frames over their gap; 0 for one standing still).
 struct ClientModel {
   const BrushModel* model = nullptr;
   Vec3f origin;
+  Vec3f velocity;
+  float reach = 1e30f;  // units it may run on before it stops (`mover_reach`)
 };
+
+// How far a mover at `origin` going at `velocity` runs on before it stops: to the nearest of
+// `rests` (places it was seen standing: a door shut or open, a plat at the top or the bottom)
+// that lies ahead of it on its line (within a unit of it), else unbounded (1e30).
+float mover_reach(Vec3f origin, Vec3f velocity, const Vec3f* rests, int count);
+
+// A MOVER'S MOTION as a client reads it off the frames (`MoverTrack`): each entity's place in the
+// last two frames and their times give its velocity (none across a change of model or a jump of
+// more than `kMoverJump` units: a train's teleport, a respawn); the places it was seen standing
+// (the same place two frames running, the newest four) and the place it was built (the origin: a
+// door shut, a plat at the top) are where it stops (`mover_reach`).
+inline constexpr float kMoverJump = 200;
+struct MoverTrack {
+  struct One {
+    Vec3f prev, last;
+    int prev_model = -1, last_model = -1;  // -1: not in that frame
+    Vec3f rests[4];
+    int rest_count = 0, rest_next = 0;
+  };
+  std::vector<One> ents;
+  double prev_s = -1, last_s = -1;  // the two frames' times
+};
+// A new frame at `time_s` (the server's time, or the network's): the last becomes the previous.
+void mover_track_frame(MoverTrack& t, double time_s);
+// Entity `entity` in the new frame: brush model `model` at `origin`.
+void mover_track_seen(MoverTrack& t, size_t entity, int model, Vec3f origin);
+// Entity `entity`'s velocity at its newest place, and how far it runs on (none: 0 and 1e30).
+void mover_motion(const MoverTrack& t, size_t entity, Vec3f& velocity, float& reach);
+
+// Where a mover at `origin` going at `velocity` is `seconds` on, stopped after `reach`: the place
+// the window draws it so the movers it shows agree with the player's own predicted place.
+Vec3f mover_ahead(Vec3f origin, Vec3f velocity, float reach, float seconds);
 
 // The client's solids: the world, the brush models, the other players' boxes (kPlayerMins..
 // kPlayerMaxs at each origin), in that order, at most kMaxSolids.
 void client_world(const BrushModel& world, const ClientModel* models, int model_count,
                   const Vec3f* players, int player_count, MoveWorld& out);
+
+// MOVERS RUN AHEAD (`advance_movers`): a replayed command ran on the server later than the frame
+// the client last saw, when a door, a plat or a train had gone on moving. Before each command the
+// brush models `models` (solids 1.. of `world`, as `client_world` lays them) move on by their
+// velocity times the command's time, and the player goes with one as the server's push takes him:
+// carried when he stands on it (`s.ground` its solid), shoved when it moved into him; either only
+// where his box is free after. A mover stops after its `reach`.
+void advance_movers(MoveWorld& world, MoveState& s, const ClientModel* models, int count, float dt);
 
 // Its own player: the acknowledged state with `count` later commands run through the move.
 // `each` (when given, `count` of them): the state after each command, in order (a jump's command
