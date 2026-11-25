@@ -376,69 +376,30 @@ void referee_turn(Q2Match& m) {
   m.referee.acts.clear();
 }
 
-// The stats words: `stats [player]`, `teamstats`, `laststats [player]` (and `oldstats`).
+// The stats words (server/match_stats.hpp `stats_words`): the match so far and the last match's.
 bool stats_word(Q2Match& m, int slot, const std::string& line) {
-  const size_t sp = line.find(' ');
-  const std::string word = line.substr(0, sp);
-  const std::string rest = sp == std::string::npos ? std::string() : line.substr(sp + 1);
-  const bool last = word == "laststats" || word == "oldstats" || word == "lastscores";
-  if (word != "stats" && word != "teamstats" && !last) return false;
   const sv::Q2Server* game = sv::q2_of(*m.rules);
-  // The warmup shows the last match; so does `laststats`.
-  const bool old = last || (m.on && m.lobby.phase != gs::LobbyPhase::match);
-  if (old && !m.has_last) {
-    say(m, slot, "There are no stats yet: no match has been played.");
-    return true;
-  }
-  if (!old && game == nullptr) return false;
-  const auto& table = old ? m.last_stats : game->stats.slot;
   const auto now_names = names(m);
-  const auto& who_names = old ? m.last_names : now_names;
-  if (word == "teamstats") {
-    for (const gs::Team team : {gs::Team::red, gs::Team::blue}) {
-      const sv::StatsGame& g = sv::q2_stats_game();
-      int64_t kills = 0, deaths = 0, dealt = 0, received = 0;
-      for (int i = 0; i < kSlots; i++) {
-        if (seat_team(m, i) != team) continue;
-        const sv::Q2SlotStats& p = table[static_cast<size_t>(i)];
-        kills += p.kills;
-        deaths += p.deaths;
-        dealt += p.tally.n[static_cast<size_t>(sv::stat_rest(g, sv::kStatDmgGiven))];
-        received += p.tally.n[static_cast<size_t>(sv::stat_rest(g, sv::kStatDmgTaken))];
-      }
-      say(m, slot,
-          "Team '" + gs::teams_name(m.teams, team) + "': kills " + std::to_string(kills) +
-              ", deaths " + std::to_string(deaths) + ", damage dealt " + std::to_string(dealt) +
-              ", received " + std::to_string(received));
-    }
-    return true;
+  ge::net::MatchReport now, last;
+  sv::StatsAsk ask;
+  // The warmup shows the last match's.
+  if (game != nullptr && !(m.on && m.lobby.phase != gs::LobbyPhase::match)) {
+    now = stats_report(m, game->stats.slot, now_names);
+    ask.now = &now;
   }
-  int of = slot;
-  if (!rest.empty()) {
-    of = -1;
-    for (int i = 0; i < kSlots; i++)
-      if (!who_names[static_cast<size_t>(i)].empty() && who_names[static_cast<size_t>(i)] == rest)
-        of = i;
-    if (of < 0) {
-      say(m, slot, "There is no player " + rest + " in those stats.");
-      return true;
-    }
+  if (m.has_last) {
+    last = stats_report(m, m.last_stats, m.last_names);
+    ask.last = &last;
   }
-  if (!old && m.teams_on && of != slot && seat_team(m, slot) != gs::Team::none &&
-      seat_team(m, of) != seat_team(m, slot)) {
-    say(m, slot, "The other team's stats are shown once the match is over.");
-    return true;
-  }
+  ask.me = now_names[static_cast<size_t>(slot)];
+  if (m.teams_on && seat_team(m, slot) != gs::Team::none)
+    ask.my_team = gs::teams_name(m.teams, seat_team(m, slot));
+  ask.teams = {gs::teams_name(m.teams, gs::Team::red), gs::teams_name(m.teams, gs::Team::blue)};
+  for (const std::string& n : now_names)
+    if (!n.empty()) ask.present.push_back(n);
   std::string out;
-  const ge::net::MatchReport r = stats_report(m, table, who_names);
-  for (const ge::net::ReportPlayer& p : r.players) {
-    if (p.name != who_names[static_cast<size_t>(of)]) continue;
-    for (const std::string& said : sv::stats_player_lines(sv::q2_stats_game(), r, p))
-      out += said + "\n";
-    break;
-  }
-  say(m, slot,
-      out.empty() ? "Nothing counted yet for " + who_names[static_cast<size_t>(of)] + "." : out);
+  if (!sv::stats_words(sv::q2_stats_game(), line, ask, out)) return false;
+  say(m, slot, out);
   return true;
 }
 

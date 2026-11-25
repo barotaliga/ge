@@ -898,7 +898,7 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
       write_voice_down(on, 255, 0, 0, {});
       reliable(c, on);
     }
-    note(s, c.name + " entered the game");
+    // "<name> entered the game" is the rules' own line, printed to everyone and the log.
     c.http_download = false;
     for (const std::string& text : s.stuff_lists.begin) stuff(c, text + "\n");
     rate_check(s, slot);

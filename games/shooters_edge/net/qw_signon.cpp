@@ -761,8 +761,12 @@ void string_command(QwServer& s, int slot, const std::string& line) {
       qw_talk_command(s, slot, w);
       return;
     }
-    if (c.rules_active && s.rules->client_command(slot, said) == sv::CommandResult::bad && chat)
+    if (!c.rules_active || s.rules->client_command(slot, said) != sv::CommandResult::bad) return;
+    if (chat) {
       qw_server_say(s, slot, cmd == "say_team", said);
+      return;
+    }
+    if (s.game_command_after != nullptr) s.game_command_after(s.game_ctx, slot, said);
   }
 }
 
