@@ -102,6 +102,83 @@ void client_world(const BrushModel& world, const ClientModel* models, int model_
   }
 }
 
+void advance_movers(MoveWorld& world, MoveState& s, const ClientModel* models, int count,
+                    float dt) {
+  for (int i = 0; i < count && 1 + i < world.count; i++) {
+    const Vec3f v = models[i].velocity;
+    if (v.x == 0 && v.y == 0 && v.z == 0) continue;
+    Solid& m = world.solids[1 + i];
+    const float speed = length(v);
+    const float gone = length(m.origin - models[i].origin);
+    const float step = std::min(speed * dt, models[i].reach - gone);
+    if (step <= 0) continue;
+    const Vec3f move = v * (step / speed);
+    m.origin = m.origin + move;
+    if (s.ground != 1 + i && box_free(world, s.origin)) continue;  // neither on it nor hit by it
+    if (box_free(world, s.origin + move)) s.origin = s.origin + move;
+  }
+}
+
+float mover_reach(Vec3f origin, Vec3f velocity, const Vec3f* rests, int count) {
+  const float speed = length(velocity);
+  float best = 1e30f;
+  if (speed <= 0) return best;
+  const Vec3f way = velocity * (1 / speed);
+  for (int i = 0; i < count; i++) {
+    const Vec3f to = rests[i] - origin;
+    const float ahead = dot(to, way);
+    if (ahead < 0 || length(to - way * ahead) > 1) continue;  // behind it, or off its line
+    best = std::min(best, ahead);
+  }
+  return best;
+}
+
+Vec3f mover_ahead(Vec3f origin, Vec3f velocity, float reach, float seconds) {
+  const float speed = length(velocity);
+  if (speed <= 0 || seconds <= 0) return origin;
+  const float go = std::min(speed * seconds, reach);
+  return origin + velocity * (go / speed);
+}
+
+void mover_track_frame(MoverTrack& t, double time_s) {
+  for (MoverTrack::One& o : t.ents) {
+    o.prev = o.last;
+    o.prev_model = o.last_model;
+    o.last_model = -1;
+  }
+  t.prev_s = t.last_s;
+  t.last_s = time_s;
+}
+
+void mover_track_seen(MoverTrack& t, size_t entity, int model, Vec3f origin) {
+  if (t.ents.size() <= entity) t.ents.resize(entity + 1);
+  MoverTrack::One& o = t.ents[entity];
+  if (o.prev_model >= 0 && o.prev_model != model) o.rest_count = o.rest_next = 0;  // another one
+  o.last = origin;
+  o.last_model = model;
+  if (o.prev_model != model || !(o.prev == origin)) return;
+  for (int i = 0; i < o.rest_count; i++)
+    if (o.rests[i] == origin) return;
+  o.rests[o.rest_next] = origin;
+  o.rest_next = (o.rest_next + 1) % 4;
+  o.rest_count = std::min(o.rest_count + 1, 4);
+}
+
+void mover_motion(const MoverTrack& t, size_t entity, Vec3f& velocity, float& reach) {
+  velocity = {};
+  reach = 1e30f;
+  if (entity >= t.ents.size()) return;
+  const MoverTrack::One& o = t.ents[entity];
+  const double gap = t.last_s - t.prev_s;
+  if (o.last_model < 0 || o.prev_model != o.last_model || t.prev_s < 0 || gap <= 0) return;
+  const Vec3f d = o.last - o.prev;
+  if (length(d) > kMoverJump) return;
+  velocity = d * static_cast<float>(1 / gap);
+  Vec3f stops[5] = {};  // where it was built, then where it was seen standing
+  for (int i = 0; i < o.rest_count; i++) stops[1 + i] = o.rests[i];
+  reach = mover_reach(o.last, velocity, stops, 1 + o.rest_count);
+}
+
 MoveState predict_player(const NetPlayer& acked, const MoveCmd* cmds, int count,
                          const MoveSettings& set, const MoveWorld& world, MoveState* each) {
   MoveState s = unquantize_player(acked, set);

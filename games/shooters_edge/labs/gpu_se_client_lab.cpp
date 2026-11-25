@@ -811,6 +811,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   if (!say.empty()) {
     lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
     for (const std::string& line : l.prints) lab.note("said: " + line);
+    // The centre prints over the same time (a program's welcome, a pickup's words).
+    lab.metric("said.centres", static_cast<double>(l.centres.size()), "");
+    for (const std::string& line : l.centres)
+      if (!line.empty()) lab.note("centre: " + line);
   }
   // `--botinfo="model cyborg;skin oni911"`: those user info keys on every player but you (the
   // companions `--say=addbot` seated), as if each had set them.
