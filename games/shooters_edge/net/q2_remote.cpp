@@ -354,6 +354,8 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   }
   sh::Vec3f drawn;
   ahead.teleports = r.predict_teleports;  // cl_predict_teleport
+  ahead.pushes = r.predict_pushes;        // cl_predict_push
+  ahead.movers = r.predict_movers;        // cl_predict_movers
   const bool predicted = !r.nopred && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
   // A teleport the prediction foresaw turns the view with it (the server's own delta angles,
@@ -383,6 +385,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size() && !st.intermission)
       st.eye = st.players[static_cast<size_t>(st.player)].origin + eye_up;
   }
+  q2_draw_movers_ahead(ahead, st);  // cl_predict_movers
   if (predicted) {
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
       st.players[static_cast<size_t>(st.player)].origin = drawn;
