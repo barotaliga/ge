@@ -89,3 +89,21 @@ TEST(gpudebug_notes_are_the_games_then_the_gpus) {
   const ge::capture::SheetPixels sheet = g.shot.compose(64, 32, px, notes);
   CHECK(sheet.width == 64 && sheet.height > 32);
 }
+
+TEST(gpustats_all_lists_every_pass_and_a_slowdown_shows_by_tenth) {
+  ge::console::Console con;
+  std::vector<std::string> said;
+  con.set_sink([&said](std::string_view l) { said.emplace_back(l); });
+  gr::GpuWatch w;
+  gr::add_gpustats(con, w);
+  con.execute("gpustats 20 all");
+  CHECK(w.all);
+  for (int i = 0; i < 20; ++i)  // the GPU twice as slow from halfway
+    gr::gpu_watch_frame(w, i < 10 ? stats(0, 1, 4) : stats(0, 2, 8), 0.01, con);
+  bool tenths = false;
+  for (const std::string& l : said)
+    if (l.find("by tenth of the run") != std::string::npos)
+      tenths = l.find(" 5.00 5.00 5.00 5.00 5.00 10.00 10.00") != std::string::npos;
+  CHECK(tenths);
+  CHECK(gr::gpu_watch_report(w, 1).size() >= w.pass_ms.size() + 3);  // `all` overrides the cap
+}

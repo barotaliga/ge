@@ -33,10 +33,11 @@ std::string fixed(double v, int places) {
 
 }  // namespace
 
-void start_gpu_watch(GpuWatch& w, int frames, bool quiet) {
+void start_gpu_watch(GpuWatch& w, int frames, bool quiet, bool all) {
   w = {};
   w.left = std::clamp(frames, 1, 6000);
   w.quiet = quiet;
+  w.all = all;
 }
 
 void gpu_watch_frame(GpuWatch& w, const FrameStats& stats, double frame_s, console::Console& con) {
@@ -74,6 +75,17 @@ std::vector<std::string> gpu_watch_report(const GpuWatch& w, size_t passes) {
     return out;
   }
   out.push_back("gpustats: GPU frame span, median " + fixed(median(w.span_ms), 2) + " ms");
+  if (w.span_ms.size() >= 20) {  // by tenths of the run: a GPU that slowed partway is a step
+    std::string tenths = "gpustats: span median by tenth of the run, ms:";
+    const size_t n = w.span_ms.size();
+    for (size_t k = 0; k < 10; ++k)
+      tenths +=
+          " " + fixed(median({w.span_ms.begin() + static_cast<std::ptrdiff_t>(n * k / 10),
+                              w.span_ms.begin() + static_cast<std::ptrdiff_t>(n * (k + 1) / 10)}),
+                      2);
+    out.push_back(tenths);
+  }
+  if (w.all) passes = w.pass_ms.size();
   if (w.pass_ms.empty() || w.read == 0) return out;
   std::vector<std::pair<double, size_t>> order;
   for (size_t i = 0; i < w.pass_ms.size(); ++i) {
@@ -94,10 +106,11 @@ std::vector<std::string> gpu_watch_report(const GpuWatch& w, size_t passes) {
 
 void add_gpustats(console::Console& con, GpuWatch& w) {
   con.add_command("gpustats",
-                  "gpustats [frames]: what the next frames cost on the GPU (60 by default), the "
-                  "dearest passes first",
+                  "gpustats [frames] [all]: what the next frames cost on the GPU (60 by default), "
+                  "the dearest passes first (all: every pass, not the dearest dozen)",
                   [&w](console::Console& c, const console::Args& a) {
-                    start_gpu_watch(w, a.size() > 1 ? std::atoi(a[1].c_str()) : 60, false);
+                    start_gpu_watch(w, a.size() > 1 ? std::atoi(a[1].c_str()) : 60, false,
+                                    a.size() > 2 && a[2] == "all");
                     c.print("gpustats: reading the next " + std::to_string(w.left) + " frames...");
                   });
 }
