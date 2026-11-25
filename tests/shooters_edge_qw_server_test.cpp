@@ -981,3 +981,18 @@ TEST(stuffed_lines_the_client_does_not_answer_wait_for_the_console) {
   CHECK(c[0].to_run.size() == 2 && c[0].to_run[0] == "alias hi \"say hi\"" &&
         c[0].to_run[1] == "echo hello");
 }
+
+// A program with `items2` (Dissolution of Eternity's) sends its second word above bit 23 of the
+// items stat, where its HUD reads the pack's guns and powers; without it the top four bits carry
+// the runes (`serverflags`), as the base game's status bar reads them.
+TEST(the_items_stat_carries_items2_for_a_program_with_it_else_the_runes) {
+  sv::RulesWorld w;
+  sh::PlayerNumbers n;
+  n.items = 4096 + 1;  // the rocket launcher and the shotgun
+  n.items2 = 1 + 4;    // the pack's first and third bits
+  w.serverflags = 15;  // all four runes
+  w.items2 = true;
+  CHECK(cn::items_word(w, n) == int32_t(4097 | (1u << 23) | (4u << 23)));
+  w.items2 = false;
+  CHECK(cn::items_word(w, n) == static_cast<int32_t>(4097u | (15u << 28)));
+}
