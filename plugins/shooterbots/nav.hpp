@@ -474,6 +474,9 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
 int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach = 40);
 // Whether a harm node lies within `reach` across of `p` and a step or more under it.
 bool nav_harm_near(const NavGraph& g, Vec3f p, float reach);
+// Whether the move's air keys carry a flight (an air acceleration with no cap on the wish: Quake
+// II's): forward in the air gains speed toward the way, and a key let go there is a flight lost.
+inline bool air_carries(const MoveSettings& m) { return m.air_wish_cap <= 0 && m.air_accel > 0; }
 // THE SIDE STEP INTO THE HARM (`nav_mark_side_harm`): a walk or drop over a deep pit (a ramp or a
 // walkway high over its lava: dm2's ramp up to the yellow armour runs 100-160 over it) has no harm
 // floor within `nav_mark_harm`'s reach, yet a run that cuts a corner off it falls in. Along every

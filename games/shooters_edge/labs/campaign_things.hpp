@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <string>
@@ -48,7 +49,7 @@ namespace pg = ge::progs;
 namespace sv = shooters_edge::server;
 namespace sh = ge::shooter;
 
-enum Act {
+enum Act : uint8_t {
   moved,
   turned,
   shown,

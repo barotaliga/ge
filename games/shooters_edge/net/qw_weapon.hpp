@@ -68,6 +68,8 @@ struct RemoteWeapon {
     ge::classic::WeaponEvent shot;
     uint32_t command = 0;
     bool midair = false;  // the state's midair flag: the rocket flies at twice the speed
+    int weapon = 0;       // the weapon in hand that fired it, under `rules`
+    ge::classic::WeaponRules rules = ge::classic::WeaponRules::quake;
   };
   std::vector<Fired> fired;
   // What the drawn state held before the prediction drew over it (`applied`).
