@@ -503,7 +503,7 @@ bool load_packages(Game& g, const gs::ServerConfig& c, std::string& folders, std
 
 // The program: a named mod's own (its compiled module `qwprogs.qvm` when it has one, else its
 // folder's program files through the game's adapter, the base game's under it), else the
-// baseline mod.
+// baseline mod: none named, or a folder whose only program is a single-player one.
 bool open_program(Game& g, const std::string& mod, std::string& error) {
   if (mod.empty() || mod == kGameFolder) return cl::baseline_progs(g.progs, error);
   if (read_game_file(&g.files, "qwprogs.qvm", g.module)) return true;
@@ -511,6 +511,12 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
   cl::FoundProgram found;
   std::string why;
   if (game.find_program == nullptr || !game.find_program(game, g.files, false, found, why)) {
+    // A mission pack's folder holds the campaign's single-player program alone: its maps are
+    // played for deathmatch on the baseline mod, as the window hosts them.
+    cl::FoundProgram campaign;
+    std::string none;
+    if (game.find_program != nullptr && game.find_program(game, g.files, true, campaign, none))
+      return cl::baseline_progs(g.progs, error);
     error = "the mod folder " + mod + " holds no multiplayer program this server runs" +
             (why.empty() ? std::string() : " (" + why + ")") + ". Put the mod's qwprogs.dat in " +
             g.files.folder + ", or leave sv_mod empty for the baseline mod.";

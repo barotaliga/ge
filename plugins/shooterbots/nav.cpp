@@ -270,6 +270,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   const float bottom = g.lo.z;
   std::vector<Vec3f> floors;
   std::vector<std::vector<Vec3f>> col_floors(ncol);
+  NavVoid unsealed;  // floors in the rock of a map whose player hull is open outside its rooms
   auto col_of = [&](int32_t i, int32_t j) {
     return static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
   };
@@ -278,6 +279,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       const float x = g.lo.x + set.spacing * (static_cast<float>(i) + 0.5f);
       const float y = g.lo.y + set.spacing * (static_cast<float>(j) + 0.5f);
       column_floors(world, x, y, top, bottom, floors);
+      std::erase_if(floors, [&](Vec3f f) { return nav_floor_in_void(world, f, unsealed); });
       col_floors[col_of(i, j)] = floors;
       g.counts.columns++;
     }

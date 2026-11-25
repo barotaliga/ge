@@ -36,6 +36,8 @@
 #include "console/console.hpp"
 #include "console/words.hpp"
 #include "net/sim_network.hpp"
+#include "progs/assembler.hpp"
+#include "progs/layout.hpp"
 #include "server/config.hpp"
 #include "server/main.hpp"
 #include "server/server.hpp"
@@ -580,6 +582,38 @@ TEST(classic_game_a_mod_folder_runs_its_own_program) {
   CHECK(r.client.gamedir == "mymod");
   CHECK_MSG(r.client.serverinfo.find("\\*gamedir\\mymod") != std::string::npos,
             r.client.serverinfo);
+  fs::remove_all(root);
+}
+
+// A mission pack's folder holds its campaign's single-player program and its maps: the server
+// plays the pack's maps for deathmatch on the baseline mod rather than refusing the folder.
+TEST(classic_game_a_mission_pack_s_folder_runs_its_maps_on_the_baseline_mod) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "ge_se_classic_game_pack";
+  fs::remove_all(root);
+  fs::create_directories(root / se::kGameFolder);
+  fs::create_directories(root / "pack");
+  std::string error;
+  std::vector<uint8_t> bsp, pak;
+  CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bsp, &error),
+            error);
+  const std::vector<uint8_t> campaign =
+      ge::progs::Assembler(ge::progs::kSinglePlayerLayout).bytes();
+  CHECK_MSG(ge::vfs::write_pak({{"maps/packdm.bsp", bsp}, {"progs.dat", campaign}}, &pak, &error),
+            error);
+  {
+    std::ofstream out(root / "pack" / "pak0.pak", std::ios::binary);
+    out.write(reinterpret_cast<const char*>(pak.data()), static_cast<std::streamsize>(pak.size()));
+  }
+  ServerConfig c = arena();
+  c.map = "packdm";
+  c.root = root.string();
+  c.mod = "pack";
+  Session r;
+  run_session(r, c, 300);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK(r.client.gamedir == "pack");
   fs::remove_all(root);
 }
 
