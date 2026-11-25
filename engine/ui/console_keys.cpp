@@ -6,6 +6,7 @@
 // ge:test tests/ui_console_keys_test.cpp
 #include "ui/console_keys.hpp"
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 
@@ -151,6 +152,8 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
     const bool menu_lets = !keys.menu || typing || (e.code >= kF1 && e.code <= kF12) ||
                            e.code == kGrave || e.code == kNonUs;
     if (down && !menu_lets) continue;
+    if (!typing && std::find(keys.taken.begin(), keys.taken.end(), e.code) != keys.taken.end())
+      continue;  // the game's own this frame
     if (down) {
       // While the chat line has the keys the binds are the console's (the tilde alone), so a
       // letter typed presses nothing in the game.

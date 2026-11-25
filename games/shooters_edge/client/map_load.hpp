@@ -158,6 +158,10 @@ struct LoadWindow {
 inline constexpr int kWarmCubes = 2, kMostWarmFrames = 40;
 int take_load(MapLoad& load, const LoadWindow& at, Listen& listen, ge::console::Console& con,
               bool measured, double now_s, WorldDrawPtr& world, bool& current, bool& fresh);
+// A demo's or a joined game's world (started with `load_world`): read on its thread and built a
+// step a frame, so the window keeps its frames; `wait` (a timedemo, or leaving one) does it all
+// now. `world` takes it once it is made. False when it failed (said on the log).
+bool step_demo_world(MapLoad& load, const LoadWindow& at, bool wait, WorldDrawPtr& world);
 
 // Every step stopped, its threads waited out (before the search path they read is let go).
 void cancel_load(MapLoad& load);

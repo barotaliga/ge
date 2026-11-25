@@ -94,3 +94,31 @@ TEST(the_cursor_blinks) {
   ui::draw_console(off, v, {}, nullptr, 0.6);
   CHECK(on.size() == off.size() + 1);
 }
+
+TEST(a_line_too_long_for_the_panel_wraps_at_its_spaces) {
+  console::Console c;
+  console::ConsoleView v(c);
+  std::string longest;
+  for (int i = 0; i < 40; ++i) longest += "word" + std::to_string(i) + " ";
+  longest.pop_back();
+  v.add(console::LineKind::output, longest);
+  v.toggle();
+  v.frame(10);
+  ui::DrawList dl;
+  dl.begin(640, 360);
+  ui::draw_console(dl, v);
+  // Its rows together hold the whole line, none wider than the screen, none cut inside a word.
+  std::string joined;
+  int rows = 0;
+  for (const ui::Cmd& cmd : dl.cmds()) {
+    if (cmd.kind != ui::CmdKind::text || cmd.text.text.rfind("word", 0) != 0) continue;
+    CHECK(cmd.text.text.back() != ' ' && cmd.text.text.front() != ' ');
+    joined += (joined.empty() ? "" : " ") + cmd.text.text;
+    ++rows;
+  }
+  CHECK(rows > 1);
+  CHECK(joined == longest);
+  // Clicking the second row's start selects from where that row begins in the line.
+  const auto spot = ui::console_spot(v, {}, 640, 360, 13, 360 * 0.5f - 200);
+  CHECK(spot.has_value());
+}

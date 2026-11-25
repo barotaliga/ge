@@ -62,19 +62,20 @@ struct ConsoleStyle {
   bool bar_glyphs = false;
 };
 
-// Where the point `x, y` (px, on a target `height` px tall drawn by draw_console with `style`)
-// falls in the scrollback's text: a line and a letter, for selecting it with the mouse. Above the
-// page its first line, below it its last line's end; none while the console is closed or has no
-// lines.
+// Where the point `x, y` (px, on a target `width` by `height` px drawn by draw_console with
+// `style`) falls in the scrollback's text: a line and a letter, for selecting it with the mouse.
+// A line too long for the panel wraps onto the rows under it, as drawn. Above the page its first
+// row's start, below it its last row's end; none while the console is closed or has no lines.
 std::optional<console::TextSpot> console_spot(const console::ConsoleView& view,
-                                              const ConsoleStyle& style, int height, float x,
-                                              float y);
+                                              const ConsoleStyle& style, int width, int height,
+                                              float x, float y);
 
 // SELECTING WITH THE MOUSE, a frame at a time: `down` the button held at (x, y) px on a target
-// `height` px tall. Pressed on the panel it starts a selection, dragged it moves its end, let go it
-// keeps it; pressed below the panel it clears it. `held` is the caller's: whether it was down.
-void select_with_pointer(console::ConsoleView& view, const ConsoleStyle& style, int height, float x,
-                         float y, bool down, bool& held);
+// `width` by `height` px. Pressed on the panel it starts a selection, dragged it moves its end, let
+// go it keeps it; pressed below the panel it clears it. `held` is the caller's: whether it was
+// down.
+void select_with_pointer(console::ConsoleView& view, const ConsoleStyle& style, int width,
+                         int height, float x, float y, bool down, bool& held);
 
 // The console as it stands, into `list` (begun at the target's size). `image` is con_bgimage's
 // picture, loaded by the caller (null: the gradient alone). `time_s` blinks the cursor.

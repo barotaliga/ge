@@ -1,10 +1,10 @@
 // The way through's waking triggers (way_through.hpp): a trigger that waits to be made live, the
 // names that wake it, the doors such a live trigger opens by touch, and the side of its doors it
-// is walked into from.
+// is walked into from, and the place a shot button is shot from.
 //
 // ge:summary Triggers a button wakes: the names that wake one, touch doors, the near side's node
 // ge:keywords way_gate_names way_wake_gates way_touch_opened way_trigger_sides triggered gate
-// ge:keywords trigger-multiple touch-door wake bunk1
+// ge:keywords trigger-multiple touch-door wake bunk1 way_shot_sides shot-button force-field
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #pragma once
@@ -40,5 +40,10 @@ bool way_touch_opened(const WayThrough& w, const ge::shooter::Edict& de, int32_t
 // A trigger reaching across the doors it opens is walked into on his side of them (a node in its
 // box he reaches), not at the node first chosen beyond them.
 void way_trigger_sides(WayThrough& w, const NavGraph& g);
+
+// A shot button whose node he does not reach (the one nearest it that sees it, in a room he has
+// not got into) is shot from the nearest node he reaches that sees it within kShotFrom (bunk1's
+// switch behind its force field, shot from the corridor through the room's far door).
+void way_shot_sides(WayThrough& w, Fighter& f, const NavGraph& g, const BotView& s, double t);
 
 }  // namespace ge::shooterbots
