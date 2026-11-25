@@ -93,6 +93,9 @@ void run(gl::Lab& lab) {
     return;
   }
   es::Scene s;
+  // Shooter's Edge's frame never adapts the eye to a flash (no lamp_lux): drawn as the game draws
+  // it, the huge blast lights the yard and the wall and leaves the dusk sky as it was.
+  s.adapt = false;
   if (!es::make_scene(*device, s, w, h, 10)) {
     lab.fail("the explosions' pipelines did not build",
              "Read the gpu: lines above. Skill: render.");
