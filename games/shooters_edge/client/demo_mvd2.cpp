@@ -576,7 +576,30 @@ struct Mvd2ToQ2 final : ConvertStream {
         case server::SqShot::bfg:
           return 64;
         case server::SqShot::bolt:
+        case server::SqShot::ripper:
+        case server::SqShot::blue_bolt:
+        case server::SqShot::green_bolt:
+        case server::SqShot::spit:
           return k == 0 ? 0 : 64;  // the blaster none; the hyperblaster a beam gun
+        case server::SqShot::plasma:
+        case server::SqShot::heat_rocket:
+          return 32;
+        case server::SqShot::trap:
+        case server::SqShot::prox:
+        case server::SqShot::tesla:
+        case server::SqShot::nuke:
+          return 16;
+        case server::SqShot::flechette:  // Ground Zero's: the nailguns' and the beam gun's
+          return 4;
+        case server::SqShot::tracker:
+        case server::SqShot::heat_beam:
+          return 64;
+        case server::SqShot::chainfist:
+          return 1;
+        case server::SqShot::defender_sphere:  // spheres are no weapon's shot
+        case server::SqShot::hunter_sphere:
+        case server::SqShot::vengeance_sphere:
+          return 0;
       }
     }
     return 0;

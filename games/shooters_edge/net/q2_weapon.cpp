@@ -132,18 +132,20 @@ void know_frame(Q2Known& k, const dc::Demo& d, int32_t frame, int weapon, int am
     k.held = weapon;
   }
   if (d.arsenal_told) {
+    static_assert(sv::kSqAmmoKinds <= dc::Demo::kArsenalAmmo && sv::kSqAmmoKinds <= 16,
+                  "the arsenal and the seen mask hold every kind");
     k.weapons = d.arsenal_weapons;
     for (int a = 1; a < sv::kSqAmmoKinds; a++) {
       k.ammo[a] = d.arsenal_ammo[a];
-      k.ammo_seen[a] = true;
+      k.ammo_seen = static_cast<uint16_t>(k.ammo_seen | 1u << a);
     }
   }
   if (weapon < 0) return;
-  k.weapons |= static_cast<uint16_t>(1u << weapon);
+  k.weapons |= 1u << weapon;
   const int a = static_cast<int>(sv::kSqWeapons[weapon].ammo);
   if (a > 0) {  // the frame's own count, newer than any arsenal
     k.ammo[a] = static_cast<int16_t>(ammo);
-    k.ammo_seen[a] = true;
+    k.ammo_seen = static_cast<uint16_t>(k.ammo_seen | 1u << a);
   }
 }
 
@@ -156,7 +158,8 @@ sv::SqBody body_of(const Q2Known& k) {
     const int item = sv::sq_item(sv::kSqWeapons[w].item);
     if (item >= 0 && sv::kSqItems[item].kind != sv::SqKind::ammo) b.counts[item] = 1;
   }
-  for (int a = 1; a < sv::kSqAmmoKinds; a++) b.ammo[a] = k.ammo_seen[a] ? k.ammo[a] : 0;
+  for (int a = 1; a < sv::kSqAmmoKinds; a++)
+    b.ammo[a] = (k.ammo_seen >> a & 1u) != 0 ? k.ammo[a] : 0;
   return b;
 }
 
@@ -288,6 +291,7 @@ void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2
   const uint32_t acked = c.ch.incoming_acknowledged;
   const uint32_t first = c.made_at[acked & (kSqSentRing - 1)];
   p.on = false;
+  p.fired.clear();
   const auto off = [&] {
     p.played_to = first - 1;
     return;
@@ -409,6 +413,8 @@ void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2
                              kSameShot))
         continue;
       weapon_shot_fired(st, r.hand.frame);
+      const double sent = move_at[(k - first) & (kSqSentRing - 1)] + offset;
+      p.fired.push_back({k, e.weapon, r.hand.frame, std::max(0.0, c.now - sent)});
       p.audit.predicted[p.audit.predicted_n++ & 31] = e.frame;
       if (e.quiet || !weapon_sound_plays(w.sound_mask, e.weapon + 1)) continue;
       if (e.flash < 0) {  // heard by name: the hand grenade's throw

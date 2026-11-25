@@ -137,6 +137,8 @@ void shoot(A& q, int run, const roster::Attack& a, bool blow) {
     }
     case Fire::drain:
     case Fire::zap:
+    case Fire::tongue:  // a pack's pull and beams land as a blow where it sees him
+    case Fire::laser:
       if ((a.fire == Fire::drain) & (q.vlen(to - from) > 256)) break;
       if (!can_see(q, enemy)) break;
       if (a.fire == Fire::drain) effect_beam(q, from, to);

@@ -9,6 +9,12 @@
 // to, his velocity on arrival and a hold the move runs (Quake II's teleport pause; 0 none). A game
 // fills it from its own entities (plugins/classic/teleporters.hpp: Quake's and Quake II's).
 //
+// PUSHES (`push`): a push trigger (a wind tunnel, a jump pad) is an entry that only sets the
+// player's velocity, every command his box is in it, as the server's touch does after his move:
+// without it the window draws him walking on for a round trip and is then yanked along the push.
+// `pusher_at` finds them; `teleporter_at` passes over them. A push makes no guess: the server's
+// state carries the velocity it gave, and a wrong one is an ordinary correction.
+//
 // THE GUESS (`TeleGuess`): one predicted teleport the server has not yet answered: the command
 // that touched it, which teleporter, and the turn the view was given. The server's answer settles
 // it:
@@ -23,6 +29,7 @@
 // ge:summary Teleports a client foresees: the table, the prediction's hit, the guess and its answer
 // ge:keywords teleport teleporter predict-teleport teleport-prediction cl_predict_teleport guess
 // ge:keywords tele_guess teleporter_at teleport_state predict_player hold confirm undo
+// ge:keywords trigger_push push-trigger jump-pad wind-tunnel pusher_at predict-push cl_predict_push
 // ge:skill shooter net
 // ge:test tests/shooter_teleport_ahead_test.cpp
 #pragma once
@@ -37,18 +44,30 @@
 namespace ge::shooter {
 
 struct Teleporter {
-  Vec3f lo, hi;     // the box the server tests, its growth included
-  Vec3f dest;       // the player's origin on arrival
-  Vec3f angles;     // the view he is turned to (pitch, yaw, roll)
-  Vec3f velocity;   // his velocity on arrival
-  int hold_ms = 0;  // a hold the move runs on arrival (Quake II's); 0 none
+  Vec3f lo, hi;       // the box the server tests, its growth included
+  Vec3f dest;         // the player's origin on arrival
+  Vec3f angles;       // the view he is turned to (pitch, yaw, roll)
+  Vec3f velocity;     // his velocity on arrival
+  int hold_ms = 0;    // a hold the move runs on arrival (Quake II's); 0 none
+  bool push = false;  // a push trigger: only `velocity` is set, the player left where he is
 };
 using Teleporters = std::vector<Teleporter>;
 
 // The teleporter whose box the player's (`origin` + `mins`..`maxs`, grown by `grow` a side)
-// overlaps, the first in the table; -1 none. `skip`: one left out.
+// overlaps, the first in the table; -1 none. `skip`: one left out. Pushes are passed over.
 int teleporter_at(const Teleporters& t, Vec3f origin, Vec3f mins, Vec3f maxs, float grow,
                   int skip = -1);
+// The push trigger the player's box overlaps, the first in the table; -1 none.
+int pusher_at(const Teleporters& t, Vec3f origin, Vec3f mins, Vec3f maxs, float grow);
+
+// A level's tables, so the teleports and the pushes switch on and off apart: the teleporters
+// alone (the guess's indices), the same teleporters followed by the pushes (the same indices),
+// and the pushes alone. `table` picks the one the switches ask for; null when it is empty.
+struct TeleTables {
+  Teleporters tele, with_push, push_only;
+  void fill(Teleporters teleporters, const Teleporters& pushes);
+  const Teleporters* table(bool teleports, bool pushes) const;
+};
 
 // Quake's arrival on the shared move's state: put there with the velocity, off the ground.
 void teleport_state(MoveState& s, const Teleporter& t);
@@ -63,10 +82,15 @@ struct TeleHit {
 inline constexpr float kTeleLinkGrow = 1;  // the server grows every box it links by a unit a side
 
 // predict_player (shooter/predict.hpp) taking the teleporters in `tele` (none when null): the
-// player's box tested after each command, a teleport taken as the server takes it.
+// player's box tested after each command, a push's velocity then a teleport taken as the server
+// takes them; `movers` (when given, `mover_count` of them, solids 1.. of `world`) run on before
+// each command (`advance_movers`): to `mover_at[i]` seconds after the frame they were seen in
+// before command i (when given: when the server will run it), else by each command's time.
 MoveState predict_player_teleports(const NetPlayer& acked, const MoveCmd* cmds, int count,
                                    const MoveSettings& set, const MoveWorld& world, MoveState* each,
-                                   const Teleporters* tele, int skip, TeleHit* hit);
+                                   const Teleporters* tele, int skip, TeleHit* hit,
+                                   const ClientModel* movers = nullptr, int mover_count = 0,
+                                   const float* mover_at = nullptr);
 
 struct TeleGuess {
   uint32_t seq = 0;     // the command that teleported, 0 none standing
