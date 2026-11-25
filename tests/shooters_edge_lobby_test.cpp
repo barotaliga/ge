@@ -271,6 +271,28 @@ TEST(a_map_after_deathmatch_0_starts_without_the_lobby) {
   CHECK(l.room != nullptr && l.host->lobby);
 }
 
+// The remix changed mid-match (`cr_items`: its lines in `ListenOptions::arsenal`): the next map
+// starts the match afresh on them, so its items switch with the HUD and the weapons in the hand.
+TEST(a_map_after_a_remix_change_starts_the_match_on_the_new_items) {
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(cl::baseline_progs(progs, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 1"};
+  cl::SearchPath none;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(l.host->worn.empty());
+  CHECK(l.server->cvars.find("fraglimit")->number != 30);
+  l.opt.arsenal = {"fraglimit 30"};  // a line the remix's would stand for
+  std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(cl::listen_change(l, std::move(next), error), error);
+  CHECK(l.host->worn == l.opt.arsenal);
+  CHECK(l.server->cvars.find("fraglimit")->number == 30);
+}
+
 TEST(the_lobby_words_are_console_commands) {
   ge::console::Console con;
   cl::Listen l;

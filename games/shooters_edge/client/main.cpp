@@ -775,14 +775,18 @@ int run_main(int argc, char** argv) {
   std::pair<bool, bool> remix_open{false, true};  // cr_enabled and cr_expansions as opened
   std::string remix_for;
   cl::RemixParts remix_items{};  // remix.hpp's `remix_parts`
-  const auto remix_sync = [&] {
+  // True once the remix is in step with its settings (false: the loader is busy, try next frame).
+  const auto remix_sync = [&]() -> bool {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     const auto open = std::pair(remix_settings.enabled, remix_settings.expansions);
     const bool same_files = open == remix_open && remix_for == args.basedir;
-    if (same_files && cl::remix_parts(remix_settings) == remix_items) return;
-    if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
+    if (same_files && cl::remix_parts(remix_settings) == remix_items) return true;
+    if (cl::busy(loader)) return false;  // its threads may read the other game's files: next frame
     remix_items = cl::remix_parts(remix_settings);
-    if (same_files) return remix_wear();
+    if (same_files) {
+      remix_wear();
+      return true;
+    }
     remix_open = open;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
@@ -799,6 +803,7 @@ int run_main(int argc, char** argv) {
       console.print(st.why);
     }
     remix_wear();
+    return true;
   };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;
@@ -1405,8 +1410,10 @@ int run_main(int argc, char** argv) {
       next_map = listen.pending_map;
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
     if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
-    remix_sync();
-    if (!next_map.empty() && !loader.map.valid() && !elsewhere) {
+    // The remix in step before the map asked for is read (its items, HUD and weapons together).
+    const bool remix_ready =
+        cl::remix_waits(listen.map != nullptr, !next_map.empty()) || remix_sync();
+    if (!next_map.empty() && !loader.map.valid() && !elsewhere && remix_ready) {
       cl::load_map(loader, files, next_map, t);
       next_map.clear();
     }

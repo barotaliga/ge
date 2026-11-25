@@ -136,6 +136,9 @@ struct ListenHost {
   std::shared_ptr<LoadedMap> map;     // the first map, read
   const SearchPath* files = nullptr;  // where the next map is read (null: the arena only)
   std::vector<std::string> lines;     // server lines before each map's rules start
+  // The remix's lines the match started with (`ListenOptions::arsenal` and `over_mod`): a map
+  // change after the remix changed starts the match afresh, its items the remix's new ones.
+  std::vector<std::string> worn, worn_over;
   bool lobby = false;
   sv::LobbySettings lobby_settings;
   std::string player = "player";  // slot 0, the window's own player: a local seat

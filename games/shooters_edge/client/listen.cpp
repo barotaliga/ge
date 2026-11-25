@@ -517,6 +517,8 @@ bool start_map(Listen& l, std::string& error) {
   h->load = std::move(l.load);  // a Quake II's save the first map loads
   h->load_name = l.load_name;
   h->lines = l.opt.item_names;
+  h->worn = l.opt.arsenal;
+  h->worn_over = l.opt.over_mod;
   // A mod's module sets its own weapons and physics: classic remix's lines for them
   // (`worn_lines`: cr_items, cr_physics) are left out, the mod's boundaries standing, but for
   // those `cr_over_mods` sets over them (`over_mod`, below).
@@ -888,8 +890,11 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
     return true;
   }
   // No match yet, or one of the other kind (a deathmatch's lobby while `deathmatch 0` now asks
-  // for single player or coop, or the other way): the match started afresh on the map.
-  if (!l.match || l.host->lobby != (l.opt.lobby && !wants_campaign(l.opt))) {
+  // for single player or coop, or the other way), or one on the remix's old items, files or
+  // moves (`cr_items` changed since it started): the match started afresh on the map.
+  if (!l.match || l.host->lobby != (l.opt.lobby && !wants_campaign(l.opt)) ||
+      l.host->worn != l.opt.arsenal || l.host->worn_over != l.opt.over_mod ||
+      l.host->files != l.opt.files) {
     l.map = std::move(map);
     return start_map(l, error);
   }
