@@ -95,6 +95,27 @@ class Zone {
   size_t span_;
 };
 
+// Zones a function opens and closes by hand, one after another, where its parts are not scopes
+// of their own: `begin` closes the part open before, `end` (or leaving the scope) the last.
+class ZoneParts {
+ public:
+  ZoneParts() = default;
+  ~ZoneParts() { end(); }
+  ZoneParts(const ZoneParts&) = delete;
+  ZoneParts& operator=(const ZoneParts&) = delete;
+  void begin(uint32_t id) {
+    end();
+    span_ = detail::g_on.load(std::memory_order_relaxed) ? detail::open(id) : detail::kNotRecorded;
+  }
+  void end() {
+    if (span_ != detail::kNotRecorded) detail::close(span_);
+    span_ = detail::kNotRecorded;
+  }
+
+ private:
+  size_t span_ = detail::kNotRecorded;
+};
+
 }  // namespace ge::prof
 
 #define GE_ZONE_CAT2(a, b) a##b

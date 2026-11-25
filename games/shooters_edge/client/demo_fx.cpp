@@ -134,8 +134,9 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
   for (std::size_t k = 0; k < s.own_missiles.size() && k < s.own_missile_ids.size(); k++) {
     const DemoEntity& d = s.own_missiles[k];
     Missile m;
-    if (d.model <= 0 || static_cast<std::size_t>(d.model) >= s.models.size() ||
-        !missile_model(s.models[static_cast<std::size_t>(d.model)], m))
+    if (d.model <= 0 || static_cast<std::size_t>(d.model) >= s.models.size()) continue;
+    if (s.format == DemoFormat::q2 ? !q2_missile(d.effects, m)  // Quake II's by their bits
+                                   : !missile_model(s.models[static_cast<std::size_t>(d.model)], m))
       continue;
     m.entity = kOwnMissileEntity + s.own_missile_ids[k];
     m.origin = d.origin;

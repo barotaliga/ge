@@ -485,6 +485,7 @@ bool match_removed(const Q2Server& s, const SqItem& it) {
 }
 
 bool dm_left_out(const Q2Server& s, int item) {
+  if (s.opt.pack == Q2Pack::ground_zero && gz_left_out(s, item)) return true;  // in every mode
   if (item < 0 || !deathmatch(s)) return false;
   if (fight_midair(s)) return true;  // nothing lies on the map in midair
   const SqItem& it = kSqItems[item];
@@ -493,13 +494,13 @@ bool dm_left_out(const Q2Server& s, int item) {
          (fight_dmflag(s, 2) && it.kind == SqKind::powerup) ||
          (fight_dmflag(s, 2048) &&
           (it.kind == SqKind::armour || it.kind == SqKind::power_armour)) ||
-         (fight_dmflag(s, 8192) && (it.kind == SqKind::ammo || name == "weapon_bfg")) ||
-         (s.opt.pack == Q2Pack::ground_zero && gz_left_out(s, item));
+         (fight_dmflag(s, 8192) && (it.kind == SqKind::ammo || name == "weapon_bfg"));
 }
 
 // Whether the map's entity is left out in this mode by its spawn flags.
 bool left_out(const Q2Server& s, int flags) {
   if (deathmatch(s)) return (flags & 0x800) != 0;
+  if (const int gz = gz_coop_left_out(s, flags); gz >= 0) return gz != 0;  // Ground Zero's co-op
   const int k = skill(s);
   return (k == 0 && (flags & 0x100) != 0) || (k == 1 && (flags & 0x200) != 0) ||
          (k >= 2 && (flags & 0x400) != 0);
@@ -1325,6 +1326,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.sounds.assign(1, "");
   fight_precache(s);
   monster_precache(s);
+  gz_decoys_reserve(s);  // Ground Zero's deathmatch: a Doppleganger's row for each slot
   campaign_start(s);
   fight_clear(s);
   s.models.emplace_back(kSqPowerScreenModel);  // the plate a power screen shows when struck

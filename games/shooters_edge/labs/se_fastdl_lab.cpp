@@ -1,5 +1,6 @@
-// LAB `se-fastdl`: how long does a QuakeWorld player wait for a map they lack, over the game's own
-// channel and over HTTPS from the server's own web files (engine/server/web_files.hpp)?
+// LAB `se-fastdl`: how long does a player wait for a map they lack, over the game's own channel and
+// over HTTPS from the server's own web files (engine/server/web_files.hpp)? `--game=qw` (the
+// default) or `q2`.
 //
 // THE MAP: `--map=<a .bsp>` (a real QuakeWorld map, such as aerowalk), else made-up bytes of
 // `--size` kB (the smoke run's).
@@ -7,7 +8,10 @@
 // OVER THE CHANNEL: the QuakeWorld server (qw_server.hpp) serves the map's bytes as a file a
 // scripted client (qw_client.hpp) lacks and fetches before it plays, over engine/net's simulated
 // LAN (`run_qw_trial`, one client); the wait is the time to play with the file less the time to
-// play without it, on the session's own clock: the same to the bit on every machine.
+// play without it, on the session's own clock: the same to the bit on every machine. With
+// `--game=q2` our Quake II server (q2_net_server.hpp) serves it to our scripted Quake II client
+// (q2_client.hpp) on a hall of brushes, once asking the base protocol (34, a stock client's) and
+// once the best the server offers (36, its downloads packed).
 //
 // OVER HTTPS: the server's web file server on loopback, TLS under the certificate it makes itself,
 // and the client's web downloads (classic/content/web_downloads.hpp) trusting it by the digest the
@@ -17,7 +21,7 @@
 //
 // ge:summary Lab: a map's wait over the channel vs HTTPS from the server's own web files
 // ge:keywords lab se-fastdl fast-downloads https web-files download-time udp-vs-https
-// ge:keywords sv_http_port rate-cap progress
+// ge:keywords sv_http_port rate-cap progress q2-download q2-fastdl
 // ge:skill net labs
 // ge:test tests/net_file_server_test.cpp
 #include <algorithm>
@@ -27,14 +31,23 @@
 #include <string>
 #include <vector>
 
+#include "brush/map.hpp"
+#include "brush/read.hpp"
+#include "brush/write.hpp"
 #include "classic/content/web_downloads.hpp"
 #include "console/view.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
+#include "net/conditions.hpp"
 #include "net/file_server.hpp"
+#include "net/sim_network.hpp"
 #include "net/tls_stream.hpp"
+#include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/net/qw_trial.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
 
@@ -44,6 +57,9 @@ namespace gl = ge::lab;
 namespace gn = ge::net;
 namespace cn = shooters_edge::net;
 namespace wd = ge::classic::content;
+namespace br = ge::brush;
+namespace sh = ge::shooter;
+namespace sv = shooters_edge::server;
 using ge::core::num::to_fixed;
 
 struct WebRun {
@@ -56,8 +72,8 @@ struct WebRun {
 };
 
 // One fetch of `map` as `maps/<name>.bsp` from a web file server on loopback with these caps.
-WebRun fetch_over_https(const std::vector<uint8_t>& map, const std::string& file, int64_t rate_kb,
-                        int64_t player_kb) {
+WebRun fetch_over_https(const std::vector<uint8_t>& map, const std::string& file,
+                        const std::string& folder, int64_t rate_kb, int64_t player_kb) {
   WebRun out;
   gn::FileServer server;
   gn::FileServeOptions o;
@@ -69,8 +85,8 @@ WebRun fetch_over_https(const std::vector<uint8_t>& map, const std::string& file
   }
   if (!gn::file_server_open(
           server, gn::loopback_v4(0), o,
-          [&map, &file](const std::string& path, std::vector<uint8_t>& bytes) {
-            if (path != "qw/maps/" + file) return false;
+          [&map, &file, &folder](const std::string& path, std::vector<uint8_t>& bytes) {
+            if (path != folder + "/maps/" + file) return false;
             bytes = map;
             return true;
           },
@@ -84,13 +100,13 @@ WebRun fetch_over_https(const std::vector<uint8_t>& map, const std::string& file
     hex += "0123456789abcdef"[b & 15];
   }
   wd::WebConfig cfg;
-  cfg.base_folder = "qw";
+  cfg.base_folder = folder;
   cfg.filelists = false;
   cfg.kinds = wd::quake_web_kinds();
   wd::WebDownloads h;
   // The address as a server with no settings but its port tells it, and its certificate's digest.
   wd::web_connect(h, cfg, "https://{server}:" + std::to_string(server.listener.local.port) + "/", 1,
-                  "127.0.0.1:27500", hex);
+                  folder == "qw" ? "127.0.0.1:27500" : "127.0.0.1:27910", hex);
   wd::web_queue(h, cfg, "maps/" + file);
   const auto t0 = std::chrono::steady_clock::now();
   const auto now = [&t0] {
@@ -127,6 +143,78 @@ WebRun fetch_over_https(const std::vector<uint8_t>& map, const std::string& file
   return out;
 }
 
+// A hall of brushes for Quake II's server to run while it serves the map's bytes as its file.
+std::shared_ptr<const br::Map> q2_hall() {
+  br::BrushWorld w;
+  w.models.resize(1);
+  const auto box = [&w](float x0, float y0, float z0, float x1, float y1, float z1) {
+    const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
+    w.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/wall"));
+  };
+  box(-1024, -1024, -16, 1024, 1024, 0);
+  box(-1040, -1024, -16, -1024, 1024, 256);
+  box(1024, -1024, -16, 1040, 1024, 256);
+  box(-1040, 1024, -16, 1040, 1040, 256);
+  box(-1040, -1040, -16, 1040, -1024, 256);
+  br::Entity spot;
+  spot.pairs = {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}};
+  w.entities.push_back(spot);
+  std::vector<uint8_t> bytes;
+  std::string error;
+  auto map = std::make_shared<br::Map>();
+  if (!br::write_brush_world(w, &bytes, &error) || !br::read_bsp(bytes, map.get(), &error))
+    return nullptr;
+  return map;
+}
+
+// The simulated seconds until our Quake II client, asking `protocol`, plays on our server; with
+// `map` it lacks the level's map and fetches those bytes first. -1 when it never plays.
+double q2_wait(const std::vector<uint8_t>* map, int protocol, double most_s, std::string& error) {
+  sv::RulesRunner rules = sv::q2_runner(sv::make_q2_server({}));
+  rules.console("deathmatch 1");
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = q2_hall();
+  if (spec.brushes == nullptr || !rules.start(spec, error)) return -1;
+  gn::LinkConditions link;
+  gn::conditions_preset("lan", link);
+  gn::SimNetwork net = gn::make_sim_network(7, link);
+  gn::Transport st, ct;
+  gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortQ2));
+  gn::open_sim_transport(ct, net, gn::sim_address(1, 27901));
+  cn::Q2NetConfig cfg;
+  cfg.read_file = [map](const std::string& path, std::vector<uint8_t>* out) {
+    if (map == nullptr || path != "maps/hall.bsp") return false;
+    *out = *map;
+    return true;
+  };
+  cn::Q2NetServer server;
+  if (!cn::q2_net_start(server, rules, st, cfg, error)) return -1;
+  cn::Q2ClientEnd c;
+  cn::Q2ClientConfig cc;
+  cc.name = "fetcher";
+  cc.qport = 100;
+  cc.fetch = map != nullptr;
+  cc.protocol = protocol;
+  cn::q2_client_start(c, ct, gn::sim_address(0, cn::kPortQ2), cc, 0);
+  int64_t now = 0;
+  while (c.stage != cn::ClientStage::active && static_cast<double>(now) / 1e6 < most_s) {
+    now += 13000;
+    gn::sim_advance(net, now);
+    cn::q2_client_tick(c, now);
+    cn::q2_net_frame(server, now);
+  }
+  if (c.stage != cn::ClientStage::active) {
+    error = "the client did not reach play: " + c.refused;
+    return -1;
+  }
+  if (map != nullptr && (c.downloaded.size() != 1 || c.downloaded["maps/hall.bsp"] != *map)) {
+    error = "the map did not come whole over the channel";
+    return -1;
+  }
+  return static_cast<double>(now) / 1e6;
+}
+
 void run(gl::Lab& lab) {
   std::vector<uint8_t> map;
   std::string name = "made-up bytes";
@@ -135,7 +223,7 @@ void run(gl::Lab& lab) {
     map.assign(std::istreambuf_iterator<char>(f), {});
     if (map.empty()) {
       lab.fail("se-fastdl: the map " + path + " does not read",
-               "next: pass --map=<a QuakeWorld .bsp file>");
+               "next: pass --map=<a .bsp file of the game>");
       return;
     }
     name = path.substr(path.find_last_of("/\\") + 1);
@@ -147,37 +235,65 @@ void run(gl::Lab& lab) {
   const double kb = static_cast<double>(map.size()) / 1000;
   lab.metric("map-size", kb, "kB");
 
-  // Over the channel: the time to play with the file to fetch, less the time without it, for a
-  // client of each kind: the extended protocol's (asking by lines, then by the protocol
-  // extension's bits: chunked downloads) and the base protocol's (a stock client's pieces, paced
-  // by its rate).
-  cn::TrialOptions t;
-  t.clients = 3;
-  t.figures = true;
-  t.preset = "lan";
-  t.seconds = 8 + kb / 8;
-  const cn::TrialReport without = cn::run_qw_trial(t);
-  t.lit = map;
-  const cn::TrialReport with = cn::run_qw_trial(t);
+  const std::string game = lab.arg("game");
+  if (game != "qw" && game != "q2") {
+    lab.fail("se-fastdl: no game '" + game + "'", "next: pass --game=qw or --game=q2");
+    return;
+  }
+  const std::string folder = game == "qw" ? "qw" : "baseq2";
   std::vector<std::pair<std::string, double>> channel;  // each kind of client's wait
-  for (size_t i = 0; i < with.clients.size() && i < without.clients.size(); i++) {
-    const cn::TrialClient& c = with.clients[i];
-    if (c.active_s < 0 || without.clients[i].active_s < 0) {
-      lab.fail("se-fastdl: " + c.name + " (" + c.mode + ") did not reach play over the channel",
-               "next: make lab LAB=se-net to see where the signon stops");
-      return;
+  if (game == "q2") {
+    // Over Quake II's channel: the base protocol (34) and the newer one (36), each the time to play
+    // with the map to fetch less the time without it, on the simulated clock.
+    for (const int protocol : {34, 0}) {
+      std::string error;
+      const double most = 20 + kb;
+      const double without = q2_wait(nullptr, protocol, most, error);
+      const double with = without < 0 ? -1 : q2_wait(&map, protocol, most, error);
+      const std::string mode = protocol == 34 ? "protocol-34" : "protocol-36";
+      if (with < 0) {
+        std::string what = "se-fastdl: Quake II, ";
+        what += mode;
+        what += ": ";
+        what += error;
+        lab.fail(what, "next: make lab LAB=se-q2-net to see where the signon stops");
+        return;
+      }
+      channel.emplace_back(mode, with - without);
+      lab.metric("channel." + mode + ".seconds", with - without, "s");
     }
-    const double s = c.active_s - without.clients[i].active_s;
-    channel.emplace_back(c.mode, s);
-    lab.metric("channel." + c.mode + ".seconds", s, "s");
-    lab.metric("channel." + c.mode + ".files-equal", c.downloads, "count");
+  } else {
+    // Over the channel: the time to play with the file to fetch, less the time without it, for a
+    // client of each kind: the extended protocol's (asking by lines, then by the protocol
+    // extension's bits: chunked downloads) and the base protocol's (a stock client's pieces, paced
+    // by its rate).
+    cn::TrialOptions t;
+    t.clients = 3;
+    t.figures = true;
+    t.preset = "lan";
+    t.seconds = 8 + kb / 8;
+    const cn::TrialReport without = cn::run_qw_trial(t);
+    t.lit = map;
+    const cn::TrialReport with = cn::run_qw_trial(t);
+    for (size_t i = 0; i < with.clients.size() && i < without.clients.size(); i++) {
+      const cn::TrialClient& c = with.clients[i];
+      if (c.active_s < 0 || without.clients[i].active_s < 0) {
+        lab.fail("se-fastdl: " + c.name + " (" + c.mode + ") did not reach play over the channel",
+                 "next: make lab LAB=se-net to see where the signon stops");
+        return;
+      }
+      const double s = c.active_s - without.clients[i].active_s;
+      channel.emplace_back(c.mode, s);
+      lab.metric("channel." + c.mode + ".seconds", s, "s");
+      lab.metric("channel." + c.mode + ".files-equal", c.downloads, "count");
+    }
   }
   double udp_s = 0;  // the slowest: the base protocol's, what a stock client gets
   for (const auto& [mode, s] : channel) udp_s = std::max(udp_s, s);
 
   // Over HTTPS: the server's default caps, then none.
-  const WebRun capped = fetch_over_https(map, file, 20000, 5000);
-  const WebRun open = fetch_over_https(map, file, 0, 0);
+  const WebRun capped = fetch_over_https(map, file, folder, 20000, 5000);
+  const WebRun open = fetch_over_https(map, file, folder, 0, 0);
   for (const WebRun* r : {&capped, &open})
     if (!r->ok) {
       lab.fail("se-fastdl: over HTTPS: " + r->error,
@@ -248,12 +364,14 @@ const gl::LabSpec kSpec{
     gl::LabKind::bench,
     "game:shooters_edge",
     "engine/server/web_files.hpp and engine/net/file_server.hpp serving a map over HTTPS to "
-    "plugins/classic/content/web_downloads.hpp, against the QuakeWorld channel's own download",
+    "plugins/classic/content/web_downloads.hpp, against QuakeWorld's and Quake II's channels' own "
+    "download",
     "net",
     "How long does a player wait for a map they lack, over the game's channel and over HTTPS "
     "from the server's own web files?",
     {
-        {"map", "", "a QuakeWorld .bsp to send (\"\": made-up bytes of --size kB)"},
+        {"game", "qw", "the game whose channel the map also comes over: qw or q2"},
+        {"map", "", "a .bsp of the game to send (\"\": made-up bytes of --size kB)"},
         {"size", "200", "the made-up map's kB"},
     },
     "--size=60",

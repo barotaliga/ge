@@ -236,7 +236,7 @@ struct Remote {  // NOLINT(clang-analyzer-optin.performance.Padding): one, the w
   bool console_held =
       false;  // the console held over the screen while joining (remote_console_foot)
   bool ahead_from_held = false;  // the acknowledged state's jump button was held
-  client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
+  client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp), both games
   int missiles_level = -1;       // the level they fly in (DemoState::levels)
   bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
   // cl_predict_teleport: the level's teleporters (classic/teleporters.hpp, `remote_teleporters`)

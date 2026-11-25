@@ -103,9 +103,18 @@ std::vector<std::string> game_archives(const std::string& root, const std::strin
                                        const GameLayout& layout = {});
 
 // The file `path` read out of the pack (`.pak`) on disk at `pack`, reading its directory and that
-// file only; false when the pack is not one or holds no such file (`*error` says which).
+// file only; false when the pack is not one or holds no such file (`*error` says which). With `out`
+// null only the directory is read: whether the pack holds the file.
 bool read_from_pack(const std::string& pack, std::string_view path, std::vector<uint8_t>* out,
                     std::string* error);
+// Whether the archive on disk at `at` (a pack, a zip, or a `.pk3dir` directory) holds `path`, any
+// letter case; a pack's directory alone is read.
+bool archive_has(const std::string& at, std::string_view path);
+// Whether the game directory `<root>/<game>` holds `path` (a loose file or an archive's entry, any
+// letter case) without mounting it: packs' directories are read, never their files. A start-up
+// question ("is this the full game?") that `add_game` would answer by reading every archive whole.
+bool game_has_file(const std::string& root, const std::string& game, std::string_view path,
+                   const GameLayout& layout = {});
 // Mounts one archive from memory (a pack or a zip, told by its first bytes) under `name`.
 bool add_archive(SearchPath* sp, const std::string& name, std::vector<uint8_t> bytes,
                  const std::string& game, std::string* error);

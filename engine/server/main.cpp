@@ -47,6 +47,7 @@
 #include "server/macros.hpp"
 #include "server/net_restart.hpp"
 #include "server/record.hpp"
+#include "server/router.hpp"
 #include "server/spectators.hpp"
 #include "server/terminal.hpp"
 
@@ -406,7 +407,22 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     }
   }
   ServerAccounts accounts;
+  gn::Transport router_sock;  // sv_open_port: the router's answers come to a socket of their own
+  ServerRouter router;
+  int64_t router_now = 0;  // the server's clock at its last frame
   const auto close_all = [&] {
+    if (router.on) {  // the forward taken down, a second at most
+      auto t = std::chrono::steady_clock::now();
+      int64_t us = router_now;
+      router_close(router, us);
+      for (int i = 0; i < 100 && !router_done(router); i++) {
+        t += std::chrono::milliseconds(10);
+        std::this_thread::sleep_until(t);
+        us += 10000;
+        router_frame(router, us);
+      }
+      gn::close_transport(router_sock);
+    }
     server_accounts_close(accounts);
     if (have_lan) gn::close_transport(lan);
     if (!c.offline) gn::close_transport(sock);
@@ -447,6 +463,20 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       return 1;
     }
   }
+  if (!c.offline && c.open_port != 0) {  // sv_open_port: the home router asked to forward it
+    gn::Address any, gw;
+    std::string why;
+    if (gn::parse_address("0.0.0.0:0", any) && gn::open_udp_transport(router_sock, any, &why)) {
+      router_gateway(c.gateway, gw);
+      router_open(router, router_sock, gw, static_cast<uint16_t>(c.port), gn::os_entropy(), 0);
+    } else {
+      std::fprintf(stderr,
+                   "%s: sv_open_port: no socket for the router's answers (%s); open UDP %d in "
+                   "the router's settings by hand\n",
+                   game.binary, why.c_str(), c.port);
+    }
+  }
+
   // A console line the server does not know goes to the game (its rules' own `map`, a mod's
   // words), while there is one; the words it declares are registered (add_game_words).
   if (game.console != nullptr) {
@@ -859,6 +889,10 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     }
     server_frame(s);
     print_lines();
+    router_now = s.now_us;
+    router_frame(router, router_now);
+    for (const std::string& line : router.said) con.print(line);
+    router.said.clear();
     // A recoverable error the game raised: its players dropped, or the process ended with it.
     if (game.drop_error != nullptr && s.state != nullptr) {
       const std::string e = game.drop_error(s.state);

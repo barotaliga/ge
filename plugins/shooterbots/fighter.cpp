@@ -6,6 +6,7 @@
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #include "shooterbots/fighter.hpp"
+#include "prof/zones.hpp"
 #include "shooterbots/floor_trap.hpp"
 
 #include <array>
@@ -1320,6 +1321,7 @@ bool blast_bursts_near(const Fighter& f, const ge::shooterbots::BotView& s, int 
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int slot, int msec) {
+  GE_ZONE("bots");
   const int me = slot + 1;
   const Stats st = read_stats(s, me, *f.arsenal);
   const double t = s.sv.time;
