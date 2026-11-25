@@ -561,38 +561,43 @@ void q2_beam_out(const double p[3], double ratio, uint32_t seed, Palette pal, Pa
       [](Rng&) { return kOneFrameS; });
 }
 
-void q2_nuke_shell(const double p[3], double ratio, uint32_t seed, Palette pal, Particles* out) {
-  constexpr int kColours[4] = {110, 112, 114, 116};
-  q2_sphere(
-      p, 700, 200 * ratio, 0, seed, pal, out, [&](Rng& r) { return kColours[pick(r, 4)]; },
-      [](Rng&) { return kOneFrameS; });
-}
-
-void q2_heat_glow(const double p[3], uint32_t seed, Palette pal, Particles* out) {
-  q2_sphere(
-      p, 40, 10, 0, seed, pal, out, [](Rng&) { return 224; }, [](Rng&) { return kOneFrameS; });
-}
-
 void q2_tracker_burst(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int n = 0; n < 128; ++n) {
     const double x = pick(r, 32) - 16, y = pick(r, 32) - 16, z = pick(r, 32) - 16;
-    const double v[3] = {double(pick(r, 256) - 128), double(pick(r, 256) - 128),
-                         double(pick(r, 256) - 128)};
-    out->push_back(q2_speck(p, x, y, z, v, 80, pal, 0, rnd(r, 1.5, 2.0)));
+    const double v[3] = {pick(r, 256) - 128.0, pick(r, 256) - 128.0, pick(r, 256) - 128.0};
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, 0, (0.6 + 0.2 * rnd(r, 0, 1)) / 0.4));
   }
 }
 
-void q2_heat_ring(const double p[3], const double right[3], const double up[3], double scale,
-                  uint32_t seed, Palette pal, Particles* out) {
+void q2_nuke_blast(const double p[3], double ratio, uint32_t seed, Palette pal, Particles* out) {
+  q2_sphere(
+      p, 700, 200 * ratio, 0, seed, pal, out, [](Rng& r) { return 110 + 2 * pick(r, 4); },
+      [](Rng&) { return kOneFrameS; });
+}
+
+void q2_monster_beam_shell(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  q2_sphere(
+      p, 40, 10, 0, seed, pal, out, [](Rng&) { return 0xe0; }, [](Rng&) { return kOneFrameS; });
+}
+
+void q2_heat_rings(const double p[3], const double way[3], const double right[3],
+                   const double up[3], double length, double phase, uint32_t seed, Palette pal,
+                   Particles* out) {
   Rng r = ge::core::make_rng(seed);
   const double zero[3] = {0, 0, 0};
-  const double radius = 1.5 * scale;
-  for (int n = 0; n < 20; ++n) {
-    const double a = n * (2 * 3.14159265358979323846 / 20);
-    const double c = std::cos(a) * radius, sn = std::sin(a) * radius;
-    out->push_back(q2_speck(p, c * right[0] + sn * up[0], c * right[1] + sn * up[1],
-                            c * right[2] + sn * up[2], zero, 0, pal, 223 - pick(r, 8), kOneFrameS));
+  for (int step = 0; phase + 32.0 * step < length; ++step) {
+    const double d = phase + 32.0 * step;
+    const double radius = 1.5 * (d < 10 ? std::floor(d) / 10 : 1);
+    for (int k = 0; k < 20; ++k) {
+      const double a = k * 3.14159265358979323846 / 10;
+      const double c = std::cos(a) * radius, sn = std::sin(a) * radius;
+      double o[3];
+      for (int i = 0; i < 3; ++i) o[i] = way[i] * d + right[i] * c + up[i] * sn;
+      Particle q = q2_speck(p, o[0], o[1], o[2], zero, 0, pal, 216 + pick(r, 8), kOneFrameS);
+      q.opacity = 0.5f;
+      out->push_back(q);
+    }
   }
 }
 

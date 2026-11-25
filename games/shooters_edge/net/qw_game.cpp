@@ -149,6 +149,7 @@ struct Game {
   StatsEyes stats_eyes;  // the weapon stats' last frame (qw_stats.hpp)
   ge::net::MatchReport report;
   bool report_ready = false;
+  ge::net::MatchReport last_stats;  // the last match's, for `laststats` (none: no players)
   // The match as the core records it (qw_game_tv.hpp): a stream of the server's own.
   std::unique_ptr<QwTv> tv = std::make_unique<QwTv>();
   ~Game() {
@@ -1123,6 +1124,7 @@ void end_match(Game& g) {
   if (!tally_end(g.tally, g.rules->world, f, r)) return;
   if (g.qw)
     for (const std::string& line : stats_lines(r)) qw_print_all(*g.qw, line + "\n");
+  if (f.stats) g.last_stats = r;
   g.report = std::move(r);
   g.report_ready = true;
 }
@@ -1502,6 +1504,18 @@ uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
   if (!tell.empty() && g.qw) client_print(*g.qw, slot, 2, tell);
   return buttons;
 }
+// The stats words the mod left (qw_stats.hpp `qw_stats_words`).
+bool stats_after(void* ctx, int slot, const std::string& line) {
+  Game& g = *static_cast<Game*>(ctx);
+  if (!g.qw || sv::qc_of(g.rules) == nullptr) return false;
+  std::string out;
+  if (!qw_stats_words(g.tally, g.last_stats, g.rules->world, slot, rule_number(g, "teamplay") != 0,
+                      line, out))
+    return false;
+  client_print(*g.qw, slot, 2, out + "\n");
+  return true;
+}
+
 // A client's words: a login's first (qw_login.hpp), then the lobby's and the votes'.
 bool game_words(void* ctx, int slot, const std::string& line) {
   Game& game = *static_cast<Game*>(ctx);
@@ -1590,6 +1604,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   if (!qw_start(*game.qw, game.rules, port, game.cfg, error)) return false;
   load_bans(*game.qw);
   game.qw->game_command = game_words;
+  game.qw->game_command_after = stats_after;
   game.qw->game_ctx = &game;
   game.qw->may_play = may_play;
   game.qw->buttons = move_buttons;

@@ -99,7 +99,6 @@ struct Q2FxSwitches {
   bool roll_hack = false;                    // cl_rollhack (Quake II's 1)
   int dlight_falloff = -1;                   // gl_dlight_falloff (-1: the renderer's own)
   bool smooth_explosions = true;             // cl_smooth_explosions
-  int hand = 0;  // not a setting of its own: `hand`, the side the player's plasma beam leaves from
 };
 
 // gl_partscale's share of a speck's own size `depth_units` in front of the eye: 1 at the default

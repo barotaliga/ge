@@ -766,6 +766,9 @@ void q2_hold_speed(const Q2Server& s, sh::Vec3f& velocity);
 void q2_frames_alone(Q2Server& s, int frames);
 // The world's lists and rows built again from the rules' state (a level read back over its map).
 void q2_rebuild(Q2Server& s);
+// Item `i` used while hidden until used (TRIGGER_SPAWN): shown, once; Ground Zero's dropped to the
+// floor then (the base game's power cube lies where it dropped at the start).
+void q2_item_used(Q2Server& s, size_t i);
 // Player `slot` put in the world at the level's spawn point, as a map's start puts him.
 void q2_spawn(Q2Server& s, int slot);
 // The runner's calls on the server itself: a console line, a key of a player's user info, a

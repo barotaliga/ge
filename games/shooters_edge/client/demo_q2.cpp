@@ -752,27 +752,24 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       break;
     case 1:   // blood
     case 26:  // green blood
-    case 42:  // more blood
       if (!point_dir(DemoEffectKind::blood)) return false;
+      break;
+    case 30:  // Ground Zero's point effects, drawn by our rules' names (q2_temp_fx.hpp's
+    case 42:  // kQ2PackTes): a green blaster's hit, more blood, the heat beam's sparks and steam,
+    case 43:  // electric sparks, a flechette's hit
+    case 44:
+    case 46:
+    case 55:
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.name = q2_pack_te(kind);
       break;
     case 2:  // the blaster's bolt landing: its yellow sparks and the mark, as our own game's
       if (!point_dir(DemoEffectKind::named)) return false;
       e.name = "te_blaster";
       break;
-    case 30:  // the Reckoning's ion bolt, Ground Zero's flechette: the blaster's hit in green, blue
-    case 55:
-      if (!point_dir(DemoEffectKind::named)) return false;
-      e.name = kind == 30 ? "te_blaster2" : "te_flechette";
-      break;
-    case 43:  // the heat beam's sparks and steam where it lands
-    case 44:
-      if (!point_dir(DemoEffectKind::named)) return false;
-      e.name = kind == 43 ? "te_heatbeam_sparks" : "te_heatbeam_steam";
-      break;
     case 9:
     case 12:
     case 13:
-    case 46:
       if (!point_dir(DemoEffectKind::spike)) return false;
       break;
     case 5:
@@ -872,7 +869,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.name = kind == 16 ? "te_parasite_attack" : "te_medic_cable_attack";
       break;
     case 38:
-    case 39:  // the heat beam, a player's or a monster's: entity, start, end
+    case 39:  // a heat beam, the player's or a monster's: entity, start, end (world_fx_q2.cpp)
       e.entity = m.i16();
       line(DemoEffectKind::named_trail);
       e.name = kind == 38 ? "te_heatbeam" : "te_monster_heatbeam";
@@ -885,15 +882,15 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.at = e.at + e.way;
       break;
     }
-    case 33: {  // lightning: the source and the target entity, start, end; its crackle on the
-                // source
+    case 33: {  // lightning: the source, what it strikes, start, end; the tesla's crackle heard on
+                // the source's weapon channel, each message anew
       e.entity = m.i16();
-      e.count = m.i16();
+      e.colour = m.i16();  // what it strikes: one bolt a pair (world_fx_q2.cpp)
       line(DemoEffectKind::named_trail);
       e.name = "te_lightning";
       DemoSound o;
       o.entity = e.entity;
-      o.channel = 2;
+      o.channel = 1;
       o.name = "weapons/tesla.wav";
       o.origin = e.at;
       if (!m.bad) s.started.push_back(o);

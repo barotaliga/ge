@@ -689,6 +689,17 @@ namespace ge::shooterbots {
 //   their end 1050 -> 1407, speed off the recordings 275.06 -> 275.24, head to head +2.5; 4on4
 //   e1m2 speed 219.9 -> 223.6, head to head -2.8 (red -5.6, blue 0.0); dm3 speed 212.1 -> 212.4,
 //   head to head +2.2 (red +1.2, blue +3.3): faster on every map, the frags even (+0.6).
+// - `pressface`: A TOUCH BUTTON IS WALKED INTO FROM IN FRONT OF ITS FACE (buttons.cpp
+//   `into_face`): near it, the poke's keys take him to the place before its face, then in along
+//   the way it is pressed (its `angle`), not straight at its middle past the wall it is set in.
+//   On for Quake II's campaign (q2_unit): bunk1's walkway button, set in a post's face and run at
+//   from its side for minutes, pressed at 123 s, was 414 s. Off for Quake's (coop_episode): e1m2
+//   at 100% in 305 s without it, 23/24 kills in 383 s with it. Judging for the matches.
+// - `shotplace`: A SHOT BUTTON HE CANNOT REACH THE PLACE OF IS SHOT FROM ONE HE HAS REACHED that
+//   sees it (way_gates.cpp `way_shot_sides`). On for Quake II's campaign: bunk1's switch behind
+//   its force field, shot from the corridor through the room's south opening. Off for Quake's:
+//   e1m6 11/24 kills and 2/4 secrets without it, 7/24 and 0/4 with it (the shot button taken
+//   first, the secret on the ledge above it then missed). Judging for the matches.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -880,9 +891,11 @@ enum class Feature : uint8_t {
   wallplan,
   startease,
   airend,
+  pressface,
+  shotplace,
   trial,
 };
-constexpr size_t kFeatures = 190;
+constexpr size_t kFeatures = 192;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

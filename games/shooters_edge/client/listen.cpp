@@ -5,6 +5,7 @@
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/listen.hpp"
+#include "prof/zones.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 
@@ -162,23 +163,43 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     e.flash = static_cast<int>(ev.values[3]);
     e.flash_monster = true;
   }
+  // The sound the Quake II client plays itself for one of the packs' temporary entities (the
+  // server sends none for them: q2_temp_fx.hpp), heard where it happened.
+  const auto pack_sound = [&](int code, const sh::Vec3f& at, int entity = -1, int channel = 0) {
+    const Q2TempSound ts = q2_temp_sound(code, 0);
+    if (ts.name == nullptr || !listen_is_q2(l) || l.sounds.size() >= kMostListenSounds) return;
+    DemoSound o;
+    o.entity = entity;
+    o.channel = channel;
+    o.name = ts.name;
+    o.attenuation = ts.attenuation;
+    o.origin = at;
+    l.sounds.push_back(o);
+  };
+  if (ev.kind == sv::EventKind::trail_effect && ev.text == "te_lightning") {
+    // A tesla's bolt: from the tesla (`level`) to what it strikes (`ent`), one bolt a pair, its
+    // crackle on the tesla's weapon channel each time it is sent.
+    e.kind = EffectKind::named_trail;
+    e.entity = ev.level;
+    e.colour = ev.ent;
+    e.at = ev.origin;
+    e.end = {ev.values[0], ev.values[1], ev.values[2]};
+    l.effects.push_back(std::move(e));
+    if (listen_is_q2(l) && l.sounds.size() < kMostListenSounds) {
+      DemoSound o;
+      o.entity = ev.level;
+      o.channel = 1;
+      o.name = "weapons/tesla.wav";
+      o.origin = ev.origin;
+      l.sounds.push_back(o);
+    }
+    return;
+  }
   if (ev.kind == sv::EventKind::trail_effect) {
     e.kind = EffectKind::named_trail;
     e.entity = ev.ent;
     e.at = ev.origin;
     e.end = {ev.values[0], ev.values[1], ev.values[2]};
-    if (ev.text == "te_lightning") {  // the tesla (level) to what it strikes (ent), its crackle
-      e.entity = ev.level;
-      e.count = ev.ent;
-      if (l.sounds.size() < kMostListenSounds) {
-        DemoSound o;
-        o.entity = ev.level;
-        o.channel = 2;
-        o.name = "weapons/tesla.wav";
-        o.origin = ev.origin;
-        l.sounds.push_back(o);
-      }
-    }
     l.effects.push_back(std::move(e));
     return;
   }
@@ -192,16 +213,6 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     e.kind = EffectKind::named;
     e.name = name == "te_boss_teleport" ? "sq_boss_teleport" : "sq_teleport";
     e.at = e.end = ev.origin;
-    l.effects.push_back(std::move(e));
-    return;
-  }
-  if (name == "te_steam" && listen_is_q2(l)) {  // a puff of steam: its jet the way times the speed
-    e.kind = EffectKind::named;
-    e.name = "sq_steam";
-    e.at = e.end = ev.origin;
-    e.way = sh::Vec3f{ev.values[0], ev.values[1], ev.values[2]} * ev.dir.x;
-    e.count = count;
-    e.colour = ev.level;
     l.effects.push_back(std::move(e));
     return;
   }
@@ -238,6 +249,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     if (const int code = q2_blast_code(name); code > 0 && listen_is_q2(l)) {
       l.explosion_codes.resize(l.explosions.size());  // its ball, light and specks
       l.explosion_codes.back() = static_cast<uint8_t>(code);
+      if (code >= 35) pack_sound(code, ev.origin);  // Ground Zero's: the client's own sound
     }
   }
   if (blast && name != "te_bfg_bigexplosion") return;
@@ -275,6 +287,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   e.at = e.end = ev.origin;
   e.way = {ev.values[0], ev.values[1], ev.values[2]};
   e.count = std::min(count, 64);
+  if (const int code = q2_pack_te_code(name); code > 0) {  // Ground Zero's, by its kind byte
+    e.code = code;
+    pack_sound(code, ev.origin);
+  }
   l.effects.push_back(std::move(e));
 }
 
@@ -1119,6 +1135,7 @@ double listen_tic(const Listen& l) {
 constexpr int kMuzzleFlashBit = 2;  // the entity's muzzle-flash effect bit
 
 void listen_frame(Listen& l, sh::MoveCmd cmd) {
+  GE_ZONE("listen.frame");
   cmd.msec = static_cast<uint8_t>(ge::core::num::round(listen_tic(l) * 1000));
   cmd.angles = l.view;
   // The easy jump: the aid strafes for him from the server's own player (speedjump_assist.hpp).
@@ -1380,6 +1397,7 @@ void listen_mic(Listen& l, std::span<const float> samples, bool talking) {
 }
 
 int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {
+  GE_ZONE("listen");  // the server frames due, the bots' thinking in them
   const double tic = listen_tic(l);
   l.owed += wall_s;
   int n = 0;

@@ -415,6 +415,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   fight_spawn(s, slot);
   pose_spawn(s, slot);
   campaign_body(s, slot, respawn);
+  gz_entered(s, slot);  // the pack's last level hands out the A-M bomb
   if (respawn && coop(s))
     for (int i = 0; i < kSqItemCount; i++)
       if (kSqItems[i].kind == SqKind::key) p.body.counts[i] = died.counts[i];
@@ -537,20 +538,34 @@ void show_item(Q2Server& s, size_t i) {
 // Each item dropped up to 128 units onto the floor, the map's or a solid mover's (a key resting on
 // a train or a wall's ledge), 0.2 s into the level, once the trains stand at their first corners;
 // one that starts in a solid is removed.
-void drop_items(Q2Server& s) {
+// Item `i` dropped up to `reach` units down onto the floor; removed, and said, if it starts in a
+// solid. Whether it found a floor.
+bool drop_item(Q2Server& s, size_t i, float reach) {
   const sh::Vec3f mins{-kItemHalf, -kItemHalf, -kItemHalf}, maxs{kItemHalf, kItemHalf, kItemHalf};
+  Q2Entity& e = s.entities[i];
+  const ge::classic::Q2Trace t =
+      map_trace(s, e.origin, mins, maxs, e.origin - sh::Vec3f{0, 0, reach},
+                sh::kSqSolid | sh::kSqWindow, static_cast<int>(i));
+  if (t.start_solid) {
+    s.console.push_back("droptofloor: " + e.classname + " startsolid at " + q2_pos(e.origin));
+    e.gone = true;
+    return false;
+  }
+  e.origin = t.end;
+  return t.fraction < 1;
+}
+
+// Ground Zero's item spawned by a trigger (TRIGGER_SPAWN, 1; never the power cube's): left where
+// it was placed, unseen, until used.
+bool gz_trigger_spawned(const Q2Server& s, const Q2Entity& e) {
+  return s.opt.pack == Q2Pack::ground_zero && e.item >= 0 && (e.spawnflags & 1) != 0 &&
+         e.classname != "key_power_cube";
+}
+
+void drop_items(Q2Server& s) {
   for (size_t i = 0; i < s.entities.size(); i++) {
-    Q2Entity& e = s.entities[i];
-    if (e.item < 0 || e.gone) continue;
-    const ge::classic::Q2Trace t =
-        map_trace(s, e.origin, mins, maxs, e.origin - sh::Vec3f{0, 0, 128},
-                  sh::kSqSolid | sh::kSqWindow, static_cast<int>(i));
-    if (t.start_solid) {
-      s.console.push_back("droptofloor: " + e.classname + " startsolid at " + q2_pos(e.origin));
-      e.gone = true;
-      continue;
-    }
-    e.origin = t.end;
+    const Q2Entity& e = s.entities[i];
+    if (e.item >= 0 && !e.gone && !gz_trigger_spawned(s, e)) drop_item(s, i, 128);
   }
   // Item teams (items sharing a `team`): every member hidden as they land, and 0.1 s later the
   // team's first entity (when it is an item) shows one of them at random.
@@ -562,6 +577,21 @@ void drop_items(Q2Server& s) {
     if (team_master(s, e.team) == i && !e.gone) e.respawn_at = s.level_time + 0.1;
   }
 }
+
+}  // namespace
+
+void q2_item_used(Q2Server& s, size_t i) {
+  Q2Entity& e = s.entities[i];
+  if (!e.hidden || (e.spawnflags & 1) == 0) return;
+  const bool dropped = gz_trigger_spawned(s, e);
+  e.hidden = false;
+  e.spawnflags &= ~1;
+  // Ground Zero's drops now, once used: 128 units down, and on to the floor below if none is
+  // that near (it falls; here it lands at once).
+  if (dropped && !drop_item(s, i, 128) && !e.gone) drop_item(s, i, 8192);
+}
+
+namespace {
 
 // The items a living player's box touches, taken by their rule.
 void touch_items(Q2Server& s, int slot) {
@@ -1091,6 +1121,12 @@ void fill_rows(Q2Server& s) {
     if (m.item < 0) continue;
     sh::WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
     e.free = m.gone || m.hidden;
+    // Where it lies: dropped to the floor 0.2 s in, as a loaded level has it (a worn look's own
+    // offset kept, sq_dress).
+    e.origin = m.origin;
+    if (e.modelindex > 0 && size_t(e.modelindex) < s.model_looks.size())
+      if (const profiles::Look* l = s.model_looks[size_t(e.modelindex)]; l != nullptr)
+        e.origin = e.origin + sh::Vec3f{l->offset[0], l->offset[1], l->offset[2]};
     // Its glow, once: on the tenth it showed (a frame between tenths shows none).
     e.event = !e.free && s.tenth && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;
     // Taken in deathmatch: how long until it shows again, and the model it will show.
@@ -1295,7 +1331,10 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     e.gone = inhibited.back() != 0 || dm_left_out(s, e.item);
     // An item keeps its own flags only as a power cube: TRIGGER_SPAWN (1) hides it until used,
     // NO_TOUCH (2) leaves it lying there, never taken. Any other item's are cleared, and said.
-    if (e.item >= 0 && (e.spawnflags & 0xff) != 0 && e.classname != "key_power_cube") {
+    // Ground Zero's items keep TRIGGER_SPAWN alone (gz_trigger_spawned).
+    const bool gz_spawned = s.opt.pack == Q2Pack::ground_zero && (e.spawnflags & 0xff) == 1;
+    if (e.item >= 0 && (e.spawnflags & 0xff) != 0 && e.classname != "key_power_cube" &&
+        !gz_spawned) {
       if (!e.gone)
         s.console.push_back(e.classname + " at " + q2_pos(e.origin) +
                             " has invalid spawnflags set");

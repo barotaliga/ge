@@ -335,29 +335,12 @@ struct FxState {
   size_t q2_models_next = 0;
   struct Q2Cable {
     int entity = 0;
-    int other = 0;           // the tesla's lightning: the entity it strikes (kept by the two)
-    sh::Vec3f from, to;      // map units
-    sh::Vec3f offset;        // the grapple's start off its holder (the player's own drawn origin)
-    bool ctf = false;        // the grapple's segment, else a monster's
-    bool lightning = false;  // the tesla's lightning (q2_model_fx.hpp's mission packs' beams)
+    sh::Vec3f from, to;  // map units
+    sh::Vec3f offset;    // the grapple's start off its holder (the player's own drawn origin)
+    bool ctf = false;    // the grapple's segment, else a monster's
     double until = 0;
   };
   std::vector<Q2Cable> q2_cables;
-  // The plasma beams (q2_model_fx.hpp), by their source: a player's (38) or a monster's (39).
-  struct Q2HeatBeam {
-    int entity = 0;
-    sh::Vec3f from, to;  // map units, as sent
-    bool monster = false;
-    double until = 0;
-  };
-  std::vector<Q2HeatBeam> q2_heat_beams;
-  // The A-M bombs' blasts growing for a second: each one's centre (engine m) and when it began;
-  // with the widow's beam-outs at most 32 at once.
-  struct Nuke {
-    double at[3] = {0, 0, 0};
-    double born = 0;
-  };
-  std::vector<Nuke> nukes;
   struct Q2Laser {
     sh::Vec3f from, to;
     float rgb[3] = {0, 1, 0};
@@ -365,6 +348,21 @@ struct FxState {
     float width_u = 4;  // the strip's width, map units
   };
   std::vector<Q2Laser> q2_lasers;
+  // GROUND ZERO'S HELD LINES (q2_model_fx.hpp's kQ2HeldLineS): a tesla's bolt by its source and
+  // what it strikes, a heat beam by its source (`monster`: a monster's, no rings), each until
+  // `until`; the A-M bomb's blasts growing (engine m, the picture's clock).
+  struct Q2HeldLine {
+    int entity = 0, struck = 0;
+    sh::Vec3f from, to;  // map units
+    bool bolt = false, monster = false;
+    double until = 0;
+  };
+  std::vector<Q2HeldLine> q2_held;
+  struct Q2Nuke {
+    double at[3] = {0, 0, 0};
+    double born = 0;
+  };
+  std::vector<Q2Nuke> q2_nukes;
   // Quake II's bubbles as the engine's bubble sprites (ce_bubbles): each from its trail, born at.
   struct OwnBubble {
     effects::RisingBubble b;
@@ -629,12 +627,9 @@ void q2_place_bubbles(FxState& s, int effect_models, double t, FxFrame& out);
 // QUAKE II'S MODEL EFFECTS in the classic look (client/world_fx_q2.cpp, q2_model_fx.hpp): the
 // pool's effects of kind `code` at `at` off a face along `way` (map units); a blast of kind `code`
 // (its specks unless `no_specks`, its ball or burst and its light; false: not one of Quake II's
-// own, drawn as any game's; the mission packs' too: a plain or big explosion, the disruptor's dark
-// burst and darkening light, the A-M bomb's growing blast); a monster's or the grapple's cable, the
-// tesla's lightning and the plasma beams held by their source (false for any other effect); the
-// BFG's laser; and each frame every live one placed as a model (the cables' segments, from the
-// player's own origin for his own; his own plasma beam from his eye along his view, traced to what
-// it meets with cl_fakeshaft on, ringed by its specks) and lit, the lasers as strips.
+// own, drawn as any game's); a monster's or the grapple's cable held for 0.2 s by its source (false
+// for any other effect); the BFG's laser; and each frame every live one placed as a model (the
+// cables' segments, `me` the player's own origin for his own) and lit, the lasers as strips.
 void q2_model_fx(FxState& s, int code, const sh::Vec3f& at, const sh::Vec3f& way, double t);
 // A mission pack's hit that is not a bullet's under ce_hits (q2_enhance_fx.hpp), its spark light
 // with it: false for any other code.
@@ -644,18 +639,19 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
                       double t, FxFrame& out);
 bool q2_cable(FxState& s, const Effect& e, double t);
 void q2_laser(FxState& s, const Effect& e, double t);
+// Ground Zero's: a tesla's bolt or a heat beam held by its source (false for any other effect),
+// and a point effect by our rules' name (q2_temp_fx.hpp's kQ2PackTes; false for any other).
+bool q2_held_line(FxState& s, const Effect& e, double t);
+bool q2_pack_point(FxState& s, const Effect& e, const double p[3], double t, FxFrame& out);
 // A heat beam (38, 39) under ce_beams: a hot strip in kQ2HeatBeamRgb, kQ2HeatBeamU units
 // wide, as long as the BFG's laser lives (the next message brings the next), never the arc gun's
 // bolt.
 void q2_enhance_heat_beam(FxState& s, const Effect& e, double t);
-void q2_draw_model_fx(FxState& s, const FxScene& l, double t, FxFrame& out);
-// The widow beam-outs and the A-M bombs' blasts still growing at `t`: a sphere of specks each frame
+void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int me_entity, double t,
+                      FxFrame& out);
+// The widow beam-outs and the A-M bomb's blasts still growing at `t`: a sphere of specks each frame
 // (client/world_fx_q2.cpp).
 void q2_sustains(FxState& s, double t, FxFrame& out);
-// The mission packs' hits Quake II draws as its own (named `e` at `p`, engine m): a green
-// blaster's and a flechette's (the blaster's specks and flare in their colours), the plasma beam's
-// sparks and steam, the big burst of blood and blue electric sparks; false for any other effect.
-bool q2_pack_hit(FxState& s, const Effect& e, const double p[3], double t, FxFrame& out);
 void q2_mark_fx(FxState& s, const Missile& m, bool moved, const double from[3], const double to[3],
                 double t, FxFrame& out);
 // A decal pressed onto the marks' faces in the light where it lies; its slot, -1 when none took it.

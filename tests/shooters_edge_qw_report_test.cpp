@@ -14,6 +14,7 @@
 #include "server/server.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_report.hpp"
+#include "shooters_edge/net/qw_stats.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 
 namespace gn = ge::net;
@@ -79,13 +80,31 @@ TEST(classic_report_tells_a_death_a_suicide_and_a_team_kill_apart) {
   // ann reaches the limit.
   w.clients[0].numbers.frags = 3;
   step(61);
+  // The match so far, as `stats` and `teamstats` read it: every player counted yet, di too.
+  gn::MatchReport now;
+  CHECK(se::tally_so_far(t, w.time, true, now));
+  CHECK(now.players.size() == 4);
+  shooters_edge::server::StatsAsk ask;
+  ask.now = &now;
+  ask.me = "ann";
+  ask.my_team = "red";
+  ask.teams = {"red", "blue"};
+  std::string out;
+  CHECK(shooters_edge::server::stats_words(se::qw_stats_game(), "teamstats", ask, out));
+  CHECK_MSG(out ==
+                "Team 'red': kills 3, deaths 1, damage dealt 0, received 0\n"
+                "Team 'blue': kills 0, deaths 2, damage dealt 0, received 0",
+            out);
+  CHECK(shooters_edge::server::stats_words(se::qw_stats_game(), "stats cy", ask, out));
+  CHECK_MSG(out == "The other team's stats are shown once the match is over.", out);
   se::TallyFacts f;
   f.mode = se::qw_mode(true, false, 4);
   f.teams = true;
   f.fraglimit = 3;
   gn::MatchReport r;
   CHECK(se::tally_end(t, w, f, r));
-  CHECK(!se::tally_end(t, w, f, r));  // once
+  CHECK(!se::tally_so_far(t, w.time, true, now));  // reported: no match counting
+  CHECK(!se::tally_end(t, w, f, r));               // once
   CHECK(r.mode == "2on2");
   CHECK(r.map == "arena");
   CHECK(r.duration_ms == 60000);

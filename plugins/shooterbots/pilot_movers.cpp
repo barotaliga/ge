@@ -92,6 +92,13 @@ bool aboard(const Pilot& p, const PilotSense& s, int32_t ent) {
 // with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
 // coming down onto him sends back up, so it would never come for him) is in his way too, and with
 // `under_plat` one he stands under on dry ground.
+// On the map's own floor (the movers left out): a trace a little way down from him meets it.
+static bool on_world_floor(const PilotSense& s) {
+  if (s.world == nullptr) return false;
+  const HullTrace tr = player_trace(*s.world, s.origin, {s.origin.x, s.origin.y, s.origin.z - 4});
+  return tr.fraction < 1 && !tr.startsolid;
+}
+
 const NavMover* over_him(const Pilot& p, const PilotSense& s, float margin) {
   if (!p.set.under_plat) return nullptr;
   const float feet = s.origin.z + kPlayerMins.z;
@@ -102,8 +109,10 @@ const NavMover* over_him(const Pilot& p, const PilotSense& s, float margin) {
     const float up = nm->absmin.z - rm.absmin.z;
     if ((up <= kRideRest && up >= -kRideRest) || aboard(p, s, rm.ent)) continue;
     // Standing on its bottom (a car's floor inside its box: base2's lift down to bunk1, ridden
-    // in, is no plat coming down on him).
-    if (feet >= nm->absmin.z && feet <= nm->absmin.z + kCageFloor) continue;
+    // in, is no plat coming down on him). Not on the map's own floor at its bottom: a slab on legs
+    // (bunk1's sinking floor, raised) has its box's bottom at the floor of the recess under it,
+    // where he stood as a car's rider and was pinned when it came down.
+    if (feet >= nm->absmin.z && feet <= nm->absmin.z + kCageFloor && !on_world_floor(s)) continue;
     if (s.origin.x + kPlayerMaxs.x > nm->absmin.x - margin &&
         s.origin.x + kPlayerMins.x < nm->absmax.x + margin &&
         s.origin.y + kPlayerMaxs.y > nm->absmin.y - margin &&
