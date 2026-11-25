@@ -421,6 +421,9 @@ struct QwServer {
   std::vector<MultiviewRecorder*> streams;  // the relays' live streams (qw_qtv.hpp)
   // A client's string command the game sees before the rules (a lobby's words): true takes it.
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
+  // One the rules did not know (their answer `bad`) the game may still take (the stats words, which
+  // a mod with its own leaves to it): true takes it.
+  bool (*game_command_after)(void* ctx, int slot, const std::string& line) = nullptr;
   // Whether a client joining now may play (a match locked to its own players): else he joins as
   // a spectator, told `why`. Null: everyone may.
   bool (*may_play)(void* ctx, const std::string& name, std::string& why) = nullptr;
