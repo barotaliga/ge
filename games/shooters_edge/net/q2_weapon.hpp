@@ -59,6 +59,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "shooter/vec.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -93,13 +94,14 @@ struct Q2HandRun {
 // none); the level time and the server frame it is sent with (a frame's own step: that frame; a
 // move's: the frame after the one it falls in); the weapon that stepped.
 struct Q2HandShot {
-  bool shot = false;
-  bool quiet = false;
+  double at = 0;
   int flash = -1;
   int sound = -1;
   int weapon = 0;
-  double at = 0;
+  float speed = 0;  // the hand grenade's throw, units/s (0: none, or it went off in the hand)
   int32_t frame = 0;
+  bool shot = false;
+  bool quiet = false;
 };
 // The run over one move the server runs at level time `at`, attack `attack`: the frames that start
 // by then stepped first, then the move's own step; its shots written to `out` (at most `room`),
@@ -141,9 +143,9 @@ struct Q2ShotAudit {
 // ammunition, so a weapon counts as held once seen in hand and an ammunition's count as known
 // once seen (until he dies), and a change to anything else is left to the server.
 struct Q2Known {
-  uint16_t weapons = 0;  // by kSqWeapons' row
-  int16_t ammo[server::kSqAmmoKinds] = {};
-  bool ammo_seen[server::kSqAmmoKinds] = {};
+  uint32_t weapons = 0;  // by kSqWeapons' row
+  int16_t ammo[::shooters_edge::server::kSqAmmoKinds] = {};
+  uint16_t ammo_seen = 0;    // a bit by ammunition kind
   int held = -1, last = -1;  // the weapon in hand, the one before it
   int32_t frame = -1;        // the newest frame folded in
 };
@@ -161,10 +163,20 @@ struct Q2Weapon {
   // flash, 0.. a hand sound's row (kSqHandSound), 100 a shot heard by name.
   WeaponPlayed played;
   Q2Known known;  // the weapons and ammunition the window knows
-  float last_sound[server::kSqHandSounds] =
-      {};              // each hand sound's last play, the server frame it fell in
+  // Each hand sound's last play, the server frame it fell in.
+  float last_sound[server::kSqHandSounds] = {};
   double fuse_at = 0;  // the hand grenade's: level time its fuse ends, predicted (0 none)
   Q2ShotAudit audit;   // where the shots fell, predicted and the server's
+  // The shots this pass played first (client/own_missiles.hpp throws the missiles among them):
+  // the move each was fired on, the weapon (kSqWeapons' row), the hand's frame then, and how long
+  // ago the move went to the server (s; 0 not yet sent).
+  struct Fired {
+    uint32_t move = 0;
+    int weapon = 0, frame = 0;
+    float speed = 0;  // the hand grenade's throw (Q2HandShot's)
+    double age_s = 0;
+  };
+  std::vector<Fired> fired;
 };
 
 // One pass: the hand run forward from the newest frame over the moves not yet answered, drawn

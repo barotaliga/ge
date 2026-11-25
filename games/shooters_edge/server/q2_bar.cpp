@@ -128,12 +128,80 @@ constexpr Numbered kReckoning[kSqItemNumbers + 6] = {
     {"item_health", "i_health", "Health"},
 };
 
+// Ground Zero's list: the base list with the pack's rows put in among them, in the order its
+// clients number them.
+constexpr Numbered kGroundZero[] = {
+    {"", "", ""},
+    {"item_armor_body", "i_bodyarmor", "Body Armor"},
+    {"item_armor_combat", "i_combatarmor", "Combat Armor"},
+    {"item_armor_jacket", "i_jacketarmor", "Jacket Armor"},
+    {"item_armor_shard", "i_jacketarmor", "Armor Shard"},
+    {"item_power_screen", "i_powerscreen", "Power Screen"},
+    {"item_power_shield", "i_powershield", "Power Shield"},
+    {"weapon_blaster", "w_blaster", "Blaster"},
+    {"weapon_shotgun", "w_shotgun", "Shotgun"},
+    {"weapon_supershotgun", "w_sshotgun", "Super Shotgun"},
+    {"weapon_machinegun", "w_machinegun", "Machinegun"},
+    {"weapon_chaingun", "w_chaingun", "Chaingun"},
+    {"weapon_etf_rifle", "w_etf_rifle", "ETF Rifle"},
+    {"ammo_grenades", "a_grenades", "Grenades"},
+    {"weapon_grenadelauncher", "w_glauncher", "Grenade Launcher"},
+    {"weapon_proxlauncher", "w_proxlaunch", "Prox Launcher"},
+    {"weapon_rocketlauncher", "w_rlauncher", "Rocket Launcher"},
+    {"weapon_hyperblaster", "w_hyperblaster", "HyperBlaster"},
+    {"weapon_plasmabeam", "w_heatbeam", "Plasma Beam"},
+    {"weapon_railgun", "w_railgun", "Railgun"},
+    {"weapon_bfg", "w_bfg", "BFG10K"},
+    {"weapon_chainfist", "w_chainfist", "Chainfist"},
+    {"weapon_disintegrator", "w_disintegrator", "Disruptor"},
+    {"ammo_shells", "a_shells", "Shells"},
+    {"ammo_bullets", "a_bullets", "Bullets"},
+    {"ammo_cells", "a_cells", "Cells"},
+    {"ammo_rockets", "a_rockets", "Rockets"},
+    {"ammo_slugs", "a_slugs", "Slugs"},
+    {"ammo_flechettes", "a_flechettes", "Flechettes"},
+    {"ammo_prox", "a_prox", "Prox"},
+    {"ammo_tesla", "a_tesla", "Tesla"},
+    {"ammo_nuke", "p_nuke", "A-M Bomb"},
+    {"ammo_disruptor", "a_disruptor", "Rounds"},
+    {"item_quad", "p_quad", "Quad Damage"},
+    {"item_invulnerability", "p_invulnerability", "Invulnerability"},
+    {"item_silencer", "p_silencer", "Silencer"},
+    {"item_breather", "p_rebreather", "Rebreather"},
+    {"item_enviro", "p_envirosuit", "Environment Suit"},
+    {"item_ancient_head", "i_fixme", "Ancient Head"},
+    {"item_adrenaline", "p_adrenaline", "Adrenaline"},
+    {"item_bandolier", "p_bandolier", "Bandolier"},
+    {"item_pack", "i_pack", "Ammo Pack"},
+    {"item_ir_goggles", "p_ir", "IR Goggles"},
+    {"item_double", "p_double", "Double Damage"},
+    {"item_compass", "p_compass", "compass"},
+    {"item_sphere_vengeance", "p_vengeance", "vengeance sphere"},
+    {"item_sphere_hunter", "p_hunter", "hunter sphere"},
+    {"item_sphere_defender", "p_defender", "defender sphere"},
+    {"item_doppleganger", "p_doppleganger", "Doppleganger"},
+    {"dm_tag_token", "i_tagtoken", "Tag Token"},
+    {"key_data_cd", "k_datacd", "Data CD"},
+    {"key_power_cube", "k_powercube", "Power Cube"},
+    {"key_pyramid", "k_pyramid", "Pyramid Key"},
+    {"key_data_spinner", "k_dataspin", "Data Spinner"},
+    {"key_pass", "k_security", "Security Pass"},
+    {"key_blue_key", "k_bluekey", "Blue Key"},
+    {"key_red_key", "k_redkey", "Red Key"},
+    {"key_commander_head", "k_comhead", "Commander's Head"},
+    {"key_airstrike_target", "i_airstrike", "Airstrike Marker"},
+    {"key_nuke_container", "i_contain", "Antimatter Pod"},
+    {"key_nuke", "i_nuke", "Antimatter Bomb"},
+    {"item_health", "i_health", "Health"},
+};
+
 // Each pack's list (q2_pack.hpp), in its own order: the base game's until a pack's rows land.
 std::span<const Numbered> numbered(Q2Pack pack) {
   switch (pack) {
     case Q2Pack::reckoning:
       return kReckoning;
     case Q2Pack::ground_zero:
+      return kGroundZero;
     case Q2Pack::base:
       break;
   }
@@ -174,8 +242,9 @@ int image(const Q2Server& s, std::string_view name) {
 
 // The classname of each ammo kind's item, by `SqAmmo`.
 constexpr const char* kAmmoClass[kSqAmmoKinds] = {
-    "",           "ammo_shells", "ammo_bullets", "ammo_grenades", "ammo_rockets",
-    "ammo_cells", "ammo_slugs",  "ammo_magslug", "ammo_trap"};
+    "",           "ammo_shells", "ammo_bullets",  "ammo_grenades", "ammo_rockets",
+    "ammo_cells", "ammo_slugs",  "ammo_magslug",  "ammo_trap",     "ammo_flechettes",
+    "ammo_prox",  "ammo_tesla",  "ammo_disruptor"};
 
 int ammo_number(SqAmmo a, Q2Pack pack) {
   return a == SqAmmo::none ? 0 : sq_number_of(kAmmoClass[static_cast<int>(a)], pack);
@@ -219,7 +288,7 @@ bool sq_weapon_numbered(int n, Q2Pack pack) {
   const Numbered* r = row_of(n, pack);
   if (r == nullptr) return false;
   const std::string_view cn = r->classname;
-  if (cn == "weapon_blaster" || cn == "ammo_grenades") return true;
+  if (cn == "weapon_blaster" || cn == "ammo_grenades" || cn == "ammo_tesla") return true;
   const int row = sq_item(cn, pack);
   return row >= 0 && kSqItems[row].kind == SqKind::weapon;
 }

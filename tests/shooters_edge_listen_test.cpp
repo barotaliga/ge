@@ -995,6 +995,27 @@ TEST(a_coop_level_change_on_brush_maps_carries_the_players_body) {
 // In Quake II's single-player game `addbot` seats a companion beside the player: the game turns
 // cooperative for it, the companion keeps near him as he walks off, stays seated through a level
 // change (the same rules), and the last one sent away makes the game single player again.
+// `sv_lobby 1` (the window's default) is a match's lobby: a single-player game, `deathmatch 0`
+// before the map, starts with the map, in Quake II's rules too; deathmatch warms up in the lobby.
+TEST(a_single_player_game_starts_with_its_map_whatever_sv_lobby_says) {
+  std::string error;
+  cl::SearchPath files;
+  const std::vector<uint8_t> hall = brush_hall();
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/hall.bsp", hall}}), error));
+  for (const bool dm : {false, true}) {
+    cl::ListenOptions opt = shooters_edge::net::listen_options();
+    opt.lobby = true;
+    opt.console = {dm ? "deathmatch 1" : "deathmatch 0"};
+    cl::Listen l;
+    std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "hall", error);
+    CHECK_MSG(map != nullptr, error);
+    if (!map) return;
+    CHECK_MSG(cl::listen_start(l, baseline(), std::move(map), opt, error), error);
+    CHECK_MSG((l.room != nullptr) == dm, dm ? "deathmatch had no lobby" : "single player had one");
+    if (l.server != nullptr) CHECK(l.server->cvars.find("deathmatch")->on() == dm);
+  }
+}
+
 TEST(a_companion_joins_q2_s_single_player_game_and_follows_through_a_level_change) {
   std::string error;
   cl::SearchPath files;
@@ -1266,6 +1287,49 @@ TEST(the_weapon_groups_pick_q2_s_weapons_by_its_own_keys) {
   m.impulse = 3;
   cl::group_moves(g, s, 1, m);
   CHECK_MSG(m.impulse == 2, std::to_string(m.impulse));
+}
+
+// On Quake II's rules the hand sees each shot, though the server fires a frame and steps past it
+// in one rules frame: a gun that fires on its first frame (the shotguns) is seen firing as the
+// step that starts the run passes it, and a held machine gun once for each round of its loop.
+TEST(the_hand_sees_q2_s_shotguns_fire_on_their_first_frame) {
+  namespace sv = shooters_edge::server;
+  const auto shots_of = [](sv::SqWeapon weapon, int held_frames) {
+    cl::Listen l;
+    if (!open_lift_hall(l, "300 300 24")) return -1;
+    sv::Q2Server* sq = sv::q2_of(*l.rules);
+    if (sq == nullptr) return -1;
+    const sv::SqWeaponRow& row = sv::kSqWeapons[static_cast<int>(weapon)];
+    sq->players[0].body.counts[sv::sq_item(row.item)] = 1;
+    sq->players[0].body.ammo[static_cast<int>(row.ammo)] = 100;
+    l.rules->client_command(0, std::string("use ") + row.name);
+    cl::ViewState shown;
+    cl::HeldState held;
+    constexpr double kTic = 0.013;
+    double t = 0;
+    const auto run = [&](int frames, sh::MoveCmd cmd) {
+      for (int i = 0; i < frames; i++) {
+        cl::listen_frame(l, cmd);
+        t += kTic;
+        cl::frame_view(l, shown, 1, t, kTic);
+        cl::step_held(l, shown, held, {}, {}, t, kTic);
+      }
+    };
+    run(150, {});
+    if (sq->players[0].hand.weapon != static_cast<int>(weapon)) return -2;
+    sh::MoveCmd fire;
+    fire.buttons = sh::kButtonAttack;
+    run(held_frames, fire);
+    run(150, {});
+    return held.shots;
+  };
+  CHECK_MSG(shots_of(sv::SqWeapon::super_shotgun, 4) == 1,
+            std::to_string(shots_of(sv::SqWeapon::super_shotgun, 4)));
+  CHECK_MSG(shots_of(sv::SqWeapon::shotgun, 4) == 1,
+            std::to_string(shots_of(sv::SqWeapon::shotgun, 4)));
+  // Held for a second: about ten rounds, each one seen (the server steps ten frames a second).
+  const int rounds = shots_of(sv::SqWeapon::machinegun, 77);
+  CHECK_MSG(rounds >= 8 && rounds <= 11, std::to_string(rounds));
 }
 
 // The window's own game on Quake II's rules throws Quake II's world as a joined client draws

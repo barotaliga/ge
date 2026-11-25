@@ -298,7 +298,7 @@ void q2_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) 
 }
 
 void q2_blaster_specks(const double p[3], const double normal[3], uint32_t seed, Palette pal,
-                       Particles* out) {
+                       Particles* out, int colour) {
   Rng r = ge::core::make_rng(seed);
   for (int n = 0; n < 40; ++n) {
     const double d = pick(r, 16);  // out along the face, the same on every axis
@@ -306,7 +306,8 @@ void q2_blaster_specks(const double p[3], const double normal[3], uint32_t seed,
                  z = pick(r, 8) - 4 + d * normal[2];
     const double v[3] = {normal[0] * 30 + rnd(r, -40, 40), normal[1] * 30 + rnd(r, -40, 40),
                          normal[2] * 30 + rnd(r, -40, 40)};
-    out->push_back(q2_speck(p, x, y, z, v, 80, pal, (0xe0 + pick(r, 8)) & 0xff, rnd(r, 0.5, 0.8)));
+    out->push_back(
+        q2_speck(p, x, y, z, v, 80, pal, (colour + pick(r, 8)) & 0xff, rnd(r, 0.5, 0.8)));
   }
 }
 
@@ -349,6 +350,33 @@ void q2_bubbles(const double from[3], const double to[3], bool second, uint32_t 
     const double life = second ? rnd(r, 1.0, 1.1) : rnd(r, 1.0, 1.2);
     out->push_back(q2_speck(from, x, y, z, v, 0, pal, 4 + pick(r, 8), life));
   }
+}
+
+void q2_rising_bubbles(const double from[3], const double to[3], bool second, uint32_t seed,
+                       std::vector<RisingBubble>* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  double way[3];
+  for (int k = 0; k < 3; ++k) way[k] = len > 1e-9 ? d[k] / len : 0;
+  const double step = second ? 8 : 32, drift = second ? 10 : 5, rise = second ? 20 : 6;
+  for (int i = 0; i * step < len; ++i) {  // the draws in q2_bubbles' order
+    const double at = i * step;
+    RisingBubble b;
+    b.at[0] = from[0] + at * way[0] + rnd(r, -2, 2);
+    b.at[1] = from[1] + at * way[1] + rnd(r, -2, 2);
+    b.at[2] = from[2] + at * way[2] + rnd(r, -2, 2) - (second ? 4 : 0);
+    b.vel[0] = rnd(r, -drift, drift);
+    b.vel[1] = rnd(r, -drift, drift);
+    b.vel[2] = rnd(r, -drift, drift) + rise;
+    b.life = second ? rnd(r, 1.0, 1.1) : rnd(r, 1.0, 1.2);
+    pick(r, 8);  // the speck's grey, drawn here too so both keep one stream
+    out->push_back(b);
+  }
+}
+
+void rising_bubble_at(const RisingBubble& b, double age, double out[3]) {
+  for (int k = 0; k < 3; ++k) out[k] = b.at[k] + b.vel[k] * age;
 }
 
 void q2_force_wall(const double from[3], const double to[3], int colour, uint32_t seed, Palette pal,
@@ -531,6 +559,46 @@ void q2_beam_out(const double p[3], double ratio, uint32_t seed, Palette pal, Pa
   q2_sphere(
       p, 300, 45 * ratio, 0, seed, pal, out, [&](Rng& r) { return kColours[pick(r, 4)]; },
       [](Rng&) { return kOneFrameS; });
+}
+
+void q2_tracker_burst(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 128; ++n) {
+    const double x = pick(r, 32) - 16, y = pick(r, 32) - 16, z = pick(r, 32) - 16;
+    const double v[3] = {pick(r, 256) - 128.0, pick(r, 256) - 128.0, pick(r, 256) - 128.0};
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, 0, (0.6 + 0.2 * rnd(r, 0, 1)) / 0.4));
+  }
+}
+
+void q2_nuke_blast(const double p[3], double ratio, uint32_t seed, Palette pal, Particles* out) {
+  q2_sphere(
+      p, 700, 200 * ratio, 0, seed, pal, out, [](Rng& r) { return 110 + 2 * pick(r, 4); },
+      [](Rng&) { return kOneFrameS; });
+}
+
+void q2_monster_beam_shell(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  q2_sphere(
+      p, 40, 10, 0, seed, pal, out, [](Rng&) { return 0xe0; }, [](Rng&) { return kOneFrameS; });
+}
+
+void q2_heat_rings(const double p[3], const double way[3], const double right[3],
+                   const double up[3], double length, double phase, uint32_t seed, Palette pal,
+                   Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double zero[3] = {0, 0, 0};
+  for (int step = 0; phase + 32.0 * step < length; ++step) {
+    const double d = phase + 32.0 * step;
+    const double radius = 1.5 * (d < 10 ? std::floor(d) / 10 : 1);
+    for (int k = 0; k < 20; ++k) {
+      const double a = k * 3.14159265358979323846 / 10;
+      const double c = std::cos(a) * radius, sn = std::sin(a) * radius;
+      double o[3];
+      for (int i = 0; i < 3; ++i) o[i] = way[i] * d + right[i] * c + up[i] * sn;
+      Particle q = q2_speck(p, o[0], o[1], o[2], zero, 0, pal, 216 + pick(r, 8), kOneFrameS);
+      q.opacity = 0.5f;
+      out->push_back(q);
+    }
+  }
 }
 
 Light q2_point_light(const double p[3], double radius_u, double red, double green, double blue) {

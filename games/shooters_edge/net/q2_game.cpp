@@ -27,6 +27,7 @@
 #include "brush/read.hpp"
 #include "classic/content/downloads.hpp"
 #include "classic/content/fs_words.hpp"
+#include "classic/content/load_order.hpp"
 #include "classic/content/web_downloads.hpp"
 #include "classic/content/web_serve.hpp"
 #include "classicenhance/profile.hpp"
@@ -41,6 +42,7 @@
 #include "server/skew.hpp"
 #include "server/status.hpp"
 #include "server/web_files.hpp"
+#include "shooters_edge/bots/bot_seats.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
@@ -314,6 +316,19 @@ bool endpoint_number(const gs::ServerConfig& c, const char* name, int most, int&
 }
 
 // Quake II's own names for the download settings, as its configs and admins write them.
+// `sv_modern` (engine/server's GameMeta): what a modern Quake II server is. Every shot and every
+// rocket, grenade and bolt meet the others where the shooter saw them, one frame further back as
+// the client drew them. The game's feel is never part of it: only how the network judges it. A
+// setting any layer names wins over it.
+constexpr gs::GameMeta kMetas[] = {
+    {"sv_modern", "0", "",
+     "Whether the server plays as a modern one: every shot judged where its shooter saw the "
+     "others.",
+     "0: as each setting says (the default); 1: sv_antilag 2, sv_antilag_projectiles 1 and "
+     "sv_antilag_interp 1"},
+    {"sv_modern", "1", "sv_antilag 2; sv_antilag_projectiles 1; sv_antilag_interp 1"},
+};
+
 constexpr gs::SettingName kSettingNames[] = {
     {"allow_download", "sv_download"},
     {"allow_download_players", "sv_download_players"},
@@ -431,6 +446,9 @@ struct Game {
   // is skipped).
   std::vector<std::string> shows;
   std::string show_map, show_next;
+  // The map a new game starts on: the game folder's default.cfg's `newgame` (a mission pack's own
+  // first map), else base1.
+  std::string first_map = "base1";
   bool show_taken = false, show_new_game = false, cinematics = true;
   bool drop_told = false;  // the stopped map's error handed to the core (drop_error)
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
@@ -441,7 +459,48 @@ struct Game {
   // settings the server started with.
   Q2Match match;
   gs::ServerConfig match_cfg;
+  // The bots `sv_bots` seats (bots/bot_seats.hpp): players with no connection, their moves run
+  // each frame after the clients'.
+  bots::BotSeats bots;
 };
+
+// The bots' moves for the next frame, one rules step long.
+void bot_moves(Game& g, std::vector<sh::Packet>& out) {
+  if (bots::bot_seats_count(g.bots) == 0) return;
+  const int msec = static_cast<int>(ge::core::num::round(g.rules->sv.set.mintic * 1000));
+  bots::bot_seats_packets(g.bots, g.rules, msec, out);
+}
+
+// `sv_bots` fighters seated on the first map: deathmatch only, on our own rules.
+bool seat_bots(Game& g, int count, std::string& error) {
+  if (count <= 0) return true;
+  const ge::console::Cvar* dm = g.rules->cvars.find("deathmatch");
+  if (sv::q2_of(g.rules) == nullptr || dm == nullptr || !dm->on()) {
+    g.said.emplace_back("sv_bots " + std::to_string(count) +
+                        ": the bots play deathmatch on the server's own rules, so this game has "
+                        "none");
+    return true;
+  }
+  for (int i = 0; i < count; i++)
+    if (bots::bot_seats_add(g.bots, g.rules, g.map->spec, ge::shooterbots::AimSkill::average, 0,
+                            error) < 0) {
+      std::string why = "sv_bots " + std::to_string(count) + ": ";
+      why.append(error).append(" (keep sv_bots under sv_maxclients)");
+      error = std::move(why);
+      return false;
+    }
+  return true;
+}
+
+// The bots on a level just started: connected again and made anew on its nav; a map they cannot
+// walk sends them away.
+void bots_enter(Game& g) {
+  std::vector<int> gone;
+  std::string error;
+  bots::bot_seats_enter(g.bots, g.rules, g.map->spec, true, gone, error);
+  for (const int slot : gone) g.rules.drop(slot);
+  if (!gone.empty() && g.net) g.net->log.push_back("the bots leave: " + error);
+}
 
 // `m` mended as it loads (server/q2_mapfix.hpp): the visibility patch, then an entity file.
 void mend(Game& g, cl::LoadedMap& m) {
@@ -498,6 +557,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->root = c.root;
   g->folder = mod.empty() ? base : mod;
   if (!cl::open_game_dir(c.root, g->folder, g->files, error, *q2)) return nullptr;
+  {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> cfg = cl::find_file(g->files, "default.cfg", store);
+    const std::string own = ge::classic::content::new_game_map(
+        std::string_view(reinterpret_cast<const char*>(cfg.data()), cfg.size()));
+    if (!own.empty()) g->first_map = own;
+  }
   const std::string name = c.map.empty() ? std::string("q2dm1") : c.map;
   if (const auto v = c.rules.find("sv_vispatch"); v != c.rules.end() && !v->second.empty())
     g->vis_patch = v->second != "0";
@@ -557,6 +623,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->rules.console(line);
   }
   if (!g->rules.start(g->map->spec, error)) return nullptr;
+  g->bots.seed = c.seed;
+  if (!seat_bots(*g, c.bots, error)) return nullptr;
   q2_votes_rules(g->votes, g->rules, gs::vote_settings(c));
   g->match_cfg = c;
   Game* game = g.get();
@@ -786,10 +854,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
 
 // A SHOW (a `.cin` or `.pcx` an exit names before its map, or the game's end): on the network the
 // level changes to the file (no world: the server data names it, Q2WireOptions::show) and the
-// clients play it. Its `nextserver` setting is `gamemap "!<what follows>"`, or `gamemap "!*base1"`
-// after co-op's victory picture, or empty. A client's `nextserver <count>` is taken once a show,
-// with the level's count, on a movie or (in co-op) a picture: the setting run and emptied, an
-// empty one stopping the server (`killserver`).
+// clients play it. Its `nextserver` setting is `gamemap "!<what follows>"`, or `gamemap "!*<first
+// map>"` after co-op's victory picture (the game's `newgame` map, `first_map`), or empty. A
+// client's `nextserver <count>` is taken once a show, with the level's count, on a movie or (in
+// co-op) a picture: the setting run and emptied, an empty one stopping the server (`killserver`).
 bool is_movie(const std::string& f) { return f.ends_with(".cin"); }
 
 bool coop_on(const Game& g) {
@@ -805,7 +873,7 @@ void start_show(Game& g) {
   if (!g.show_map.empty()) rest += (rest.empty() ? "" : "+") + g.show_map;
   const bool coop = coop_on(g);
   g.show_new_game = rest.empty() && coop && show == "victory.pcx";
-  g.show_next = g.show_new_game ? "gamemap \"!*base1\""
+  g.show_next = g.show_new_game ? "gamemap \"!*" + g.first_map + "\""
                 : rest.empty()  ? std::string()
                                 : "gamemap \"!" + rest + "\"";
   g.rules->cvars.set("nextserver", g.show_next, ge::console::Source::local, true);
@@ -862,7 +930,7 @@ void next_server(Game& g, int32_t count) {
     start_show(g);
   } else {
     g.cfg.wire.show.clear();
-    (*g.rules).pending_map = g.show_new_game ? "base1" : g.show_map;
+    (*g.rules).pending_map = g.show_new_game ? g.first_map : g.show_map;
     if (g.show_new_game) (*g.rules).pending_change = sv::MapChange::new_game;
   }
 }
@@ -978,6 +1046,7 @@ void change_level(Game& g) {
   } else {
     g.map = std::move(next);
   }
+  bots_enter(g);
   g.cfg.wire.map_checksum = sv::q2_map_checksum(g.map->file);
   sv::q2_sky(*g.map->spec.brushes, g.cfg.wire);
   if (g.net) q2_net_level(*g.net, g.cfg.wire);
@@ -1081,13 +1150,18 @@ void crash(void* g, const std::string& text) {
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
   if (game.relay.spawned) return;  // no game while it relays
-  game.rules.frame(nullptr, 0);
+  std::vector<sh::Packet> moves;
+  bot_moves(game, moves);
+  game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   change_level(game);
 }
 
 int seated(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
-  return game.net ? q2_net_clients(*game.net) : 0;
+  int bots = 0;  // the bots seated, players as QuakeWorld's server counts its own
+  for (int i = 1; i < sh::kMaxClients; i++)
+    bots += game.bots.bots[static_cast<size_t>(i)] && game.rules->clients[i].active ? 1 : 0;
+  return (game.net ? q2_net_clients(*game.net) : 0) + bots;
 }
 
 uint64_t hash(const void* g) {
@@ -1114,6 +1188,15 @@ void fill_status(const void* g, ge::net::Status& st) {
     p.score = static_cast<int32_t>(game.rules->world.clients[i].numbers.frags);
     p.ping_ms = static_cast<uint16_t>(std::clamp(c.ping_ms, 0, 9999));
     p.flags = c.spectator ? ge::net::kPlayerSpectator : 0;
+    st.players.push_back(std::move(p));
+  }
+  for (int i = 1; i < sh::kMaxClients; i++) {  // the bots, seated with no connection
+    const bots::SeatBot* b = game.bots.bots[static_cast<size_t>(i)].get();
+    if (b == nullptr || !game.rules->clients[i].active) continue;
+    ge::net::StatusPlayer p;
+    p.name = b->name;
+    p.score = static_cast<int32_t>(game.rules->world.clients[i].numbers.frags);
+    p.flags = ge::net::kPlayerBot;
     st.players.push_back(std::move(p));
   }
 }
@@ -1192,6 +1275,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   }
   q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
   q2_match_open(game.match, *game.net, game.rules, game.match_cfg);  // its words before the votes'
+  game.match.votes = &game.votes.book;
+  if (game.login) game.match.logins = &game.login->logins;  // a report's accounts
   return true;
 }
 
@@ -1206,6 +1291,8 @@ void net_frame(void* g, int64_t now_us) {
     q2_relay_frame(game.relay, now_us);
     return;
   }
+  game.net->local_moves.clear();
+  bot_moves(game, game.net->local_moves);
   q2_net_frame(*game.net, now_us);
   gs::web_files_frame(game.web, game.now_s);
   if (!game.relay.conns.empty()) q2_relay_frame(game.relay, now_us);
@@ -1475,6 +1562,13 @@ void player_view(const void* g, int player, std::vector<uint8_t>& out) {
   q2_player_view(*static_cast<const Game*>(g)->rules, player, out);
 }
 
+// The match's phase (sv_lobby), else the match: what the core's features act on (sv_autorecord
+// records each match from its first frame to its last).
+gs::LobbyPhase phase(const void* g) {
+  const Game& game = *static_cast<const Game*>(g);
+  return game.match.on ? game.match.lobby.phase : gs::LobbyPhase::match;
+}
+
 const gs::ServerGame& make() {
   static gs::ServerGame g = [] {
     gs::ServerGame s;
@@ -1491,6 +1585,8 @@ const gs::ServerGame& make() {
     s.rule_count = static_cast<int>(all_rules().size());
     s.names = kSettingNames;
     s.name_count = static_cast<int>(std::size(kSettingNames));
+    s.metas = kMetas;
+    s.meta_count = static_cast<int>(std::size(kMetas));
     s.create = create;
     s.destroy = destroy;
     s.frame_seconds = frame_seconds;
@@ -1504,6 +1600,10 @@ const gs::ServerGame& make() {
     s.tv_frame = tv_state;
     s.tv_keyframe = tv_state;
     s.player_view = player_view;
+    s.phase = phase;
+    s.match_report = [](void* game, ge::net::MatchReport& out) {
+      return q2_match_report(static_cast<Game*>(game)->match, out);
+    };
     s.console_lines = console_lines;
     s.console = console_line;
     s.words = kQ2ServerWords;

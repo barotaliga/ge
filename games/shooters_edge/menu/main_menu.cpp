@@ -24,7 +24,13 @@ namespace {
 using ge::ui::ItemKind;
 
 constexpr Choice kGameType[] = {{"COOPERATIVE", "0"}, {"DEATHMATCH", "1"}};
-constexpr Choice kTeamplay[] = {{"OFF", "0"}, {"NO FRIENDLY FIRE", "1"}, {"FRIENDLY FIRE", "2"}};
+// Teamplay's words; Dissolution of Eternity's games past the first three (shown only when its maps
+// are the packs', `teamplay_choices`).
+constexpr Choice kTeamplay[] = {
+    {"OFF", "0"},           {"NO FRIENDLY FIRE", "1"}, {"FRIENDLY FIRE", "2"},
+    {"TAG", "3"},           {"CAPTURE THE FLAG", "4"}, {"ONE FLAG CTF", "5"},
+    {"THREE TEAM CTF", "6"}};
+constexpr size_t kBaseTeamplay = 3;
 constexpr Choice kSkill[] = {{"EASY", "0"}, {"NORMAL", "1"}, {"HARD", "2"}, {"NIGHTMARE", "3"}};
 constexpr Choice kFragLimit[] = {{"NONE", "0"}, {"10", "10"}, {"20", "20"},  {"30", "30"},
                                  {"40", "40"},  {"50", "50"}, {"60", "60"},  {"70", "70"},
@@ -706,6 +712,14 @@ constexpr Entry kEntries[] = {
      .hint = "Each shot's flash and smoke from the barrel.",
      .needs = "ce_muzzles",
      .target = Target::client},
+    {.page = "weapon",
+     .id = "ce_shells",
+     .text = "SPENT SHELLS",
+     .kind = ItemKind::toggle,
+     .hint = "The shotguns and machine guns throw out their spent shells, which clatter to the "
+             "floor and lie there a while.",
+     .needs = "ce_shells",
+     .target = Target::client},
     {.page = "weapon", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     // CLASSIC ENHANCED: what the game adds to the classic picture, page by subject. Only what a
@@ -819,6 +833,23 @@ constexpr Entry kEntries[] = {
      .hint = "Live lights and the monsters cast shadows.",
      .needs = "ce_shadows",
      .target = Target::client},
+    {.page = "ce_light",
+     .id = "ce_ao",
+     .text = "CONTACT SHADE",
+     .kind = ItemKind::toggle,
+     .hint = "Corners, creases and the floor under monsters and items darken.",
+     .needs = "ce_ao",
+     .target = Target::client},
+    {.page = "ce_light",
+     .id = "ce_ao_strength",
+     .text = "SHADE LEVEL",
+     .kind = ItemKind::slider,
+     .hint = "How dark the closed corners and the floor under figures grow.",
+     .needs = "ce_ao_strength",
+     .target = Target::client,
+     .min = 0.2,
+     .max = 1,
+     .step = 0.1},
     {.page = "ce_light",
      .id = "ce_flicker",
      .text = "FLICKERING LIGHT",
@@ -1392,6 +1423,13 @@ std::vector<std::string> slot_names(const MenuTable& table) {
   return out;
 }
 
+namespace {}  // namespace
+
+size_t teamplay_choices(std::span<const std::string> maps) {
+  const bool dissolution = std::find(maps.begin(), maps.end(), "r1m1") != maps.end();
+  return dissolution ? std::size(kTeamplay) : kBaseTeamplay;
+}
+
 namespace {
 
 // The host page's EPISODE and LEVEL kept with its MAP row (episodes.hpp): `from` "map" sets the two
@@ -1466,6 +1504,17 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         for (const std::string_view w : figure_weapons(&game_table(table_of(host)) == &q2_menu()))
           it.choices.emplace_back(w);
         it.choice = std::clamp(was, 0, static_cast<int>(it.choices.size()) - 1);
+        continue;
+      }
+      if (e->page == "host" && e->id == "teamplay") {  // Dissolution's games with its maps
+        const size_t n = teamplay_choices(host.maps);
+        it.choices.resize(n);
+        for (size_t i = 0; i < n; i++) it.choices[i] = std::string(e->choices[i].text);
+        if (it.choice >= static_cast<int>(n)) it.choice = 0;
+        if (it.disabled) continue;
+        const std::string v = host_value(host, cvar_of(*e));
+        for (size_t i = 0; i < n; i++)
+          if (same_value(v, e->choices[i].value)) it.choice = static_cast<int>(i);
         continue;
       }
       if (e->page == "host" && (e->id == "episode" || e->id == "level")) {

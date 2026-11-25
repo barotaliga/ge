@@ -37,6 +37,10 @@ are local seats of its classic endpoint: shown to every client as players, sent 
 lines, a countdown run out restarts the map into the match, and the match's end brings the next
 map up in warmup. With `LobbySettings::humans` set (a dedicated server's 1) bots alone never
 count down, and a bot never leads while a player is seated (the `se-dedicated-lobby` lab).
+Quake II's server seats `sv_bots` too, in deathmatch on its own rules: the same bot seats
+(`games/shooters_edge/bots/bot_seats.hpp`, which QuakeWorld's lobby keeps its bots in), their nav
+built off the map's brushes, Quake II's arsenal, their moves run after the clients' each frame, a
+client never given a bot's slot, and the status listing them as bots.
 The lobby and the warmup are apart: with `LobbySettings::warm_on_join` off (a game that has a
 lobby screen of its own, as Shooter's Edge's window does) a player waits on that screen, off the
 map, until `warmup` puts him in the warmup (`sitout` takes him back, `lobby_on_map` says where a
@@ -335,6 +339,14 @@ in `tests/golden/console_script.txt` (`meta-*`) hold the precedence, the restore
 the refused loop; the `server-cfg` lab draws a mod setting `sv_modern 1` over a base that set
 `sv_fps`.
 
+A game's dedicated server declares its own levels as data (`ServerGame::metas`, a `GameMeta` row a
+level), so `sv_modern` means "a modern server" in every game and each says what that is for it.
+Only how the network judges play is in it, never a game's feel. Shooter's Edge's QuakeWorld: 1 is
+`sv_antilag 2; sv_antilag_projectiles 1` (every shot's line and every rocket, grenade and nail
+rewound to what the shooter saw), 2 adds `sv_lanrate 1`. Its Quake II: 1 is `sv_antilag 2;
+sv_antilag_projectiles 1; sv_antilag_interp 1`. Held by `tests/shooters_edge_qw_game_test.cpp`;
+the `se-dedicated-lobby` lab plays its matches with `--modern=1`.
+
 ## The lobby and the match's phases
 
 Sessions (`engine/net/session`) already hold the seats, the leader, teams, ready and `lobby` /
@@ -369,7 +381,8 @@ itself: a recording begins at the frame after the phase turns to the match (the 
 see of it: a map restarted for the match shows from there) and ends when the phase leaves it, to
 `demos/<map>-<YYYYMMDD>-<HHMMSS>.ged` in the game's folder, written as it goes, so the warmup and
 the scores after are in no file and a server stopped mid-match keeps every whole second. A game with
-no phases is in its match from the start. Beside `--record` and the server's own TV, every
+no phases is in its match from the start. QuakeWorld's and Quake II's servers both tell their match's phase
+(`sv_lobby`), so each of their matches is a file of its own. Beside `--record` and the server's own TV, every
 recording takes the same frame bytes, which the game is asked for once a frame
 (`Server::tv_frame_bytes`): a game whose frame hands out what its viewers have not had yet, as
 Shooter's Edge's classic game does, would otherwise give each recording only part of a frame. In
@@ -502,6 +515,36 @@ full. The book asks the game to seat or unseat a player and says every line; the
 the seats again from a seed. Quake II's server plays it with `dmflags` 64 or 128, every player
 in his team's look.
 
+## Elections and picks
+
+`engine/server/election.hpp`. A role a player asks the others for (a captain, a coach, an admin)
+is an election: ONE is open on a server at a time whatever it is for (the role is data: its name
+and a team), the people playing are the voters and answer `yes` (`no` takes it back), the
+candidate's own vote counts when he is one (a coach who watches is not), and it passes on the
+round-up of a percent (51 to 100) of the voters, at least two. It times out after 60 seconds, the
+candidate may call it off, and he waits 30 seconds before he asks again. The game gives the role
+when one passes and says the lines in its own words.
+
+`engine/server/draft.hpp`. Two captains picking the other players in turn: each waiting player
+has a number (1, 2, 3... in slot order), the captain who picks first is drawn from the seed, then
+A, B, B, A, B, A...; the last one goes by himself, a late joiner takes the lowest free number,
+and a captain who leaves ends it. Our QuakeWorld server's captain mode is both in QuakeWorld's
+words (`games/shooters_edge/net/qw_captains.hpp`): `captain` before a match in team play, the
+numbers shown as frags, a pick by the number keys, each pick taking the captain's team name and
+colours, nobody firing and nobody changing team while they pick.
+
+## Coaches
+
+`engine/server/coach.hpp`. A spectator who wants to help one team asks for it in the warmup of a
+team match (`coach <team>`); the seated players answer `yes` (`no` takes it back) and he is elected
+when the yes reach 51 % of them, 2 at least, within 60 s. One coach a team, at least 3 players on
+the server, one election at a time and never beside a vote; a candidate who withdraws or runs out
+of time waits 30 s. A coach is in his team's team chat both ways (his lines read "(Coach <name>)",
+`engine/server/chat.hpp`) and his chase camera follows only his team's players; nothing else: no
+captain's word. He stops with `coach` again, by leaving or by taking a seat; he stays through the
+match and the map's change. The referee names one with no vote (`coach <team> <player>`) and takes
+one off (`uncoach <team>`); `coaches` lists them. Quake II's server plays it.
+
 ## The referee
 
 `engine/server/referee.hpp`. A player who gives the server's administrator password in the game
@@ -510,6 +553,16 @@ match), `tl <minutes>`, `changemap <map>`, `kick`, `kickban` and `ban <player> [
 default, 720 at most), `mute <player> [minutes]` (5 by default, 60 at most) and `unmute`,
 `shuffle`, `readyall` and `unreadyall`; `acommands` lists them. A wrong password is refused and
 logged; a referee is never kicked, banned or muted. The book hands the game each act to do.
+
+A game keeps its own words (`RefereeWords`): its login word, its spellings of the book's words,
+the wait after a try, how a player is named, a kick's reason and ban, and every line said; a word
+its table leaves out is not the book's and reaches the mod. Our QuakeWorld server's admin is the
+book in QuakeWorld's words (`games/shooters_edge/net/qw_referee.hpp`): `admin <code>` against
+`k_admincode` (`k_admins 0`: no admins; a wrong code holds the next try 5 seconds), `forcebreak`,
+`forcemap <map>` (refused during a lobby's match and for a map the server lacks), `kick <id or
+name> [reason]` (the address kept out 30 seconds), and QuakeWorld's own `forcestart` (a 10-second
+count, then the unready dropped and the match counted down) and `lock` (joiners watch for 15
+seconds). A mod's own program keeps its own admin: the words go to it untouched.
 
 ## Player aids: help for one chosen player
 
@@ -701,7 +754,29 @@ from where it stopped (a `Range` request, three tries), holds every fetch togeth
 The console's download bar follows the fetch (`web_progress`).
 
 The `se-fastdl` lab times both ways on a real map: `make lab LAB=se-fastdl
-ARGS=--map=<path>/aerowalk.bsp`.
+ARGS=--map=<path>/aerowalk.bsp`, or a Quake II map with `--game=q2`. Quake II's channel sends one
+piece of a packet's room for each `nextdl` the client answers, so a map comes at about 13 kB a
+second whichever protocol the client speaks; HTTPS is what makes it fast there.
+
+## The port opened on the home router
+
+A dedicated server run at home sits behind the home router, which drops what the internet sends to
+it unless someone forwards the game port by hand. `sv_open_port 1` asks the router to do it
+(`engine/server/router.hpp` over `engine/net/portmap.hpp`): PCP first, then NAT-PMP, then UPnP,
+from a socket of its own beside the game's. The forward is the game's UDP port, the same port
+outside, asked for an hour at a time and renewed at half its life; a lease the router drops is
+asked for again. When the server stops, the router is asked to take the forward down.
+
+| Setting | Default | What |
+| --- | --- | --- |
+| `sv_open_port` | 0 (off) | 1: ask the home router to forward the game's UDP port |
+| `sv_gateway` | none | the router's address (port 5351 when left out); none: the machine's default route (Linux), or UPnP's search |
+
+The console says once what came of it: "The router forwards UDP 27500 to this server (pcp):
+players reach it at 203.0.113.7:27500.", or, when no router answered, the reason and what to do
+(open the port in the router's settings by hand, or set `sv_gateway`). The HTTPS file port
+(`sv_http_port`) is TCP, which these protocols' UDP forward does not cover: forward it by hand.
+`tests/server_router_test.cpp` runs it against the simulated router (`engine/net/sim_router.hpp`).
 
 ## Open for extension
 

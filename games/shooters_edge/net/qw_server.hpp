@@ -67,6 +67,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/protocol/challenges.hpp"
 #include "classic/protocol/lag_turn.hpp"
 #include "core/prng.hpp"
 #include "net/status.hpp"
@@ -324,6 +325,7 @@ struct QwClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fields b
   bool carried = false;
   float parms[16] = {};
   int frags_told = 0;    // the frags every client was last sent
+  int pick_number = 0;   // captain mode's number, shown as his frags while he waits (0: frags)
   gs::FloodGuard flood;  // its chat lines' times and its silence
   // Its voice (qw_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),
   // whether it hears voice at all (`unmuteall`, `muteall`) and the talkers it ignores, a bit each.
@@ -364,12 +366,6 @@ struct ServerCounts {
   int64_t rcon_run = 0, rcon_refused = 0;  // remote console lines run; refused or not answered
 };
 
-struct Challenge {
-  gn::Address address;  // the port ignored
-  int32_t value = 0;
-  int64_t made = 0;  // the order it was made, for replacing the oldest
-};
-
 // The frag log (net/qw_fraglog.hpp): the rules' frag lines read so far, the file `fraglogfile`
 // opened, the buffer being filled and the last one filled, which the `log` query answers with.
 struct FragLog {
@@ -392,8 +388,7 @@ struct QwServer {
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
   QwClient clients[sh::kMaxClients];
-  Challenge challenges[64];
-  int64_t challenges_made = 0;
+  ge::classic::ChallengeBook challenges;  // classic/protocol/challenges.hpp
   ge::core::Rng rng{1};
   int spawncount = 1;
   int next_userid = 1;
@@ -426,12 +421,23 @@ struct QwServer {
   std::vector<MultiviewRecorder*> streams;  // the relays' live streams (qw_qtv.hpp)
   // A client's string command the game sees before the rules (a lobby's words): true takes it.
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
+  // One the rules did not know (their answer `bad`) the game may still take (the stats words, which
+  // a mod with its own leaves to it): true takes it.
+  bool (*game_command_after)(void* ctx, int slot, const std::string& line) = nullptr;
   // Whether a client joining now may play (a match locked to its own players): else he joins as
   // a spectator, told `why`. Null: everyone may.
   bool (*may_play)(void* ctx, const std::string& name, std::string& why) = nullptr;
   // A client's move's buttons as the game lets them through (fire and jump held before a match);
   // null: all of them.
   uint8_t (*buttons)(void* ctx, int slot, uint8_t buttons) = nullptr;
+  // A client's move's impulse as the game lets it through (0: the game took it, as captain mode's
+  // pick); `fresh` for the newest move, false for the two older ones a packet repeats. Null: all.
+  uint8_t (*impulse)(void* ctx, int slot, uint8_t impulse, bool fresh) = nullptr;
+  // A client's `setinfo` before it is taken: false refuses it (the game told him why and put his
+  // own key back). Null: every key.
+  bool (*info_rule)(void* ctx, int slot, const std::string& key,
+                    const std::string& value) = nullptr;
+  void* move_ctx = nullptr;  // `impulse`'s and `info_rule`'s
   void* game_ctx = nullptr;
   std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
   // A listen server's own player, a local seat: the rules' frame handed to the game before the

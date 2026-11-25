@@ -55,9 +55,9 @@ void monster_spawn(Q2Server& s);
 // One rules frame of every monster: notice, chase, attack, move.
 void monster_frame(Q2Server& s);
 // A player's projectile (a bolt, a rocket, the BFG's ball) fired from `start` whose line meets
-// monster `e` first, `dist` away, flying at `speed`: the monster may dodge it (duck), as its kind
-// does (q2-monsters-full.md § Dodging and ducking).
-void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed);
+// monster `e` first, `dist` away at `hit`, flying at `speed`: the monster may dodge it (duck), as
+// its kind does (q2-monsters-full.md § Dodging and ducking).
+void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed, sh::Vec3f hit);
 // The frame a kind's duck holds low (its model's), or -1 for a kind that never ducks.
 int monster_duck_frame(std::string_view classname);
 // A blow of `damage` from `attacker` (a slot, or -1) to map entity `e` along `dir` (`splash` a
@@ -91,6 +91,19 @@ bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles,
                          int activator);
 // Whether map entity `e` is a monster that bleeds green (The Reckoning's gekk).
 bool monster_green(const Q2Server& s, int e);
+// Ground Zero's hidden brain that drives a turret_breach (q2_gz_monsters.cpp): set up, used
+// (false when entity `i` is not one), and its frame.
+bool gz_brain_spawn(Q2Server& s, int i);
+// Ground Zero's `hint_path` set up as the map spawns (q2_gz_ai.cpp); false for any other entity.
+bool gz_hint_spawn(Q2Server& s, int i);
+bool gz_brain_use(Q2Server& s, int i, int activator);
+// Ground Zero's tesla (q2_gz_tesla.cpp), missile `i`, hurt the monster at entity `e`: its field
+// (`lo`..`hi`) a bad area for 30 s, and the monster turns on it when the area is new or it had no
+// enemy, a medic leaving its patient; a player it fought is kept to go back to.
+void gz_tesla_bad_area(Q2Server& s, int i, int e, sh::Vec3f lo, sh::Vec3f hi);
+// Tesla `i` takes `damage`: at none left it bursts (q2_gz_weapons.cpp).
+void gz_tesla_damage(Q2Server& s, int i, int damage);
+void gz_brains(Q2Server& s);
 // The words of a death by a monster's attack (`cause` from `kSqByMonster`), or null.
 const char* monster_obituary(int cause);
 

@@ -1,12 +1,17 @@
-// Quake II's match stats, counted and shown (q2_stats.hpp states them).
+// Quake II's match stats, counted into the shared columns (q2_stats.hpp states them).
 //
-// ge:summary Quake II's match stats counted from the fight's calls, and the table a player reads
-// ge:keywords stats_shot stats_blow stats_death stats_table accuracy q2-stats
+// ge:summary Quake II's match stats counted from the fight's calls into the shared columns
+// ge:keywords stats_shot stats_blow stats_death stats_item stats_tick q2-stats
 // ge:skill shooter net
 // ge:test tests/shooters_edge_q2_match_test.cpp
 #include "shooters_edge/server/q2_stats.hpp"
 
+#include <cstring>
+
+#include "core/num.hpp"
+
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -14,7 +19,9 @@ namespace shooters_edge::server {
 namespace {
 
 bool player(int slot) { return slot >= 0 && slot < 32 && slot < sh::kMaxClients; }
-bool weapon(int w) { return w >= 0 && w < kSqWeaponCount; }
+// The base game's guns (blaster to hand grenade) are counted; a mission pack's are not columns.
+constexpr int kCounted = int(SqWeapon::hand_grenade) + 1;
+bool weapon(int w) { return w >= 0 && w < kCounted; }
 
 Q2SlotStats& of(Q2Server& s, int slot) {
   Q2SlotStats& p = s.stats.slot[static_cast<size_t>(slot)];
@@ -22,99 +29,117 @@ Q2SlotStats& of(Q2Server& s, int slot) {
   return p;
 }
 
-std::string pad(std::string text, size_t width, bool left = false) {
-  if (text.size() >= width) return text;
-  const std::string fill(width - text.size(), ' ');
-  return left ? text + fill : fill + text;
-}
+constexpr int kRocket = int(SqWeapon::rocket_launcher), kGrenade = int(SqWeapon::grenade_launcher);
 
 }  // namespace
 
-int stats_accuracy(const Q2WeaponTally& t) {
-  if (t.shots <= 0) return -1;
-  return static_cast<int>((int64_t(t.hits) * 100 + t.shots - 1) / t.shots);
+const StatsGame& q2_stats_game() {
+  static const StatsGame g = [] {
+    StatsGame out;
+    out.weapons = kCounted;
+    out.label = {"bl", "sg", "ssg", "mg", "cg", "gl", "rl", "hb", "rg", "bfg", "hg", nullptr};
+    out.rl = kRocket;
+    out.gl = kGrenade;
+    int k = 0;
+    for (SqWeapon w :
+         {SqWeapon::railgun, SqWeapon::rocket_launcher, SqWeapon::grenade_launcher,
+          SqWeapon::hyperblaster, SqWeapon::chaingun, SqWeapon::machinegun, SqWeapon::super_shotgun,
+          SqWeapon::shotgun, SqWeapon::bfg, SqWeapon::hand_grenade, SqWeapon::blaster})
+      out.shown[static_cast<size_t>(k++)] = static_cast<uint8_t>(w);
+    out.shown_count = k;
+    out.item = {"ja", "ca", "ba", "mh", "quad", "invuln", "power"};
+    out.words = {"jacket", "combat", "body", "mega", "quad", "invulnerability", "power armour"};
+    return out;
+  }();
+  return g;
 }
 
 void stats_shot(Q2Server& s, int slot, int w, int n) {
   if (!s.stats.on || !player(slot) || !weapon(w) || n <= 0) return;
-  of(s, slot).weapon[static_cast<size_t>(w)].shots += n;
+  const int each = w == int(SqWeapon::shotgun) ? 12 : w == int(SqWeapon::super_shotgun) ? 20 : 1;
+  stats_attack(&of(s, slot).tally, w, int64_t(n) * each);
 }
 
 void stats_blow(Q2Server& s, int attacker, int target, int w, int points) {
-  if (!s.stats.on || !player(target) || points <= 0) return;
+  if (!s.stats.on || !player(target) || !player(attacker) || points <= 0) return;
+  const StatsGame& g = q2_stats_game();
   Q2SlotStats& victim = of(s, target);
-  if (!player(attacker) || attacker == target) {
-    victim.received += points;
-    if (attacker == target && weapon(w)) victim.weapon[static_cast<size_t>(w)].received += points;
-    return;
-  }
   Q2SlotStats& by = of(s, attacker);
-  if (fight_teammates(s, attacker, target)) {
-    by.team_dealt += points;
-    victim.team_received += points;
+  const bool self = attacker == target;
+  const bool enemy = !self && !fight_teammates(s, attacker, target);
+  const Q2Player& body = s.players[target];
+  const bool big = sq_holds(body.body, kRocket) || sq_holds(body.body, int(SqWeapon::railgun));
+  stats_blow(g, &by.tally, &victim.tally, self, enemy, points, big);
+  if (self || !weapon(w) || s.blow_how == kSqHowLaser) return;
+  const bool blast = s.blow_how == kSqHowBlast || s.blow_how == kSqHowBurst;
+  if (w == kRocket || w == kGrenade) {
+    if (!blast) stats_hit(&by.tally, w, 1);  // the direct touch
+    if (enemy) stats_splash(g, &by.tally, w, points);
+    if (enemy && w == kRocket && !body.on_ground && body.water_level < 2)
+      stats_midair(g, &by.tally,
+                   static_cast<int64_t>(ge::core::num::round(double(fight_floor_gap(s, target)))));
     return;
   }
-  by.dealt += points;
-  victim.received += points;
-  if (!weapon(w)) return;
-  const auto k = static_cast<size_t>(w);
-  by.weapon[k].dealt += points;
-  victim.weapon[k].received += points;
-  const int64_t frame = s.fast_number + 1;
-  if (w == int(SqWeapon::railgun)) {  // a slug's every player
-    if (by.hit_frame[k] != frame) by.rail_hit = 0;
+  if (w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::bfg)) {  // once a player a frame
+    const auto k = static_cast<size_t>(w);
+    const int64_t frame = s.fast_number + 1;
+    if (by.hit_frame[k] != frame) by.hit_mask[k] = 0;
     by.hit_frame[k] = frame;
     const uint32_t bit = 1u << target;
-    if ((by.rail_hit & bit) != 0) return;
-    by.rail_hit |= bit;
-    by.weapon[k].hits++;
-    return;
+    if ((by.hit_mask[k] & bit) != 0) return;
+    by.hit_mask[k] |= bit;
   }
-  if (by.hit_frame[k] == frame) return;  // a blast's or a blast of pellets' one hit
-  by.hit_frame[k] = frame;
-  by.weapon[k].hits++;
+  stats_hit(&by.tally, w, 1);
 }
 
 void stats_death(Q2Server& s, int slot, int killer, int w, bool teammate) {
   if (!s.stats.on || !player(slot)) return;
   Q2SlotStats& victim = of(s, slot);
   victim.deaths++;
-  if (!player(killer) || killer == slot) {
+  const bool other = player(killer) && killer != slot;
+  const bool enemy = other && !teammate;
+  if (!other)
     victim.suicides++;
-    return;
-  }
-  Q2SlotStats& by = of(s, killer);
-  if (teammate) {
-    by.team_kills++;
-    return;
-  }
-  by.kills++;
-  if (!weapon(w)) return;
-  by.weapon[static_cast<size_t>(w)].kills++;
-  victim.weapon[static_cast<size_t>(w)].deaths++;
+  else if (teammate)
+    of(s, killer).team_kills++;
+  else
+    of(s, killer).kills++;
+  const bool quad = enemy && s.players[killer].quad_until > s.level_time;
+  stats_died(q2_stats_game(), &victim.tally, enemy ? &of(s, killer).tally : nullptr, enemy,
+             weapon(w) ? w : -1, quad, s.level_time);
 }
 
-std::string stats_table(const Q2SlotStats& p, const std::string& name) {
-  if (!p.counted) return {};
-  std::string out = "Stats for " + name + ":\n";
-  out += pad("Weapon", 15, true) + pad("Acc", 5) + pad("Hits", 6) + pad("Shots", 6) +
-         pad("Kills", 6) + pad("Deaths", 7) + pad("Dealt", 6) + pad("Recvd", 6) + "\n";
-  for (int w = 0; w < kSqWeaponCount; w++) {
-    const Q2WeaponTally& t = p.weapon[static_cast<size_t>(w)];
-    if (t.shots == 0 && t.hits == 0 && t.kills == 0 && t.deaths == 0 && t.received == 0) continue;
-    const int acc = stats_accuracy(t);
-    out += pad(kSqWeapons[w].name, 15, true) + pad(acc < 0 ? "-" : std::to_string(acc) + "%", 5) +
-           pad(std::to_string(t.hits), 6) + pad(std::to_string(t.shots), 6) +
-           pad(std::to_string(t.kills), 6) + pad(std::to_string(t.deaths), 7) +
-           pad(std::to_string(t.dealt), 6) + pad(std::to_string(t.received), 6) + "\n";
+void stats_spawn(Q2Server& s, int slot) {
+  if (player(slot)) stats_spawned(&s.stats.slot[static_cast<size_t>(slot)].tally, s.level_time);
+}
+
+void stats_item(Q2Server& s, int slot, int item) {
+  if (!s.stats.on || !player(slot) || item < 0) return;
+  const SqItem& it = kSqItems[item];
+  const StatsGame& g = q2_stats_game();
+  PlayerStats* p = &of(s, slot).tally;
+  if (it.kind == SqKind::armour && it.amount >= 1 && it.amount <= 3)
+    stats_took(g, p, static_cast<StatItem>(it.amount - 1));
+  else if (it.kind == SqKind::power_armour)
+    stats_took(g, p, StatItem::power_c);
+  else if (std::strcmp(it.classname, "item_health_mega") == 0)
+    stats_took(g, p, StatItem::mega);
+  else if (std::strcmp(it.classname, "item_quad") == 0)
+    stats_took(g, p, StatItem::quad);
+  else if (std::strcmp(it.classname, "item_invulnerability") == 0)
+    stats_took(g, p, StatItem::power_b);
+}
+
+void stats_tick(Q2Server& s) {
+  const double now = s.level_time, dt = now - s.stats.last_time;
+  const bool step = s.stats.last_time >= 0 && dt > 0 && dt <= 1;
+  s.stats.last_time = now;
+  if (!s.stats.on || !step) return;
+  for (int i = 0; i < 32 && i < sh::kMaxClients; i++) {
+    const Q2Player& p = s.players[i];
+    if (!s.clients[i].active || !p.alive || p.quad_until <= now) continue;
+    stats_quad_held(q2_stats_game(), &of(s, i).tally, dt);
   }
-  out += "Kills " + std::to_string(p.kills) + ", deaths " + std::to_string(p.deaths) +
-         ", suicides " + std::to_string(p.suicides) + ", team kills " +
-         std::to_string(p.team_kills) + "\n";
-  out += "Damage dealt " + std::to_string(p.dealt) + ", received " + std::to_string(p.received) +
-         ", to teammates " + std::to_string(p.team_dealt) + ", from teammates " +
-         std::to_string(p.team_received) + "\n";
-  return out;
 }
 
 }  // namespace shooters_edge::server

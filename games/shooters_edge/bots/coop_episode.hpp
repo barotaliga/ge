@@ -27,9 +27,16 @@
 //
 // The maps come from the caller's loader (the player's own packs: none ships in the tree).
 //
+// THE CENSUS (`census`): every entity of the map counted by its class name as the run sees it,
+// so a pack's new monsters, items, movers and traps are shown at work: how many stood after the
+// spawn, how many more the run made (shots, gibs, spawned helpers), how many moved and how many
+// went (killed, picked up, used up), how many had their model taken away while they stayed (an
+// item picked up), and the largest number alive at once.
+//
 // ge:summary A co-op episode played through: a leader finding each map's exit, companions beside
 // ge:keywords coop-episode run_coop_episode episode play-through e1m1 leader way-through
 // ge:keywords companions intermission changelevel parms real-maps party partners
+// ge:keywords census class-name mission-pack spawned moved gone
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #pragma once
@@ -77,6 +84,18 @@ struct EpisodeOptions {
   bool god = false;                // the leader's (and his partners') `god` on every map
   std::vector<std::string> avoid;  // exits to these maps are not taken (a secret level)
   std::vector<std::string> stop;   // an exit to one of these ends the run (the episode's end)
+  bool census = false;             // count each class name's entities (EpisodeMap::census)
+};
+
+// One class name's entities on a map, as the run saw them (EpisodeOptions::census).
+struct ClassCensus {
+  std::string name;
+  int spawned = 0;  // standing after the map's spawn
+  int made = 0;     // made later in the run
+  int moved = 0;    // moved more than a unit from where it first stood
+  int gone = 0;     // removed (killed, picked up, used up)
+  int taken = 0;    // its model taken away while it stayed (an item picked up)
+  int most = 0;     // the most alive at once
 };
 
 struct EpisodeMap {
@@ -121,8 +140,9 @@ struct EpisodeMap {
   std::vector<sh::Vec3f> secrets;             // where the leader stood as each secret counted
   // The leader's rocket and grenade jumps: each flight, the take-off first and the landing last.
   std::vector<std::vector<sh::Vec3f>> blasts;
-  std::vector<sh::Vec3f> exits;   // the exits' middles
-  std::vector<std::string> plan;  // the leader's changes of plan (EpisodeOptions::plan)
+  std::vector<sh::Vec3f> exits;     // the exits' middles
+  std::vector<std::string> plan;    // the leader's changes of plan (EpisodeOptions::plan)
+  std::vector<ClassCensus> census;  // by class name, in the order first seen (`census`)
 };
 
 struct EpisodeReport {

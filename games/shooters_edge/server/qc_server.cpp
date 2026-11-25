@@ -12,6 +12,7 @@
 #include <cstdio>
 
 #include "classic/coop.hpp"
+#include "prof/zones.hpp"
 #include "server/overtime.hpp"
 #include "shooter/frame.hpp"
 #include "shooter/settings.hpp"
@@ -512,6 +513,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   for (std::string& l : s.lightstyles) l.clear();
   s.out = MessageSink{};
   s.map_messages.clear();
+  s.spawned_as.clear();
   s.loading = true;
   s.map_stopped = false;
   s.stop_reason.clear();
@@ -594,6 +596,9 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
       sim::leave_qc(s.q);
       continue;
     }
+    if (s.spawned_as.size() <= static_cast<size_t>(e))
+      s.spawned_as.resize(static_cast<size_t>(e) + 1);
+    s.spawned_as[static_cast<size_t>(e)] = classname;
     pg::set_global_int(vm, s.q.layout->g.self, pg::entity_value(vm, e));
     pg::set_global_int(vm, s.q.layout->g.other, 0);
     pg::set_global_float(vm, s.q.layout->g.time, static_cast<float>(s.sv.time));
@@ -691,6 +696,7 @@ sh::RjumpReady qc_rocket_ready(void* rules, int slot, sh::MoveCmd& cmd, std::str
 }  // namespace
 
 void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
+  GE_ZONE("rules.frame");
   // The rocket jump helper rewrites the commands it acts on (rjump_rules.hpp).
   // The view a shot turned is put back after the frame, so no one sees it a frame longer and the
   // player's own view is never moved (his client keeps his angles).

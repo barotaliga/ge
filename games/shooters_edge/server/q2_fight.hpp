@@ -41,6 +41,9 @@ void fight_choose(Q2Server& s, int slot, int w);
 // deathmatch, always outside it; grenades with none held before (`grenades_before`, -1 unknown:
 // the count now a box's own) take the hand grenade the same way.
 void fight_took(Q2Server& s, int slot, int item, int grenades_before = -1);
+// How far the bottom of player `slot`'s box is above the floor straight under him (the world
+// only): a mid-air's height.
+float fight_floor_gap(const Q2Server& s, int slot);
 // The player's `use`, `weapnext` and `weapprev` commands; false when `cmd` is none of them.
 bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::string& arg);
 
@@ -53,7 +56,13 @@ inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSq
 // A map's laser, an exploding barrel, a deathmatch exit taken without allow-exit (`dmflags` 4096).
 inline constexpr int kSqByLaser = 109, kSqByBarrel = 110, kSqByExit = 111;
 // A bite, a claw, a leap, a spit or a tongue of a mission pack's monster ("that's gotta hurt.").
-inline constexpr int kSqByGotta = 113;
+inline constexpr int kSqByGotta = 119;
+// Ground Zero's A-M bomb (q2_gz.hpp): its blast's own words.
+inline constexpr int kSqByAmBomb = 113;
+// Ground Zero's spheres (q2_gz_spheres.cpp): the vengeance's, the defender's bolt, the hunter's;
+// and the two a doppleganger releases.
+inline constexpr int kSqByVengeance = 114, kSqByDefender = 115, kSqByHunter = 116;
+inline constexpr int kSqByDoppleVengeance = 117, kSqByDoppleHunter = 118;
 // A monster's attack: this plus its row in the roster (q2_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 
@@ -70,12 +79,16 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
                         int how, const std::string& gender, bool* by_killer = nullptr);
 
 // A blow to player `target` from `attacker` (a slot or -1) along `dir` (zero: no push), by
-// `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by.
+// `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by, 4
+// is energy (the armour's energy share).
 void fight_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
                 int weapon, int flags = 0);
 // Radius damage at `at`: `damage` less half the distance, within `radius` (the attacker's half),
-// to the players and the map's shootable movers it reaches.
-void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon);
+// to the players and the map's shootable movers it reaches; player `ignore` left out, `energy` the
+// armour's energy share; map entity `ignore_entity` and the players in `skip` (a bit a slot) left
+// out too.
+void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon,
+                 int ignore = -1, bool energy = false, int ignore_entity = -1, uint32_t skip = 0);
 
 // Midair (`k_midair` in deathmatch; plugins/shooter/midair.hpp): whether it is on; a spawn's kit
 // (250 health, 200 body armour, the rocket launcher in hand, 255 rockets that never run out); the
@@ -185,7 +198,7 @@ struct LaserEnd {
 };
 // A laser's line from `start` to `end`: `damage` to every player and monster on it, the line
 // passing on through them, and to the mover or wall that stops it (an energy blow, `attacker` a
-// slot or -1).
+// slot or -1); under Ground Zero it passes on through a thing it hurt, too.
 LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
                      int skip_entity);
 // A point effect (`te_*`) at `at` for everyone.

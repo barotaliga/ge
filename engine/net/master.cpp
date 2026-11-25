@@ -44,11 +44,6 @@ void send(Transport& t, const Address& to, const Writer& w, int64_t now_us) {
   if (!w.overflow) transport_send(t, to, w.data, w.size, now_us);
 }
 
-// The host part of an address (its port left out): what `max_per_host` counts by.
-bool same_host(const Address& a, const Address& b) {
-  return a.family == b.family && std::memcmp(a.bytes, b.bytes, 16) == 0;
-}
-
 MasterEntry* find(Master& m, const Address& at, uint32_t protocol, NodeKind kind) {
   for (MasterEntry& e : m.entries) {
     if (e.address == at && e.protocol == protocol && e.kind == kind) return &e;

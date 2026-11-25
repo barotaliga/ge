@@ -46,10 +46,12 @@
 #include "shooters_edge/net/qw_coop.hpp"
 #include "shooters_edge/net/qw_coop_game.hpp"
 #include "shooters_edge/net/qw_endpoint_cfg.hpp"
+#include "shooters_edge/net/qw_game_names.hpp"
 #include "shooters_edge/net/qw_game_tv.hpp"
 #include "shooters_edge/net/qw_login.hpp"
 #include "shooters_edge/net/qw_match_rules.hpp"
 #include "shooters_edge/net/qw_qtv.hpp"
+#include "shooters_edge/net/qw_referee.hpp"
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/net/qw_sheet.hpp"
@@ -130,6 +132,7 @@ struct Game {
   // server's clock (`now_s`, which runs on through the pause).
   gs::TimeoutBook timeout;
   bool timeout_held = false;  // the rules paused for it
+  QwReferee referee;  // the admin in the game (qw_referee.hpp), on a program of the server's own
   double now_s = 0;
   // The stream port for QuakeWorld relays (qw_qtv.hpp; qtv_streamport 0: none).
   int qtv_port = 0;
@@ -146,6 +149,7 @@ struct Game {
   StatsEyes stats_eyes;  // the weapon stats' last frame (qw_stats.hpp)
   ge::net::MatchReport report;
   bool report_ready = false;
+  ge::net::MatchReport last_stats;  // the last match's, for `laststats` (none: no players)
   // The match as the core records it (qw_game_tv.hpp): a stream of the server's own.
   std::unique_ptr<QwTv> tv = std::make_unique<QwTv>();
   ~Game() {
@@ -229,8 +233,7 @@ constexpr gs::GameRule kModRules[] = {
      nullptr, "0: only plain letters, digits and signs are kept; 1: any (the default)"},
     {"zombietime",
      "Seconds a dropped player's packets are still answered with the goodbye, so his game learns "
-     "it "
-     "was dropped.",
+     "it was dropped.",
      nullptr, "0: none; 2: two seconds (the default)"},
 };
 
@@ -260,96 +263,6 @@ const std::vector<gs::GameRule>& all_rules() {
   return rules;
 }
 
-// Each QuakeWorld game's own names for the server's settings (gs::SettingName): a server.cfg,
-// `+set`, rcon or vote line by either name sets the one setting. Both games share the names they
-// have in common, so one table serves both: Quake's alone (floodprot, floodprotmsg), the
-// Quake II's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
-constexpr gs::SettingName kSettingNames[] = {
-    {"hostname", "sv_hostname"},
-    {"maxclients", "sv_maxclients"},
-    {"maxspectators", "sv_maxspectators"},
-    {"password", "sv_password"},
-    {"spectator_password", "sv_spectatorpassword"},
-    {"timeout", "sv_timeout"},
-    {"floodprot", "sv_floodprot"},
-    {"floodprotmsg", "sv_floodprotmsg"},
-    {"sv_maplist", "sv_maprotation"},
-    {"flood_msgs", "sv_floodprot", 0},
-    {"flood_persecond", "sv_floodprot", 1},
-    {"flood_waitdelay", "sv_floodprot", 2},
-    {"allow_download", "sv_download"},
-    {"allow_download_skins", "sv_download_skins"},
-    {"allow_download_models", "sv_download_models"},
-    {"allow_download_sounds", "sv_download_sounds"},
-    {"allow_download_maps", "sv_download_maps"},
-    {"allow_download_other", "sv_download_other"},
-    {"sv_downloadchunksperframe", "sv_downloadchunks"},
-    {"sv_default_name", "sv_defaultname"},
-    {"sv_forcenick", "sv_loginname"},
-    {"sv_registrationinfo", "sv_loginwelcome"},
-    {"sv_forcespec_onfull", "sv_fullspectate"},
-    {"sv_reconnectlimit", "sv_reconnectwait"},
-    {"sv_enable_cmd_minping", "sv_minpingcmd"},
-    {"countrycode", "sv_country"},
-    {"city", "sv_city"},
-    {"coords", "sv_coords"},
-    {"hostport", "sv_publicaddr"},
-    {"sv_admininfo", "sv_admin"},
-    {"watervis", "sv_watervis"},
-    {"sv_kicktop", "sv_colorkick"},
-    {"sv_kickuserinfospamcount", "sv_infoflood", 0},
-    {"sv_kickuserinfospamtime", "sv_infoflood", 1},
-    {"sv_antilag_no_pred", "sv_antilagexact"},
-    {"sv_voip_echo", "sv_voipecho"},
-    {"sv_crypt_rcon", "sv_rconcrypt"},
-    {"sv_timestamplen", "sv_rcontime"},
-    {"sv_rconlim", "sv_rconrate"},
-    {"filterban", "sv_banmode"},
-    {"vip_password", "sv_vippassword"},
-    {"vip_values", "sv_vipvalues"},
-    {"maxvip_spectators", "sv_maxvipspectators"},
-};
-
-// `*mods`: each package's name and version, ", " between, cut with "+N more" past what one
-// serverinfo value should take of the whole string's 512 bytes.
-std::string mods_info(const std::vector<std::unique_ptr<ge::mod::LoadedMod>>& packages) {
-  constexpr size_t kMax = 120;
-  std::string out;
-  for (size_t k = 0; k < packages.size(); k++) {
-    const ge::mod::Manifest& m = packages[k]->manifest;
-    std::string one = m.name + " " + m.version;
-    const std::string more = " +" + std::to_string(packages.size() - k) + " more";
-    if (out.size() + 2 + one.size() > kMax - (k + 1 < packages.size() ? more.size() : 0)) {
-      out += more;
-      break;
-    }
-    if (!out.empty()) out += ", ";
-    out += one;
-  }
-  return out;
-}
-
-// The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
-// own table before they start: each mod sees the server it runs on, not a default of its own.
-void game_names(sv::RulesCommon& rules, const gs::ServerConfig& c) {
-  const struct {
-    const char* name;
-    std::string value;
-    const char* help;
-  } values[] = {
-      {"hostname", c.hostname, "The server's name, which is sv_hostname."},
-      {"maxclients", std::to_string(c.maxclients), "The most players, which is sv_maxclients."},
-      {"maxspectators", std::to_string(c.max_spectators),
-       "The most spectators, which is sv_maxspectators."},
-  };
-  for (const auto& v : values) {
-    if (rules.cvars.find(v.name) == nullptr)
-      rules.cvars.add({v.name, v.value, ge::console::kServer, v.help, ge::console::CvarKind::text});
-    else
-      rules.cvars.set(v.name, v.value, ge::console::Source::code);
-  }
-}
-
 // A file of the game's search path, for a compiled module's reads.
 bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& bytes) {
   const auto& files = *static_cast<const cl::SearchPath*>(ctx);
@@ -358,14 +271,6 @@ bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& by
   if (found.empty()) return false;
   bytes.assign(found.begin(), found.end());
   return true;
-}
-
-// The loop's client slots: the players' and, when spectators have their own, theirs.
-int slots(const gs::ServerConfig& c) {
-  int vip = 0;
-  if (const auto v = c.rules.find("sv_maxvipspectators"); v != c.rules.end())
-    vip = std::max(0, std::atoi(v->second.c_str()));
-  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
 // A save of Quake II's game the window asked to load (ListenHost::load): asked of `rules`, the
@@ -410,7 +315,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     // hulls (q2_native.hpp).
     sv::NativeQ2Options no;
     no.library = g.native_library;
-    no.max_clients = slots(c);
+    no.max_clients = qw_slots(c);
     no.game = std::filesystem::path(g.native_library).parent_path().filename().string();
     no.settings.emplace_back("deathmatch", "1");
     no.settings.emplace_back("hostname", c.hostname);
@@ -427,12 +332,12 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     so.speedjump = speedjump;
     so.pack = sv::q2_pack_of_folder(g.files.folder);  // a mission pack's folder plays its rules
     std::unique_ptr<sv::Q2Server> sq = sv::make_q2_server(so);
-    sq->sv.set.maxclients = slots(c);
+    sq->sv.set.maxclients = qw_slots(c);
     rules = sv::q2_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = slots(c);
+    so.loop.maxclients = qw_slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     so.read_file = &read_game_file;
@@ -446,7 +351,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   } else {
     sv::QcServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = slots(c);
+    so.loop.maxclients = qw_slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*g.program, so, error);
@@ -466,9 +371,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     for (const std::string& line : g.info_lines) rules.console(line);
   }
   // The C++ mods it runs, for a browser and a hub to show (docs/mods.md § Distribution).
-  if (const std::string mods = mods_info(g.packages); !mods.empty())
+  if (const std::string mods = qw_mods_info(g.packages); !mods.empty())
     rules.console("serverinfo *mods \"" + mods + "\"");
-  game_names(*rules, c);
+  qw_game_names(*rules, c);
   // The settings a config made with `set` (a match mod's switches), before the map starts.
   if (!brushes && g.native_library.empty())
     for (const auto& [setting, value] : c.created)
@@ -525,7 +430,7 @@ bool open_room(Game& g, std::string& error) {
   if (c.bots == 0 && c.lobby == 0) return true;
   g.room = std::make_unique<cl::Room>();
   cl::Room& r = *g.room;
-  r.seed = c.seed;
+  r.seats.seed = c.seed;
   r.lobby.settings.humans = 1;  // bots alone warm up until a player joins
   r.lobby.settings.countdown_s = c.countdown_s;
   r.lobby.settings.intermission_s = c.intermission_s;
@@ -1219,6 +1124,7 @@ void end_match(Game& g) {
   if (!tally_end(g.tally, g.rules->world, f, r)) return;
   if (g.qw)
     for (const std::string& line : stats_lines(r)) qw_print_all(*g.qw, line + "\n");
+  if (f.stats) g.last_stats = r;
   g.report = std::move(r);
   g.report_ready = true;
 }
@@ -1291,13 +1197,14 @@ void sync_seats(Game& g) {
   const double now = now_rules.sv.time;
   for (int i = 0; i < gs::kLobbySeats && i < sh::kMaxClients; i++) {
     const auto at = static_cast<size_t>(i);
-    const bool bot = r.bots[at] != nullptr;
+    const bool bot = r.seats.bots[at] != nullptr;
     if (cs.clients[i].local && !bot && !(i == 0 && g.host != nullptr)) {
       cs.clients[i].rules_active = false;  // the room let it go from the rules
       qw_drop(cs, i, "left the room");
     }
     std::string error;
-    if (bot && cs.clients[i].state == ConnState::free) qw_add_local(cs, i, r.bots[at]->name, error);
+    if (bot && cs.clients[i].state == ConnState::free)
+      qw_add_local(cs, i, r.seats.bots[at]->name, error);
     const QwClient& c = cs.clients[i];
     gs::LobbySeat& seat = r.lobby.seats[at];
     if (!c.local && c.state == ConnState::free && seat.used && !seat.bot) {
@@ -1436,9 +1343,24 @@ bool mate_words(Game& g, int slot, const std::string& line) {
   return true;
 }
 
-// A client's words the server takes before the mod: the vote's (`vote ...`, and `yes` and `no`
-// while one is open) from anyone; with a room, `addbot [skill]` and `removebot` from the leader,
-// and with sv_lobby the lobby's own (ready, break, team, start, lobby).
+// The admin's view of the game (qw_referee.hpp); none (`qw` null) while a mod's program plays.
+QwRefereeGame referee_game(Game& g) {
+  if (!g.qw || !g.progs_crc.empty() || !g.module.empty() || !g.native_library.empty()) return {};
+  cl::Room* room = g.room && g.settings.lobby != 0 ? g.room.get() : nullptr;
+  QwRefereeGame f{
+      g.qw.get(),  &g.rules,   room ? &room->lobby : nullptr, room ? &room->announcer : nullptr,
+      &g.overtime, &g.settings};
+  f.in_match = !room || room->lobby.phase == gs::LobbyPhase::match;
+  f.now = g.now_s;
+  f.map_known = [](const void* c, std::string_view m) {
+    gs::VoteCheck out;
+    return act_vote_check(*static_cast<const Game*>(c), "map", m, out);
+  };
+  f.map_ctx = &g;
+  return f;
+}
+
+// A client's words before the mod: the admin's, the vote's, a room's `addbot`, sv_lobby's own.
 bool room_words(void* ctx, int slot, const std::string& line) {
   Game& g = *static_cast<Game*>(ctx);
   if (g.qw && line.starts_with("ge_sheet") && slot >= 0 && slot < 32) {  // qw_sheet.hpp
@@ -1452,6 +1374,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     return true;
   }
   if (g.qw) {
+    if (qw_referee_line(g.referee, referee_game(g), slot, line)) return true;
     const gs::VoteTarget target{&g, vote_check};
     if (gs::vote_command(g.vote, target, slot, line, g.rules->sv.time)) {
       vote_turn(g);
@@ -1475,7 +1398,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     std::string error;
     if (word == "removebot") {
       for (int i = gs::kLobbySeats - 1; i > 0; i--)
-        if (r.bots[static_cast<size_t>(i)]) {
+        if (r.seats.bots[static_cast<size_t>(i)]) {
           cs.clients[i].rules_active = false;  // room_remove_bot lets it go from the rules
           break;
         }
@@ -1491,9 +1414,9 @@ bool room_words(void* ctx, int slot, const std::string& line) {
                    "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
       return true;
     }
-    r.held = 0;
+    r.seats.held = 0;
     for (int i = 0; i < sh::kMaxClients; i++)
-      if (cs.clients[i].state != ConnState::free) r.held |= 1u << i;
+      if (cs.clients[i].state != ConnState::free) r.seats.held |= 1u << i;
     if (cl::room_add_bot(r, g.rules, g.map->spec, skill, error) < 0)
       client_print(cs, slot, 2, "addbot: " + error + "\n");
     sync_seats(g);
@@ -1538,7 +1461,7 @@ void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_frame(*game.coop);
   std::vector<sh::Packet> moves;
-  if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
+  if (game.room) cl::room_packets(*game.room, game.rules, frame_msec(game), moves);
   if (game.mates) cl::q2_party_packets(*game.mates, game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   tally(game);
@@ -1564,15 +1487,16 @@ void load_bans(QwServer& s) {
   }
 }
 
-// A client's words: a login's first (qw_login.hpp), then the lobby's and the votes'.
-// The lobby's lock and prewar on a client (qw_match_rules.hpp).
+// The lobby's lock and prewar on a client (qw_match_rules.hpp); the referee's lock and picking.
 bool may_play(void* ctx, const std::string& name, std::string& why) {
   const Game& g = *static_cast<const Game*>(ctx);
-  if (g.room && g.settings.lobby != 0) why = lock_refusal(g.room->lobby, name);
+  why = qw_referee_lock(g.referee, g.now_s);
+  if (why.empty() && g.room && g.settings.lobby != 0) why = lock_refusal(g.room->lobby, name);
   return why.empty();
 }
 uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
   Game& g = *static_cast<Game*>(ctx);
+  buttons = qw_referee_buttons(g.referee, referee_game(g), slot, buttons);
   if (!g.room || g.settings.lobby == 0 || slot < 0 || slot >= gs::kLobbySeats) return buttons;
   std::string tell;
   buttons = prewar_buttons(g.room->lobby, slot, buttons, g.rules->sv.time,
@@ -1580,7 +1504,19 @@ uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
   if (!tell.empty() && g.qw) client_print(*g.qw, slot, 2, tell);
   return buttons;
 }
+// The stats words the mod left (qw_stats.hpp `qw_stats_words`).
+bool stats_after(void* ctx, int slot, const std::string& line) {
+  Game& g = *static_cast<Game*>(ctx);
+  if (!g.qw || sv::qc_of(g.rules) == nullptr) return false;
+  std::string out;
+  if (!qw_stats_words(g.tally, g.last_stats, g.rules->world, slot, rule_number(g, "teamplay") != 0,
+                      line, out))
+    return false;
+  client_print(*g.qw, slot, 2, out + "\n");
+  return true;
+}
 
+// A client's words: a login's first (qw_login.hpp), then the lobby's and the votes'.
 bool game_words(void* ctx, int slot, const std::string& line) {
   Game& game = *static_cast<Game*>(ctx);
   if (game.login && qw_login_line(*game.login, slot, line)) return true;
@@ -1668,11 +1604,12 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   if (!qw_start(*game.qw, game.rules, port, game.cfg, error)) return false;
   load_bans(*game.qw);
   game.qw->game_command = game_words;
+  game.qw->game_command_after = stats_after;
   game.qw->game_ctx = &game;
   game.qw->may_play = may_play;
   game.qw->buttons = move_buttons;
-  // Logins, on a dedicated server and on the window's own match alike (its player is a local seat,
-  // never asked).
+  qw_referee_hooks(*game.qw, game.referee);
+  // Logins, on a dedicated server and on the window's own match (its local seat never asked).
   if (qw_login_wanted(game.settings)) {
     game.login = std::make_unique<QwLogin>();
     if (!qw_login_open(*game.login, *game.qw, game.settings, error)) return false;
@@ -1699,7 +1636,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
 void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_net_frame(*game.coop, now_us);
-  if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), game.qw->local_moves);
+  if (game.room) cl::room_packets(*game.room, game.rules, frame_msec(game), game.qw->local_moves);
   if (game.mates)
     cl::q2_party_packets(*game.mates, game.rules, frame_msec(game), game.qw->local_moves);
   const gs::LobbyPhase phase = game.room ? game.room->lobby.phase : gs::LobbyPhase::warmup;
@@ -1719,6 +1656,7 @@ void net_frame(void* g, int64_t now_us) {
   gs::timeout_tick(game.timeout, game.now_s);
   home_turn(game);
   timeout_turn(game);
+  qw_referee_frame(game.referee, referee_game(game));
   lobby_turn(game);
   change_if_asked(game);
   lobby_words(game);
@@ -1788,7 +1726,7 @@ void fill_status(const void* g, ge::net::Status& st) {
   for (const char* name : {"fraglimit", "timelimit"}) {
     st.keys.emplace_back(name, std::to_string(number(name)));
   }
-  if (const std::string mods = mods_info(game.packages); !mods.empty())
+  if (const std::string mods = qw_mods_info(game.packages); !mods.empty())
     st.keys.emplace_back("*mods", mods);
   // The classic game the match is of (its content id): the hub draws its map and its board from
   // that game's files (hub/cards.hpp).
@@ -1810,7 +1748,7 @@ std::string status(const void* g) {
   if (game.room) {
     const gs::Lobby& l = game.room->lobby;
     int bots = 0;
-    for (const auto& b : game.room->bots) bots += b ? 1 : 0;
+    for (const auto& b : game.room->seats.bots) bots += b ? 1 : 0;
     out.append(" bots=").append(std::to_string(bots));
     if (game.settings.lobby != 0)
       out.append(" lobby=")
@@ -1935,8 +1873,10 @@ gs::ServerGame make() {
   g.base_dir = kGameFolder;
   g.rules = all_rules().data();
   g.rule_count = static_cast<int>(all_rules().size());
-  g.names = kSettingNames;
-  g.name_count = static_cast<int>(std::size(kSettingNames));
+  g.names = qw_setting_names().data();
+  g.name_count = static_cast<int>(qw_setting_names().size());
+  g.metas = qw_game_metas().data();
+  g.meta_count = static_cast<int>(qw_game_metas().size());
   g.create = create;
   g.destroy = destroy;
   g.frame_seconds = frame_seconds;

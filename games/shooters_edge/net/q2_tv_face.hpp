@@ -45,6 +45,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/protocol/challenges.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -94,7 +95,7 @@ struct Q2TvFace {
   std::vector<std::vector<uint8_t>> baselines;    // each baseline's message, in order
   std::vector<std::vector<uint8_t>> since_whole;  // the blocks from the newest whole frame
   std::array<Q2Viewer, 64> viewers;
-  std::map<uint64_t, int32_t> challenges;  // by host
+  ge::classic::ChallengeBook challenges;  // classic/protocol/challenges.hpp
   uint32_t next_challenge = 0x5eb1;
   // Counts.
   int64_t blocks = 0, whole_frames = 0, levels = 0, refused = 0, dropped = 0;

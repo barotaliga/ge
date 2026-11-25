@@ -25,6 +25,7 @@
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map_kinds.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -447,6 +448,7 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     }
     return;
   }
+  gz_plat_blocked(s, e, slot);  // Ground Zero's: a dead body crushed first
   crush();
   if (c == kPlat) {
     if (e.state == kGoing)
@@ -584,6 +586,7 @@ void train_next(Q2Server& s, Q2Entity& e) {
       return;
     }
     Q2Entity& corner = s.entities[size_t(c)];
+    gz_train_corner(s, e, e.owner);  // Ground Zero: the speeds of the corner it leaves
     e.wait = number(s, corner, "wait", 0);
     e.target = corner.target;
     e.pathtarget = key(s, corner, "pathtarget");
@@ -849,7 +852,7 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
       pack(p.move.velocity, held);
       p.old_fall = held.z;  // no fall from the push
       p.ground = -1;
-      if (s.level_time + 0.001 >= p.windfly_at + 1.5) {
+      if (!gz_push_silent(s, e) && s.level_time + 0.001 >= p.windfly_at + 1.5) {
         p.windfly_at = s.level_time;
         sound_at(s, slot + 1, unpack(p.move.origin), kWindfly);
       }
@@ -932,7 +935,8 @@ void explosion(Q2Server& s, int i, int activator, int depth) {
 
 void use(Q2Server& s, int target, int activator, int depth, int other) {
   Q2Entity& e = s.entities[size_t(target)];
-  if (e.gone && class_of(e) != kWall) return;
+  if ((e.gone && class_of(e) != kWall) || gz_push_use(s, e)) return;
+  if (s.opt.pack == Q2Pack::ground_zero && gz_used(s, e)) return;  // its toggles (q2_gz.hpp)
   switch (class_of(e)) {
     case kDoor:
     case kDoorRotating:
@@ -945,6 +949,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       secret_use(s, e);
       return;
     case kRotating:  // toggles: stops at once, or starts at full speed
+      if (gz_fan_use(s, e, activator)) return;
       if (e.avelocity.x != 0 || e.avelocity.y != 0 || e.avelocity.z != 0)
         e.avelocity = {};
       else
@@ -1111,11 +1116,8 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       explosion(s, target, activator, depth);
       return;
     case kNone:
-      if (e.item >= 0) {  // a power cube hidden until used appears, as a thing once
-        if (e.hidden && (e.spawnflags & 1) != 0) {
-          e.hidden = false;
-          e.spawnflags &= ~1;
-        }
+      if (e.item >= 0) {  // an item hidden until used appears, as a thing once
+        q2_item_used(s, size_t(target));
         return;
       }
       if (targets_use(s, target, activator)) return;
@@ -1312,6 +1314,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       if ((e.spawnflags & 2) != 0) e.axis = e.axis * -1;
       e.angles = {};
       if ((e.spawnflags & 1) != 0) e.avelocity = e.axis * e.speed;
+      gz_fan_spawn(s, e);
       return;
     case kAreaPortal: {
       e.hidden = true;  // never drawn, never solid
@@ -1435,7 +1438,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
     case kTriggerMultiple:
       if (c == kTriggerOnce && (e.spawnflags & 1) != 0) e.spawnflags = (e.spawnflags & ~1) | 4;
       if (c == kTriggerMultiple && e.wait == 0) e.wait = 0.2f;
-      e.trigger = (e.spawnflags & 4) == 0;
+      e.trigger = (e.spawnflags & 4) == 0 && !gz_toggled(s, e);  // a toggled one starts off
       e.state = e.trigger ? 1 : 0;
       e.dir = has_angle(s, e) ? way_of(s, e) : sh::Vec3f{};
       e.angles = {};
@@ -1449,6 +1452,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       e.speed = number(s, e, "speed", 1000);
       e.dir = has_angle(s, e) ? way_of(s, e) : sh::Vec3f{};
       e.angles = {};
+      gz_push_spawn(s, e);
       return;
     case kHurt:
       e.trigger = (e.spawnflags & 1) == 0;
@@ -1517,7 +1521,8 @@ void link_doors(Q2Server& s) {
     if (e.gone || !is_door(class_of(e)) || e.team_master >= 0) continue;
     e.team_master = static_cast<int>(i);
     sh::Vec3f lo = abs_min(e), hi = abs_max(e);
-    bool field = e.targetname.empty() && e.max_health == 0 && e.classname != "func_water";
+    bool field = (e.targetname.empty() || gz_inactive(s, e)) && e.max_health == 0 &&
+                 e.classname != "func_water";
     if (!e.team.empty())
       for (size_t j = i + 1; j < count; j++) {
         Q2Entity& m = s.entities[j];
@@ -1551,7 +1556,7 @@ void link_doors(Q2Server& s) {
     if ((e.spawnflags & 1) != 0) door_portals(s, e, true);  // a door that starts open
     Q2Entity f;
     f.classname = "door_field";
-    f.trigger = true;
+    f.trigger = !gz_inactive(s, e);  // a sleeping door's wakes with it
     f.mins = lo - sh::Vec3f{60, 60, 0};
     f.maxs = hi + sh::Vec3f{60, 60, 0};
     f.owner = static_cast<int>(i);
@@ -1703,6 +1708,7 @@ void map_spawn(Q2Server& s) {
       e.modelindex = disc_model(s);
     }
   link_doors(s);
+  gz_train_teams(s);
   map_loops(s);
 }
 
@@ -1774,6 +1780,7 @@ void map_frame(Q2Server& s) {
     else
       fire_targets(s, d.entity, d.activator, 0, true);
   }
+  gz_movers_frame(s);  // Ground Zero: a train's riders, the fans that ramp
   // Each mover pushes, then steps; a blocked push skips the step (its schedule slides).
   std::vector<TeamFrame> teams;
   for (size_t i = 0; i < s.entities.size(); i++) {
@@ -1910,7 +1917,7 @@ bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, boo
     return true;
   }
   if (d.gone || d.health <= 0 || damage <= 0) return false;
-  if (!is_door(c) && c != kButton) return false;
+  if ((!is_door(c) && c != kButton) || gz_inactive(s, d)) return false;
   d.health -= damage;
   if (d.health > 0) return true;
   if (c == kButton) {

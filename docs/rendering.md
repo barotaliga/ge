@@ -306,6 +306,7 @@ input read, the game stepped by the STEADY time, the frame drawn and presented, 
 | `vid_vsync_lag_tweak` | 1 | The ms the lag fix leaves spare before the refresh: lower is less lag, too low misses refreshes |
 | `scr_showfps` | 0 | 1 the rate in the top-right corner; 2 with the last 120 frames' times as bars, the refresh's interval dashed, a missed refresh red |
 | `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits (the cap's, the GPU's queue's, and the swap chain's for a free image: a frame that waits there is held by the display, one that waits on the GPU is held by its own cost), the display's refresh, the cap, the present mode |
+| `profile [frames]` | 600 | The next frames timed part by part (`prof/frames.hpp` over the timing zones): the frame's median, p99 and worst; each part's own time (mean, median, p99, worst, share) and heap allocations a frame; the time in no part; and the five slowest frames with the parts that made each slow. `profile stop` reports at once. Beside `gpustats` (the GPU's passes), it says whether a slow frame is the CPU's and which part, on the player's own machine |
 
 **Why these defaults** (the `pacing` lab, 120 Hz, a light and a heavy load): the old loop (vsync,
 Metal's three images, nothing else) held every frame ~25 ms from input to picture. Two images and
@@ -2077,6 +2078,15 @@ boots, and a figure stands on the snow instead of floating over it:
   only a tenth of the search, so two it is. Fall
   Line keeps it on at 0.6 (`r_ao`): the snow's bounce fills the creases in life, so the full
   strength reads too dark.
+- **Applied after the fact** (`encode_ao_apply`, pass `ao.apply`, `ao_apply.wgsl`; M41w): a
+  renderer with no depth prepass (the classic maps', `plugins/brush`, drawing colour and depth in
+  one pass) runs `ao` after its opaque passes (the map and its models) and then multiplies the
+  colour drawn by the sky each pixel sees, read as `sky_seen` reads it; a pixel with no depth (the
+  sky, drawn after) is left alone. It darkens all of a pixel's light, which suits a world lit by
+  its lightmaps, whose light is all bounced. Shooter's Edge's modern look runs it under `ce_ao`
+  (`ce_ao_strength` 0.8, `ce_ao_radius` 48 units). Cost on Quake's demo1 at 960 x 540 on the
+  software rasterizer: `ao` 12.7 ms and `ao.apply` 3.8 ms; the timedemo's price for the switch
+  20.2 ms of a 365 ms median frame (about 5.5 %, the run's noise 7.6 ms).
 
 **As built (M35d): depth of field** (`render/dof.hpp`, `defocused` in `post.wgsl`; the `post`
 lab's `dof` variant and the `world` lab's `--cfg="r_dof …"`). The picture blurred away from a

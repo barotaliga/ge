@@ -534,6 +534,16 @@ std::string local_date_now() {
   return buf;
 }
 
+std::string run_line(long frames, double seconds, double longest_s, int w, int h, unsigned errors) {
+  char line[200];
+  std::snprintf(line, sizeof line,
+                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame, the longest %.0f ms) at "
+                "%dx%d, %u GPU errors",
+                frames, seconds, frames ? seconds * 1e3 / static_cast<double>(frames) : 0.0,
+                longest_s * 1e3, w, h, errors);
+  return line;
+}
+
 hud::Status demo_status(const DemoState& s, double t) {
   hud::Status h;
   h.t = t;

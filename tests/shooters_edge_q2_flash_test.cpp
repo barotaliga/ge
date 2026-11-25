@@ -58,6 +58,20 @@ TEST(a_silenced_shot_is_quiet_and_the_own_flash_is_heard_not_drawn) {
   CHECK(sounds.size() == 2);
 }
 
+TEST(the_mission_packs_player_flashes_sound_as_their_guns) {
+  // The ion ripper, the phalanx, the ETF rifle and the disruptor each play their shot; the blue
+  // hyperblaster's player flash (which no pack sends) and the heat beam's are silent.
+  const auto first = [](int value) {
+    std::vector<cl::DemoSound> sounds;
+    std::vector<cl::DemoEffect> effects;
+    cl::q2_flash_fx(value, false, 2, {}, {}, false, 0, sounds, effects);
+    return sounds.empty() ? std::string() : std::string(sounds[0].name);
+  };
+  CHECK(first(16) == "weapons/rippfire.wav" && first(18) == "weapons/plasshot.wav");
+  CHECK(first(30) == "weapons/nail1.wav" && first(35) == "weapons/disint2.wav");
+  CHECK(first(17).empty() && first(33).empty());
+}
+
 TEST(a_monsters_gun_picks_its_value_and_the_value_its_sound) {
   CHECK(sv::q2_monster_flash_value("monster_soldier_light", "blaster") == 39);
   CHECK(sv::q2_monster_flash_value("monster_soldier", "gun") == 41);
@@ -88,7 +102,7 @@ TEST(the_mission_packs_flashes_play_their_own_shots) {
     return sounds.empty() || sounds[0].name == nullptr ? std::string() : sounds[0].name;
   };
   CHECK(heard(16, false) == "weapons/rippfire.wav");  // the ion ripper
-  CHECK(heard(17, false) == "weapons/hyprbf1a.wav");  // the blue hyperblaster
+  CHECK(heard(17, false).empty());                    // the blue hyperblaster: no pack sends it
   CHECK(heard(18, false) == "weapons/plasshot.wav");  // the phalanx
   CHECK(heard(30, false) == "weapons/nail1.wav");     // the flechettes
   CHECK(heard(32, false) == "weapons/shotg2.wav");    // the pack's shotgun

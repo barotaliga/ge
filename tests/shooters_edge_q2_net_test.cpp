@@ -13,6 +13,7 @@
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -30,7 +31,6 @@
 #include "forward/forward.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
-#include "net/tcp_socket.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
@@ -44,6 +44,7 @@
 #include "shooters_edge/net/qw_wire.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
+#include "shooters_edge_q2_rig.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/search.hpp"
@@ -58,38 +59,13 @@ namespace sv = shooters_edge::server;
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
 namespace fw = ge::forward;
-
-br::WorldBrush box(float x0, float y0, float z0, float x1, float y1, float z1) {
-  const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
-  return br::box_brush(lo, hi, sh::kSqSolid, "world/wall");
-}
-
-br::Entity entity(std::vector<std::pair<std::string, std::string>> pairs) {
-  br::Entity e;
-  e.pairs = std::move(pairs);
-  return e;
-}
-
-std::shared_ptr<const br::Map> hall() {
-  br::BrushWorld w;
-  w.models.resize(1);
-  auto& m = w.models[0];
-  m.push_back(box(-1024, -1024, -16, 1024, 1024, 0));
-  m.push_back(box(-1040, -1024, -16, -1024, 1024, 256));
-  m.push_back(box(1024, -1024, -16, 1040, 1024, 256));
-  m.push_back(box(-1040, 1024, -16, 1040, 1040, 256));
-  m.push_back(box(-1040, -1040, -16, 1040, -1024, 256));
-  w.entities.push_back(entity(
-      {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}}));
-  w.entities.push_back(entity(
-      {{"classname", "info_player_deathmatch"}, {"origin", "400 400 24"}, {"angle", "180"}}));
-  std::vector<uint8_t> bytes;
-  std::string error;
-  CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
-  auto map = std::make_shared<br::Map>();
-  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
-  return map;
-}
+using q2_rig::box;
+using q2_rig::entity;
+using q2_rig::hall;
+using q2_rig::join;
+using q2_rig::Rig;
+using q2_rig::rig;
+using q2_rig::run;
 
 // The hall split in two by a wall at x 0, with visibility put in by hand: every open leaf west of
 // the wall cluster 0, east of it cluster 1, and neither sees the other. A spawn and an item in
@@ -135,60 +111,6 @@ bool holds_near(const cn::Q2ClientEnd& c, float x, float y) {
         (e.origin.x - x) * (e.origin.x - x) + (e.origin.y - y) * (e.origin.y - y) < 16.0f * 16.0f)
       return true;
   return false;
-}
-
-// Our server on the simulated network, and as many clients as asked.
-struct Rig {
-  std::shared_ptr<const br::Map> map;  // the level's brushes
-  sv::RulesRunner rules;
-  gn::SimNetwork net;
-  gn::Transport st;
-  std::vector<std::unique_ptr<gn::Transport>> ct;
-  cn::Q2NetServer server;
-  std::vector<std::unique_ptr<cn::Q2ClientEnd>> clients;
-  int64_t now = 0;
-};
-
-std::unique_ptr<Rig> rig(const cn::Q2NetConfig& cfg, const char* conditions = "lan",
-                         const std::shared_ptr<const br::Map>& brushes = nullptr, int fps = 10) {
-  auto r = std::make_unique<Rig>();
-  r->rules = sv::q2_runner(sv::make_q2_server({}));
-  r->rules.console("deathmatch 1");
-  r->rules.console("sv_fps " + std::to_string(fps));
-  sv::MapSpec map;
-  map.name = "hall";
-  r->map = brushes != nullptr ? brushes : hall();
-  map.brushes = r->map;
-  std::string error;
-  CHECK_MSG(r->rules.start(map, error), error);
-  gn::LinkConditions link;
-  CHECK(gn::conditions_preset(conditions, link));
-  r->net = gn::make_sim_network(7, link);
-  gn::open_sim_transport(r->st, r->net, gn::sim_address(0, cn::kPortQ2));
-  CHECK_MSG(cn::q2_net_start(r->server, r->rules, r->st, cfg, error), error);
-  return r;
-}
-
-// A client from host `host` (0: a host of its own).
-cn::Q2ClientEnd& join(Rig& r, cn::Q2ClientConfig cfg, uint32_t host = 0) {
-  const int n = static_cast<int>(r.clients.size());
-  r.ct.push_back(std::make_unique<gn::Transport>());
-  gn::open_sim_transport(*r.ct.back(), r.net,
-                         gn::sim_address(host != 0 ? host : uint32_t(n + 1), uint16_t(27901 + n)));
-  r.clients.push_back(std::make_unique<cn::Q2ClientEnd>());
-  cfg.qport = static_cast<uint16_t>(100 + n);
-  cn::q2_client_start(*r.clients.back(), *r.ct.back(), gn::sim_address(0, cn::kPortQ2), cfg,
-                      static_cast<double>(r.now) / 1e6);
-  return *r.clients.back();
-}
-
-void run(Rig& r, int ticks) {
-  for (int i = 0; i < ticks; i++) {
-    r.now += 13000;
-    gn::sim_advance(r.net, r.now);
-    for (auto& c : r.clients) cn::q2_client_tick(*c, r.now);
-    cn::q2_net_frame(r.server, r.now);
-  }
 }
 
 sh::MoveCmd forward(int /*tick*/) {
@@ -1793,9 +1715,17 @@ TEST(voice_on_our_server_of_q2_reaches_whom_the_first_games_rules_say) {
   cn::Q2ClientEnd& cb = join(*r, b);
   cn::Q2ClientEnd& cc = join(*r, c);
   cn::Q2ClientEnd& cd = join(*r, d);
+  std::vector<uint8_t> level;  // the level as a `record` keeps it
+  ca.level_record = &level;
   run(*r, 300);
   CHECK(ca.stage == cn::ClientStage::active && cd.stage == cn::ClientStage::active);
   CHECK(ca.voice_on && cb.voice_on && cc.voice_on && !cd.voice_on);
+  int own = 0;  // the talker's own voice in his recording, a block of its own each time
+  for (size_t at = 0, len = 0; at + 4 < level.size(); at += 4 + len) {
+    std::memcpy(&len, &level[at], 4);  // a block's length, little-endian (the hosts are)
+    own += len > 0 && level[at + 4] == cn::kSvcGeVoice;
+  }
+  CHECK_MSG(own > 0, "the talker's recording kept none of his own voice");
   const int sa = slot_named(*r, "a");
   CHECK(sa >= 0);
   if (sa < 0) return;
@@ -1911,80 +1841,6 @@ TEST(the_landing_and_surfacing_settings_reach_a_client_told_the_feel) {
   CHECK(untold.land_pause && untold.surface_lift);
   game.cvars.set("sv_landjump", "2", ge::console::Source::code);
   CHECK(!sv::q2_move_feel(game, 0).land_pause);
-}
-
-TEST(a_client_fetches_from_the_server_web_address_and_falls_back_to_the_channel) {
-  // The server names a web address (sv_downloadserver). The web holds the map: the client fetches
-  // it there, says so, and tells the server `download http`; a skin the web lacks (404) is left
-  // lacking. A second client's own repository (cl_http_default_url) lacks the map: HTTP turns off
-  // and the map comes over the game's channel. Both play on.
-  gn::TcpListener web;
-  std::string error;
-  if (!gn::tcp_listen(web, gn::loopback_v4(0), &error)) {
-    ge::test::skip("no loopback TCP socket here: " + error);
-    return;
-  }
-  const std::string base = "http://127.0.0.1:" + std::to_string(web.local.port) + "/";
-  const std::vector<uint8_t> map(5000, 1);
-  cn::Q2NetConfig cfg;
-  cfg.download_server = base;
-  cfg.read_file = [&map](const std::string& path, std::vector<uint8_t>* out) {
-    if (path != "maps/hall.bsp") return false;
-    *out = map;
-    return true;
-  };
-  auto r = rig(cfg);
-  cn::Q2ClientConfig web_one;
-  web_one.name = "web";
-  web_one.fetch = true;
-  web_one.want = {"players/male/red.pcx"};
-  cn::Q2ClientConfig own = web_one;
-  own.name = "own";
-  own.http.default_url = base + "mine/";
-  cn::Q2ClientEnd& a = join(*r, web_one);
-  std::vector<gn::TcpStream> streams;
-  std::vector<std::string> asked;
-  for (int i = 0; i < 400; i++) {
-    if (i == 30) {  // the second joins once the server names no address: its own is asked
-      r->server.cfg.download_server.clear();
-      join(*r, own);
-    }
-    for (gn::TcpStream in; gn::tcp_accept(web, in); in = {}) streams.push_back(in);
-    for (gn::TcpStream& t : streams) {
-      if (t.handle == -1) continue;
-      gn::tcp_pump(t);
-      std::vector<uint8_t> got;
-      gn::tcp_take_bytes(t, got);
-      const std::string req(got.begin(), got.end());
-      if (req.find("\r\n\r\n") == std::string::npos) continue;
-      const std::string path = req.substr(4, req.find(' ', 4) - 4);
-      asked.push_back(path);
-      const bool has = path == "/baseq2/maps/hall.bsp";
-      std::string reply = has ? "HTTP/1.1 200 OK\r\nContent-Length: 5000\r\n\r\n"
-                              : "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-      if (has) reply.append(map.begin(), map.end());
-      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(reply.data()), reply.size());
-      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
-      gn::tcp_close(t);
-    }
-    run(*r, 1);
-  }
-  cn::Q2ClientEnd& b = *r->clients[1];
-  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
-  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
-  CHECK(a.downloaded.size() == 1 && a.downloaded["maps/hall.bsp"] == map);
-  CHECK(std::find(asked.begin(), asked.end(), "/baseq2/players/male/red.pcx") != asked.end());
-  CHECK(std::find(asked.begin(), asked.end(), "/baseq2.filelist") != asked.end());
-  CHECK(std::find(asked.begin(), asked.end(), "/baseq2/maps/hall.filelist") != asked.end());
-  CHECK(b.downloaded.size() == 1 && b.downloaded["maps/hall.bsp"] == map);
-  CHECK(!b.http.on);
-  CHECK(std::find(b.http.said.begin(), b.http.said.end(),
-                  "[UDP] maps/hall.bsp [DONE] [1 remaining file]") != b.http.said.end());
-  CHECK(std::find(a.http.said.begin(), a.http.said.end(), "[HTTP] Download server at " + base) !=
-        a.http.said.end());
-  CHECK(std::find(asked.begin(), asked.end(), "/mine/baseq2/maps/hall.bsp") != asked.end());
-  for (gn::TcpStream& t : streams) gn::tcp_close(t);
-  gn::tcp_close_listener(web);
 }
 
 // A Quake II server beats to a hub's masters under the game's own id, as a Quake server does, so

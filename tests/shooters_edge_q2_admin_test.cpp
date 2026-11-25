@@ -27,10 +27,12 @@
 #include "check.hpp"
 #include "core/num.hpp"
 #include "net/conditions.hpp"
+#include "net/packet.hpp"
 #include "net/sim_network.hpp"
 #include "server/bans.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 
@@ -633,7 +635,7 @@ TEST(the_operators_words_reach_one_client_or_all_in_the_servers_words) {
   // The version probe: its answer kept and listed.
   CHECK_MSG(has(rcon(*r, "rcon letmein status v"), "  1 eve             q2 test 1.0\n"),
             rcon(*r, "rcon letmein status v"));
-  CHECK(r->server.clients[0].version_heard && r->server.clients[0].version.empty());
+  CHECK(r->server.clients[0].version_heard && r->server.clients[0].version == cn::kProgramVersion);
   CHECK(has(rcon(*r, "rcon letmein status x"), "Usage: status [d|l|p|s|t|v]\nCurrent map: hall"));
   CHECK(
       has(rcon(*r, "rcon letmein status p"), "  1 eve                34     0   1390  no   old\n"));
@@ -763,4 +765,13 @@ TEST(a_user_info_is_held_to_the_strict_rule_and_a_name_is_kept) {
   run(*r, 300);
   CHECK(printed(eve, "bob timed out\n"));
   CHECK(r->server.clients[1].stage == cn::Q2Slot::free);
+}
+
+// A Quake II server beats to a hub's masters under the game's own id, as a Quake server does, so
+// the hub's list (which asks for that id alone) shows both.
+TEST(q2_server_is_listed_under_the_games_id) {
+  const ge::server::ServerGame& g = shooters_edge::net::q2_game();
+  CHECK(g.protocol != 0);
+  CHECK(g.protocol == ge::net::protocol_id("shooters_edge", 1));
+  CHECK(g.fill_status != nullptr);
 }

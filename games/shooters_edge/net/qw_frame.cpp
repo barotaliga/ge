@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "prof/zones.hpp"
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
@@ -508,6 +509,7 @@ void route_events(QwServer& s) {
 }
 
 void send_frames(QwServer& s) {
+  GE_ZONE("net.send");
   uint8_t payload[kMaxMsgLen];
   uint8_t packet[kMaxPacket];
   std::vector<EntityState> ents;

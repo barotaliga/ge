@@ -3,7 +3,7 @@
 // ge:summary Our Quake II server's match: seats, the lobby's words, timeouts, overtime, the hold,
 // ge:summary teams and captains, the referee, the teams' scores and the stats words
 // ge:keywords q2_match_frame q2_match_open q2-lobby q2-timeout q2-overtime prewar lock
-// ge:keywords q2-teams q2-referee q2-stats team-skins team-score
+// ge:keywords q2-teams q2-referee q2-stats team-skins team-score q2-coach coach-chat
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_match_test.cpp
 #include "shooters_edge/net/q2_match.hpp"
@@ -11,8 +11,10 @@
 #include <algorithm>
 #include <vector>
 
+#include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "server/overtime.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
 
@@ -60,11 +62,20 @@ gs::Team seat_team(const Q2Match& m, int i) {
 }
 
 // Every slot's name ("" a free one), for the words that name a player.
+// A slot's name: its client's, or for a seat the rules made themselves (a bot) its user info's.
+std::string seat_name(const Q2Match& m, int i) {
+  if (m.net->clients[i].stage == Q2Slot::active) return m.net->clients[i].name;
+  const sv::ClientInfo& r = (*m.rules)->clients[i];
+  if (!r.active) return {};
+  for (const auto& [k, v] : r.userinfo)
+    if (k == "name") return v;
+  return {};
+}
+
 std::array<std::string, gs::kLobbySeats> names(const Q2Match& m) {
   std::array<std::string, gs::kLobbySeats> out{};
   for (int i = 0; i < kSlots && i < sh::kMaxClients; i++)
-    if (m.net->clients[i].stage == Q2Slot::active)
-      out[static_cast<size_t>(i)] = m.net->clients[i].name;
+    out[static_cast<size_t>(i)] = seat_name(m, i);
   return out;
 }
 
@@ -198,14 +209,43 @@ void say_result(Q2Match& m) {
                       gs::teams_name(m.teams, gs::Team::blue), s[1]));
 }
 
+// The stats as a match's report (the shared lines read one): a player for each slot counted, his
+// score his kills less his suicides and team kills, his team while the teams are on.
+ge::net::MatchReport stats_report(const Q2Match& m, const std::array<sv::Q2SlotStats, 32>& table,
+                                  const std::array<std::string, 32>& who,
+                                  std::vector<int>* slots = nullptr) {
+  const sv::StatsGame& g = sv::q2_stats_game();
+  ge::net::MatchReport r;
+  for (int k = 0; k < sv::stats_columns(g); k++) r.columns.push_back(sv::stats_column_name(g, k));
+  for (int i = 0; i < kSlots; i++) {
+    const sv::Q2SlotStats& t = table[static_cast<size_t>(i)];
+    const sv::ClientInfo& c = (*m.rules)->clients[i];  // a report: all who played, bots too
+    const bool in = t.counted || (slots != nullptr && c.active && !c.spectator);
+    if (!in || who[static_cast<size_t>(i)].empty()) continue;
+    ge::net::ReportPlayer p;
+    p.name = who[static_cast<size_t>(i)];
+    if (m.teams_on && seat_team(m, i) != gs::Team::none)
+      p.team = gs::teams_name(m.teams, seat_team(m, i));
+    p.score = p.frags = t.kills - t.suicides - t.team_kills;
+    p.deaths = t.deaths;
+    p.suicides = t.suicides;
+    p.team_kills = t.team_kills;
+    p.columns = sv::stats_row(g, t.tally);
+    r.players.push_back(std::move(p));
+    if (slots != nullptr) slots->push_back(i);
+  }
+  return r;
+}
+
 // The match's stats kept as the last match's, with the names they were counted under.
-void keep_stats(Q2Match& m) {
+bool keep_stats(Q2Match& m) {
   const sv::Q2Server* game = sv::q2_of(*m.rules);
-  if (game == nullptr) return;
+  if (game == nullptr) return false;
   m.last_stats = game->stats.slot;
   for (int i = 0; i < kSlots && i < sh::kMaxClients; i++)
-    m.last_names[static_cast<size_t>(i)] = m.net->clients[i].name;
+    m.last_names[static_cast<size_t>(i)] = seat_name(m, i);
   m.has_last = true;
+  return true;
 }
 
 // The teams as the server's settings and the dmflags say: on or off, names, sizes, looks worn.
@@ -336,63 +376,82 @@ void referee_turn(Q2Match& m) {
   m.referee.acts.clear();
 }
 
-// The stats words: `stats [player]`, `teamstats`, `laststats [player]` (and `oldstats`).
+// The stats words (server/match_stats.hpp `stats_words`): the match so far and the last match's.
 bool stats_word(Q2Match& m, int slot, const std::string& line) {
-  const size_t sp = line.find(' ');
-  const std::string word = line.substr(0, sp);
-  const std::string rest = sp == std::string::npos ? std::string() : line.substr(sp + 1);
-  const bool last = word == "laststats" || word == "oldstats" || word == "lastscores";
-  if (word != "stats" && word != "teamstats" && !last) return false;
   const sv::Q2Server* game = sv::q2_of(*m.rules);
-  // The warmup shows the last match; so does `laststats`.
-  const bool old = last || (m.on && m.lobby.phase != gs::LobbyPhase::match);
-  if (old && !m.has_last) {
-    say(m, slot, "There are no stats yet: no match has been played.");
-    return true;
-  }
-  if (!old && game == nullptr) return false;
-  const auto& table = old ? m.last_stats : game->stats.slot;
   const auto now_names = names(m);
-  const auto& who_names = old ? m.last_names : now_names;
-  if (word == "teamstats") {
-    for (const gs::Team team : {gs::Team::red, gs::Team::blue}) {
-      int64_t kills = 0, deaths = 0, dealt = 0, received = 0;
-      for (int i = 0; i < kSlots; i++) {
-        if (seat_team(m, i) != team) continue;
-        const sv::Q2SlotStats& p = table[static_cast<size_t>(i)];
-        kills += p.kills;
-        deaths += p.deaths;
-        dealt += p.dealt;
-        received += p.received;
-      }
-      say(m, slot,
-          "Team '" + gs::teams_name(m.teams, team) + "': kills " + std::to_string(kills) +
-              ", deaths " + std::to_string(deaths) + ", damage dealt " + std::to_string(dealt) +
-              ", received " + std::to_string(received));
-    }
-    return true;
+  ge::net::MatchReport now, last;
+  sv::StatsAsk ask;
+  // The warmup shows the last match's.
+  if (game != nullptr && !(m.on && m.lobby.phase != gs::LobbyPhase::match)) {
+    now = stats_report(m, game->stats.slot, now_names);
+    ask.now = &now;
   }
-  int of = slot;
-  if (!rest.empty()) {
-    of = -1;
-    for (int i = 0; i < kSlots; i++)
-      if (!who_names[static_cast<size_t>(i)].empty() && who_names[static_cast<size_t>(i)] == rest)
-        of = i;
-    if (of < 0) {
-      say(m, slot, "There is no player " + rest + " in those stats.");
-      return true;
-    }
+  if (m.has_last) {
+    last = stats_report(m, m.last_stats, m.last_names);
+    ask.last = &last;
   }
-  if (!old && m.teams_on && of != slot && seat_team(m, slot) != gs::Team::none &&
-      seat_team(m, of) != seat_team(m, slot)) {
-    say(m, slot, "The other team's stats are shown once the match is over.");
-    return true;
-  }
-  const std::string out =
-      sv::stats_table(table[static_cast<size_t>(of)], who_names[static_cast<size_t>(of)]);
-  say(m, slot,
-      out.empty() ? "Nothing counted yet for " + who_names[static_cast<size_t>(of)] + "." : out);
+  ask.me = now_names[static_cast<size_t>(slot)];
+  if (m.teams_on && seat_team(m, slot) != gs::Team::none)
+    ask.my_team = gs::teams_name(m.teams, seat_team(m, slot));
+  ask.teams = {gs::teams_name(m.teams, gs::Team::red), gs::teams_name(m.teams, gs::Team::blue)};
+  for (const std::string& n : now_names)
+    if (!n.empty()) ask.present.push_back(n);
+  std::string out;
+  if (!sv::stats_words(sv::q2_stats_game(), line, ask, out)) return false;
+  say(m, slot, out);
   return true;
+}
+
+// A `say_team` the coaches are in (a coach's, or a player's on a team that has one): the engine's
+// chat route with the coach seated on his team (server/chat.hpp), printed here.
+bool coach_chat(Q2Match& m, int slot, const std::string& line) {
+  if (!m.teams_on || !line.starts_with("say_team ")) return false;
+  const gs::Team own = seat_team(m, slot);
+  const gs::Team coached = gs::coach_team(m.coaches, slot);
+  if (coached == gs::Team::none && (own == gs::Team::none || m.coaches.coach[team_index(own)] < 0))
+    return false;
+  std::string said = line.substr(9);
+  if (said.size() >= 2 && said.front() == '"' && said.back() == '"')
+    said = said.substr(1, said.size() - 2);
+  if (said.empty()) return true;
+  std::array<gs::ChatSeat, sh::kMaxClients> seats;
+  for (int i = 0; i < kSlots && i < sh::kMaxClients; i++) {
+    gs::ChatSeat& d = seats[static_cast<size_t>(i)];
+    d.active = m.net->clients[i].stage == Q2Slot::active;
+    if (!d.active) continue;
+    d.name = m.net->clients[i].name;
+    d.spectator = !playing(m, i);
+    const gs::Team coaches = gs::coach_team(m.coaches, i);
+    d.coach = coaches != gs::Team::none;
+    const gs::Team team = d.coach ? coaches : seat_team(m, i);
+    d.team = team != gs::Team::none ? std::string(gs::team_name(team)) : std::to_string(i);
+  }
+  const gs::ChatLine out = gs::chat_route(seats, slot, true, false, sv::chat_in_match(**m.rules),
+                                          gs::chat_settings((*m.rules)->cvars), said);
+  for (int i = 0; i < kSlots && i < sh::kMaxClients; i++)
+    if (((out.to >> i) & 1u) != 0 && m.net->clients[i].stage == Q2Slot::active)
+      q2_net_print(*m.net, i, out.text);
+  return true;
+}
+
+// Each coach's chase camera kept on his team's players: one on another player steps on to the
+// next of his team, or ends when the team has none.
+void coach_cameras(Q2Match& m) {
+  sv::Q2Server* game = sv::q2_of(*m.rules);
+  if (game == nullptr) return;
+  for (const int c : m.coaches.coach) {
+    if (c < 0 || c >= sh::kMaxClients) continue;
+    sv::Q2Player& p = game->players[c];
+    if (p.chase < 0 || gs::coach_may_follow(m.coaches, m.lobby, c, p.chase)) continue;
+    const int next = gs::coach_next_follow(m.coaches, m.lobby, c, p.chase);
+    if (next >= 0 && next < sh::kMaxClients && playing(m, next)) {
+      p.chase = next;
+    } else {
+      sv::spectate_stop(*game, c);
+      say(m, c, "Your team has no player to follow.");
+    }
+  }
 }
 
 bool hook(void* ctx, int slot, const std::string& line) {
@@ -432,6 +491,24 @@ bool hook(void* ctx, int slot, const std::string& line) {
     if (gs::timeout_command(m.timeout, who, in_match(m), timeout_word(m, slot, line), m.net->now)) {
       timeout_turn(m);
       return true;
+    }
+    if (m.on && c.stage == Q2Slot::active) {
+      if (coach_chat(m, slot, line)) return true;
+      if (m.coaches.candidate >= 0 && line.starts_with("vote ") && line != "vote yes" &&
+          line != "vote no") {
+        say(m, slot, "A coach election is under way. Call your vote when it ends.");
+        return true;
+      }
+      gs::CoachCaller cc;
+      cc.slot = slot;
+      cc.admin = gs::referee_is(m.referee, slot);
+      cc.spectator = !playing(m, slot);
+      cc.vote_open = m.votes != nullptr && m.votes->open;
+      cc.names = &all;
+      if (gs::coach_command(m.coaches, m.lobby, m.teams, cc, line, m.teams_on, rules_time(m))) {
+        say_book(m, m.coaches.said, m.coaches.to);
+        return true;
+      }
     }
     if (m.teams_on && c.stage == Q2Slot::active) {
       const gs::TeamsCaller tc{slot, gs::referee_is(m.referee, slot), &all};
@@ -489,6 +566,10 @@ void q2_match_open(Q2Match& m, Q2NetServer& net, sv::RulesRunner& rules,
   net.move_ctx = &m;
 }
 
+namespace {
+void match_end(Q2Match& m);
+}  // namespace
+
 void q2_match_frame(Q2Match& m, const std::string& map, double now) {
   if (m.net == nullptr || m.rules == nullptr || !*m.rules) return;
   m.map = map;
@@ -498,10 +579,14 @@ void q2_match_frame(Q2Match& m, const std::string& map, double now) {
   if (m.on) {
     seats_turn(m);
     teams_turn(m);
+    gs::coach_tick(m.coaches, m.lobby, m.teams, names(m), m.teams_on, rules.sv.time);
+    say_book(m, m.coaches.said, m.coaches.to);
+    coach_cameras(m);
     if (gs::lobby_due(m.lobby, rules.sv.time) && rules.pending_map.empty()) {
       rules.pending_map = map;  // the match: the map again, every score new
       rules.pending_change = sv::MapChange::restart;
       gs::teams_match_began(m.teams);
+      gs::coach_match_began(m.coaches, m.teams);
     }
     gs::lobby_tick(m.lobby, rules.sv.time);
     std::vector<int> kicked;
@@ -511,8 +596,12 @@ void q2_match_frame(Q2Match& m, const std::string& map, double now) {
     for (int slot : kicked) q2_net_drop(*m.net, slot, "was kicked for not getting ready");
     sv::warmup_hold(m.hold, *m.rules, m.lobby.phase == gs::LobbyPhase::match);
   }
-  if (sv::Q2Server* game = sv::q2_of(*m.rules); game != nullptr)  // the stats count in a match
+  if (sv::Q2Server* game = sv::q2_of(*m.rules); game != nullptr) {  // the stats count in a match
     game->stats.on = m.on ? m.lobby.phase == gs::LobbyPhase::match : number(m, "deathmatch") != 0;
+    sv::stats_tick(*game);
+    // The rules' limit reached: the intermission is the match's end, said while all still listen.
+    if (game->intermission_at > 0 && !m.end_said && game->stats.on) match_end(m);
+  }
   int64_t deaths = 0;
   const gs::MatchScore score = score_turn(m, deaths);
   std::vector<std::string> said;
@@ -521,6 +610,84 @@ void q2_match_frame(Q2Match& m, const std::string& map, double now) {
                     said);
   for (const std::string& line : said) say(m, -1, line);
 }
+
+namespace {
+
+// The match just ended as the master keeps it (net/report.hpp): the mode, the map, how long and
+// how it ended, the teams and their scores, and each player counted with his account, ping and
+// the stats' columns (the server adds its own part). None when nobody was counted.
+void make_report(Q2Match& m, const std::string& map) {
+  std::vector<int> slots;
+  ge::net::MatchReport r = stats_report(m, m.last_stats, m.last_names, &slots);
+  if (r.players.empty()) return;
+  const int seated = static_cast<int>(r.players.size());
+  r.mode = m.teams_on ? (seated <= 4 ? "2on2" : "4on4") : (seated <= 2 ? "1on1" : "ffa");
+  r.map = map;
+  const double played = (*m.rules)->sv.time;
+  r.duration_ms = static_cast<int64_t>(ge::core::num::round(played * 1000));
+  int64_t most = 0;
+  for (size_t k = 0; k < r.players.size(); k++) {
+    ge::net::ReportPlayer& p = r.players[k];
+    const auto i = slots[k];
+    const sv::ClientInfo& c = (*m.rules)->clients[i];
+    p.bot = c.bot;
+    if (m.logins != nullptr) p.account = gs::login_account(*m.logins, i);
+    p.seconds = static_cast<int64_t>(played);
+    if (const sv::Q2Server* game = sv::q2_of(*m.rules); game != nullptr)  // the frags shown
+      p.score = p.frags = static_cast<int64_t>(game->players[i].frags);
+    const int ping = m.net->clients[i].ping_ms;
+    if (ping > 0) p.ping_min = p.ping_avg = p.ping_max = ping;
+    most = std::max(most, p.score);
+  }
+  if (m.teams_on) {
+    const std::array<int64_t, 2> score = team_scores(m);
+    for (const gs::Team team : {gs::Team::red, gs::Team::blue})
+      r.teams.push_back({gs::teams_name(m.teams, team), score[team == gs::Team::red ? 0 : 1], 0});
+    std::stable_sort(r.teams.begin(), r.teams.end(),
+                     [](const auto& a, const auto& b) { return a.score > b.score; });
+  }
+  std::stable_sort(r.players.begin(), r.players.end(), [](const auto& a, const auto& b) {
+    if (a.score != b.score) return a.score > b.score;
+    if (a.deaths != b.deaths) return a.deaths < b.deaths;
+    return a.name < b.name;
+  });
+  // How it ended: a limit reached, else a side gone, else broken off.
+  const double fraglimit = number(m, "fraglimit"), timelimit = number(m, "timelimit");
+  int sides = 0;
+  if (m.teams_on) {
+    for (const ge::net::ReportTeam& t : r.teams)
+      for (const ge::net::ReportPlayer& p : r.players)
+        if (p.team == t.name) {
+          sides++;
+          break;
+        }
+  } else {
+    sides = seated;
+  }
+  r.ended = ge::net::MatchEnd::broken;
+  if ((fraglimit > 0 && double(most) >= fraglimit) ||
+      (timelimit > 0 && played >= timelimit * 60 - 0.5))
+    r.ended = ge::net::MatchEnd::limit;
+  else if (sides < 2)
+    r.ended = ge::net::MatchEnd::forfeit;
+  m.report = std::move(r);
+  m.report_ready = true;
+}
+
+// The match's end, said once: who won, every player's stats, the report for the master. At the
+// intermission when the rules reach a limit, else when the map changes under the match.
+void match_end(Q2Match& m) {
+  m.end_said = true;
+  say_result(m);
+  if (!keep_stats(m)) return;
+  std::vector<int> slots;  // every player on the map, one who never fired or was hit too
+  const ge::net::MatchReport r = stats_report(m, m.last_stats, m.last_names, &slots);
+  if (!r.players.empty())  // every player's stats, as each classic game shows them
+    for (const std::string& line : sv::stats_lines(sv::q2_stats_game(), r)) say(m, -1, line);
+  make_report(m, m.map);
+}
+
+}  // namespace
 
 void q2_match_map_change(Q2Match& m, bool restart, double now) {
   (void)now;
@@ -536,10 +703,8 @@ void q2_match_map_change(Q2Match& m, bool restart, double now) {
   m.deaths_left = 0;
   m.died_seen.fill(0);  // a new map's rules: deaths counted from there
   const bool ended = m.on && match_over && m.lobby.phase == gs::LobbyPhase::match;
-  if (ended || (!m.on && match_over)) {
-    say_result(m);
-    keep_stats(m);
-  }
+  if ((ended || (!m.on && match_over)) && !m.end_said) match_end(m);
+  m.end_said = false;
   m.frags_seen.fill(0);
   m.team_left.fill(0);
   if (!ended) return;
@@ -548,6 +713,14 @@ void q2_match_map_change(Q2Match& m, bool restart, double now) {
   gs::lobby_end(m.lobby, t);
   if (gs::lobby_next_due(m.lobby, t)) gs::lobby_back(m.lobby);
   m.held_out = 0;  // the sidelines open with the warmup
+}
+
+bool q2_match_report(Q2Match& m, ge::net::MatchReport& out) {
+  if (!m.report_ready) return false;
+  out = std::move(m.report);
+  m.report = {};
+  m.report_ready = false;
+  return true;
 }
 
 std::string q2_match_status(const Q2Match& m) {

@@ -25,6 +25,7 @@
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
 #include "classicenhance/replace.hpp"
+#include "classicenhance/shells.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
 #include "render/sprite_shapes.hpp"
@@ -497,9 +498,23 @@ bool read_skin(const SearchPath& files, std::span<const uint8_t> palette, const 
 
 }  // namespace
 
+void list_worn_pictures(WorldModels& m, std::span<const Placed> placed) {
+  for (const Placed& p : placed) {
+    if (p.skin_picture.empty()) continue;
+    const std::string key = "picture:" + p.skin_picture;
+    const auto [at, fresh] = m.player_skins.try_emplace(key, uint32_t(m.skin_files.size()));
+    if (fresh) m.skin_files.push_back({key, true, {p.skin_picture}});
+  }
+}
+
 const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   const ModelKind& k = m.kinds[size_t(p.modelindex)];
   *worn = {};
+  if (!p.skin_picture.empty()) {  // a picture in place of its own skin, once it is listed
+    const auto at = m.player_skins.find("picture:" + p.skin_picture);
+    if (at != m.player_skins.end()) worn->file = at->second;
+    return k;
+  }
   // One figure every player is drawn as (classic remix's `cr_models`), when it was read.
   const std::string& all = m.skin_choice.figure;
   const bool forced = !all.empty() && m.figures.contains(all);
@@ -705,6 +720,12 @@ void place_returning(const Listen& l, double within_s, std::vector<Returning>& o
   }
 }
 
+int made_case(std::string_view name) {
+  for (int k = 0; k < ge::classicenhance::kCasings; ++k)
+    if (name == kEffectModels[size_t(EffectModel::case_hull) + size_t(k)]) return k;
+  return -1;
+}
+
 Placed hologram_of(const Placed& item, const ge::classicenhance::HologramLook& h) {
   Placed p = item;
   p.alpha = h.alpha;
@@ -784,15 +805,29 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       continue;
     }
     if (i == 1 || name.empty()) continue;
+    k.path = name;
     const ge::classicenhance::Replacement* rep = ge::classicenhance::replacement_of(name);
     if (rep != nullptr) k.effect = rep->effect;
     OpenedModel opened;
     std::string error;
-    if (!game.open_model(game, files, name, opened, error) &&
-        !(vwep && stand_in(name, opened, skin_of[i]))) {
-      // Not in the files (the map itself is not in the packs by this name either) or refused.
-      if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
-      continue;
+    if (const int made = own ? made_case(name) : -1; made >= 0) {  // the spent cases: made here
+      opened.form = ModelForm::morph;
+      opened.morph =
+          ge::classicenhance::casing_model(static_cast<ge::classicenhance::Casing>(made), palette);
+    } else if (!game.open_model(game, files, name, opened, error)) {
+      if (own && rep != nullptr && rep->effect == "bubbles") {
+        // The engine's bubble with no pack sprite under it (Quake II's): its made frame alone,
+        // placed only while ce_bubbles is on (world_fx.cpp's own bubbles).
+        k.is = ModelKind::Is::sprite;
+        k.first = k.made = uint32_t(frames.size());
+        frames.push_back(gr::bubble_frame(kBubblePx));
+        continue;
+      }
+      if (!(vwep && stand_in(name, opened, skin_of[i]))) {
+        // Not in the files (the map itself is not in the packs by this name either) or refused.
+        if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
+        continue;
+      }
     }
     if (opened.form == ModelForm::morph) {
       const mo::Model& model = opened.morph;
@@ -800,7 +835,10 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       // The visible weapons' body wears each player's skin and colours as the figure does.
       k.player = name == kPlayerModel || (vwep && i == vwep_at);
       if (k.player)
-        for (const mo::Frame& fr : model.frames) m.player_frames.push_back(fr.name);
+        for (const mo::Frame& fr : model.frames) {
+          m.player_frames.push_back(fr.name);
+          k.frame_names.push_back(fr.name);
+        }
       k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
       if (k.player || k.figure) {  // where a body lies still (cl_deadbodyfilter)
         std::vector<std::string> frame_names;
@@ -987,6 +1025,10 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed, double 
     ba::Mover& mv = out[n - 1];
     mv.hidden = false;
     to_world(p.origin, mv.offset);
+    // Turned by its angles about the map's origin, where a rotating model is built round its
+    // centre (pitch not reversed: that is the vertex-animated models' own quirk).
+    const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+    if (ang[0] != 0 || ang[1] != 0 || ang[2] != 0) models::rotation_of(ang, false, mv.rotation);
     mv.frame = p.q2_anim < 0 ? -1 : q2_texture_frame(uint32_t(p.q2_anim), p.frame, t);
   }
 }
@@ -1304,6 +1346,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const ge::brush::app::DynamicLight> dynamic, double dynamic_strength,
                     const Burning* burning,
                     std::span<const std::pair<int, gr::MorphBlood>> bloodied) {
+  list_worn_pictures(m, placed);
   const bool bare_flames = in_place.flames;
   const bool q2 = map.family == br::Family::v38;
   m.morph_draws.clear();

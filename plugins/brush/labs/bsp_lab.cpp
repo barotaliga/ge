@@ -26,6 +26,7 @@
 
 #include "assets/model.hpp"
 #include "brush/read.hpp"
+#include "brush/rebake.hpp"
 #include "brush/write.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
@@ -286,32 +287,6 @@ double read_us(const std::vector<uint8_t>& bytes) {
   return best;
 }
 
-// Where to stand in a map to look at it: the player's start, then up to three other starts spread
-// through the entity list, each at eye height facing its `angle`.
-std::vector<std::pair<std::string, br::labs::TexturedEye>> eyes_of(const br::Map& map) {
-  std::vector<std::pair<std::string, br::labs::TexturedEye>> out;
-  std::vector<const br::Entity*> others;
-  const auto eye_at = [](const br::Entity& e) {
-    br::labs::TexturedEye eye;
-    double o[3] = {0, 0, 0};
-    std::sscanf(e.get("origin").c_str(), "%lf %lf %lf", &o[0], &o[1], &o[2]);
-    for (int k = 0; k < 3; ++k) eye.at[k] = o[k];
-    eye.at[2] += 22;  // the eye over a start's origin
-    eye.yaw_deg = std::atof(e.get("angle").c_str());
-    return eye;
-  };
-  for (const br::Entity& e : map.entities) {
-    const std::string& c = e.get("classname");
-    if (c == "info_player_start" && out.empty()) out.push_back({"THE START", eye_at(e)});
-    if (c == "info_player_deathmatch" || c == "info_player_coop") others.push_back(&e);
-  }
-  for (size_t i = 0; i < 3 && i < others.size(); ++i) {
-    const size_t at = others.size() <= 3 ? i : i * (others.size() - 1) / 2;
-    out.push_back({"START " + std::to_string(at + 1), eye_at(*others[at])});
-  }
-  return out;
-}
-
 // A texture's file name for the matcher: a leading '*' (a liquid) is `liq_`, a leading '+' (an
 // animation frame) `anim_`, and anything a file name cannot hold an underscore.
 std::string texture_file(const std::string& name) {
@@ -365,6 +340,43 @@ bool write_textures(lab::Lab& lab, const std::vector<Loaded>& maps,
                 out.string().c_str());
   }
   return true;
+}
+
+// A 38 map's surface lights in the rebake (rebake.hpp's lamp_emit), held by the digest: the
+// fixture's first ceiling made a lamp (write.hpp's kFixtureLamp), the room rebaked with every
+// texture an orange and no other light, and the light it gives counted: the luxels it reaches, the
+// brightest red and blue, and a hash of every luxel's packed bits.
+void lamp_rebake(lab::Lab& lab) {
+  br::Fixture fx = br::sample_fixture();
+  fx.rooms[0].ceiling = "lamp1";
+  std::vector<uint8_t> bytes;
+  std::string err;
+  br::Map m;
+  br::Rebaked out;
+  br::RebakeInput in;
+  br::RebakeOptions o;
+  o.atlas_width = 1024;
+  o.bake.samples = 8;
+  if (!br::write_bsp(fx, br::Family::v38, &bytes, &err) || !br::read_bsp(bytes, &m, &err) ||
+      (in.albedo.assign(m.textures.size(), {0.8f, 0.4f, 0.1f}),
+       !br::rebake_map(m, in, o, &out, &err))) {
+    lab.fail("bsp: the lamp fixture's rebake: " + err,
+             "next: fix plugins/brush/rebake.cpp; skill: brush");
+    return;
+  }
+  uint32_t hash = 2166136261u, lit = 0;
+  float most[3] = {0, 0, 0};
+  for (const uint32_t px : out.rgb9e5) {
+    hash = (hash ^ px) * 16777619u;
+    float c[3];
+    br::unpack_rgb9e5(px, c);
+    if (c[0] > 0 || c[1] > 0 || c[2] > 0) lit++;
+    for (int k = 0; k < 3; ++k) most[k] = std::max(most[k], c[k]);
+  }
+  lab.metric("rebake-lamp-v38.lit", double(lit), "luxels");
+  lab.metric("rebake-lamp-v38.red", double(most[0]), "lightmap");
+  lab.metric("rebake-lamp-v38.blue", double(most[2]), "lightmap");
+  lab.metric("rebake-lamp-v38.hash", double(hash), "fnv1a");
 }
 
 void run(lab::Lab& lab) {
@@ -484,6 +496,7 @@ void run(lab::Lab& lab) {
   }
   lab.table(table);
   lab.table(times, Det::measured);
+  if (path.empty()) lamp_rebake(lab);
   const std::vector<std::pair<std::string, std::string>> inputs{
       {"map", path.empty() ? "the sample fixture" : path}};
 
@@ -555,7 +568,7 @@ void run(lab::Lab& lab) {
     for (const Loaded& l : maps) {
       const br::Map& m = l.map;
       if (m.family != br::Family::v29 && m.family != br::Family::bsp2) continue;
-      const auto eyes = eyes_of(m);
+      const auto eyes = br::labs::start_eyes(m);
       if (eyes.empty()) continue;
       const int cw = px, ch = px * 5 / 8, cols = eyes.size() > 1 ? 2 : 1;
       const int rows = int((eyes.size() + size_t(cols) - 1) / size_t(cols));

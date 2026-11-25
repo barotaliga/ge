@@ -80,7 +80,7 @@ struct Features;  // feature.hpp
 
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
-struct ServerConfig {
+struct ServerConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one, by name
   std::string hostname = "server";  // sv_hostname: the name in the browser and the lobby
   std::string description;          // sv_description: a line under the name
   std::string ip;                   // net_ip: the address to listen on (empty: every interface)
@@ -126,6 +126,8 @@ struct ServerConfig {
   std::string rcon_password;     // rcon_password: the remote console's (empty: none offered)
   std::string rendezvous;        // sv_rendezvous: the rendezvous to list with (M17r)
   std::string masters;           // sv_master: the masters to beat to, space-separated
+  int32_t open_port = 0;         // sv_open_port: 1 asks the home router to forward the port
+  std::string gateway;           // sv_gateway: the router to ask ("": the default route's)
   std::string mod;               // sv_mod: the mods' directories, lowest first (read-only)
   double timeout_s = 65;         // sv_timeout: a client silent this long is dropped
   double countdown_s = 5;        // sv_countdown: everyone ready to the match, s (sv_lobby)
@@ -154,6 +156,9 @@ struct ServerConfig {
   // The settings the config made with `set` that nothing registered (a mod's own, such as a
   // match mod's switches), by name, as set: handed to a game whose rules read their own.
   std::map<std::string, std::string> created;
+  // The game's meta-cvars (ServerGame::metas: `sv_modern`) by name, as set: what they set is in
+  // `rules` and the core's own fields already.
+  std::map<std::string, std::string> metas;
 
   double seconds = 60;      // server time to run (0: until stopped); see server_configure
   double status_every = 5;  // a status line every this many seconds of server time (0: none)
@@ -222,6 +227,19 @@ struct SettingName {
   bool own = false;
 };
 
+// One level of a META-CVAR a game declares (`ServerGame::metas`; console/cvar.hpp § META-CVARS):
+// `name` at `value` sets each of `sets`' "<setting> <value>" pairs (`;` between them) that nothing
+// else set, and turning it off puts them back. Rows of one name make one meta, its help the first
+// row's. A game names its own members, so `sv_modern 1` means "a modern server" in every game and
+// each game says what that is for it (Shooter's Edge's QuakeWorld: every shot's line rewound).
+struct GameMeta {
+  const char* name;
+  const char* value;
+  const char* sets;
+  const char* help = nullptr;    // what the meta does: one sentence
+  const char* values = nullptr;  // what each value does
+};
+
 // A console word the GAME takes through `ServerGame::console` (its rules' `map`, its admin's
 // `kick`), declared so the server's console registers it: Tab completes it, `cmdlist` and the
 // reference manual list it, and running it hands the whole line to `console`. `also` is the game's
@@ -252,6 +270,8 @@ struct ServerGame {
   int name_count = 0;
   const GameWord* words = nullptr;  // the game's own console words (GameWord), `word_count`
   int word_count = 0;
+  const GameMeta* metas = nullptr;  // the game's meta-cvars' levels (GameMeta), `meta_count`
+  int meta_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;

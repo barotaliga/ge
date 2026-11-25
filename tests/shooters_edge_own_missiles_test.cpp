@@ -2,7 +2,8 @@
 // Quake's rules (the nail's barrel, the rocket's midair speed, the grenade's arc), dated back by
 // the shot's age, shown and ended by the round trip; a wall stops a nail; a grenade bounces off
 // the floor; a server copy near a stand-in about to end takes it over; at most 96 fly; none off,
-// or with no ping; drawn only with the server's model.
+// or with no ping; drawn only with the server's model; Quake II's launch under the eye by the gun's
+// side, its bits, its grenade bouncing off brushes to rest.
 //
 // ge:summary Tests: the own missiles thrown ahead: launch, age, wall, bounce, handover, drawn
 // ge:keywords test own_missiles cl_predict_projectiles handover grenade nail rocket
@@ -11,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "brush/compile/compile.hpp"
+#include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -241,4 +244,151 @@ TEST(at_most_96_fly_and_a_new_one_replaces_the_farthest) {
   float farthest = 0;
   for (const cl::OwnMissile& o : m.flying) farthest = std::max(farthest, o.origin.x - kAt.x);
   CHECK(farthest < cl::kOwnMissilesMost - 1 + 8 - 0.5f);  // the one at +95 went
+}
+
+TEST(the_packs_shots_leave_as_their_rules_launch_them) {
+  cl::OwnMissiles m;
+  cl::OwnShot shot;
+  shot.origin = kAt;
+  shot.angles = {0, 0, 0};  // due east (+x)
+  // Scourge of Armagon's twin laser bolts: 12 ahead, 1.8 up, 4.2 to each side, at 1000.
+  shot.kind = cl::OwnMissileKind::laser;
+  shot.side = 1;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  const cl::OwnMissile& laser = m.flying.back();
+  CHECK(near(laser.origin.x, kAt.x + 12) && near(laser.origin.y, kAt.y - 4.2f) &&
+        near(laser.origin.z, kAt.z + 1.8f));
+  CHECK(near(laser.velocity.x, 1000));
+  // Dissolution of Eternity's multi rockets: in a deathmatch turned 3.3 and 6.6 degrees each way.
+  shot.kind = cl::OwnMissileKind::multi_rocket;
+  shot.spread = 0;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  const cl::OwnMissile& rocket = m.flying.back();
+  CHECK(near(rocket.origin.x, kAt.x + 8) && near(rocket.origin.z, kAt.z + 16));
+  CHECK(rocket.velocity.y < -100 && rocket.velocity.y > -130);  // 1000 sin 6.6 to the right
+  // In single play with 80 units/s to the right instead.
+  shot.deathmatch = false;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  CHECK(near(m.flying.back().velocity.x, 1000) && near(m.flying.back().velocity.y, -80));
+  // The plasma ball waits 0.1 s 24 ahead and 16 up, then flies at 1250.
+  shot.kind = cl::OwnMissileKind::plasma;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.1, 100, kAt));
+  cl::own_missiles_step(m, nullptr, 800, 10.05);
+  CHECK(near(m.flying.back().origin.x, kAt.x + 24));
+  cl::own_missiles_step(m, nullptr, 800, 10.1 + 0.02);
+  CHECK(near(m.flying.back().origin.x, kAt.x + 24 + 25, 0.1f));
+}
+
+TEST(a_proximity_grenade_sticks_where_it_lands) {
+  std::unique_ptr<cl::LoadedMap> map = halls();
+  const sh::Hull* world = &map->bsp.world.models[0].hulls[0];
+  cl::OwnMissiles m;
+  cl::OwnShot shot;
+  shot.kind = cl::OwnMissileKind::prox;
+  shot.origin = kAt;
+  shot.angles = {0, 0, 0};
+  CHECK(cl::own_missile_fire(m, shot, 10, 3, 100, kAt));
+  cl::own_missiles_step(m, world, 800, 11);
+  CHECK(m.flying.size() == 1 && m.flying[0].stuck);
+  const sh::Vec3f at = m.flying[0].origin;
+  cl::own_missiles_step(m, world, 800, 11.3);
+  CHECK(m.flying.size() == 1 && sh::length(m.flying[0].origin - at) < 0.01f);
+}
+
+TEST(quake_ii_s_shots_leave_under_the_eye_by_the_gun_s_side_and_carry_their_bits) {
+  cl::OwnMissiles m;
+  cl::OwnShot shot;
+  shot.origin = kAt;
+  shot.view_height = 22;
+  shot.angles = {0, 0, 0};  // due east (+x): right is -y
+  shot.side = 1;            // held in the right hand
+  shot.kind = cl::OwnMissileKind::q2_bolt;
+  shot.effects = 8;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.15, 150, kAt));
+  const cl::OwnMissile& bolt = m.flying[0];
+  CHECK(near(bolt.origin.x, kAt.x + cl::kQ2BoltAheadU) && near(bolt.origin.y, kAt.y - 8));
+  CHECK(near(bolt.origin.z, kAt.z + 22 - cl::kQ2EyeDropU));
+  CHECK(near(bolt.velocity.x, cl::kQ2BoltSpeedU) && bolt.effects == 8);
+  // The server moves nothing ahead: shown at once; its copy may wait a frame more than Quake's.
+  CHECK(bolt.show_s <= 10);
+  CHECK(std::abs(bolt.end_s -
+                 (10 + 0.15 + cl::kOwnMissileLeadS + cl::kOwnMissileWaitS + cl::kQ2FrameS)) < 1e-9);
+  shot.side = -1;  // the left hand
+  shot.kind = cl::OwnMissileKind::q2_rocket;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.15, 150, kAt));
+  CHECK(near(m.flying[1].origin.x, kAt.x + cl::kQ2MissileAheadU) &&
+        near(m.flying[1].origin.y, kAt.y + 8));
+  CHECK(near(m.flying[1].velocity.x, cl::kQ2RocketSpeedU));
+  shot.side = 0;  // centred
+  shot.kind = cl::OwnMissileKind::q2_bfg;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.15, 150, kAt));
+  CHECK(near(m.flying[2].origin.y, kAt.y) && near(m.flying[2].velocity.x, cl::kQ2BfgSpeedU));
+  shot.kind = cl::OwnMissileKind::q2_grenade;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.15, 150, kAt));
+  CHECK(near(m.flying[3].velocity.x, cl::kGrenadeAheadU) &&
+        near(m.flying[3].velocity.z, cl::kGrenadeUpU));
+  shot.kind = cl::OwnMissileKind::q2_hand_grenade;  // thrown at the speed its hold gave it
+  shot.speed = 640;
+  CHECK(cl::own_missile_fire(m, shot, 10, 0.15, 150, kAt));
+  CHECK(near(m.flying[4].velocity.x, 640) && near(m.flying[4].velocity.z, cl::kGrenadeUpU));
+  // Drawn with the server's model and the bits its copy carries.
+  cl::DemoState s;
+  s.format = cl::DemoFormat::q2;
+  s.models = {"", "models/objects/laser/tris.md2"};
+  cl::own_missiles_draw(m, s, 10);
+  CHECK(s.own_missiles.size() == 1 && s.own_missiles[0].model == 1 &&
+        s.own_missiles[0].effects == 8);
+}
+
+TEST(quake_ii_s_grenade_bounces_off_the_brushes_and_comes_to_rest) {
+  // A closed room of brushes, 224 by 224 by 128 from the origin (around the spot), as version 38.
+  namespace mc = ge::brush::mapc;
+  mc::Source src;
+  mc::Entity world;
+  world.keys = {{"classname", "worldspawn"}};
+  const auto box = [&](mc::V3 lo, mc::V3 hi) {
+    world.brushes.push_back(mc::box_brush(lo, hi, "w"));
+  };
+  box({-16, -16, -16}, {240, 240, 0});
+  box({-16, -16, 128}, {240, 240, 144});
+  box({-16, -16, 0}, {0, 240, 128});
+  box({224, -16, 0}, {240, 240, 128});
+  box({0, -16, 0}, {224, 0, 128});
+  box({0, 224, 0}, {224, 240, 128});
+  src.entities.push_back(world);
+  mc::Entity start;
+  start.keys = {{"classname", "info_player_start"}, {"origin", "64 64 24"}};
+  src.entities.push_back(start);
+  mc::CompileOptions opt;
+  opt.version = 38;
+  std::vector<uint8_t> bytes;
+  mc::CompileReport rep;
+  std::string error;
+  CHECK_MSG(mc::compile_map(src, opt, &bytes, &rep, &error), error);
+  br::Map map;
+  CHECK_MSG(br::read_bsp(bytes, &map, &error), error);
+  br::BrushTracer tracer(map);
+  cl::OwnMissiles m;
+  cl::OwnShot shot;
+  shot.kind = cl::OwnMissileKind::q2_grenade;
+  shot.origin = kAt;
+  shot.view_height = 22;
+  shot.angles = {60, 0, 0};  // pitched down at the floor
+  CHECK(cl::own_missile_fire(m, shot, 0, 10, 10000, kAt));
+  float lowest = 1e9f;
+  bool rose = false;
+  for (int i = 1; i <= 400 && !m.flying.empty(); i++) {
+    cl::own_missiles_step_brushes(m, &tracer, 800, i * 0.01);
+    lowest = std::min(lowest, m.flying[0].origin.z);
+    if (m.flying[0].velocity.z > 0) rose = true;
+  }
+  CHECK(rose);
+  CHECK_MSG(lowest >= -0.01f, "lowest " + std::to_string(lowest));  // never through the floor
+  CHECK(m.flying.size() == 1 && m.flying[0].stuck);                 // at rest on the floor
+  // A bolt along the floor ends at a wall.
+  shot.kind = cl::OwnMissileKind::q2_bolt;
+  shot.angles = {0, 90, 0};
+  CHECK(cl::own_missile_fire(m, shot, 4, 10, 10000, kAt));
+  cl::own_missiles_step_brushes(m, &tracer, 800, 10);
+  CHECK(m.walled == 1);
 }

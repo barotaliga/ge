@@ -46,7 +46,7 @@ enum class Fire : uint8_t {
 
 // The missile a `bolt` or `rockets` attack throws: the base game's, or a pack's (q2_combat.hpp's
 // SqShot: the ion ripper's disc, the blue bolt, the phalanx's ball, the heat rocket, the spit).
-enum class Shot : uint8_t { usual, ripper, blue_bolt, plasma, heat_rocket, spit };
+enum class Shot : uint8_t { usual, ripper, blue_bolt, plasma, heat_rocket, spit, green_bolt };
 
 // The words a death by an attack reads: its kind's ("died." in co-op), a laser's ("saw the
 // light.") or a bite's ("that's gotta hurt.").
@@ -99,6 +99,7 @@ struct Attack {
   float farthest = 0;                     // taken only within this (0 any range)
   float rise = 250;                       // a leap's speed up
   const char* cry = nullptr;              // its sound as it starts (a spin-up, a chest opening)
+  int splash = 0;                         // a missile's splash (0 its shot's own)
 };
 
 struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by name
@@ -155,6 +156,13 @@ struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by
   bool amphibian = false;     // walks on land, swims in water, by where it stands
   bool repairs = false;       // the repair bot: roams, welds, raises the dead with its beam
   const char* chant[3] = {};  // spawn flag 8: it chants (one of three) and looks for no one
+  // Ground Zero's bosses' (q2_gz_bosses.cpp): its turn a frame in degrees (0: a walker's 20, a
+  // flier's 10), the height a flier keeps over its enemy, lasers pass it by, and shots between it
+  // and another monster start no fight.
+  float yaw_speed = 0;
+  float hover = 35;
+  bool laser_proof = false;
+  bool ignore_shots = false;
 };
 
 // The class whose frames, pains, deaths and flashes kind `k` plays: its base kind's, or its own.
@@ -1208,6 +1216,256 @@ inline constexpr Kind kKinds[] = {
                   .burst_max = 2.5f}},
      .good = true},
 
+    // Ground Zero's (gz-monsters.md § 7). The daedalus: the hover's body (its frames, runs, bursts
+    // and fall) on skin 2, stronger and heavier, its bolts green, a power screen in front.
+    {.classname = "monster_daedalus",
+     .name = "a daedalus",
+     .model = "models/monsters/hover/tris.md2",
+     .sight = "daedalus/daedsght1.wav",
+     .pain = "daedalus/daedpain1.wav",
+     .death = "daedalus/daeddeth1.wav",
+     .skin = 2,
+     .health = 450,
+     .gib = -100,
+     .mass = 225,
+     .walk = 40,
+     .run = 100,
+     .death_time = 1.1f,
+     .mins = {-24, -24, -24},
+     .maxs = {24, 24, 32},
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 1,
+                  .damage_max = 1,
+                  .speed = 1000,
+                  .windup = 0.3f,
+                  .every = 0.1f,
+                  .loop = 0.3f,
+                  .shots = 2,
+                  .again = 0.6f,
+                  .recover = 0.2f,
+                  .shot = Shot::green_bolt}},
+     .flies = true,
+     .end = End::crash,
+     .screen = true,
+     .search = {"daedalus/daedsrch1.wav", "daedalus/daedsrch2.wav"},
+     .loop = "daedalus/daedidle1.wav",
+     .pack = Q2Pack::ground_zero,
+     .like = "monster_hover"},
+    // The medic commander: the medic's body on skin 2, its bolts green, and when it cannot raise
+    // the dead it calls a group of guards in (q2_gz_monsters.cpp).
+    {.classname = "monster_medic_commander",
+     .name = "a medic commander",
+     .model = "models/monsters/medic/tris.md2",
+     .sight = "medic_commander/medsght.wav",
+     .pain = "medic_commander/medpain1.wav",
+     .death = "medic_commander/meddeth.wav",
+     .skin = 2,
+     .health = 600,
+     .gib = -130,
+     .mass = 600,
+     .walk = 92.6f,
+     .run = 248.2f,
+     .mins = {-24, -24, -24},
+     .maxs = {24, 24, 32},
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 2,
+                  .damage_max = 2,
+                  .speed = 1000,
+                  .windup = 0.8f,
+                  .every = 0.3f,
+                  .loop = 0.4f,
+                  .again = 0.95f,
+                  .again_max = 1,
+                  .again_every = 0.1f,
+                  .again_loop = 1.2f,
+                  .recover = 0.1f,
+                  .shot = Shot::green_bolt}},
+     .medic = true,
+     .idle = "medic_commander/medidle.wav",
+     .search = {"medic_commander/medsrch.wav"},
+     .search_reach = 2,
+     .pack = Q2Pack::ground_zero,
+     .like = "monster_medic"},
+    // The turret: a gun on a wall, a floor or a ceiling that never moves (q2_gz_monsters.cpp
+    // aims and fires it); mechanical, it explodes at its death.
+    {.classname = "monster_turret",
+     .name = "a turret",
+     .model = "models/monsters/turret/tris.md2",
+     .health = 240,
+     .gib = -100,
+     .mass = 250,
+     .mins = {-12, -12, -12},
+     .maxs = {12, 12, 12},
+     .end = End::explode,
+     .pack = Q2Pack::ground_zero},
+    // The stalker: a spider on floors and ceilings (q2_gz_monsters.cpp: its jumps, its pounce,
+    // its false death); green bolts, two claws.
+    {.classname = "monster_stalker",
+     .name = "a stalker",
+     .model = "models/monsters/stalker/tris.md2",
+     .sight = "stalker/sight.wav",
+     .pain = "stalker/pain.wav",
+     .death = "stalker/death.wav",
+     .health = 250,
+     .gib = -50,
+     .mass = 250,
+     .walk = 56.25f,  // 45 units over its 8 walking frames
+     .run = 172.5f,   // 69 over its 4 running frames
+     .mins = {-28, -28, -18},
+     .maxs = {28, 28, 18},
+     .melee = {club(5, 9, 50), club(5, 9, 50)},
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 15,
+                  .damage_max = 15,
+                  .speed = 800,
+                  .windup = 0.1f,
+                  .recover = 0.2f,
+                  .shot = Shot::green_bolt}},
+     .idle = "stalker/idle.wav",
+     .pack = Q2Pack::ground_zero},
+    // Ground Zero's bosses (q2_gz_bosses.cpp plays their attacks, pains and deaths by hand; their
+    // health is set by skill at spawn). The carrier: a flying gunship keeping 104 over its enemy,
+    // two machine guns, grenades, rockets, a rail, and fliers it launches.
+    {.classname = "monster_carrier",
+     .name = "a carrier",
+     .model = "models/monsters/carrier/tris.md2",
+     .sight = "carrier/sight.wav",
+     .health = 2000,
+     .gib = -200,
+     .mass = 1000,
+     .walk = 40,
+     .run = 60,
+     .death_time = 1.6f,
+     .mins = {-56, -56, -44},
+     .maxs = {56, 56, 44},
+     .flies = true,
+     .end = End::boss,
+     .loop = "bosshovr/bhvengn1.wav",
+     .pack = Q2Pack::ground_zero,
+     .yaw_speed = 15,
+     .hover = 104,
+     .laser_proof = true,
+     .ignore_shots = true},
+    // The black widow's first stage: a walker with a turret's blaster, rails, a kick and stalkers;
+    // at her death she beams out and leaves her legs.
+    {.classname = "monster_widow",
+     .name = "the black widow",
+     .model = "models/monsters/blackwidow/tris.md2",
+     .health = 2000,
+     .gib = kNoGib,
+     .mass = 1500,
+     .walk = 38.8f,  // 50.47 units over her 13 walking frames
+     .run = 38.8f,
+     .mins = {-40, -40, 0},
+     .maxs = {40, 40, 144},
+     .pack = Q2Pack::ground_zero,
+     .yaw_speed = 30,
+     .laser_proof = true,
+     .ignore_shots = true},
+    // Her second stage: a heat beam, a disruptor, a tongue that pulls, and stalkers; every stalker
+    // in the level dies with her, and she burns down in a chain of blasts.
+    {.classname = "monster_widow2",
+     .name = "the black widow",
+     .model = "models/monsters/blackwidow2/tris.md2",
+     .health = 2800,
+     .gib = -900,
+     .mass = 2500,
+     .walk = 75.8f,  // 68.24 units over her 9 walking frames
+     .run = 75.8f,
+     .mins = {-70, -70, 0},
+     .maxs = {70, 70, 144},
+     .pack = Q2Pack::ground_zero,
+     .yaw_speed = 30,
+     .laser_proof = true,
+     .ignore_shots = true},
+    // Ground Zero's flyer: the base one with a lower box top (16; 32 in the base game), and its
+    // strafing burst (q2_gz_base_monsters.cpp).
+    {.classname = "monster_flyer",
+     .name = "a flyer",
+     .model = "models/monsters/flyer/tris.md2",
+     .sight = "flyer/flysght1.wav",
+     .pain = "flyer/flypain1.wav",
+     .death = "flyer/flydeth1.wav",
+     .health = 50,
+     .gib = 0,
+     .mass = 50,
+     .walk = 50,
+     .run = 100,
+     .maxs = {16, 16, 16},
+     .melee = {{.fire = Fire::club,
+                .damage = 5,
+                .damage_max = 5,
+                .every = 0.5f,
+                .loop = 1.0f,
+                .again = 0.8f}},
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 1,
+                  .damage_max = 1,
+                  .speed = 1000,
+                  .every = 0.1f,
+                  .loop = 0.8f}},
+     .flies = true,
+     .end = End::explode,
+     .idle = "flyer/flysrch1.wav",
+     .loop = "flyer/flyidle1.wav",
+     .pack = Q2Pack::ground_zero,
+     .like = "monster_flyer"},
+    // Ground Zero's iron maiden: its own model, the rest as the base game's (its rockets and blind
+    // fire in q2_gz_base_monsters.cpp).
+    {.classname = "monster_chick",
+     .name = "an iron maiden",
+     .model = "models/monsters/bitch2/tris.md2",
+     .sight = "chick/chksght1.wav",
+     .pain = "chick/chkpain1.wav",
+     .death = "chick/chkdeth1.wav",
+     .health = 175,
+     .gib = -70,
+     .mass = 200,
+     .walk = 75,
+     .run = 75,
+     .mins = {-16, -16, 0},
+     .maxs = {16, 16, 56},
+     .melee = {{.fire = Fire::club,
+                .damage = 10,
+                .damage_max = 15,
+                .kick = 100,
+                .windup = 0.4f,
+                .every = 0.9f,
+                .loop = 0.9f,
+                .again = 0.9f,
+                .recover = 0.4f}},
+     .missile = {{.fire = Fire::rockets,
+                  .damage = 50,
+                  .damage_max = 50,
+                  .speed = 500,
+                  .windup = 1.3f,
+                  .every = 1.4f,
+                  .loop = 1.4f,
+                  .again = 0.6f,
+                  .recover = 0.5f}},
+     .pack = Q2Pack::ground_zero,
+     .like = "monster_chick"},
+    // The kamikaze: a flyer that only charges its enemy at 400 and bursts on him within 90 (50,
+    // straight to him), or bursts harmlessly where it is blocked; no pain
+    // (q2_gz_base_monsters.cpp).
+    {.classname = "monster_kamikaze",
+     .name = "a flyer",
+     .model = "models/monsters/flyer/tris.md2",
+     .sight = "flyer/flysght1.wav",
+     .pain = "flyer/flypain1.wav",
+     .death = "flyer/flydeth1.wav",
+     .health = 50,
+     .gib = 0,
+     .mass = 100,
+     .walk = 400,
+     .run = 400,
+     .maxs = {16, 16, 16},
+     .flies = true,
+     .end = End::explode,
+     .idle = "flyer/flysrch1.wav",
+     .loop = "flyer/flyidle1.wav",
+     .pack = Q2Pack::ground_zero,
+     .like = "monster_flyer"},
     // The Reckoning's (q2-reckoning-monsters.md), found only under its pack (`kind_named`).
     // The three guards: the base guards' frames, moves and choices, a spread ten times tighter
     // (100 by 50 at 8192), and the pack's guns.

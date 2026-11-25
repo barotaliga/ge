@@ -115,8 +115,9 @@ TEST(the_atlas_packs_without_overlap_and_refuses_what_cannot_fit) {
       CHECK_MSG(apart, "skins " + std::to_string(a) + " and " + std::to_string(b) + " overlap");
     }
   }
+  // More than the square holds: five skins each over half its side.
   std::vector<MorphModel> huge(5);
-  for (MorphModel& m : huge) m.skin.width = m.skin.height = 1200;
+  for (MorphModel& m : huge) m.skin.width = m.skin.height = kMorphAtlasSize / 2 + 352;
   CHECK(!pack_morph_atlas(huge, r));
 }
 

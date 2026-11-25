@@ -13,6 +13,7 @@
 
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -22,6 +23,7 @@ namespace shooters_edge::server::monster_ai {
 
 // The enemy's eye, `lead` s along his motion.
 sh::Vec3f mark(const Q2Server& s, const Q2Monster& m, float lead) {
+  if (m.blind) return m.blind_at;  // Ground Zero's blind fire: where he was last seen
   return foe_eye(s, m.enemy) + foe_velocity(s, m.enemy) * lead;
 }
 
@@ -43,8 +45,9 @@ sh::Vec3f aim_point(Q2Server& s, const Q2Monster& m, const Attack& a, sh::Vec3f 
   const sh::Vec3f t = mark(s, m, a.lead);
   if (a.aim_h == 0 && a.aim_v == 0) return t;
   Attack wide;
-  wide.h = a.aim_h;
-  wide.v = a.aim_v;
+  const float keep = gz_base_spread(s, m);  // Ground Zero's soldiers' half on hard
+  wide.h = a.aim_h * keep;
+  wide.v = a.aim_v * keep;
   return from + aim_at(s, wide, from, t) * 8192;
 }
 sh::Vec3f aim(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
@@ -66,11 +69,14 @@ int cause_of(const Q2Monster& m) {
 // A blow of `dmg` from `m` on its foe: a player hurt as by a monster, a monster as by this one.
 void hurt_foe(Q2Server& s, const Q2Monster& m, int dmg, sh::Vec3f dir) {
   if (m.enemy >= 0) {
+    const FightBlowFrom by(s, m.entity);
     fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
     return;
   }
   if (const Q2Monster* o = foe_monster(s, m.enemy))
     monster_damage(s, o->entity, foe_of_entity(m.entity), dmg, dir);
+  else if (foe_missile(m.enemy) >= 0)  // Ground Zero's tesla
+    gz_tesla_damage(s, foe_missile(m.enemy), dmg);
 }
 
 const Attack& attack_at(const Q2Monster& m, int i) {
@@ -196,6 +202,7 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
             ? kind(m).flash
             : q2_monster_flash_value(looks_like(kind(m)), std::string_view(flash).substr(17)));
   }
+  if (gz_base_shoot(s, m, a, from)) return;  // Ground Zero's own aim (q2_gz_base_monsters.cpp)
   switch (a.fire) {
     case Fire::bolt:
       for (int i = 0; i < a.count; i++)
@@ -248,6 +255,10 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
       return;
     }
     case Fire::rail:
+      // Ground Zero's: never from a muzzle inside a wall (no shot through it).
+      if (s.opt.pack == Q2Pack::ground_zero &&
+          (map_contents(s, from) & (sh::kSqSolid | sh::kSqWindow)) != 0)
+        return;
       if (!m.aimed) m.aim_at = mark(s, m, 0);
       fight_monster_rail(s, m.entity, from, m.aim_at, a.damage, a.kick, cause_of(m));
       return;
@@ -262,7 +273,8 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
       const sh::Vec3f across = forward_of(e.angles.y + offset) * level;
       d = sh::Vec3f{across.x, across.y, d.z};
       sh::normalize(d);
-      fight_monster_launch(s, m.entity, SqShot::bolt, from, d, a.damage, a.speed, cause_of(m));
+      fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, d, a.damage, a.speed,
+                           cause_of(m));
       return;
     }
     case Fire::leap: {  // off the ground at the enemy
@@ -298,6 +310,8 @@ SqShot shot_of(const Attack& a, SqShot usual) {
       return SqShot::heat_rocket;
     case roster::Shot::spit:
       return SqShot::spit;
+    case roster::Shot::green_bolt:
+      return SqShot::green_bolt;
     case roster::Shot::usual:
       break;
   }
