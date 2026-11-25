@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -251,8 +252,9 @@ bool spawnable(const Q2Server& s, std::string_view c) {
           std::find(std::begin(kReckoningSpawnable), std::end(kReckoningSpawnable), c) !=
               std::end(kReckoningSpawnable)) ||
          (s.opt.pack == Q2Pack::ground_zero &&
-          std::find(std::begin(kGroundZeroSpawnable), std::end(kGroundZeroSpawnable), c) !=
-              std::end(kGroundZeroSpawnable));
+          (std::find(std::begin(kGroundZeroSpawnable), std::end(kGroundZeroSpawnable), c) !=
+               std::end(kGroundZeroSpawnable) ||
+           gz_thing(c)));
 }
 
 }  // namespace

@@ -8,6 +8,8 @@
 
 #include <string>
 
+#include "classicenhance/upscaler.hpp"
+
 namespace ge::classicenhance {
 
 using S = Switches;
@@ -217,6 +219,7 @@ void bind_switches(console::Cvars& cvars, Switches* values, console::Overlap ove
 
 void apply_bakes(const Switches& values, RunOptions* opts) {
   if (!values.upscaler) opts->textures.network = nullptr;
+  opts->cached_network = values.upscaler ? std::string(kUpscalerWeights.sha256) : std::string();
   opts->models.round = values.rounded ? 4 : 0;
 }
 

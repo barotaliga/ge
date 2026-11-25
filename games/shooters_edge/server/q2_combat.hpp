@@ -284,8 +284,9 @@ bool sq_flash_plays(int value, const char* sample);
 
 // THE HAND'S OWN SOUNDS, the server's and the joined window's prediction alike: the one-shots a
 // step's frames make (the hand grenade's pin, the chaingun's spin up and down, the hyperblaster's
-// wind-down) and the loop the hand carries (the railgun's and the BFG's hum while held, the
-// hyperblaster's and the chaingun's spin while firing, a lit hand grenade's fuse in the hand).
+// wind-down, The Reckoning's trap cocked) and the loop the hand carries (the railgun's and the
+// BFG's hum while held, the hyperblaster's and the chaingun's spin while firing, a lit hand
+// grenade's fuse in the hand, a held trap's suck and the phalanx's hum).
 struct SqHandSound {
   const char* sample;
   int channel;      // 0 any, 1 the weapon's

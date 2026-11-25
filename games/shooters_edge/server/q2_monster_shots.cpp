@@ -67,6 +67,8 @@ void hurt_foe(Q2Server& s, const Q2Monster& m, int dmg, sh::Vec3f dir) {
     monster_damage(s, o->entity, foe_of_entity(m.entity), dmg, dir);
   else if (foe_missile(m.enemy) >= 0)  // Ground Zero's tesla
     gz_tesla_damage(s, foe_missile(m.enemy), dmg);
+  else  // a thing an anger set it on (a wall, a point); none for no foe
+    map_damage(s, foe_entity(m.enemy), foe_of_entity(m.entity), dmg, dir);
 }
 
 const Attack& attack_at(const Q2Monster& m, int i) {

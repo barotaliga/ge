@@ -45,15 +45,6 @@ constexpr int kMaxUseDepth = 16;  // a chain of uses deeper than this is a loop:
 
 using namespace q2map;
 
-const char* kDoorStart = "doors/dr1_strt.wav";
-const char* kDoorEnd = "doors/dr1_end.wav";
-const char* kPlatStart = "plats/pt1_strt.wav";
-const char* kPlatEnd = "plats/pt1_end.wav";
-const char* kDoorMove = "doors/dr1_mid.wav";  // the loops while they move
-const char* kPlatMove = "plats/pt1_mid.wav";
-const char* kPadHum = "world/amb10.wav";    // a teleporter's pad
-const char* kTeleSound = "misc/tele1.wav";  // its burst, at the pad and at the exit
-const char* kButtonSound = "switches/butn2.wav";
 constexpr float kStatic =
     3;  // a mover's start and stop: heard only near it (silent past ~410 units)
 const char* kTalk = "misc/talk1.wav";
@@ -162,18 +153,6 @@ bool is_ship(const Q2Entity& e) {
 bool is_transport(const Q2Entity& e) { return e.classname == "misc_transport"; }
 
 int index_of(const Q2Server& s, const Q2Entity& e);
-
-// A door's start or end sample; null when it moves quietly. A door of water sounds of water,
-// and only when it has `sounds`. Only a team's master sounds.
-const char* door_sample(const Q2Server& s, const Q2Entity& e, bool start) {
-  if (e.team_master >= 0 && e.team_master != index_of(s, e)) return nullptr;
-  if (e.classname == "func_water") {
-    if (e.sounds == 0) return nullptr;
-    return start ? "world/mov_watr.wav" : "world/stp_watr.wav";
-  }
-  if (e.sounds == 1) return nullptr;
-  return start ? kDoorStart : kDoorEnd;
-}
 
 bool brush(const Q2Entity& e) { return !e.model.empty() && e.model[0] == '*'; }
 
@@ -436,8 +415,11 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     else
       monster_damage(s, -2 - slot, -1, e.dmg, {});
   };
-  if (e.classname == "func_water") return;  // never blocked: it waits where it is
-  if (c == kRotating) {                     // crushes every blocked frame and never turns back
+  if (e.classname == "func_water") {  // never blocked: it waits where it is (smart water burns)
+    gz_smart_water_blocked(s, e, slot);
+    return;
+  }
+  if (c == kRotating) {  // crushes every blocked frame and never turns back
     if (e.dmg > 0) crush();
     return;
   }
@@ -449,6 +431,7 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     return;
   }
   gz_plat_blocked(s, e, slot);  // Ground Zero's: a dead body crushed first
+  if (c == kPlat2) return gz_plat2_blocked(s, e, slot);
   crush();
   if (c == kPlat) {
     if (e.state == kGoing)
@@ -513,6 +496,7 @@ void door_go_down(Q2Server& s, Q2Entity& e) {
 
 // A use of a door: the team opens (or, a toggle, closes when open or opening).
 void door_use(Q2Server& s, Q2Entity& e, int activator) {
+  if (gz_smart_water_use(s, e, activator)) return;  // Ground Zero's rising lava
   const int master = e.team_master >= 0 ? e.team_master : index_of(s, e);
   if (index_of(s, e) != master) return;  // a use on a slave does nothing
   const bool toggle = (e.spawnflags & 32) != 0;
@@ -663,6 +647,8 @@ void arrived(Q2Server& s, Q2Entity& e) {
       sound_at(s, row, e.origin, kPlatEnd, 1, kStatic);
       e.state = kAtFirst;
       return;
+    case kPlat2Arrive:
+      return gz_plat2_arrived(s, e);
     case kTrainCorner: {
       e.state = kAtSecond;
       if (!e.pathtarget.empty()) {
@@ -725,6 +711,8 @@ void think(Q2Server& s, Q2Entity& e) {
     case kPlatUp:
       if (e.state == kAtFirst) plat_go_up(s, e);
       return;
+    case kPlat2Go:
+      return gz_plat2_go(s, e);
     case kTrainFind: {
       const int c = corner_named(s, e.target);
       if (c < 0) {
@@ -898,6 +886,8 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
         plat.think_at = s.level_time + 1;  // held up while someone stands there
       return;
     }
+    case kPlat2Field:
+      return gz_plat2_touch(s, e, unpack(p.move.origin).z);
     case kRotating:  // touch pain while it spins
       if ((e.spawnflags & 16) == 0 || e.dmg <= 0) return;
       if (e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0) return;
@@ -918,6 +908,7 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
       button_press(s, e, slot);
       return;
     default:
+      gz_thing_touch(s, index_of(s, e), slot);  // Ground Zero's disguise
       return;
   }
 }
@@ -966,6 +957,8 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
     case kPlat:
       if (!e.moved && e.state == kGoing && e.arrive == kNoAct) plat_go_down(s, e);
       return;
+    case kPlat2:
+      return gz_plat2_use(s, e, activator);
     case kTrain:
       if (e.hidden && is_transport(e)) {  // already on its way: it shows itself where it is
         e.hidden = false;
@@ -1120,7 +1113,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
         q2_item_used(s, size_t(target));
         return;
       }
-      if (targets_use(s, target, activator)) return;
+      if (gz_thing_use(s, target, activator, other) || targets_use(s, target, activator)) return;
       monster_use(s, target, activator);
       return;
     case kHelp:  // the first or the second help message, and the news of it
@@ -1346,6 +1339,8 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       e.closed = e.origin;
       e.open = e.origin + e.dir * (span(e.dir) - e.lip);
       return;
+    case kPlat2:
+      return gz_plat2_spawn(s, e);
     case kPlat: {
       e.solid = true;
       e.speed = number(s, e, "speed", 200) * 0.1f;
@@ -1579,82 +1574,6 @@ int map_entity_of_row(const Q2Server& s, int row) {
   return e >= 0 && size_t(e) < s.entities.size() ? e : -1;
 }
 
-namespace {
-
-// The sound list's index of `name`, put on the list when it is not there (as the map starts,
-// before the list is told to anyone).
-int sound_index(Q2Server& s, const std::string& name) {
-  if (name.empty()) return 0;
-  const auto found = std::find(s.sounds.begin(), s.sounds.end(), name);
-  if (found != s.sounds.end()) return static_cast<int>(found - s.sounds.begin());
-  s.sounds.push_back(name);
-  return static_cast<int>(s.sounds.size()) - 1;
-}
-
-// The movers', the pads' and the speakers' loops, and the one-shots the movers make beside them,
-// on the sound list (porting note: q2-render-fx.md § Entity loop sounds). A door grinds on
-// unless its `sounds` is 1 (a door of water only splashes); a plat always; a train its `noise`;
-// the pad hums; a looping speaker plays its `noise`, on from the start with spawn flag 1.
-void map_loops(Q2Server& s) {
-  for (Q2Entity& e : s.entities) {
-    e.loop = 0;
-    if (e.gone) continue;
-    switch (class_of(e)) {
-      case kDoor:
-      case kDoorRotating:
-        for (const char* one : {door_sample(s, e, true), door_sample(s, e, false)})
-          if (one != nullptr) sound_index(s, one);
-        if (e.classname != "func_water" && e.sounds != 1) e.loop = sound_index(s, kDoorMove);
-        break;
-      case kPlat:
-        sound_index(s, kPlatStart);
-        sound_index(s, kPlatEnd);
-        e.loop = sound_index(s, kPlatMove);
-        break;
-      case kTrain:
-        e.loop = sound_index(s, e.noise);
-        break;
-      case kButton:
-        if (e.sounds != 1) sound_index(s, kButtonSound);
-        break;
-      case kTeleporter:
-        if (e.pad == 1) e.loop = sound_index(s, kPadHum);
-        if (e.pad == 1) sound_index(s, kTeleSound);
-        break;
-      case kSpeaker:
-        if ((e.spawnflags & 3) == 0) {
-          sound_index(s, e.noise);
-          break;
-        }
-        e.loop = sound_index(s, e.noise);
-        e.on = (e.spawnflags & 1) != 0;
-        break;
-      default:
-        break;
-    }
-  }
-}
-
-// The loop entity `e` (at `i`) makes this frame: a mover only while it moves, and only its team's
-// first; a speaker while on; a pad always.
-int loop_now(const Q2Entity& e, int i) {
-  if (e.loop == 0 || e.gone) return 0;
-  switch (class_of(e)) {
-    case kDoor:
-    case kDoorRotating:
-    case kPlat:
-    case kTrain:
-      if (e.team_master >= 0 && e.team_master != i) return 0;
-      return e.arrive != kNoAct ? e.loop : 0;
-    case kSpeaker:
-      return e.on ? e.loop : 0;
-    default:
-      return e.loop;
-  }
-}
-
-}  // namespace
-
 void map_precache(Q2Server& s) {
   for (const Q2Entity& e : s.entities)
     if ((e.classname == "misc_teleporter" && !e.target.empty()) ||
@@ -1871,9 +1790,11 @@ void map_monster_touch(Q2Server& s, int entity) {
     const Class c = class_of(f);
     // The triggers a monster sets off: a trigger_multiple with MONSTER (1), facing its way when
     // it has one; a hurt; a push.
-    if (f.trigger && (c == kTriggerMultiple || c == kHurt || c == kPush)) {
+    if (f.trigger && (c == kTriggerMultiple || c == kHurt || c == kPush || c == kPlat2Field)) {
       if (!overlap(lo, hi, abs_min(f), abs_max(f))) continue;
-      if (c == kTriggerMultiple) {
+      if (c == kPlat2Field) {
+        gz_plat2_touch(s, f, b.origin.z);
+      } else if (c == kTriggerMultiple) {
         if ((f.spawnflags & 1) == 0) continue;
         if ((f.dir.x != 0 || f.dir.y != 0 || f.dir.z != 0) && sh::dot(facing, f.dir) < 0) continue;
         trigger_fire(s, f, -1);

@@ -162,10 +162,11 @@ struct Q2Weapon {
   // The sounds played, matched to the server's copies (net/weapon_shown.hpp): kinds -1 a shot's
   // flash, 0.. a hand sound's row (kSqHandSound), 100 a shot heard by name.
   WeaponPlayed played;
-  Q2Known known;             // the weapons and ammunition the window knows
-  float last_sound[4] = {};  // each hand sound's last play, the server frame it fell in
-  double fuse_at = 0;        // the hand grenade's: level time its fuse ends, predicted (0 none)
-  Q2ShotAudit audit;         // where the shots fell, predicted and the server's
+  Q2Known known;  // the weapons and ammunition the window knows
+  // Each hand sound's last play, the server frame it fell in.
+  float last_sound[server::kSqHandSounds] = {};
+  double fuse_at = 0;  // the hand grenade's: level time its fuse ends, predicted (0 none)
+  Q2ShotAudit audit;   // where the shots fell, predicted and the server's
   // The shots this pass played first (client/own_missiles.hpp throws the missiles among them):
   // the move each was fired on, the weapon (kSqWeapons' row), the hand's frame then, and how long
   // ago the move went to the server (s; 0 not yet sent).

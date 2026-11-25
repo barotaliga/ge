@@ -21,6 +21,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_ai.hpp"
@@ -83,7 +84,9 @@ bool hunted(const Q2Server& s, int slot) {
 // A player a monster may take up as its enemy by sight, by noise, by another's fight or by his
 // trigger: hunted and not under `notarget` (q2_commands.hpp). A fight under way goes on.
 bool targetable(const Q2Server& s, int slot) {
-  return hunted(s, slot) && !s.players[slot].notarget;
+  if (!hunted(s, slot) || s.players[slot].notarget) return false;
+  // Ground Zero's disguise: passed over, unless his shot gave him away this half second.
+  return !s.players[slot].disguised || s.level_time < s.players[slot].violator_until;
 }
 
 // ---- Foes: a player's slot, or another monster as -2 - its entity (q2_server.hpp's `enemy`) ----
@@ -100,7 +103,7 @@ bool foe_alive(const Q2Server& s, int foe) {
   if (foe >= 0) return hunted(s, foe);
   const Q2Monster* o = foe_monster(s, foe);
   if (o == nullptr && foe_missile(foe) >= 0) return gz_tesla_alive(s, foe_missile(foe));
-  if (o == nullptr || o->dead) return false;
+  if (o == nullptr || o->dead) return o == nullptr && gz_anger_alive(s, foe_entity(foe));
   const Q2Entity& b = s.entities[size_t(o->entity)];
   return !b.gone && b.health > 0;
 }
@@ -108,7 +111,7 @@ sh::Vec3f foe_at(const Q2Server& s, int foe) {
   if (foe >= 0) return unpack(s.players[foe].move.origin);
   const Q2Monster* o = foe_monster(s, foe);
   if (o == nullptr && foe_missile(foe) >= 0) return gz_tesla_at(s, foe_missile(foe), 0);
-  return o != nullptr ? s.entities[size_t(o->entity)].origin : sh::Vec3f{};
+  return o != nullptr ? s.entities[size_t(o->entity)].origin : gz_anger_at(s, foe_entity(foe));
 }
 sh::Vec3f foe_velocity(const Q2Server& s, int foe) {
   if (foe >= 0) return unpack(s.players[foe].move.velocity);
@@ -119,7 +122,8 @@ sh::Vec3f foe_eye(const Q2Server& s, int foe) {
   if (foe >= 0) return player_eye(s.players[foe]);
   const Q2Monster* o = foe_monster(s, foe);
   if (o == nullptr && foe_missile(foe) >= 0) return gz_tesla_at(s, foe_missile(foe), 10);
-  return o != nullptr ? eye(s.entities[size_t(o->entity)], kKinds[o->kind]) : sh::Vec3f{};
+  return o != nullptr ? eye(s.entities[size_t(o->entity)], kKinds[o->kind])
+                      : gz_anger_at(s, foe_entity(foe));
 }
 // The foe's box about its origin.
 void foe_box(const Q2Server& s, int foe, sh::Vec3f& mins, sh::Vec3f& maxs) {
@@ -134,6 +138,7 @@ void foe_box(const Q2Server& s, int foe, sh::Vec3f& mins, sh::Vec3f& maxs) {
     maxs = {12, 12, 20};
     return;
   }
+  if (o == nullptr) return gz_anger_box(s, foe_entity(foe), mins, maxs);
   mins = o != nullptr ? s.entities[size_t(o->entity)].mins : sh::Vec3f{};
   maxs = o != nullptr ? s.entities[size_t(o->entity)].maxs : sh::Vec3f{};
 }
@@ -206,10 +211,8 @@ ge::classic::Q2Trace sweep(const Q2Server& s, const Q2Monster& m, sh::Vec3f star
 bool reaches(const Q2Server& s, const Q2Monster& m, int foe, int32_t mask) {
   const Q2Entity& e = s.entities[size_t(m.entity)];
   ge::classic::Q2Trace t = map_trace(s, eye(e, kind(m)), {}, {}, foe_eye(s, foe), mask, m.entity);
-  if (t.fraction < 1 && foe < 0) {  // a monster foe: its own box is no wall
-    const Q2Monster* o = foe_monster(s, foe);
-    if (o != nullptr && t.entity == map_row(o->entity)) return true;
-  }
+  // A foe entity (a monster, an anger's wall): its own box is no wall.
+  if (t.fraction < 1 && foe <= -2 && t.entity == map_row(foe_entity(foe))) return true;
   return t.fraction >= 1;
 }
 
@@ -357,6 +360,7 @@ void go_to(Q2Server& s, Q2Monster& m, sh::Vec3f goal, float speed) {
 void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
   if (kind(m).good && !named(m, "misc_actor")) return;  // a good guy hunts no one
   m.enemy = foe;
+  if (foe >= 0 && foe < sh::kMaxClients) s.players[foe].disguised = false;  // seen through
   if (!m.lost_combat.empty()) q2_lost_combat(s, m);
   m.seen_at = s.level_time;
   m.last_sight = foe_at(s, foe);
@@ -642,6 +646,7 @@ void choose(Q2Server& s, Q2Monster& m) {
     if (skill(s) == 0) chance *= 0.5;
     if (skill(s) >= 2) chance *= 2;
   }
+  if (gz_anger_point(s, m)) chance = 1;  // an anger's point target: at every chance
   if (random01(s) >= chance) {
     // A flier that did not fire slides sideways three times in ten, each such frame afresh
     // (Ground Zero's: walkers too, by its own chances).
@@ -1537,6 +1542,7 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed, sh:
 // monster's fight against its foe.
 void react(Q2Server& s, Q2Monster& m, int attacker) {
   if (gz_tesla_holds(s, m)) return;  // Ground Zero: a monster fighting a tesla minds only it
+  if (gz_anger_holds(s, m)) return;  // set on an anger's target, others' blows ignored
   if (hunted(s, attacker) && !kind(m).good) {
     if (m.patient >= 0 && m.enemy != -1) return;  // a medic at a corpse keeps to it
     if (attacker == m.enemy) return;
@@ -1668,6 +1674,8 @@ bool monster_laser_proof(const Q2Server& s, int e) {
   return i >= 0 &&
          (named(s.monsters[size_t(i)], "monster_boss2") || kind(s.monsters[size_t(i)]).laser_proof);
 }
+
+bool monster_targetable(const Q2Server& s, int slot) { return targetable(s, slot); }
 
 bool monster_use(Q2Server& s, int e, int activator) {
   const int i = monster_index(s, e);

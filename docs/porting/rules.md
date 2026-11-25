@@ -110,7 +110,12 @@ the suit and the rebreather, each with its tint, warning, shell and drop rule) f
 view's tint, the shell, the drops and `use` alike. The Reckoning's rules are in
 `server/q2_reckoning.hpp` (its map things, its thinking shots, the trap) and `server/q2_choose.cpp`
 (its weapon cycle and the hyperblaster and railgun toggles); the item and ammunition tables are
-saved length first, so a pack's rows never break an older save.
+saved length first, so a pack's rows never break an older save. Ground Zero's deathmatch modes are
+in `server/q2_gz_tag.cpp`: tag (`gamerules 2`: one token, its holder scoring 3 a kill and his
+killer 5, blows without him a quarter less) and `randomrespawn` (a taken item back as another of
+its kind). Each is a hook the shared rules call (the kill's score, a blow, an item's touch and
+return, the scoreboard) that does nothing outside the pack. Dissolution of Eternity's tag runs in
+its own QC program, so the two share no code.
 
 ## Labs and tests
 

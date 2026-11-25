@@ -15,6 +15,7 @@
 
 #include "brush/trace.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -238,11 +239,17 @@ void fight_touch_drops(Q2Server& s, int slot) {
   const sh::Vec3f at = unpack(p.move.origin);
   const sh::Vec3f lo = at + p.mins, hi = at + p.maxs;
   for (Q2Drop& d : s.drops) {
-    if (!d.live || (d.owner == slot && s.level_time + 0.001 < d.takeable_at)) continue;
+    // Its dropper's after 1 s; one nobody dropped (Ground Zero's thrown token) anyone's after it.
+    if (!d.live || ((d.owner == slot || d.owner < 0) && s.level_time + 0.001 < d.takeable_at))
+      continue;
     if (lo.x > d.origin.x + kItemHalf || hi.x < d.origin.x - kItemHalf ||
         lo.y > d.origin.y + kItemHalf || hi.y < d.origin.y - kItemHalf ||
         lo.z > d.origin.z + kItemHalf || hi.z < d.origin.z - kItemHalf)
       continue;
+    if (gz_tag_take(s, slot, d.item)) {  // Ground Zero's tag token
+      d.live = false;
+      continue;
+    }
     const SqItem& it = kSqItems[d.item];
     const bool power = d.power_left > 0 || d.shots > 0;
     const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
@@ -271,6 +278,8 @@ void fight_touch_drops(Q2Server& s, int slot) {
     if (!power) fight_took(s, slot, d.item, grenades);
   }
 }
+
+Q2Drop* fight_toss(Q2Server& s, int slot, int item) { return toss(s, slot, item, 0); }
 
 Q2Drop* fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {
   const int item = sq_item(classname, s.opt.pack);

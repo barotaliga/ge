@@ -21,6 +21,7 @@ namespace shooters_edge::server {
 namespace con = ge::console;
 
 void gz_cvars(Q2Server& s) {
+  gz_tag_cvars(s);  // the tag game's and randomrespawn's (q2_gz_tag.cpp)
   s.cvars.add({.name = "strong_mines",
                .fallback = "0",
                .flags = con::kServer,

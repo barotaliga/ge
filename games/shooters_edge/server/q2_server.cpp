@@ -487,6 +487,7 @@ bool match_removed(const Q2Server& s, const SqItem& it) {
 
 bool dm_left_out(const Q2Server& s, int item) {
   if (s.opt.pack == Q2Pack::ground_zero && gz_left_out(s, item)) return true;  // in every mode
+  if (item >= 0 && gz_tag_left_out(s, item)) return true;  // the tag token, outside tag
   if (item < 0 || !deathmatch(s)) return false;
   if (fight_midair(s)) return true;  // nothing lies on the map in midair
   const SqItem& it = kSqItems[item];
@@ -533,6 +534,7 @@ void show_item(Q2Server& s, size_t i) {
   if (e.gone) return;
   e.hidden = false;
   e.back_frame = s.frame_number;
+  if (gz_random_respawn(s, e) && dm_left_out(s, e.item)) e.gone = true;  // swapped for a banned one
 }
 
 // Each item dropped up to 128 units onto the floor, the map's or a solid mover's (a key resting on
@@ -552,6 +554,10 @@ bool drop_item(Q2Server& s, size_t i, float reach) {
     return false;
   }
   e.origin = t.end;
+  // Its row too (built as the map started, before the drop): drawn where it lies, as a loaded
+  // game, whose rows are built after the drop, draws it.
+  if (const size_t row = 1 + sh::kMaxClients + i; row < s.world.entities.size())
+    s.world.entities[row].origin = e.origin;
   return t.fraction < 1;
 }
 
@@ -614,6 +620,10 @@ void touch_items(Q2Server& s, int slot) {
       }
     }
     Q2Entity& item = s.entities[i];
+    if (gz_tag_take(s, slot, item.item)) {  // Ground Zero's tag token: it never comes back
+      item.gone = true;
+      continue;
+    }
     const SqItem& it = kSqItems[item.item];
     // A weapon that stays (`dmflags` 4; always in coop) is refused to one who holds it, and stays
     // when taken; in coop with `coop_pickup_weapons` a holder may take a copy nobody has yet.
@@ -650,11 +660,13 @@ void touch_items(Q2Server& s, int slot) {
     if (std::string_view(it.classname) == "item_health_mega") {
       item.hidden = true;  // shows again 20 s after its taker is back to his maximum
       item.respawn_at = 0;
+      item.picked = true;
       p.mega = static_cast<int>(i);
       p.drained_at = s.level_time + 4;  // the first point goes 5 s after
     } else if (deathmatch(s) && it.respawn_s > 0) {
       item.hidden = true;
       item.respawn_at = s.level_time + it.respawn_s;
+      item.picked = true;
     } else {
       item.gone = true;
     }
@@ -967,11 +979,15 @@ void rules_frame(Q2Server& s) {
     return;
   }
   map_frame(s);
-  if (s.frame_number == 2) drop_items(s);
+  if (s.frame_number == 2) {
+    drop_items(s);
+    gz_tag_start(s);  // Ground Zero's tag: a token where the map placed none
+  }
   monster_frame(s);
   campaign_frame(s);
   fight_missiles(s);
   fight_drops(s);
+  gz_tag_frame(s);
   gibs_frame(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
     Q2Player& p = s.players[i];
@@ -1090,6 +1106,7 @@ void fill_rows(Q2Server& s) {
     }
     if (!p.alive && p.hunter_cam != -1) e.modelindex = 0;          // his view rides a hunter sphere
     if (s.opt.pack == Q2Pack::ground_zero) e.render_fx |= 0x8000;  // seen through IR goggles
+    if (p.disguised) e.render_fx |= 1 << 18;  // Ground Zero's disguise: its folder's skin
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
       for (const SqPower& pw : sq_powers())
         if ((pw.effects | pw.render) != 0 && sq_power_shown(p.*pw.until - s.level_time)) {
@@ -1100,6 +1117,7 @@ void fill_rows(Q2Server& s) {
         e.effects |= kSqColourShellEffect;
         e.render_fx |= kSqGodShellRender;
       }
+      if (gz_tag_holder(s, i)) e.effects |= kGzTagTrailEffect;  // the token's holder
       if (s.level_time < p.power_flash) {  // power armour that took a blow: its plate or shell
         if (p.body.counts[sq_item("item_power_shield")] > 0) {
           e.effects |= kSqColourShellEffect;
@@ -1263,6 +1281,7 @@ void fill_lists(Q2Server& s) {
     e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 2) == 0;
     e.effects = e.turns ? kSqTurnEffect : 0;
     e.render_fx = m.item >= 0 && (m.spawnflags & 2) == 0 ? kSqGlowRender : 0;  // its light pulses
+    if (gz_tag_token(m.item)) e.effects |= kGzTagTrailEffect;
     if (m.pad != 0) {  // a teleporter's disc: the pad's skin and specks, the exit plain
       e.skin = m.pad == 1 ? 1 : 0;
       e.effects = m.pad == 1 ? kSqTeleporterEffect : 0;
@@ -1505,6 +1524,7 @@ void sq_drop(void* r, int slot) {
     arrival_flash(s, slot, "sq_logout");
   if (s.map != nullptr && s.clients[slot].active)
     fight_print(s, -1, info_name(s, slot) + " disconnected\n", 2);
+  if (s.map != nullptr && s.clients[slot].active) gz_tag_left(s, slot);
   s.clients[slot] = ClientInfo{};
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = Q2Player{};

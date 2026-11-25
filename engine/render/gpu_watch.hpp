@@ -36,23 +36,25 @@ struct GpuWatch {
   int left = 0;        // frames still to read
   size_t read = 0;     // frames read
   bool quiet = false;  // the report kept in `report`, not printed (gpudebug's)
+  bool all = false;    // every pass reported, not the dearest dozen (`gpustats N all`)
   std::vector<double> frame_ms, cpu_ms, span_ms;  // each frame's (span: those timed)
   std::vector<std::pair<std::string, std::vector<double>>> pass_ms;  // by name, where it ran
   std::vector<std::string> report;                                   // the last report's lines
 };
 
-// Start reading the next `frames` frames (1..6000).
-void start_gpu_watch(GpuWatch& w, int frames, bool quiet);
+// Start reading the next `frames` frames (1..6000); `all`: report every pass.
+void start_gpu_watch(GpuWatch& w, int frames, bool quiet, bool all = false);
 
 // After each frame drawn: its stats (`frame_s` the whole frame's wall time) read while a watch
 // runs; at its end the report is made, kept in `report` and printed to `con` unless quiet.
 void gpu_watch_frame(GpuWatch& w, const FrameStats& stats, double frame_s, console::Console& con);
 
-// The report over the frames read: the frame and the CPU's side, the GPU's span, then the
-// dearest passes (at most `passes`).
+// The report over the frames read: the frame and the CPU's side, the GPU's span and its median
+// in each tenth of the run (a frame that slowed partway shows as a step), then the dearest passes
+// (at most `passes`; every one with the watch's `all`).
 std::vector<std::string> gpu_watch_report(const GpuWatch& w, size_t passes = 12);
 
-// `gpustats [frames]` on `con` over `w` (which must outlive it): 60 frames by default.
+// `gpustats [frames] [all]` on `con` over `w` (which must outlive it): 60 frames by default.
 void add_gpustats(console::Console& con, GpuWatch& w);
 
 // gpudebug's "# gpu" notes: the adapter (when `device` is given), then the report.
