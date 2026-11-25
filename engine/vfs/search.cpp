@@ -341,6 +341,7 @@ bool read_from_pack(const std::string& pack, std::string_view path, std::vector<
     bool same = n == path.size();
     for (size_t i = 0; same && i < n; ++i) same = fold(char(entries[at + i])) == fold(path[i]);
     if (!same) continue;
+    if (out == nullptr) return true;  // only asked whether it holds the file
     const uint32_t offset = u32(&entries[at + kPath]), size = u32(&entries[at + kPath + 4]);
     out->resize(size);
     f.seekg(offset);
@@ -349,6 +350,66 @@ bool read_from_pack(const std::string& pack, std::string_view path, std::vector<
     return true;
   }
   return refuse("holds no " + std::string(path));
+}
+
+namespace {
+
+// The file `path` ('/' separated) under `dir`, each part matched in any letter case.
+bool loose_has(const fs::path& dir, std::string_view path) {
+  fs::path at = dir;
+  std::error_code ec;
+  while (!path.empty()) {
+    const size_t cut = path.find('/');
+    const std::string_view part = path.substr(0, cut);
+    path = cut == std::string_view::npos ? std::string_view() : path.substr(cut + 1);
+    if (part.empty()) continue;
+    if (fs::exists(at / std::string(part), ec)) {
+      at /= std::string(part);
+      continue;
+    }
+    bool found = false;
+    for (const fs::directory_entry& e : fs::directory_iterator(at, ec)) {
+      const std::string name = e.path().filename().string();
+      bool same = name.size() == part.size();
+      for (size_t i = 0; same && i < name.size(); ++i) same = fold(name[i]) == fold(part[i]);
+      if (same) {
+        at = e.path();
+        found = true;
+        break;
+      }
+    }
+    if (!found) return false;
+  }
+  return fs::is_regular_file(at, ec);
+}
+
+}  // namespace
+
+bool archive_has(const std::string& at, std::string_view path) {
+  std::error_code ec;
+  if (fs::is_directory(at, ec)) return loose_has(at, path);
+  std::ifstream f(at, std::ios::binary);
+  char magic[4] = {};
+  if (!f || !f.read(magic, 4)) return false;
+  if (magic[0] == 'P' && magic[1] == 'A' && magic[2] == 'C' && magic[3] == 'K') {
+    std::string why;
+    return read_from_pack(at, path, nullptr, &why);
+  }
+  // A zip: mounted from its bytes (rare in the games' base folders), then asked.
+  std::vector<uint8_t> bytes;
+  std::string why;
+  SearchPath one;
+  return read_disk(at, &bytes, &why) && add_archive(&one, at, std::move(bytes), "", &why) &&
+         find(one, path) != nullptr;
+}
+
+bool game_has_file(const std::string& root, const std::string& game, std::string_view path,
+                   const GameLayout& layout) {
+  const fs::path dir = fs::path(root) / game;
+  if (loose_has(dir, path)) return true;
+  for (const std::string& at : game_archives(root, game, layout))
+    if (archive_has(at, path)) return true;
+  return false;
 }
 
 const FileRef* find(const SearchPath& sp, std::string_view path) {

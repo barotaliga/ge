@@ -27,9 +27,16 @@
 //
 // The maps come from the caller's loader (the player's own packs: none ships in the tree).
 //
+// THE CENSUS (`census`): every entity of the map counted by its class name as the run sees it,
+// so a pack's new monsters, items, movers and traps are shown at work: how many stood after the
+// spawn, how many more the run made (shots, gibs, spawned helpers), how many moved and how many
+// went (killed, picked up, used up), how many had their model taken away while they stayed (an
+// item picked up), and the largest number alive at once.
+//
 // ge:summary A co-op episode played through: a leader finding each map's exit, companions beside
 // ge:keywords coop-episode run_coop_episode episode play-through e1m1 leader way-through
 // ge:keywords companions intermission changelevel parms real-maps party partners
+// ge:keywords census class-name mission-pack spawned moved gone
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #pragma once
@@ -59,6 +66,10 @@ struct EpisodeOptions {
   // leader, one each, the map's work split among them (nearest takes it), the exit waiting for
   // all of it; players 2.. after the leader, before the companions.
   std::vector<sb::AimSkill> partners;
+  // (`partners`) BESIDE A PERSON: the leader plays as a person would (his own way through, not of
+  // the party) and the partners are HELPERS beside him, as a hosted co-op game's `addbot helper`
+  // (party.hpp's `PartyWork` round the people): leashed to him by kPartyLeash, the exit his.
+  bool beside = false;
   sb::AimSkill leader = sb::AimSkill::expert;
   int skill = 1;  // the campaign's `skill`
   uint32_t seed = 1;
@@ -73,6 +84,18 @@ struct EpisodeOptions {
   bool god = false;                // the leader's (and his partners') `god` on every map
   std::vector<std::string> avoid;  // exits to these maps are not taken (a secret level)
   std::vector<std::string> stop;   // an exit to one of these ends the run (the episode's end)
+  bool census = false;             // count each class name's entities (EpisodeMap::census)
+};
+
+// One class name's entities on a map, as the run saw them (EpisodeOptions::census).
+struct ClassCensus {
+  std::string name;
+  int spawned = 0;  // standing after the map's spawn
+  int made = 0;     // made later in the run
+  int moved = 0;    // moved more than a unit from where it first stood
+  int gone = 0;     // removed (killed, picked up, used up)
+  int taken = 0;    // its model taken away while it stayed (an item picked up)
+  int most = 0;     // the most alive at once
 };
 
 struct EpisodeMap {
@@ -88,6 +111,11 @@ struct EpisodeMap {
   sb::PartyStats party;        // the party's sharing
   int64_t partner_steps = 0;   // the steps the partners did
   int64_t left_to_mates = 0;   // plans that left a stop to a mate, the party's
+  // (`beside`) the helpers' share of the time within kPartyLeash of the leader, the farthest one
+  // was, the plans they went back to him and the steps they took off an exit.
+  double helper_near_share = 0;
+  float helper_farthest = 0;
+  int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
   int leader_deaths = 0, mate_deaths = 0;
   double near_share = 0;  // the companions' share of the time within kEscortFar of him
   float farthest = 0;
@@ -112,8 +140,9 @@ struct EpisodeMap {
   std::vector<sh::Vec3f> secrets;             // where the leader stood as each secret counted
   // The leader's rocket and grenade jumps: each flight, the take-off first and the landing last.
   std::vector<std::vector<sh::Vec3f>> blasts;
-  std::vector<sh::Vec3f> exits;   // the exits' middles
-  std::vector<std::string> plan;  // the leader's changes of plan (EpisodeOptions::plan)
+  std::vector<sh::Vec3f> exits;     // the exits' middles
+  std::vector<std::string> plan;    // the leader's changes of plan (EpisodeOptions::plan)
+  std::vector<ClassCensus> census;  // by class name, in the order first seen (`census`)
 };
 
 struct EpisodeReport {

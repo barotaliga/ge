@@ -9,7 +9,8 @@
 // - a NOVICE knows none of it: now and then he shoots at a button he sees, or walks into it, to
 //   see what it does (`button_poke`).
 //
-// THE MAP'S EXITS too (`exits_init`): each `trigger_changelevel`'s box, the nodes a standing
+// THE MAP'S EXITS too (`exits_init`): each `trigger_changelevel`'s box (or a `trigger_multiple`'s
+// or `trigger_once`'s that fires a `target_changelevel`), the nodes a standing
 // player there would touch it from (`kExitMargin` round it), and the nearest node clear of it by
 // `kExitClear`, where a companion stands to show the leader the way (companion.hpp).
 //
@@ -19,6 +20,7 @@
 // ge:summary The map's buttons: the doors each opens, the items they keep, a novice's random pokes
 // ge:keywords button func_button shootable-button door func_door secret armour-door buttons_init
 // ge:keywords button_poke button_node poke novice exit trigger_changelevel exits_init stand-by
+// ge:keywords target_changelevel
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_footwork_test.cpp
 #pragma once
@@ -26,6 +28,7 @@
 #include <string>
 #include <vector>
 
+#include "shooter/map_spec.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooterbots/entities.hpp"
 #include "shooterbots/fighter.hpp"
@@ -65,9 +68,10 @@ void buttons_init(Fighter& f, const ge::shooterbots::NavGraph& g, const ge::shoo
                   const char* entities);
 
 // The exits off the map's entity text: the boxes of their brush models, the nodes in them, the
-// stand-by node beside each.
+// stand-by node beside each. The boxes come from the server's brush models, else (a runner that
+// keeps none, as Quake II's) from `spec`'s.
 void exits_init(Fighter& f, const ge::shooterbots::NavGraph& g, const ge::shooterbots::BotView& s,
-                const char* entities);
+                const char* entities, const sh::MapSpec* spec = nullptr);
 
 // A novice's whim, at a think: a button in sight now and then becomes where he goes and what he
 // shoots at. True while he is on one.

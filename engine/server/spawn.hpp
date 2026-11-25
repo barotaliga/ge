@@ -78,6 +78,8 @@ struct SpawnAsk {
   std::vector<std::string> mods;   // --mod, lowest first
   std::string cfg;                 // cfg lines handed to it (`server-<port>.cfg`), "" none
   double seconds = 0;              // --for (0: until stopped)
+  bool open_port = false;          // sv_open_port 1: the home router asked to forward the port
+  std::string gateway;             // sv_gateway: the router to ask ("": the default route's)
   std::vector<std::string> extra;  // more flags or +commands, as given
 };
 

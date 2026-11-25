@@ -137,6 +137,45 @@ gr::BlastLook make_billow() {
   return l;
 }
 
+gr::BlastLook make_huge() {
+  gr::BlastLook l = make_blast();
+  l.id = "se.blast.huge";
+  l.grow_s = 0.09;
+  l.fire_s = 0.6;
+  l.core_k = 5200;  // white, a sun for a moment
+  l.cool_k = 1800;
+  l.cool_s = 0.6;
+  l.flash = 1.0;
+  l.smoke = 1.1;
+  l.smoke_s = 4.5;
+  l.smoke_albedo = 0.4;  // dust thrown up, not soot
+  l.light_range_m = 22;  // times its scale's: a hall
+  return l;
+}
+
+gr::BlastLook make_dark() {
+  gr::BlastLook l = make_blast();
+  l.id = "se.blast.dark";
+  l.grow_s = 0.03;
+  l.smoke_grow = 0.1;
+  l.rise = 0.2;
+  l.fire = 0.06;
+  l.fire_s = 0.08;
+  l.core_k = 1100;
+  l.cool_k = 800;
+  l.flash = 0;
+  l.smoke = 1.8;
+  l.smoke_in_s = 0.04;
+  l.smoke_s = 1.1;
+  l.smoke_albedo = 0.02;
+  l.smoke_tint[0] = 0.55f, l.smoke_tint[1] = 0.5f, l.smoke_tint[2] = 0.7f;
+  l.billows = 0.5;
+  l.debris = 0;
+  l.scorch_m = 1.6;
+  l.light_range_m = 0;
+  return l;
+}
+
 gr::MuzzleLook make_exhaust() {
   gr::MuzzleLook l = *gr::muzzle_look_by_id("muzzle.rocket");
   l.id = "se.exhaust";
@@ -204,6 +243,14 @@ const gr::BlastLook& billow_look() {
   static const gr::BlastLook l = make_billow();
   return l;
 }
+const gr::BlastLook& huge_look() {
+  static const gr::BlastLook l = make_huge();
+  return l;
+}
+const gr::BlastLook& dark_look() {
+  static const gr::BlastLook l = make_dark();
+  return l;
+}
 const gr::MuzzleLook& exhaust_look() {
   static const gr::MuzzleLook l = make_exhaust();
   return l;
@@ -227,15 +274,20 @@ const gr::BeamLook& prong_arc_look() {
 }
 
 void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
-           std::vector<gr::Blast>* blasts, Particles* births) {
+           std::vector<gr::Blast>* blasts, Particles* births, BlastOf of) {
   Rng r = ge::core::make_rng(seed);
+  const double size = of == BlastOf::big ? kBigBlast : of == BlastOf::huge ? kHugeBlast : 1;
+  const gr::BlastLook& look = of == BlastOf::huge   ? huge_look()
+                              : of == BlastOf::dark ? dark_look()
+                                                    : blast_look();
   gr::Blast main;
   for (int k = 0; k < 3; ++k) main.at[k] = p[k];
   if (normal != nullptr) {
     main.on_surface = true;
     for (int k = 0; k < 3; ++k) main.normal[k] = normal[k];
   }
-  main.look = &blast_look();
+  main.look = &look;
+  main.scale = size;
   main.seed = seed;
   main.born_s = now_s;
   if (blasts) blasts->push_back(main);
@@ -248,47 +300,72 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
     gr::Blast b = main;
     b.on_surface = false;  // round the dome, in the air
     const double out = rnd(r, 0.55, 0.95);
-    for (int k = 0; k < 3; ++k) b.at[k] = p[k] + d[k] * out;
-    b.look = &billow_look();
-    b.scale = rnd(r, 0.8, 1.2);
+    for (int k = 0; k < 3; ++k) b.at[k] = p[k] + d[k] * out * size;
+    b.look =
+        of == BlastOf::common || of == BlastOf::big || of == BlastOf::bare ? &billow_look() : &look;
+    b.scale = rnd(r, 0.8, 1.2) * size * (b.look == &look ? 0.5 : 1);
     b.seed = seed * 7919u + static_cast<uint32_t>(i) + 1u;
     b.born_s = now_s + kBillowsBy * (i + 1) / kBillows * rnd(r, 0.4, 1.0);
-    for (int k = 0; k < 3; ++k) b.v[k] = d[k] * rnd(r, 0.8, 1.8);
+    for (int k = 0; k < 3; ++k) b.v[k] = d[k] * rnd(r, 0.8, 1.8) * size;
     if (blasts) blasts->push_back(b);
   }
-  if (!births) return;
+  if (!births || of == BlastOf::bare) return;
+  if (of == BlastOf::dark) {  // black specks drawn in to its heart from round it
+    for (int i = 0; i < 120; ++i) {
+      double d[3];
+      unit(r, d);
+      if (normal != nullptr) away_from(normal, d);
+      const double out = rnd(r, 1.2, 2.2), life = rnd(r, 0.35, 0.5);
+      const double q[3] = {p[0] + d[0] * out, p[1] + d[1] * out, p[2] + d[2] * out};
+      Particle e = at(q);
+      const double in[3] = {-d[0], -d[1], -d[2]};
+      set_v(e, in, out / life);
+      e.life = float(life);
+      e.size = float(rnd(r, 0.04, 0.07));
+      e.drag = 0;
+      e.fall = 0;
+      e.streak = 0.03f;
+      e.albedo = 0.02f;
+      e.opacity = 1;
+      e.kelvin = 0;
+      births->push_back(e);
+    }
+    return;
+  }
   // The chunks the engine's look throws (its sparks are ours, below).
-  std::vector<gr::Spark> thrown(gr::blast_births_max(blast_look(), 1));
+  std::vector<gr::Spark> thrown(gr::blast_births_max(look, size));
   const size_t n = gr::blast_births(main, thrown);
   for (size_t i = 0; i < n; ++i) births->push_back(gr::spark_particle(thrown[i]));
   // The classic's ember ball: fast embers flung out that fall, slow ones that hang and drift
   // (toned down a little from a fuller ball: fewer and finer, so they read as sparks, not squares).
-  for (int i = 0; i < 160; ++i) {
+  for (int i = 0; i < int(160 * size); ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
-    const double q[3] = {p[0] + d[0] * 0.2, p[1] + d[1] * 0.2, p[2] + d[2] * 0.2};
-    Particle e = ember(q, d, rnd(r, 4, 10), 2500, rnd(r, 0.4, 0.6), rnd(r, 0.6, 1.2), r);
+    const double q[3] = {p[0] + d[0] * 0.2 * size, p[1] + d[1] * 0.2 * size,
+                         p[2] + d[2] * 0.2 * size};
+    Particle e = ember(q, d, rnd(r, 4, 10) * size, 2500, rnd(r, 0.4, 0.6), rnd(r, 0.6, 1.2), r);
     e.size = float(rnd(r, 0.035, 0.055));
     births->push_back(e);
   }
-  for (int i = 0; i < 85; ++i) {
+  for (int i = 0; i < int(85 * size); ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
-    const double q[3] = {p[0] + d[0] * 0.4, p[1] + d[1] * 0.4, p[2] + d[2] * 0.4};
-    Particle e = ember(q, d, rnd(r, 1.5, 4.5), 2300, rnd(r, 0.6, 0.9), rnd(r, 0.9, 1.6), r);
+    const double q[3] = {p[0] + d[0] * 0.4 * size, p[1] + d[1] * 0.4 * size,
+                         p[2] + d[2] * 0.4 * size};
+    Particle e = ember(q, d, rnd(r, 1.5, 4.5) * size, 2300, rnd(r, 0.6, 0.9), rnd(r, 0.9, 1.6), r);
     e.drag = 2.6f;
     e.fall = 0.2f;
     e.size = float(rnd(r, 0.045, 0.07));
     births->push_back(e);
   }
   // White-hot sparks, fast and streaked.
-  for (int i = 0; i < 40; ++i) {
+  for (int i = 0; i < int(40 * size); ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
-    Particle s = ember(p, d, rnd(r, 12, 26), 2900, 0.18, rnd(r, 0.25, 0.55), r);
+    Particle s = ember(p, d, rnd(r, 12, 26) * size, 2900, 0.18, rnd(r, 0.25, 0.55), r);
     s.size = 0.02f;
     s.drag = 0.8f;
     s.fall = 1;
@@ -308,7 +385,7 @@ bool blast_light(const gr::Blast& b, double now_s, Light* out) {
   const double k = std::max(f.fire, 0.35 * tail);
   if (k <= 0.01) return false;
   for (int i = 0; i < 3; ++i) out->pos[i] = f.centre[i];
-  out->radius = gr::look_of(b).light_range_m * (0.6 + 0.4 * k);
+  out->radius = gr::look_of(b).light_range_m * b.scale * (0.6 + 0.4 * k);
   const double level = 2.6 * k;
   for (int i = 0; i < 3; ++i) out->colour[i] = level * flash.colour[i];
   out->group = kLightExplosion;
@@ -1053,16 +1130,36 @@ void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Parti
   }
 }
 
-void blaster_hit(const double p[3], uint32_t seed, Particles* out) {
+void blaster_hit(const double p[3], uint32_t seed, Particles* out, bool green) {
   Rng r = ge::core::make_rng(seed);
   for (int i = 0; i < 24; ++i) {
     double d[3];
     unit(r, d);
-    Particle q = ember(p, d, rnd(r, 1.5, 4.0), 2600, 0.12, rnd(r, 0.15, 0.4), r);
+    Particle q = green ? shine(p, kBfgRgb, 2.0, 0.03, rnd(r, 0.15, 0.4), r)
+                       : ember(p, d, rnd(r, 1.5, 4.0), 2600, 0.12, rnd(r, 0.15, 0.4), r);
+    if (green) set_v(q, d, rnd(r, 1.5, 4.0));
     q.size = float(rnd(r, 0.02, 0.035));
     out->push_back(q);
   }
-  for (int i = 0; i < 6; ++i) out->push_back(shine(p, kBoltRgb, 3.0, 0.08, 0.15, r));
+  for (int i = 0; i < 6; ++i)
+    out->push_back(shine(p, green ? kBfgRgb : kBoltRgb, 3.0, 0.08, 0.15, r));
+}
+
+void tinted_hit(const double p[3], const double normal[3], const TintedHit& h, uint32_t seed,
+                Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const bool faced = normal[0] != 0 || normal[1] != 0 || normal[2] != 0;
+  for (int i = 0; i < h.count; ++i) {
+    double d[3];
+    unit(r, d);
+    if (faced) away_from(normal, d);
+    Particle q = shine(p, h.rgb, 3.0, h.size_m, h.life_s, r);
+    set_v(q, d, rnd(r, 0.3, 1.0) * h.speed);
+    q.drag = 1.2f;
+    q.fall = float(h.fall);
+    q.streak = 0.02f;
+    out->push_back(q);
+  }
 }
 
 void bfg_burst(const double p[3], uint32_t seed, Particles* out) {

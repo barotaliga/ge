@@ -13,8 +13,10 @@
 #include <utility>
 #include <vector>
 
+#include "classic/content/load_order.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_folder.hpp"
+#include "vfs/search.hpp"
 
 namespace shooters_edge::client {
 
@@ -59,13 +61,26 @@ bool remember_install(const std::string& prefs, std::string_view id, const std::
 }
 
 Edition edition_of(const std::string& basedir, const ge::classicenhance::Profile& content) {
-  SearchPath files;
-  std::string error;
-  if (!open_game_dir(basedir, std::string(content.base_dir), files, error, content))
-    return Edition::unknown;
+  // The places the base game's search path reads, asked by their directories alone: mounting
+  // them read every pack whole, seconds at start-up for each install known.
+  const fs::path root = basedir.empty() ? "." : basedir;
+  const std::string base(content.base_dir);
+  std::error_code ec;
+  if (!fs::is_directory(root / base, ec)) return Edition::unknown;
   if (content.full_game.empty()) return Edition::full;
-  std::vector<uint8_t> store;
-  return find_file(files, content.full_game, store).empty() ? Edition::shareware : Edition::full;
+  const auto& order = ge::classic::content::load_order_of(content);
+  const std::string rootdir = root.string();
+  const bool full =
+      ge::vfs::game_has_file(rootdir, base, content.full_game, order.layout) ||
+      (!order.root_archive.empty() &&
+       ge::vfs::archive_has((root / std::string(order.root_archive)).string(),
+                            content.full_game)) ||
+      [&] {
+        const fs::path client = client_folder(root, content);
+        return !client.empty() && ge::vfs::game_has_file(rootdir, client.filename().string(),
+                                                         content.full_game, order.layout);
+      }();
+  return full ? Edition::full : Edition::shareware;
 }
 
 std::string_view edition_words(Edition e, const ge::classicenhance::Profile& content) {

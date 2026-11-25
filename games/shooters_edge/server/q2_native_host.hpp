@@ -25,6 +25,10 @@
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_native_abi.hpp"
 
+namespace ge::classic {
+struct Q2Move;
+}
+
 namespace shooters_edge::server {
 
 // One setting the library holds a pointer to: its record never moves (a deque's element), its
@@ -156,6 +160,10 @@ struct NativeHost {
 // The library's calls (q2_native_calls.cpp): the table filled, and the host whose world they
 // answer (one at a time: the runner makes it current before each call into its library).
 void native_fill_imports(native::NativeImports& t);
+// The move's ranges by the limits (`ext`): at the second level a player's coordinates reach 23
+// bits (a million units each way, not 4096) and its timers count milliseconds, not eighths; below
+// it the classic 16 bits and eighths.
+void native_move_ranges(const NativeHost& h, ge::classic::Q2Move& m);
 void native_fill_imports_ex(native::NativeImportsEx& t);
 // The game's feature bits as it set them (`g_features`), and the server's it reads
 // (`kNativeServerFeatures`: proper in-use, every disconnect, enhanced saves, the extra user info,

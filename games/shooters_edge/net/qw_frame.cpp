@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "prof/zones.hpp"
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
@@ -291,7 +292,7 @@ ge::classic::WeaponState weapon_state(const sv::RulesWorld& w, int slot, int fra
   ws.clock = static_cast<float>(w.time);
   ws.attack_finished = n.attack_finished;
   ws.next_think = n.next_think;
-  ws.step = ge::classic::weapon_step_of(ws.weapon, frame);
+  ws.step = ge::classic::weapon_step_of(ws.weapon, frame, ge::classic::weapon_rules_of(w.models));
   ws.ping_ms = w.clients[slot].ping_ms;
   for (int i = 0; i < 4; i++) ws.ammo[i] = static_cast<int>(n.ammo[i]);
   ws.frame = frame;
@@ -508,6 +509,7 @@ void route_events(QwServer& s) {
 }
 
 void send_frames(QwServer& s) {
+  GE_ZONE("net.send");
   uint8_t payload[kMaxMsgLen];
   uint8_t packet[kMaxPacket];
   std::vector<EntityState> ents;
@@ -535,6 +537,20 @@ void send_frames(QwServer& s) {
         write_byte(w, svc::chokecount);
         write_byte(w, c.chokecount > 255 ? 255 : c.chokecount);
         c.chokecount = 0;
+      }
+      // The server's turn of him, unreliable as every classic server sends it; under the high-lag
+      // teleport with its kind, and his moves in flight turned until this packet is acknowledged.
+      if (c.turn_pending) {
+        c.turn_pending = false;
+        SvcMsg turn;
+        turn.id = svc::setangle;
+        const cp::TurnKind kind = c.turn_teleport ? cp::TurnKind::teleport : cp::TurnKind::respawn;
+        turn.ints = {static_cast<int>(kind)};
+        turn.floats = {c.turn_to.x, c.turn_to.y, c.turn_to.z};
+        write_svc(w, turn, ctx_of(c));
+        if (c.ext.has(ExtFamily::mvd, kMvdTeleport))
+          cp::lag_turn_sent(c.lag, kind, seq, c.ch.incoming_sequence, c.last_yaw, c.turn_to.y,
+                            nullptr);
       }
       for (int k = 0; k < sh::kMaxClients; k++) {
         if (!s.clients[k].rules_active || s.clients[k].spectator) continue;

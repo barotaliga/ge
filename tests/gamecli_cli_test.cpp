@@ -272,6 +272,19 @@ TEST(host_and_join_as_dry_runs) {
   fs::remove_all(root);
 }
 
+TEST(host_open_port_asks_the_router_for_a_dedicated_server) {
+  const fs::path root = fresh("ge_gamecli_open_port");
+  std::string out;
+  CHECK(run({"host", "--dedicated", "--open-port", "--gateway=192.168.1.1", "--dry-run", "--json"},
+            out, root) == 0);
+  const std::string cmd = parse(out)["result.command"].text;
+  CHECK_MSG(cmd.find("+set sv_open_port 1") != std::string::npos, cmd);
+  CHECK_MSG(cmd.find("+set sv_gateway 192.168.1.1") != std::string::npos, cmd);
+  CHECK(run({"host", "--open-port", "--dry-run"}, out, root) == 2);  // a listen server: refused
+  CHECK_MSG(out.find("dedicated server only") != std::string::npos, out);
+  fs::remove_all(root);
+}
+
 #ifndef _WIN32
 TEST(a_started_program_is_kept_listed_and_stopped) {
   const fs::path root = fresh("ge_gamecli_host");

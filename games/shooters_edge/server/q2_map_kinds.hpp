@@ -146,6 +146,16 @@ struct TeamFrame {
   std::vector<size_t> steps;  // the parts whose step is due once the team has moved
 };
 
+// Ground Zero's trains and fans (q2_gz_trains.cpp), each a no-op outside the pack: a train
+// leaving corner `leaving` takes its speeds; a train's team made its riders (after link_doors);
+// the riders' velocities and the ramping fans, at each frame's start; a fan's spawn and its use
+// (true when the pack's use ran).
+void gz_train_corner(const Q2Server& s, Q2Entity& train, int leaving);
+void gz_train_teams(Q2Server& s);
+void gz_movers_frame(Q2Server& s);
+void gz_fan_spawn(const Q2Server& s, Q2Entity& e);
+bool gz_fan_use(Q2Server& s, Q2Entity& e, int activator);
+
 // Starts team `master`'s frame: what to put back should a part be blocked.
 void team_begin(const Q2Server& s, TeamFrame& t, int master);
 

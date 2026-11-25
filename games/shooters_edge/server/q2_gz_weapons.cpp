@@ -315,7 +315,7 @@ void tracker(Q2Server& s, Q2Missile& m) {
     }
     const int tick = m.damage / 5;
     if (m.prey >= 0 && m.prey < sh::kMaxClients)  // a player; a monster's prey is -2 - entity
-      fight_hurt(s, m.prey, m.owner, {}, tick, 0, int(SqWeapon::disruptor), 4);
+      fight_hurt(s, m.prey, m.owner, {}, tick, 0, m.weapon, 4);
     else if (m.prey <= -2)
       monster_damage(s, -2 - m.prey, m.owner, tick, {}, false);
     return;
@@ -328,7 +328,8 @@ void tracker(Q2Server& s, Q2Missile& m) {
       return;
     }
     sh::Vec3f way = aim - m.origin;
-    if (sh::normalize(way) > 0) m.velocity = way * 1000;
+    const float speed = sh::length(m.velocity);  // the speed it was fired at (a widow's 500)
+    if (sh::normalize(way) > 0) m.velocity = way * (speed > 0 ? speed : 1000.0f);
   } else if (s.level_time + 0.001 >= m.dies_at) {
     m.live = false;
     return;
@@ -487,6 +488,7 @@ void tesla(Q2Server& s, Q2Missile& m, float gravity) {
     sh::Vec3f dir = t.origin - from;
     sh::normalize(dir);
     monster_damage(s, int(e), m.owner, damage, dir, false);
+    gz_tesla_bad_area(s, int(&m - s.missiles), int(e), lo, hi);  // its ground, and at it
     lightning(s, self, map_row(int(e)), from, t.origin);
     if (const char* boost = fight_multiplier_sound(m.multiplier)) fight_sound(s, self, from, boost);
   }
@@ -642,6 +644,7 @@ void gz_fire(Q2Server& s, int slot, int shots) {
                              thrown(s, ax, aim, p.hand.throw_speed), multiplier)) {
         m->stage_at = s.level_time + 3;
         m->dies_at = 1e18;
+        m->health = deathmatch(s) ? 20 : 30;  // it can be shot from the throw
       }
       return;
     }
@@ -680,12 +683,20 @@ bool gz_missile(Q2Server& s, Q2Missile& m) {
       nuke(s, m, gravity);
       return true;
     default:
-      return false;
+      return gz_sphere_missile(s, m);
   }
 }
 
 bool gz_drawn(const Q2Missile& m) {
   return !((m.kind == SqShot::tracker && m.stage == 4) || (m.kind == SqShot::nuke && m.stage == 5));
+}
+
+void gz_tesla_damage(Q2Server& s, int i, int damage) {
+  if (i < 0 || size_t(i) >= std::size(s.missiles)) return;
+  Q2Missile& m = s.missiles[size_t(i)];
+  if (!m.live || m.kind != SqShot::tesla || damage <= 0) return;
+  m.health -= damage;
+  if (m.health <= 0) burst(s, m, m.origin, 0, 0, int(SqWeapon::tesla));  // the small burst
 }
 
 }  // namespace shooters_edge::server

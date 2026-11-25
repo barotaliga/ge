@@ -20,6 +20,7 @@
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/rules_world.hpp"
 
 namespace sb = ge::shooterbots;
 
@@ -145,7 +146,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       if (opt.complete) way_complete_init(f, nav, s, c.map);
       way_init(way, f, nav, s, c.map);
       if (opt.plan && k == 0) way.log = &em.plan;
-      m.members.push_back({&way, k + 1, true});
+      if (!opt.beside || k > 0) m.members.push_back({&way, k + 1, true});
     } else {
       escort_init(f, s, k, 0);
     }
@@ -162,6 +163,68 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   }
   em.mates.assign(static_cast<size_t>(n) - 1, {});
   return true;
+}
+
+// THE CENSUS: each entity slot's class name and first place, so a removal, a reuse of the slot
+// and a move are seen; the counts kept by class name in the map's row.
+struct Census {
+  struct Slot {
+    int cls = -1;  // index into the map's census, -1 a free slot
+    sh::Vec3f at;
+    bool moved = false;
+    bool shown = false;  // its model drawn at the last look
+  };
+  std::vector<Slot> slots;
+};
+
+int census_class(EpisodeMap& em, const char* name) {
+  // An entity its program gave no class name (a body left behind, a thrown gib) counts as one
+  // class.
+  const std::string_view n = name != nullptr && name[0] != 0 ? name : "(no class name)";
+  for (size_t i = 0; i < em.census.size(); i++)
+    if (em.census[i].name == n) return static_cast<int>(i);
+  em.census.push_back({std::string(n)});
+  return static_cast<int>(em.census.size()) - 1;
+}
+
+// One look at the server's entities: `first` at the map's start (each counted as spawned).
+void census_look(Census& cs, EpisodeMap& em, const sv::RulesRunner& run, bool first) {
+  const sv::RulesCommon& now = *run;
+  const sv::QcServer* q = sv::qc_of(run);
+  if (q == nullptr) return;
+  cs.slots.resize(std::max(cs.slots.size(), now.sv.edicts.size()));
+  std::vector<int> alive(em.census.size(), 0);
+  for (size_t e = static_cast<size_t>(now.sv.set.maxclients) + 1; e < cs.slots.size(); e++) {
+    Census::Slot& slot = cs.slots[e];
+    const bool live = e < static_cast<size_t>(now.sv.num_edicts) && !now.sv.edicts[e].free;
+    int cls = -1;
+    const bool shown = live && sv::model_shown(*q, static_cast<int>(e));
+    if (live) {
+      const char* name =
+          pg::vm_string(q->q.vm, static_cast<int32_t>(*pg::entity_field(
+                                     q->q.vm, static_cast<int>(e), q->q.layout->f.classname)));
+      cls = census_class(em, name);
+      alive.resize(em.census.size(), 0);
+      alive[static_cast<size_t>(cls)]++;
+    }
+    if (slot.cls >= 0 && slot.cls != cls) em.census[static_cast<size_t>(slot.cls)].gone++;
+    if (cls >= 0 && slot.cls != cls) {
+      ClassCensus& c = em.census[static_cast<size_t>(cls)];
+      (first ? c.spawned : c.made)++;
+      slot.at = now.sv.edicts[e].origin;
+      slot.moved = false;
+    } else if (cls >= 0 && slot.shown && !shown) {  // its model taken away: an item picked up
+      em.census[static_cast<size_t>(cls)].taken++;
+    }
+    if (cls >= 0 && slot.cls == cls && !slot.moved && dist(now.sv.edicts[e].origin, slot.at) > 1) {
+      slot.moved = true;
+      em.census[static_cast<size_t>(cls)].moved++;
+    }
+    slot.shown = shown;
+    slot.cls = cls;
+  }
+  for (size_t i = 0; i < alive.size(); i++)
+    em.census[i].most = std::max(em.census[i].most, alive[i]);
 }
 
 }  // namespace
@@ -218,8 +281,12 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       return r;
     }
     const size_t entered = c.history.size();
+    Census census;
+    if (opt.census) census_look(census, em, c.server, true);
     std::vector<bool> alive(static_cast<size_t>(mates) + 1, true);
     int64_t near = 0, counted = 0;
+    int64_t helper_near = 0, helper_counted = 0;
+    sb::PartyOptions people;
     const int frames = static_cast<int>(opt.map_seconds * 72);
     int frame = 0;
     bool changed = false;
@@ -257,11 +324,23 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       if (partners > 0) {
         for (sb::PartyMember& pm : m.members)
           pm.alive = now.world.entities[static_cast<size_t>(pm.ent)].health > 0;
-        sb::party_share(m.party, m.members, *m.nav, now, {});
+        if (opt.beside) {  // round the leader, a person's stand-in (party.hpp)
+          people.humans.assign(1, now.world.entities[1].origin);
+          people.facing.assign(1, now.world.entities[1].view_angles.y);
+          people.leash = sb::kPartyLeash;
+          people.exit_held = true;
+        }
+        sb::party_share(m.party, m.members, *m.nav, now, people);
       }
-      for (int k = 0; k <= partners; k++)
-        way_plan(m.ways[static_cast<size_t>(k)], m.players[static_cast<size_t>(k)], *m.nav, now,
-                 k + 1, t);
+      for (int k = 0; k <= partners; k++) {
+        WayThrough& way = m.ways[static_cast<size_t>(k)];
+        const int64_t plans = way.stats.plans;
+        way_plan(way, m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, t);
+        if (opt.beside && k > 0 &&
+            sb::party_stay(m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, people) &&
+            way.stats.plans != plans)
+          em.helper_stays++;
+      }
       for (int k = 0; k <= mates; k++) {
         Recent& rc = recent[static_cast<size_t>(k)];
         rc.cmds[0] = rc.cmds[1];
@@ -271,6 +350,11 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
           WayThrough& way = m.ways[static_cast<size_t>(k)];
           way_dive(way, *m.nav, now, k + 1, rc.cmds[2]);
           way_touch(way, now, k + 1, rc.cmds[2]);  // its keys turned or not, he goes on
+          if (opt.beside && k > 0 && sb::party_give_way(now, k + 1, people.humans, rc.cmds[2]))
+            em.helper_gave_way++;
+          if (opt.beside && k > 0 &&
+              exits_keep_off(m.players[static_cast<size_t>(k)], now, k + 1, rc.cmds[2]))
+            em.helper_exits_turned++;
         }
         if (!m.players[static_cast<size_t>(k)].bot.pilot.pilot.climbing)  // held to his ladder
           unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
@@ -313,6 +397,7 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         em.last_fault = qa->q.last_fault;
       }
       h = fold_frame(h, after, mates + 1);
+      if (opt.census && frame % 6 == 0) census_look(census, em, c.server, false);
       const sv::WorldEntity& L = after.world.entities[1];
       const bool leader_live = L.health > 0;
       if (alive[0] && !leader_live) em.leader_deaths++;
@@ -322,6 +407,12 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         const bool live = d.health > 0;
         if (alive[static_cast<size_t>(k)] && !live) em.mate_deaths++;
         alive[static_cast<size_t>(k)] = live;
+        if (opt.beside && live && leader_live && !ending && k <= partners) {  // a helper's
+          const float dd = dist(d.origin, L.origin);
+          helper_near += dd <= sb::kPartyLeash ? 1 : 0;
+          helper_counted++;
+          em.helper_farthest = std::max(em.helper_farthest, dd);
+        }
         if (live && leader_live && !ending && k > partners) {  // a companion's keeping near
           const float dd = dist(d.origin, L.origin);
           near += dd < kEscortFar ? 1 : 0;
@@ -382,6 +473,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     em.seconds = static_cast<double>(frame) / 72;
     if (!changed) em.end = "the time ran out";
     em.near_share = counted > 0 ? static_cast<double>(near) / static_cast<double>(counted) : 0;
+    em.helper_near_share =
+        helper_counted > 0 ? static_cast<double>(helper_near) / static_cast<double>(helper_counted)
+                           : 0;
     em.way = m.ways[0].stats;
     em.party = m.party.stats;
     for (int k = 1; k <= partners; k++) {

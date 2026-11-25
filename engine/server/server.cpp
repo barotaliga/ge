@@ -7,12 +7,15 @@
 // ge:test tests/server_core_test.cpp
 #include "server/server.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <limits>
+#include <vector>
 
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "net/packet.hpp"
+#include "prof/zones.hpp"
 #include "server/feature.hpp"
 #include "server/guards.hpp"
 
@@ -99,6 +102,62 @@ bool start_beat(Server& s, const ServerGame& game, const ServerConfig& config, s
 
 Server::~Server() { server_close(*this); }
 
+namespace {
+
+// The game's meta-cvars (GameMeta rows), each a text cvar of its own kept in `c.metas`, then its
+// levels declared over the settings above.
+void add_game_metas(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game) {
+  std::vector<std::string> names;
+  for (int i = 0; i < game.meta_count; i++)
+    if (std::find(names.begin(), names.end(), game.metas[i].name) == names.end())
+      names.emplace_back(game.metas[i].name);
+  for (const std::string& name : names) {
+    std::vector<cn::MetaLevel> levels;
+    const GameMeta* first = nullptr;
+    for (int i = 0; i < game.meta_count; i++) {
+      const GameMeta& m = game.metas[i];
+      if (name != m.name) continue;
+      if (first == nullptr) first = &m;
+      cn::MetaLevel level;
+      level.value = m.value;
+      const std::string sets = m.sets;
+      for (size_t at = 0; at < sets.size();) {
+        size_t end = sets.find(';', at);
+        if (end == std::string::npos) end = sets.size();
+        std::string pair = sets.substr(at, end - at);
+        at = end + 1;
+        const size_t a = pair.find_first_not_of(' ');
+        if (a == std::string::npos) continue;
+        pair = pair.substr(a);
+        const size_t sp = pair.find(' ');
+        cn::MetaSet set;
+        set.name = pair.substr(0, sp);
+        set.value = sp == std::string::npos ? std::string() : pair.substr(sp + 1);
+        while (!set.value.empty() && set.value.back() == ' ') set.value.pop_back();
+        level.sets.push_back(std::move(set));
+      }
+      levels.push_back(std::move(level));
+    }
+    std::string& field = c.metas[name];  // a map's node: its address outlives the inserts
+    if (field.empty()) field = "0";
+    cvars.bind({.name = name,
+                .fallback = "0",
+                .flags = static_cast<uint32_t>(cn::kServer),
+                .help = first->help != nullptr ? first->help : "",
+                .kind = cn::CvarKind::text,
+                .values = first->values != nullptr ? first->values : ""},
+               &field);
+    std::string error;
+    if (!cvars.add_meta(name, std::move(levels), error))
+      std::fprintf(stderr,
+                   "error: the game's meta-cvar %s is refused: %s. Fix its rows in the "
+                   "game's ServerGame::metas.\n",
+                   name.c_str(), error.c_str());
+  }
+}
+
+}  // namespace
+
 void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game) {
   using cn::CvarKind;
   const uint32_t info = cn::kServer | cn::kServerInfo;
@@ -118,6 +177,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
   const std::string masters = c.masters;
+  const std::string open_port = std::to_string(c.open_port), gateway = c.gateway;
   const std::string rcon = c.rcon_password;
   // Each setting's words (console/words.hpp): one sentence, then what each value does.
   auto bind = [&](std::string_view id, std::string_view fallback, uint32_t flags,
@@ -147,6 +207,8 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        kAny, "\"\": every interface (the default); TEXT: that address only", &c.ip);
   bind("net_port", port, latched, "The UDP port the game listens on.", CvarKind::integer, 1, 65535,
        "1..65535: that port", &c.port);
+  // A hosting window's name for its port (listen_console.cpp), so one cfg line serves both.
+  cvars.add_synonym("sv_port", "net_port");
   bind("net_ip6", ip6, latched, "The local IPv6 address the server listens on as well.",
        CvarKind::text, -kAny, kAny, "\"\": every interface (the default); TEXT: that address only",
        &c.ip6);
@@ -298,6 +360,17 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        "\"\": none, listed by no master (the default); TEXT: host:port addresses with spaces "
        "between (port 27900 when left out)",
        &c.masters);
+  bind("sv_open_port", open_port, latched,
+       "Whether the server asks the home router to forward its game port from the internet, so "
+       "players anywhere can join a server run at home.",
+       CvarKind::integer, 0, 1,
+       "0: no (the default); 1: ask the router by PCP, NAT-PMP or UPnP and say the public address",
+       &c.open_port);
+  bind("sv_gateway", gateway, latched, "The home router sv_open_port asks.", CvarKind::text, -kAny,
+       kAny,
+       "\"\": the machine's default route where the system tells it, else UPnP's search (the "
+       "default); TEXT: the router's address",
+       &c.gateway);
   bind("sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
        "The mods' game directories laid over the base game, set by --mod.", CvarKind::text, -kAny,
        kAny, "\"\": the base game alone; TEXT: directories, lowest first, commas between", &c.mod);
@@ -459,6 +532,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
                    "there is no such setting. Fix its row in the game's ServerGame::names.\n",
                    n.name, n.setting);
   }
+  add_game_metas(cvars, c, game);
 }
 
 VoteSettings vote_settings(const ServerConfig& c) {
@@ -606,9 +680,13 @@ void take_phase(Server& s) {
 }
 
 void server_frame(Server& s) {
+  GE_ZONE("server.frame");
   if (!s.state) return;
   if (s.own_protocol) {
-    s.game->net_frame(s.state, s.now_us);
+    {
+      GE_ZONE("server.game");
+      s.game->net_frame(s.state, s.now_us);
+    }
     take_report(s);
     if (!s.beat.config.masters.empty()) gn::master_beat_update(s.beat, *s.port, s.now_us);
     s.now_us = server_next_us(s);
@@ -617,7 +695,10 @@ void server_frame(Server& s) {
     if (s.features) features_frame(*s.features);
     return;
   }
-  s.game->frame(s.state);
+  {
+    GE_ZONE("server.game");
+    s.game->frame(s.state);
+  }
   take_report(s);
   s.now_us = server_next_us(s);
   s.frame++;
@@ -626,6 +707,7 @@ void server_frame(Server& s) {
     if (s.features) features_frame(*s.features);
     return;
   }
+  GE_ZONE("server.net");  // the node, the public answers, the session, hosting, the masters
   gn::node_update(s.node, s.now_us);
   answer_public(s);
   gn::session_host_update(s.session, s.now_us);

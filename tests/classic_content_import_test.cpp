@@ -263,6 +263,11 @@ TEST(quake_iis_mission_packs_ask_the_digital_releases_track_numbers) {
   CHECK(content::q2_remap_track("xatrix", 11) == 18);
   CHECK(content::q2_remap_track("baseq2", 5) == 5 && content::q2_remap_track("rogue", 12) == 12);
   CHECK(content::q2_remap_track("rogue", 1) == 1);
+  // The folder as `-game` may give it: any case, a path, a trailing slash.
+  CHECK(content::q2_remap_track("XATRIX", 2) == 9 && content::q2_remap_track("Rogue", 2) == 12);
+  CHECK(content::q2_remap_track("C:\\Quake2\\xatrix\\", 2) == 9);
+  CHECK(content::q2_remap_track("/games/quake2/rogue/", 11) == 21);
+  CHECK(content::q2_remap_track("/games/rogue/baseq2", 5) == 5);
 }
 
 TEST(import_takes_a_games_mission_packs_in_beside_it) {
@@ -342,6 +347,48 @@ TEST(import_reads_a_packs_disc_by_its_digest) {
   CHECK(!fs::exists(data / "q2/xatrix/gamex86.dll"));
   CHECK(r.music_folder == "xatrix" && r.tracks.size() == 1);
   CHECK(fs::exists(data / "q2/xatrix/music/track02.flac") && !fs::exists(data / "q2/music"));
+}
+
+TEST(import_gives_a_discs_tracks_to_each_pack_on_it) {
+  // One disc carrying both of Quake's packs and one set of audio tracks, which both packs' maps
+  // ask for: each pack keeps the tracks.
+  const fs::path src = fresh("qpacks_disc"), data = fresh("qpacks_disc_data");
+  const Files files = {{"Armagon/HIPNOTIC/PAK0.PAK", pak("hip1m1")},
+                       {"Eternity/ROGUE/PAK0.PAK", pak("r1m1")}};
+  std::vector<uint8_t> bin = vfs::raw_sectors(vfs::write_iso(files, true));
+  const uint32_t data_sectors = uint32_t(bin.size() / 2352);
+  const std::vector<uint8_t> b2 = le(tone(30, 5));
+  bin.insert(bin.end(), b2.begin(), b2.end());
+  save(src / "QPacks.BIN", bin);
+  std::ofstream(src / "QPacks.cue") << "FILE \"QPacks.BIN\" BINARY\nTRACK 01 MODE1/2352\nINDEX 01 "
+                                       "00:00:00\nTRACK 02 AUDIO\nINDEX 01 "
+                                    << at(data_sectors) << "\n";
+  content::ImportOptions opts;
+  opts.identify = [](uint64_t size, std::string_view sha,
+                     const ge::classicenhance::Profile** game) {
+    const auto* q1 = ge::classicenhance::find_profile("q1");
+    *game = q1;
+    for (const auto& [map, folder] :
+         {std::pair{"hip1m1", "hipnotic"}, std::pair{"r1m1", "rogue"}}) {
+      const std::vector<uint8_t> want = pak(map);
+      if (size == want.size() && sha == ge::assets::sha256_hex(want))
+        return ge::classicenhance::find_pack(*q1, folder);
+    }
+    return static_cast<const ge::classicenhance::MissionPack*>(nullptr);
+  };
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game((src / "QPacks.cue").string(), data.string(), &r, &error, opts),
+            error);
+  CHECK(!r.base && r.packs.size() == 2 && r.tracks.size() == 1);
+  for (const char* folder : {"hipnotic", "rogue"}) {
+    CHECK(fs::exists(data / "q1" / folder / "pak0.pak"));
+    CHECK(fs::exists(data / "q1" / folder / "music/track02.flac"));
+    CHECK(fs::exists(data / "q1" / folder / "music/tracks.txt"));
+  }
+  CHECK(flac_samples(data / "q1/rogue/music/track02.flac") ==
+        flac_samples(data / "q1/hipnotic/music/track02.flac"));
+  CHECK(!fs::exists(data / "q1/music"));
 }
 
 TEST(import_reads_a_release_zip_and_a_7z_of_its_disc) {
@@ -466,4 +513,31 @@ TEST(a_pack_on_a_disc_image_or_in_a_zip_in_the_store_folders_is_offered_as_itsel
   CHECK(fs::exists(data / "q2/rogue/pak0.pak"));
   offers = content::find_offers({lib.string()}, data.string());
   CHECK(offers.size() == 1 && offers[0].pack->folder == "hipnotic");
+}
+
+TEST(import_takes_both_quake_packs_off_their_cd_image) {
+  // The Quake packs' CD: one raw data track (its sheet beside it) holding both packs' folders in
+  // upper case and no base folder; each pack lands beside Quake's base folder, the game needed.
+  const fs::path src = fresh("qpacks"), data = fresh("qpacks_data");
+  const Files files = {{"HIPNOTIC/PAK0.PAK", pak("hip1m1")},
+                       {"ROGUE/PAK0.PAK", pak("r1m1")},
+                       {"ROGUE/PROGS.DAT", {'p'}},
+                       {"SETUP.EXE", {'M', 'Z'}}};
+  save(src / "QPacks.BIN", vfs::raw_sectors(vfs::write_iso(files, false)));
+  std::ofstream(src / "QPacks.cue") << "FILE \"QPacks.BIN\" BINARY\nTRACK 01 MODE1/2352\nINDEX 01 "
+                                       "00:00:00\n";
+  save(data / "q1/taken.txt", {'x'});
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game((src / "QPacks.cue").string(), data.string(), &r, &error), error);
+  CHECK(!r.base && r.game != nullptr && r.game->id == "q1" && r.packs.size() == 2);
+  CHECK(r.notes.size() == 1 && r.notes[0].find("Quake itself") != std::string::npos);
+  CHECK(fs::exists(data / "q1/hipnotic/pak0.pak") && fs::exists(data / "q1/rogue/pak0.pak"));
+  CHECK(!fs::exists(data / "q1/rogue/progs.dat") && !fs::exists(data / "q1/setup.exe"));
+  // The image alone, its sheet lost: the raw sectors are read as the disc.
+  const fs::path bare = fresh("qpacks_bare"), into = fresh("qpacks_bare_data");
+  fs::copy_file(src / "QPacks.BIN", bare / "QPacks.BIN");
+  content::ImportReport b;
+  CHECK_MSG(content::import_game((bare / "QPacks.BIN").string(), into.string(), &b, &error), error);
+  CHECK(b.packs.size() == 2 && fs::exists(into / "q1/rogue/pak0.pak"));
 }

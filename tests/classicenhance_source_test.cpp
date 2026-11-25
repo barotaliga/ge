@@ -215,6 +215,40 @@ std::vector<uint8_t> pack_of(const std::vector<std::pair<std::string, std::vecto
 
 }  // namespace
 
+TEST(source_lays_a_mission_pack_over_its_base_game) {
+  const std::vector<uint8_t> pack = fixture_pack();
+  const fs::path dir = scratch("mission");
+  std::vector<uint8_t> mission, mission2;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"readme.txt", text("the pack's")}, {"maps/hip1m1.bsp", text("map")}},
+                           &mission, &error));
+  CHECK(ge::vfs::write_pak({{"maps/hip2m1.bsp", text("map 2")}}, &mission2, &error));
+  write(dir / "id1" / "pak0.pak", pack);
+  write(dir / "Hipnotic" / "PAK0.PAK", mission);
+  write(dir / "Hipnotic" / "pak1.pak", mission2);
+  ce::Source s;
+  CHECK_MSG(ce::open_source((dir / "Hipnotic").string(), &s, &error), error);
+  CHECK(s.mission != nullptr && s.mission->folder == "hipnotic");
+  CHECK(s.pack == pack && s.later.size() == 2);  // the base's first pack, then the pack's two
+  CHECK(s.later[0].sha256 == ge::assets::sha256_hex(mission));
+  const std::string digests[] = {ge::assets::sha256_hex(pack), ge::assets::sha256_hex(mission),
+                                 ge::assets::sha256_hex(mission2)};
+  CHECK(s.set_sha256 == ce::set_key(digests));  // the key the game reads with the pack mounted
+  ge::vfs::Pak merged;
+  CHECK_MSG(ge::vfs::read_pak(s.content(), &merged, &error), error);
+  CHECK(ge::vfs::pak_find(merged, "gfx/palette.lmp") != nullptr);  // the base game's palette
+  const ge::vfs::PakEntry* readme = ge::vfs::pak_find(merged, "readme.txt");
+  const std::span<const uint8_t> latest = ge::vfs::pak_file(s.content(), *readme);
+  CHECK(std::string(latest.begin(), latest.end()) == "the pack's");
+  CHECK(ge::vfs::pak_find(merged, "maps/hip2m1.bsp") != nullptr);
+  // With no base game beside it, the pack is refused, naming what to put where.
+  fs::remove_all(dir / "id1");
+  CHECK(!ce::open_source((dir / "Hipnotic").string(), &s, &error));
+  CHECK(error.find("Scourge of Armagon") != std::string::npos &&
+        error.find("id1") != std::string::npos);
+  fs::remove_all(dir);
+}
+
 TEST(source_knows_a_release_by_its_files_in_any_packs) {
   FixtureSet full, remaster;
   fixture_set(&full, "fixture-full", false);

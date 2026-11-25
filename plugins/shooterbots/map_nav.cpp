@@ -218,6 +218,37 @@ bool floor_door(const sb::EntityBlock& b, const ModelBox& bm, const std::vector<
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
+// A SLIDE-OUT BRIDGE: a named plate drawn resting in its slot (not started open), sliding level
+// (an angle of 0, 90, 180 or 270) to where it spans a gap, with room to stand on it there and a
+// floor under where it rests (bunk1's over the hole between its two floors, run out by the button
+// on the walkway above). Its travel in `move` (a door's: across its own size less its lip).
+bool slides_out(const sb::EntityBlock& b, const ModelBox& bm, const sh::MoveWorld& world,
+                sh::Vec3f& move) {
+  const char* cn = sb::block_value(b, "classname");
+  const char* an = sb::block_value(b, "angle");
+  if (!cn || std::strcmp(cn, "func_door") != 0 || start_open(b) || !an ||
+      !sb::block_value(b, "targetname") || !plate(bm))
+    return false;
+  const int angle = std::atoi(an);
+  const sh::Vec3f dir = angle == 0     ? sh::Vec3f{1, 0, 0}
+                        : angle == 90  ? sh::Vec3f{0, 1, 0}
+                        : angle == 180 ? sh::Vec3f{-1, 0, 0}
+                        : angle == 270 ? sh::Vec3f{0, -1, 0}
+                                       : sh::Vec3f{};
+  if (dir.x == 0 && dir.y == 0) return false;
+  const char* lp = sb::block_value(b, "lip");
+  const float lip = lp ? static_cast<float>(std::atof(lp)) : 8;
+  const sh::Vec3f size = bm.maxs - bm.mins;
+  const float travel = std::fabs(dir.x) * size.x + std::fabs(dir.y) * size.y - lip;
+  if (travel <= 0) return false;
+  move = dir * travel;
+  const sh::Vec3f rest{(bm.mins.x + bm.maxs.x) * 0.5f, (bm.mins.y + bm.maxs.y) * 0.5f, 0};
+  const sh::Vec3f out = rest + move;
+  return !sh::box_free(world, {rest.x, rest.y, bm.mins.z - 25}) &&
+         sh::box_free(world, {out.x, out.y, bm.maxs.z + 25}) &&
+         sh::box_free(world, {out.x, out.y, bm.mins.z - 25});
+}
+
 void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                          ge::brush::BrushTracer* tracer, const std::vector<sb::EntityBlock>& blocks,
                          sh::MoveWorld& world, std::vector<NavBridge>& bridges) {
@@ -230,6 +261,19 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
       continue;
     const int e = edict_of(s, model);
     const ModelBox bm = model_box(spec, m);
+    sh::Vec3f move;
+    if (e >= 0 && slides_out(b, bm, world, move)) {
+      const sh::Vec3f rest = s.sv.edicts[static_cast<size_t>(e)].origin;
+      world.solids[world.count++] = model_solid(spec, tracer, m, rest + move);  // out
+      NavBridge br;
+      br.ent = e;
+      br.spawn = rest;
+      br.out_at = rest + move;
+      const char* wait = sb::block_value(b, "wait");
+      br.wait = wait ? static_cast<float>(std::atof(wait)) : 3;  // a door's default
+      bridges.push_back(br);
+      continue;
+    }
     if (!floor_door(b, bm, named, e)) continue;
     sh::Solid& so = world.solids[world.count++];
     so = model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);  // at rest
@@ -694,10 +738,67 @@ bool teleport_dest(const std::vector<sb::EntityBlock>& blocks, const char* targe
   return false;
 }
 
-std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter::MapSpec& spec,
+// Whether the game spawned the teleporter of block `b` (one the mode or skill leaves out, mintro's
+// deathmatch pad under a wall in single player, is none): a live edict whose box is its brush
+// model's within 2 units (a trigger keeps its box though the program drops its model), or one
+// standing on its pad's centre.
+bool teleporter_in_game(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                        const sb::EntityBlock& b) {
+  const char* model = sb::block_value(b, "model");
+  const char* org = sb::block_value(b, "origin");
+  ModelBox box;
+  if (model && model[0] == '*' && std::atoi(model + 1) > 0)
+    box = model_box(spec, std::atoi(model + 1));
+  const sh::Vec3f o = org ? origin_of(org) : sh::Vec3f{};
+  const auto near = [](sh::Vec3f a, sh::Vec3f c, float d) {
+    return std::fabs(a.x - c.x) <= d && std::fabs(a.y - c.y) <= d && std::fabs(a.z - c.z) <= d;
+  };
+  bool any = false;
+  for (int e = 1; e < s.sv.num_edicts; e++) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    if (d.free) continue;
+    any = true;
+    if (box.ok && near(d.absmin, box.mins, 2) && near(d.absmax, box.maxs, 2)) return true;
+    // A pad's own row, not a monster or player standing on its centre (rmine1's soldier).
+    if (!model && org && d.health <= 0 && d.solid != sh::kSolidSlidebox && near(d.origin, o, 1))
+      return true;
+  }
+  return !any || (model && !box.ok);  // nothing to tell by: it counts
+}
+
+// Whether a wall in the game (a `func_wall` whose model an edict of `s` wears) stands flush across
+// the face of the teleporter in `box`: e3m4's player-only teleporter behind a wall that only
+// deathmatch takes away, which drew his route into the wall for the whole map.
+bool walled_off(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                const std::vector<sb::EntityBlock>& blocks, const ModelBox& box) {
+  constexpr float kFlush = 8;  // a wall this near its face covers it, units
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    if (!cn || std::strcmp(cn, "func_wall") != 0 || !model || model[0] != '*') continue;
+    bool worn = false;
+    for (int e = 1; e < s.sv.num_edicts && !worn; e++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      worn = !d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
+             s.models[static_cast<size_t>(d.modelindex)] == model;
+    }
+    const ModelBox w = worn ? model_box(spec, std::atoi(model + 1)) : ModelBox{};
+    if (!w.ok || w.mins.z > box.mins.z + 1 || w.maxs.z < box.maxs.z - 1) continue;
+    const bool across_x = w.mins.x <= box.mins.x + 1 && w.maxs.x >= box.maxs.x - 1 &&
+                          w.maxs.y >= box.mins.y - kFlush && w.mins.y <= box.maxs.y + kFlush;
+    const bool across_y = w.mins.y <= box.mins.y + 1 && w.maxs.y >= box.maxs.y - 1 &&
+                          w.maxs.x >= box.mins.x - kFlush && w.mins.x <= box.maxs.x + kFlush;
+    if (across_x || across_y) return true;
+  }
+  return false;
+}
+
+std::vector<sb::NavExtraLink> teleport_links(const ge::shooterbots::BotView& s, sb::NavGraph& g,
+                                             const ge::shooter::MapSpec& spec,
                                              const std::vector<sb::EntityBlock>& blocks) {
   std::vector<sb::NavExtraLink> out;
   for (const sb::EntityBlock& b : blocks) {
+    if (!teleporter_in_game(s, spec, b)) continue;
     const char* cn = sb::block_value(b, "classname");
     const char* target = sb::block_value(b, "target");
     if (!cn || !target || sb::block_value(b, "targetname")) continue;
@@ -707,7 +808,7 @@ std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter:
       const char* model = sb::block_value(b, "model");
       if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
       box = model_box(spec, std::atoi(model + 1));
-      if (!box.ok) continue;
+      if (!box.ok || walled_off(s, spec, blocks, box)) continue;
     } else if (std::strcmp(cn, "misc_teleporter") == 0) {
       const char* org = sb::block_value(b, "origin");
       if (!org) continue;
@@ -1141,7 +1242,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
-  std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
+  std::vector<sb::NavExtraLink> teleports = teleport_links(s, out.graph, spec, blocks);
   const std::vector<sb::NavExtraLink> pushes =
       push_links(out.graph, spec, blocks, out.world, out.move);
   teleports.insert(teleports.end(), pushes.begin(), pushes.end());
@@ -1165,7 +1266,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     // Out, and a player's half-width beyond its edge (a node there stands on it too).
     // A floor door's nodes stand on it where it rests (a turning one's too); a bridge's where the
     // map drew it.
-    const sh::Vec3f shift = br.floor || br.turns ? sh::Vec3f{} : br.spawn;
+    const sh::Vec3f shift = br.floor || br.turns ? sh::Vec3f{} : br.spawn - br.out_at;
     const sh::Vec3f lo = ab.min - shift - sh::Vec3f{16, 16, 0},
                     hi = ab.max - shift + sh::Vec3f{16, 16, 0};
     for (size_t n = 0; n < out.graph.nodes.size(); n++) {

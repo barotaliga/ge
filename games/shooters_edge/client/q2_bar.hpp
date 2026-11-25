@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -91,9 +92,10 @@ struct Q2Bar {
   // loaded pictures carry: a change reads them again.
   const double* gamma = nullptr;
   double pics_gamma = 1;
-  // The crosshair's settings the last draw_q2_crosshair was given (ch_scale, ch_x, ch_y: a
-  // scope's picture follows them); null: their defaults.
-  const ge::hud::CrosshairSettings* cross = nullptr;
+  // A copy of the crosshair's settings the last draw_q2_crosshair was given (ch_scale, ch_x, ch_y:
+  // a scope's picture follows them); none: their defaults. A copy, since the caller's settings may
+  // not outlive the call.
+  std::optional<ge::hud::CrosshairSettings> cross = std::nullopt;
   // The console a missing scr_font is told on and set back in (null: neither).
   ge::console::Console* console = nullptr;
   int64_t hits_seen = 0;

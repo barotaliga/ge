@@ -19,6 +19,8 @@ namespace dc = shooters_edge::client;
 
 constexpr float kSameShot = 0.05f;  // s of weapon clock: one sound twice this close is one shot
 constexpr float kHitEvery = 0.6f;   // s: the lightning gun's hit heard at most this often
+// Commands: a shot a correction moved this far from one played is that one.
+constexpr int32_t kMovedBy = 4;
 constexpr int kMostCommands = 62;
 
 // The stats the prediction draws over.
@@ -39,7 +41,8 @@ int model_index(const dc::DemoState& d, const char* name) {
 }
 
 // A sound of the kind the prediction plays, on the player's own entity: the server's copy of one
-// it played is dropped, any other plays late.
+// it played is dropped, any other plays late. A sample the prediction never plays (the axe's hit,
+// a mission pack's cool-down or blow) is the server's alone.
 bool predicted_copy(const RemoteWeapon& w, const dc::DemoState& d, const dc::DemoSound& s, int me) {
   if (s.entity != me + 1 || s.name != nullptr || w.sound_mask == 0) return false;
   if (s.sound <= 0 || static_cast<size_t>(s.sound) >= d.sounds.size()) return false;
@@ -47,7 +50,7 @@ bool predicted_copy(const RemoteWeapon& w, const dc::DemoState& d, const dc::Dem
   const int bit = cl::weapon_sound_bit_of_sample(sample);
   if (s.channel == 0) return sample == "weapons/lstart.wav" && (w.sound_mask & 256) == 0;
   if (s.channel != 1) return false;
-  if (w.sound_mask == 1) return sample != "player/axhit2.wav";
+  if (w.sound_mask == 1) return bit != 0;
   return bit == 0 || (w.sound_mask & bit) == 0;
 }
 
@@ -105,7 +108,9 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
   if (static_cast<int32_t>(w.played_to - acked) < 0) w.played_to = acked;
   cl::WeaponState s = own.weapon;
   s.frame = own.weaponframe;
-  const cl::WeaponWorld world{static_cast<int>(d.stats[dc::kStatItems]), w_rank};
+  // A mission pack's rules when the level lists its guns (cl::weapon_rules_of).
+  const cl::WeaponWorld world{static_cast<int>(d.stats[dc::kStatItems]), w_rank,
+                              cl::weapon_rules_of(d.models)};
   const bool frozen = own.dead || own.pm == PmType::none || own.pm == PmType::lock;
   int run = 0;
   for (uint32_t q = acked + 1; static_cast<int32_t>(q - shown) <= 0 && run < kMostCommands; q++) {
@@ -120,13 +125,23 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
     cmd.waterlevel = waterlevel;
     cl::WeaponEvent ev[8];
     const int n = cl::weapon_command(s, cmd, world, ev, 8);
-    if (static_cast<int32_t>(q - w.played_to) <= 0) continue;  // played by an earlier pass
+    // A command an earlier pass reached played its shots then. A correction can move a shot back
+    // onto one (the server's think a few milliseconds off the predicted clock): one no sound of
+    // its kind was played beside plays now, or it is heard only as the server's copy, late.
+    const bool replayed = static_cast<int32_t>(q - w.played_to) <= 0;
     for (int i = 0; i < n; i++) {
-      const float gap = ev[i].sound == cl::WeaponSound::lightning_hit ? kHitEvery : kSameShot;
-      if (!weapon_shot_fresh(w.last_shot, static_cast<int>(std::size(w.last_shot)),
-                             static_cast<int>(ev[i].sound), ev[i].clock, gap))
-        continue;
-      w.fired.push_back({ev[i], q, (s.flags & 1) != 0});
+      if (replayed) {
+        if (ev[i].sound == cl::WeaponSound::lightning_hit || !plays(w, ev[i].sound)) continue;
+        const int kind = sound_index(d, cl::weapon_sound_sample(ev[i].sound));
+        if (kind == 0 || weapon_played_near(w.played, static_cast<int32_t>(q), kind, kMovedBy))
+          continue;
+      } else {
+        const float gap = ev[i].sound == cl::WeaponSound::lightning_hit ? kHitEvery : kSameShot;
+        if (!weapon_shot_fresh(w.last_shot, static_cast<int>(std::size(w.last_shot)),
+                               static_cast<int>(ev[i].sound), ev[i].clock, gap))
+          continue;
+      }
+      w.fired.push_back({ev[i], q, (s.flags & 1) != 0, s.weapon, world.rules});
       if (ev[i].sound != cl::WeaponSound::lightning_hit) weapon_shot_fired(d, s.frame);
       if (!plays(w, ev[i].sound)) continue;
       dc::DemoSound snd;
@@ -135,10 +150,12 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
       const char* sample = cl::weapon_sound_sample(ev[i].sound);
       snd.sound = sound_index(d, sample);
       if (snd.sound == 0) snd.name = sample;
+      snd.volume = cl::weapon_sound_volume(ev[i].sound);
       snd.attenuation = 0;
       snd.origin = origin;
       d.started.push_back(snd);
-      if (snd.sound != 0) weapon_played_add(w.played, static_cast<int32_t>(q), snd.sound);
+      for (int k = 0; snd.sound != 0 && k < ev[i].copies; k++)
+        weapon_played_add(w.played, static_cast<int32_t>(q), snd.sound);
     }
   }
   if (static_cast<int32_t>(shown - w.played_to) > 0) w.played_to = shown;
@@ -147,10 +164,11 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
   for (const int k : kDrawn) w.stats[k] = d.stats[k];
   w.frame = d.players[static_cast<size_t>(me)].weapon_frame;
   w.applied = true;
-  const int model = model_index(d, cl::weapon_view_model(s.weapon));
+  if (s.weapon == cl::kWeaponUnknown) return;  // a change only the server can say: its own drawn
+  const int model = model_index(d, cl::weapon_view_model(s.weapon, world.rules));
   if (model != 0 && d.stats[dc::kStatWeapon] != 0) d.stats[dc::kStatWeapon] = model;
   d.stats[dc::kStatActiveWeapon] = s.weapon;
-  d.stats[dc::kStatAmmo] = cl::weapon_current_ammo(s);
+  d.stats[dc::kStatAmmo] = cl::weapon_current_ammo(s, world.rules);
   for (int i = 0; i < 4; i++) d.stats[dc::kStatShells + i] = s.ammo[i];
   // The frame only from a server that animates it (rules whose shots run frame by frame): one whose
   // frames stay 0 leaves the hand to play its own shot (client/held.cpp).

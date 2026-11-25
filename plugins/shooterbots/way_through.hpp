@@ -65,6 +65,7 @@ constexpr float kKeyCovered = 96;      // a locked door this near a key's height
 constexpr float kWaySeen = 192;        // a node this near where he has stood is explored, units
 
 constexpr uint8_t kLockedOut = 2;     // `locked_turns`: a bridge open only once all the way out
+constexpr uint8_t kLockedGone = 3;    // `locked_turns`: a wall open once it is no longer solid
 constexpr double kWayTour_s = 30;     // (`complete`) the tour worked out again this often, s
 constexpr int kWayTourMax = 96;       // and over the nearest this many stops at most
 constexpr float kWayStill = 96;       // (`complete`) no further than this, units, in
@@ -80,10 +81,16 @@ const char* way_kind_name(WayKind k);
 struct WayStep {
   sh::Vec3f lo, hi;  // its box (the item's spot grown a little)
   std::string target, name;
-  int32_t node = -1;  // where it is reached from
-  int button = -1;    // a button's index in the fighter's spots
-  int key_bit = 0;    // a key's item bit (Quake's), or
-  int ent = -1;       // the key lying on the map (Quake II's: taken when it is gone)
+  // A trigger that waits for something to make it live (Quake II's TRIGGERED: bunk1's strip by
+  // its locked doors, live once the button beside it is pressed): its name and the names that fire
+  // it in turn (a trigger the button fires), left for good until a step with one as its target is
+  // done.
+  std::vector<std::string> gate;
+  bool repeats = false;  // a trigger_multiple: it fires each time he walks in
+  int32_t node = -1;     // where it is reached from
+  int button = -1;       // a button's index in the fighter's spots
+  int key_bit = 0;       // a key's item bit (Quake's), or
+  int ent = -1;          // the key lying on the map (Quake II's: taken when it is gone)
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;
@@ -94,6 +101,7 @@ struct WayStep {
   bool drains = false;    // a button that moves water (it strands him in the pool): pressed last
   bool ever = false;      // (`complete`) done once: a lift's button shut again is not pressed again
   int tries = 0;          // (`complete`) times it was left
+  bool first = false;     // (`complete`) taken before the tour's stops (a blast weapon)
   bool reach_in = false;  // (`complete`) its node lies by it, not in it: the last stretch is
                           // walked or swum into its box (`way_reach_in`)
   std::vector<sh::Vec3f> crawl;  // (`complete`) or crawled from its node, ducked (a nook under a
@@ -151,7 +159,25 @@ struct WayThrough {
   // The drops through a floor door (MapNav::hatches) shut now (it rests over its hole): their
   // links, and at the last plan.
   std::vector<int32_t> hatch_shut, hatch_shut_was;
+  // The links into an exit's box from outside it (way_exits.hpp): each with its from node and its
+  // exit's step, shut to his routes while another step is his; and his step at the last rebuild.
+  struct ExitLink {
+    int32_t link = 0, from = 0, step = -1;
+  };
+  std::vector<ExitLink> exit_links;
+  int exit_step_was = -2;
   std::vector<int> walls;  // the secret walls among `locked`
+  // A floor door that starts open and closes when fired (e3m2's over the key's pillar, shut as the
+  // pillar sinks): its edict, where it spawned, and (found the first time it stands closed) the
+  // links through it, shut while it is away from where it spawned (`closed_shut`).
+  struct Closer {
+    int door = -1;
+    sh::Vec3f spawn{};
+    bool known = false;
+    std::vector<int32_t> links, froms;
+  };
+  std::vector<Closer> closers;
+  std::vector<int32_t> closed_shut, closed_from, closed_was;
   struct KeyDoor {
     int door = -1, bit = 0;  // a Quake key door among `locked`, and its key's item bit
   };
@@ -257,6 +283,25 @@ void way_reach_in(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotVi
 // the walk off the edge, steered into it on the way down (`WayStep::fall`).
 void way_fall_steps(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s,
                     const ge::ai::Search& reach);
+
+// A link from `a` to `b` goes through the floor door from `lo` to `hi`: it passes the door's
+// middle height, and there or at its lower end (a drop falls straight once past the edge) it is
+// over the door, a player's half width allowed.
+bool way_through_floor(sh::Vec3f a, sh::Vec3f b, sh::Vec3f lo, sh::Vec3f hi);
+// The node a player standing on touches the box from, nearest its middle; else the nearest a step
+// beyond it; else one under it that a fall through it lands on; else none.
+int32_t way_node_in(const ge::shooterbots::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi);
+// Door `e` (spawnflags `sf`) noted as a closer (`WayThrough::closers`) when it starts open and lies
+// flat: a floor that closes when fired.
+void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, const char* sf);
+// The closers away from where they spawned: their links in `closed_shut` (each found the first time
+// it stands closed and still); whether that set changed since the last call.
+bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s);
+// (`complete`) A map with monsters only a blast puts down (e3m2's zombies): the weapons lying on it
+// that blast (`BotArsenal::blast_pickup`) as steps walked over first (`WayStep::first`), so he
+// carries one before they wait.
+void way_blast_steps(WayThrough& w, const Fighter& f, const MapNav& nav,
+                     const ge::shooterbots::BotView& s);
 
 constexpr float kWayStuck = 24;
 constexpr double kWayStuck_s = 1.5;

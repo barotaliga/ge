@@ -752,8 +752,16 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       break;
     case 1:   // blood
     case 26:  // green blood
-    case 42:  // more blood
       if (!point_dir(DemoEffectKind::blood)) return false;
+      break;
+    case 30:  // Ground Zero's point effects, drawn by our rules' names (q2_temp_fx.hpp's
+    case 42:  // kQ2PackTes): a green blaster's hit, more blood, the heat beam's sparks and steam,
+    case 43:  // electric sparks, a flechette's hit
+    case 44:
+    case 46:
+    case 55:
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.name = q2_pack_te(kind);
       break;
     case 2:  // the blaster's bolt landing: its yellow sparks and the mark, as our own game's
       if (!point_dir(DemoEffectKind::named)) return false;
@@ -762,11 +770,6 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 9:
     case 12:
     case 13:
-    case 30:
-    case 43:
-    case 44:
-    case 46:
-    case 55:
       if (!point_dir(DemoEffectKind::spike)) return false;
       break;
     case 5:
@@ -866,9 +869,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.name = kind == 16 ? "te_parasite_attack" : "te_medic_cable_attack";
       break;
     case 38:
-    case 39:  // entity, start, end
+    case 39:  // a heat beam, the player's or a monster's: entity, start, end (world_fx_q2.cpp)
       e.entity = m.i16();
-      line(DemoEffectKind::beam);
+      line(DemoEffectKind::named_trail);
+      e.name = kind == 38 ? "te_heatbeam" : "te_monster_heatbeam";
       break;
     case 24: {  // the grapple: entity, start, end, offset; its cable from the start plus the offset
       e.entity = m.i16();
@@ -878,11 +882,20 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.at = e.at + e.way;
       break;
     }
-    case 33:  // lightning: two entities, start, end
+    case 33: {  // lightning: the source, what it strikes, start, end; the tesla's crackle heard on
+                // the source's weapon channel, each message anew
       e.entity = m.i16();
-      m.i16();
-      line(DemoEffectKind::beam);
+      e.colour = m.i16();  // what it strikes: one bolt a pair (world_fx_q2.cpp)
+      line(DemoEffectKind::named_trail);
+      e.name = "te_lightning";
+      DemoSound o;
+      o.entity = e.entity;
+      o.channel = 1;
+      o.name = "weapons/tesla.wav";
+      o.origin = e.at;
+      if (!m.bad) s.started.push_back(o);
       break;
+    }
     case 36:  // a flashlight: point, entity
       point(DemoEffectKind::named);
       e.name = "sq_flashlight";
@@ -1365,5 +1378,7 @@ DemoRead next_q2(Demo& d, std::string& error) {
     if (d.ended) return DemoRead::end;
   }
 }
+
+bool q2_extended(int protocol) { return ext_of(protocol) > 0; }
 
 }  // namespace shooters_edge::client

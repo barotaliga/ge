@@ -7,6 +7,7 @@
 // ge:keywords am-bomb double-damage obituary
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_q2_gz_test.cpp
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,9 +15,13 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/content/load_order.hpp"
+#include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
+#include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -247,4 +252,228 @@ TEST(a_dry_body_turns_to_ground_zero_s_order) {
   CHECK(sv::sq_best_weapon(b) == int(SqWeapon::etf_rifle));
 }
 
+// A unit's start config (runit2.cfg: `give etf rifle`, `give prox 15`, ...) takes the pack's
+// item names in single player.
+TEST(a_unit_s_start_config_gives_the_pack_s_weapons_by_name) {
+  auto a = facing(200, "0");
+  a->r.console("cheats 1");
+  for (const char* line : {"give etf rifle", "give prox launcher", "give plasma beam",
+                           "give chainfist", "give flechettes 125", "give prox 15"})
+    a->r.client_command(0, line);
+  const sv::SqBody& b = a->p(0).body;
+  for (const char* item :
+       {"weapon_etf_rifle", "weapon_proxlauncher", "weapon_plasmabeam", "weapon_chainfist"})
+    CHECK_MSG(b.counts[sv::sq_item(item, sv::Q2Pack::ground_zero)] == 1, item);
+  CHECK(b.ammo[int(sv::SqAmmo::flechettes)] == 125);
+  CHECK(b.ammo[int(sv::SqAmmo::prox)] == 15);
+}
+
+// The pack's own default.cfg names its first map, as the base game's does.
+TEST(the_new_game_starts_on_the_map_the_game_s_default_cfg_names) {
+  namespace cc = ge::classic::content;
+  CHECK(cc::new_game_map("// newgame command\nalias   newgame \" killserver ; maxclients 1 ; "
+                         "deathmatch 0 ; map *rintro.cin+rmine1\"\n") == "rmine1");
+  CHECK(cc::new_game_map("alias newgame \"map *logo.cin+xin.cin+xswamp\"") == "xswamp");
+  CHECK(cc::new_game_map("alias newgame \"map *ntro.cin+base1$start\"\r\n") == "base1");
+  CHECK(cc::new_game_map("alias newgame \"map victory.pcx\"").empty());
+  CHECK(cc::new_game_map("bind 1 \"use Blaster\"\nmap base2\n").empty());
+}
+
+// A game of the pack saved with mines in flight and stuck, a tesla thrown and double damage
+// running, loaded into a fresh server of the pack, plays on as the game never saved.
+TEST(a_ground_zero_game_saved_and_loaded_plays_on_as_the_game_never_saved) {
+  auto a = facing(900, "0");
+  give(*a, SqWeapon::prox_launcher, 5);
+  run(*a, 2, 1);  // a mine down the hall
+  run(*a, 120);   // landed and opening
+  run(*a, 2, 1);  // another, in flight at the save
+  a->p(0).double_until = a->s().level_time + 20;
+  std::vector<uint8_t> file;
+  std::string error;
+  CHECK_MSG(sv::q2_save(a->s(), file, error), error);
+  auto b = std::make_unique<Arena>();
+  sv::Q2ServerOptions o;
+  o.pack = sv::Q2Pack::ground_zero;
+  b->r = sv::q2_runner(sv::make_q2_server(o));
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  CHECK_MSG(sv::q2_load(b->r, map, file, "test", error), error);
+  b->sequence = a->sequence;
+  CHECK_MSG(sv::q2_digest(b->s()) == sv::q2_digest(a->s()), "the loaded game differs");
+  for (int k = 0; k < 400; k++) {
+    const uint8_t buttons = k % 60 < 2 ? 1 : 0;  // a mine a little under a second apart
+    run(*a, 1, buttons);
+    run(*b, 1, buttons);
+    if (sv::q2_digest(b->s()) != sv::q2_digest(a->s())) {
+      CHECK_MSG(false, "the loaded game went its own way at tick " + std::to_string(k));
+      break;
+    }
+  }
+  CHECK(b->p(0).double_until > 0);
+}
+
+// The pack's last level hands every player the A-M bomb, selected, outside deathmatch.
+TEST(the_last_level_hands_out_the_am_bomb_selected) {
+  for (const char* dm : {"0", "1"}) {
+    auto a = std::make_unique<Arena>();
+    sv::Q2ServerOptions o;
+    o.pack = sv::Q2Pack::ground_zero;
+    a->r = sv::q2_runner(sv::make_q2_server(o));
+    a->r.console(std::string("deathmatch ") + dm);
+    sv::MapSpec map;
+    map.name = "rboss";
+    map.brushes = hall();
+    std::string error;
+    CHECK_MSG(a->r.start(map, error), error);
+    a->r.connect(0, "Ana", false, false);
+    run(*a, 20);
+    const int bomb = sv::sq_item("ammo_nuke", sv::Q2Pack::ground_zero);
+    const sv::SqBody& b = a->p(0).body;
+    const bool single = dm[0] == '0';
+    CHECK_MSG((b.counts[bomb] == 1) == single, dm);
+    CHECK((b.selected == sv::sq_item_number(bomb, sv::Q2Pack::ground_zero)) == single);
+  }
+}
+
 }  // namespace
+
+// A single player's room under Ground Zero: an exit trigger with TOGGLE (8) and two relays that
+// use it, a box of bullets spawned by a trigger (1) above the floor, a health with a flag it lacks.
+std::unique_ptr<Arena> room() {
+  br::BrushWorld w;
+  w.models.resize(4);
+  const float floor_lo[3] = {-512, -512, -16}, floor_hi[3] = {512, 512, 0};
+  const float exit_lo[3] = {384, -64, 0}, exit_hi[3] = {448, 64, 96};
+  const float door_lo[3] = {0, 256, 0}, door_hi[3] = {64, 264, 128};
+  const float crate_lo[3] = {-256, 256, 0}, crate_hi[3] = {-192, 320, 64};
+  w.models[0].push_back(br::box_brush(floor_lo, floor_hi, sh::kSqSolid, "world/floor"));
+  w.models[1].push_back(br::box_brush(exit_lo, exit_hi, sh::kSqSolid, "common/trigger"));
+  w.models[2].push_back(br::box_brush(door_lo, door_hi, sh::kSqSolid, "world/door"));
+  w.models[3].push_back(br::box_brush(crate_lo, crate_hi, sh::kSqSolid, "world/crate"));
+  const auto put = [&](std::vector<std::pair<std::string, std::string>> pairs) {
+    w.entities.push_back(entity(std::move(pairs)));
+  };
+  put({{"classname", "info_player_start"}, {"origin", "-300 0 24"}, {"angle", "0"}});
+  put({{"classname", "trigger_multiple"},
+       {"model", "*1"},
+       {"spawnflags", "8"},
+       {"targetname", "exiter"},
+       {"target", "out"}});
+  put({{"classname", "target_changelevel"}, {"targetname", "out"}, {"map", "next"}});
+  put({{"classname", "trigger_relay"}, {"targetname", "r"}, {"target", "exiter"}});
+  put({{"classname", "ammo_bullets"},
+       {"origin", "0 0 96"},
+       {"spawnflags", "2049"},
+       {"targetname", "t1"}});
+  put({{"classname", "item_health"}, {"origin", "-128 0 24"}, {"spawnflags", "2"}});
+  put({{"classname", "func_door_rotating"},
+       {"model", "*2"},
+       {"origin", "0 256 0"},
+       {"spawnflags", "8192"},
+       {"targetname", "d"},
+       {"distance", "90"}});
+  put({{"classname", "func_explosive"}, {"model", "*3"}, {"spawnflags", "8"}, {"targetname", "c"}});
+  std::vector<uint8_t> bytes;
+  std::string error;
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::write_brush_world(w, &bytes, &error) && br::read_bsp(bytes, map.get(), &error),
+            error);
+  auto a = std::make_unique<Arena>();
+  sv::Q2ServerOptions o;
+  o.pack = sv::Q2Pack::ground_zero;
+  a->r = sv::q2_runner(sv::make_q2_server(o));
+  a->r.console("deathmatch 0");
+  sv::MapSpec spec;
+  spec.name = "room";
+  spec.brushes = map;
+  CHECK_MSG(a->r.start(spec, error), error);
+  a->r.connect(0, "Ana", false, false);
+  a->r.connect(1, "Ben", false, false);
+  run(*a, 40);
+  return a;
+}
+
+int named(const sv::Q2Server& s, std::string_view classname) {
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (s.entities[i].classname == classname) return static_cast<int>(i);
+  return -1;
+}
+
+int use_named(sv::Q2Server& s, const char* target) {
+  sv::Q2Entity relay;
+  relay.classname = "trigger_relay";
+  relay.target = target;
+  s.entities.push_back(relay);
+  sv::map_use_targets(s, static_cast<int>(s.entities.size() - 1), 0);
+  return static_cast<int>(s.entities.size() - 1);
+}
+
+TEST(a_toggled_trigger_starts_off_and_each_use_switches_it_never_firing_it) {
+  auto a = room();
+  sv::Q2Server& s = a->s();
+  const int exit = named(s, "trigger_multiple"), relay = named(s, "trigger_relay");
+  CHECK(!s.entities[size_t(exit)].trigger);
+  sv::map_use_targets(s, relay, 0);
+  CHECK(s.entities[size_t(exit)].trigger && s.pending_map.empty());  // on, and nothing left for
+  sv::map_use_targets(s, relay, 0);
+  CHECK(!s.entities[size_t(exit)].trigger && s.pending_map.empty());  // off again
+}
+
+TEST(a_trigger_spawned_item_waits_unseen_where_placed_then_drops_when_used) {
+  auto a = room();
+  sv::Q2Server& s = a->s();
+  const int box = named(s, "ammo_bullets");
+  CHECK(s.entities[size_t(box)].hidden && s.entities[size_t(box)].origin.z == 96);
+  bool said_box = false, said_health = false;
+  for (const std::string& l : s.console) {
+    said_box = said_box || l.find("ammo_bullets at") == 0;
+    said_health = said_health || l == "item_health at (-128 0 24) has invalid spawnflags set";
+  }
+  CHECK(!said_box && said_health);  // 1 is the pack's own; 2 on a health is not
+  CHECK(!s.entities[size_t(named(s, "item_health"))].hidden);
+  use_named(s, "t1");
+  CHECK_MSG(
+      !s.entities[size_t(box)].hidden && std::abs(s.entities[size_t(box)].origin.z - 15) < 0.2f,
+      std::to_string(s.entities[size_t(box)].origin.z));
+  CHECK((s.entities[size_t(box)].spawnflags & 1) == 0);  // once
+}
+
+TEST(an_inactive_rotating_door_wakes_on_its_first_use_and_opens_by_touch_after) {
+  auto a = room();
+  sv::Q2Server& s = a->s();
+  const int door = named(s, "func_door_rotating"), field = named(s, "door_field");
+  CHECK(field >= 0 && !s.entities[size_t(field)].trigger);  // asleep: no touch opens it
+  use_named(s, "d");
+  CHECK(s.entities[size_t(field)].trigger);
+  CHECK(s.entities[size_t(door)].state == 0);  // woken, not opened
+  use_named(s, "d");
+  CHECK(s.entities[size_t(door)].state == 0);  // no trigger uses it again
+}
+
+TEST(an_inactive_explosive_takes_no_damage_until_woken_then_a_use_blows_it) {
+  auto a = room();
+  sv::Q2Server& s = a->s();
+  const int crate = named(s, "func_explosive");
+  const int health = s.entities[size_t(crate)].health;
+  sv::map_damage(s, crate, 0, 10, {1, 0, 0});
+  CHECK(s.entities[size_t(crate)].health == health);
+  use_named(s, "c");
+  CHECK(!s.entities[size_t(crate)].gone);
+  sv::map_damage(s, crate, 0, 10, {1, 0, 0});
+  CHECK(s.entities[size_t(crate)].health == health - 10);
+  use_named(s, "c");
+  CHECK(s.entities[size_t(crate)].gone);
+}
+
+TEST(the_laser_passes_on_through_a_thing_it_hurts) {
+  auto a = room();
+  sv::Q2Server& s = a->s();
+  const sh::Vec3f from{-300, 288, 32}, to{-100, 288, 32};
+  CHECK(std::abs(sv::fight_laser(s, from, to, 1, -1, -1).at.x + 256) < 0.1f);  // asleep: stops
+  use_named(s, "c");
+  const int crate = named(s, "func_explosive");
+  const int health = s.entities[size_t(crate)].health;
+  CHECK(sv::fight_laser(s, from, to, 1, -1, -1).at.x == -100);  // hurt once, and on past it
+  CHECK(s.entities[size_t(crate)].health == health - 1);
+}

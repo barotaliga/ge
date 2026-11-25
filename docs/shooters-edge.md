@@ -332,7 +332,8 @@ ammo|pairs|row`, `hud_guns_all`, `hud_ammo_all`; the weapon in hand raised over 
 while they show; drawn in the packs' own pictures when
 a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
-models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
+models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, turned
+by its angles about the map's origin (a swinging door, a fan, a rotating train: M63b), and one
 the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
 `set_movers`, fed each frame by `client/world_models.hpp`'s `place_brushes`; their shadows in the
 modern look stay where the map built them. Not yet: sounds and the network (the rest of M18h,
@@ -581,7 +582,33 @@ at once, and each server frame corrects the prediction. `cl_nopred_weapon 1` tur
 `cl_predict_weaponsound` chooses which weapons' sounds are played ahead (0 none, 1 all, above 1 a
 mask of those left to the server), `cl_predict_buffer` how many commands behind the newest the
 weapon is shown, `cl_pext_weaponprediction 0` stops asking for the state. `make lab
-LAB=se-weapon-predict` measures the press to the first shot heard, off and on. On a Quake II server, any server, the window predicts the same way from the gun the frames show (`net/q2_weapon.hpp`: the shot's flash heard, the gun's frame and the ammunition drawn at the press) under the same three settings; `make lab LAB=se-q2-weapon-predict` measures it. Your own eye rides the same clock as the models: drawn one server frame behind, between
+LAB=se-weapon-predict` measures the press to the first shot heard, off and on. On a Quake II server, any server, the window predicts the same way from the gun the frames show (`net/q2_weapon.hpp`: the shot's flash heard, the gun's frame and the ammunition drawn at the press) under the same three settings; `make lab LAB=se-q2-weapon-predict` measures it. Through a teleporter (or at
+a spawn) the server turns the player with a `setangle` in his next datagram; under the high-lag
+teleport (the demo family's bit 0x02, `cl_pext_lagteleport`, on by default;
+`classic/protocol/lag_turn.hpp`) it carries its kind, and the moves the player made before the
+turn reached him are turned to where he now faces on the server and in the window's prediction
+alike, so he never walks the old way for a round trip and the two agree; the mouse's turning
+during that round trip is kept. `make lab LAB=se-teleport ARGS="--basedir=<base> --map=dm6"` walks
+through a teleporter and counts the frames off where he faces, on and off. The client goes further
+and FORESEES the teleport (`cl_predict_teleport`, on by default; `shooter/teleport_ahead.hpp` and
+`classic/teleporters.hpp`): the level's own teleporters (Quake's `trigger_teleport` to an
+`info_teleport_destination`, Quake II's `misc_teleporter` pad) are taken in the window's prediction
+the command the player's box reaches one, so the far end is drawn and the view turned the frame he
+walks in, on any server that runs the game's own rules. Its moves after that are made the new way,
+so the high-lag teleport is not asked for while it is on; a server that does not teleport him
+(a teleporter waiting to be switched on, a mod's own rule) is believed two commands later, the
+turn taken back and that teleporter left out while he stands in it, and a server's turn to the
+same facing is the guess's own. `make lab LAB=se-teleport` and `make lab LAB=se-q2-teleport
+ARGS="--game=<base> --map=city1"` measure it. A push trigger (a jump pad, a wind tunnel) is
+foreseen the same way (`cl_predict_push`). DOORS, PLATS AND TRAINS RUN ON in the prediction
+(`cl_predict_movers`, on by default; `shooter/predict.hpp`'s `MoverTrack`, `advance_movers`): each
+goes on at the speed its last two frames show, stops where it was seen standing (or where it was
+built), carries the player who stands on it and shoves him where it moves into him, so the lift
+under him and the door he runs through are where the server will have them when it runs his move;
+the window draws them there too. Quake II's server moves them once a 100 ms frame, so they step
+there a frame at a time. `make lab LAB=se-control ARGS="--basedir=<base> --game=<folder>
+--map=dm2 --event=plat"` (or `door`, `push`, `water`, `train`; a Quake II install's folder for its
+maps) counts the yanks both ways. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder
@@ -732,10 +759,10 @@ server's frames go on under it). Its pages are Quake's:
 | OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
-| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
+| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`), SPENT SHELLS (`ce_shells`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
-| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
+| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_ao`, `ce_ao_strength`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `r_arrival`, `ce_respawns`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
@@ -1674,7 +1701,11 @@ every pass, and judged by captioned screenshots:
   (`client/world_extras.hpp`) the modern look also draws the water, the lava and the slime as
   real liquids, the torches' burning gas and the weather through the open sky, and the map's
   textures come from classic-enhance's cache when the pack was enhanced, each behind its `ce_`
-  switch; `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
+  switch. A mission pack is enhanced laid over its base game (`ge tool classicenhance -- run
+  <install>/hipnotic` finds `id1` beside it): its cache is keyed by the base game's packs then the
+  pack's, the key the window reads with the pack mounted (`content_cache`), falling back to the
+  base game's own cache until the pack's is made (M63b);
+  `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
   both looks, for private pictures only. The `se-world` lab pictures every named view in both. The player sets the picture with
   cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
   effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and

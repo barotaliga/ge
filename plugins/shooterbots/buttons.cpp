@@ -332,13 +332,67 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
 }
 
 void exits_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotView& s,
-                const char* entities) {
+                const char* entities, const sh::MapSpec* spec) {
   f.exits.clear();
   f.locked.clear();
   f.locked_rest.clear();
   std::vector<sb::EntityBlock> blocks;
   std::string error;
   if (!entities || !sb::parse_entity_text(entities, blocks, error)) return;
+  // A map may leave by a trigger that fires a named changelevel target instead of a trigger
+  // that is one itself: the names of those targets, so their triggers count as exits too.
+  std::vector<std::string> leaving;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* name = sb::block_value(b, "targetname");
+    if (cn && name && std::strcmp(cn, "target_changelevel") == 0) leaving.emplace_back(name);
+  }
+  const auto fires_changelevel = [&](const char* target) {
+    if (!target) return false;
+    for (const std::string& n : leaving)
+      if (n == target) return true;
+    return false;
+  };
+  // A brush model's box: the server's (found by its name in the model list: a trigger draws none,
+  // so no entity carries the index), else (a runner that keeps none) the map's in `spec`.
+  const auto box_of = [&](const char* model, sh::Vec3f& lo, sh::Vec3f& hi) {
+    size_t mi = 0;
+    for (size_t i = 1; i < s.models.size() && i < s.sv.models.size(); i++)
+      if (s.models[i] == model) mi = i;
+    const size_t bm = static_cast<size_t>(std::atoi(model + 1));
+    if (mi > 0) {
+      lo = s.sv.models[mi].mins;
+      hi = s.sv.models[mi].maxs;
+    } else if (spec && spec->brushes && bm > 0 && bm < spec->brushes->models.size()) {
+      const ge::brush::Model& m = spec->brushes->models[bm];
+      lo = {m.mins[0], m.mins[1], m.mins[2]};
+      hi = {m.maxs[0], m.maxs[1], m.maxs[2]};
+    } else {
+      return false;
+    }
+    return true;
+  };
+  // An exit's nodes: those a standing player touches it from, and the stand-by one beside it.
+  const auto add_exit = [&](ExitSpot x) {
+    // The box a standing player at a node fills: 16 each way across, 24 below, 32 above.
+    const auto gap = [&](sh::Vec3f o) {
+      const float dx = std::fmax(std::fmax(x.lo.x - (o.x + 16), (o.x - 16) - x.hi.x), 0.f);
+      const float dy = std::fmax(std::fmax(x.lo.y - (o.y + 16), (o.y - 16) - x.hi.y), 0.f);
+      const float dz = std::fmax(std::fmax(x.lo.z - (o.z + 32), (o.z - 24) - x.hi.z), 0.f);
+      return std::sqrt(dx * dx + dy * dy + dz * dz);
+    };
+    float best = 1e30f;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const float d = gap(g.nodes[n].origin);
+      if (d <= kExitMargin) {
+        x.inside.push_back(static_cast<int32_t>(n));
+      } else if (d >= kExitClear && d <= kExitStandFar && d < best) {
+        best = d;
+        x.stand = static_cast<int32_t>(n);
+      }
+    }
+    f.exits.push_back(std::move(x));
+  };
   for (const sb::EntityBlock& b : blocks) {
     const char* cn = sb::block_value(b, "classname");
     const char* model = sb::block_value(b, "model");
@@ -361,34 +415,42 @@ void exits_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotVie
         }
       }
     }
-    if (!cn || std::strcmp(cn, "trigger_changelevel") != 0 || !model || model[0] != '*') continue;
-    // The trigger's brush model by its name in the model list (a trigger draws none, so no
-    // entity carries the index): its bounds are the box.
-    size_t mi = 0;
-    for (size_t i = 1; i < s.models.size() && i < s.sv.models.size(); i++)
-      if (s.models[i] == model) mi = i;
-    if (mi == 0) continue;
+    if (!cn || !model || model[0] != '*') continue;
+    const bool changes =
+        std::strcmp(cn, "trigger_changelevel") == 0 ||
+        ((std::strcmp(cn, "trigger_multiple") == 0 || std::strcmp(cn, "trigger_once") == 0) &&
+         fires_changelevel(sb::block_value(b, "target")));
+    if (!changes) continue;
     ExitSpot x;
-    x.lo = s.sv.models[mi].mins;
-    x.hi = s.sv.models[mi].maxs;
-    // The box a standing player at a node fills: 16 each way across, 24 below, 32 above.
-    const auto gap = [&](sh::Vec3f o) {
-      const float dx = std::fmax(std::fmax(x.lo.x - (o.x + 16), (o.x - 16) - x.hi.x), 0.f);
-      const float dy = std::fmax(std::fmax(x.lo.y - (o.y + 16), (o.y - 16) - x.hi.y), 0.f);
-      const float dz = std::fmax(std::fmax(x.lo.z - (o.z + 32), (o.z - 24) - x.hi.z), 0.f);
-      return std::sqrt(dx * dx + dy * dy + dz * dz);
-    };
-    float best = 1e30f;
-    for (size_t n = 0; n < g.nodes.size(); n++) {
-      const float d = gap(g.nodes[n].origin);
-      if (d <= kExitMargin) {
-        x.inside.push_back(static_cast<int32_t>(n));
-      } else if (d >= kExitClear && d <= kExitStandFar && d < best) {
-        best = d;
-        x.stand = static_cast<int32_t>(n);
+    if (!box_of(model, x.lo, x.hi)) continue;
+    add_exit(std::move(x));
+  }
+  // A button that sends a lift up into an exit (base2's cage back to the last map, its button
+  // inside): pressing it is taking that exit, so the button's box is one too.
+  const size_t exits = f.exits.size();
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    const char* target = sb::block_value(b, "target");
+    if (!cn || std::strcmp(cn, "func_button") != 0 || !target || !model || model[0] != '*')
+      continue;
+    bool lifts = false;
+    for (const sb::EntityBlock& d : blocks) {
+      const char* dc = sb::block_value(d, "classname");
+      const char* dn = sb::block_value(d, "targetname");
+      const char* dm = sb::block_value(d, "model");
+      const char* angle = sb::block_value(d, "angle");
+      sh::Vec3f lo, hi;
+      if (!dc || std::strcmp(dc, "func_door") != 0 || !dn || std::strcmp(dn, target) != 0 ||
+          !angle || std::atoi(angle) != -1 || !dm || dm[0] != '*' || !box_of(dm, lo, hi))
+        continue;
+      for (size_t k = 0; k < exits && !lifts; k++) {
+        const ExitSpot& x = f.exits[k];
+        lifts = lo.x < x.hi.x && hi.x > x.lo.x && lo.y < x.hi.y && hi.y > x.lo.y && lo.z < x.lo.z;
       }
     }
-    f.exits.push_back(std::move(x));
+    ExitSpot x;
+    if (lifts && box_of(model, x.lo, x.hi)) add_exit(std::move(x));
   }
 }
 
@@ -432,6 +494,19 @@ void button_poke_look(Fighter& f, const ge::shooterbots::BotView& s, int me, dou
   f.poke_looked = true;
 }
 
+namespace {
+
+// Whether a wall stands between `self` and button `b` on the straight line (a button on a ledge
+// pressed from its front: walked straight at from the side, bunk1's on the 232 ledge pressed him
+// into the wall beside it for good; the route's keys bring him round to its front instead).
+bool walled(const ge::shooterbots::BotView& s, int me, sh::Vec3f self, const ButtonSpot& b) {
+  const sh::HullTrace tr =
+      sh::trace_move(s.sv, self, {0, 0, 0}, {0, 0, 0}, b.at, sh::kTraceNoMonsters, me);
+  return tr.fraction < 1 && tr.ent == 0;
+}
+
+}  // namespace
+
 void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
@@ -459,7 +534,7 @@ void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, doub
       cmd.forward = 0;
       cmd.side = 0;
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
-    } else if (flat < 200) {
+    } else if (flat < 200 && !walled(s, me, self, b)) {
       cmd.forward = 320;
       cmd.side = 0;
     }
@@ -483,7 +558,7 @@ void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, doub
       cmd.side = 0;
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
     }
-  } else if (flat < 200) {
+  } else if (flat < 200 && !walled(s, me, self, b)) {
     cmd.forward = 320;  // into it: a touch presses it
     cmd.side = 0;
   }

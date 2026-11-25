@@ -39,24 +39,49 @@
 
 #include <string_view>
 
+#include "shooter/vec.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 
 namespace shooters_edge::server {
+
+namespace sh = ge::shooter;
 
 struct Q2Server;
 struct Q2Missile;
 struct Q2Entity;
 
-// Ground Zero's own settings (`strong_mines`, `g_disruptor`), registered only
+// Ground Zero's own settings (`strong_mines`, `g_disruptor`, `huntercam`), registered only
 // when it is the pack played.
 void gz_cvars(Q2Server& s);
 // The class name a map's entity spawns as under Ground Zero (its rows for the base game's nail
 // gun and heat beam, and for the other pack's weapons and ammo); the same name otherwise.
 std::string_view gz_classname(std::string_view classname);
 // Whether item row `item` stays off the map under Ground Zero's rules: the disruptor and its
-// rounds unless `g_disruptor`; in deathmatch, the mines (dmflags 131072), the A-M bomb (524288),
-// the spheres (1048576).
+// rounds unless `g_disruptor` (every mode); outside deathmatch the A-M bomb, the Doppleganger and
+// the hunter and vengeance spheres; in deathmatch, the mines (dmflags 131072), the A-M bomb
+// (524288), the spheres (1048576).
 bool gz_left_out(const Q2Server& s, int item);
+// Ground Zero's co-op spawn rule for spawnflags `flags` (outside deathmatch): 1 left out (4096,
+// never in co-op), 0 kept (all three skill bits: co-op only, at every skill), -1 the base game's
+// rule decides (single player, another pack, `coop_baseq2` 1, or any other flags).
+int gz_coop_left_out(const Q2Server& s, int flags);
+
+// Its changes to the base game's map things (q2_gz_world.cpp), asked only while it is played:
+// whether `e` is a trigger_multiple with TOGGLE (8), which starts off; a use of `e` taken as a
+// toggle (that trigger: on or off, never fired); whether `e` makes no sound (a target_earthquake's
+// SILENT 1).
+// A func_door_rotating with INACTIVE (8192) not yet used: never shot and no touch field until
+// its first use wakes it (`kGzWoken` then marks it, and a named func_explosive woken by a use).
+struct Q2Entity;
+constexpr int kGzWoken = 0x40000;
+bool gz_toggled(const Q2Server& s, const Q2Entity& e);
+bool gz_inactive(const Q2Server& s, const Q2Entity& e);
+bool gz_used(Q2Server& s, Q2Entity& e);
+bool gz_silent(const Q2Server& s, const Q2Entity& e);
+
+// A player coming into the pack's last level (`rboss`) outside deathmatch: the A-M bomb his, and
+// selected in the inventory, for the boss.
+void gz_entered(Q2Server& s, int slot);
 
 // A shot of Ground Zero's weapon in `slot`'s hand (q2_fight.cpp's fire hands it over).
 void gz_fire(Q2Server& s, int slot, int shots);
@@ -74,6 +99,61 @@ SqStep gz_hand_fire(SqHand& h, SqBody& body, bool attack, double now, bool infin
 // The weapon a body that runs dry turns to in Ground Zero: railgun, plasma beam (2 cells or more),
 // ETF rifle, chaingun, machinegun, super shotgun (2 shells or more), shotgun, blaster.
 int gz_best_weapon(const SqBody& body);
+
+// --- The spheres (q2_gz_spheres.cpp)
+// -------------------------------------------------------------- Each launched from the top of its
+// owner's box and living 30 s, one out a player at a time, following its owner 4 above his box and
+// leaping to that spot each whole second it loses sight of him; drawn full bright and seen through
+// IR goggles; harmless bursts (TE 5) at its end, at the intermission, at `kill` and when its owner
+// leaves.
+// - **Defender**: halves its owner's blows (at least 1) before anything else saves them, and every
+//   0.4 s at most shoots a green bolt (1000 units/s, 10 and a 30 splash within 128, never on its
+//   owner) at whoever last hurt him while it sees him; it bursts when its owner dies.
+// - **Hunter**: idle, it turns to its owner's yaw. Its owner killed by another, it hunts the
+//   killer (15 s at least left): at 500 straight at his eye while it sees him, else to where it
+//   last saw him, lurking there; a body it touches takes 10 000 past armour, a thing that takes no
+//   blows a 512 blast within 256; with `huntercam` and the killer 192 or more away, its owner's
+//   corpse is thrown apart and his view rides it (field of view 140).
+// - **Vengeance**: spins; once a blow leaves its owner under 25, it flies at 500 straight at the
+//   attacker (15 s at least left) and strikes as the hunter does, the world too.
+// A hunter or vengeance sphere with no prey yet bursts when its owner dies; one hunting goes on.
+
+// Whether `k` is a sphere's kind.
+constexpr bool gz_sphere_kind(SqShot k) {
+  return k == SqShot::defender_sphere || k == SqShot::hunter_sphere ||
+         k == SqShot::vengeance_sphere;
+}
+// Player `slot` uses sphere item `item`: launched, or kept with "Only one sphere at a time!".
+// False when `item` is no sphere.
+bool gz_use_sphere(Q2Server& s, int slot, int item);
+// Whether player `slot` may not pick up item `item` (a sphere, while he has one out).
+bool gz_sphere_refused(const Q2Server& s, int slot, int item);
+// A blow of `damage` on player `target` from `by` (a slot, a monster as -2 - its entity, -1 none):
+// the defender's half (at least 1) and its new target. Returns the damage left.
+int gz_sphere_hurt(Q2Server& s, int target, int by, int damage);
+// A blow from `by` that player `target` lived through: the vengeance sphere's call under 25.
+void gz_sphere_hit(Q2Server& s, int target, int by);
+// Player `slot` killed by `killer` (a slot, -1 none): his sphere bursts, or hunts the killer.
+void gz_sphere_died(Q2Server& s, int slot, int killer);
+// Player `slot`'s sphere gone at once (the `kill` command), harmlessly.
+void gz_sphere_remove(Q2Server& s, int slot);
+// A doppleganger of `owner` killed by `target` (a slot) releases a sphere at `from`: a hunter or a
+// vengeance one, hunting at once for 15 s, its kills the doppleganger's, never hurting its owner.
+void gz_release_sphere(Q2Server& s, int owner, int target, sh::Vec3f from, bool hunter);
+// The Doppleganger (q2_gz_decoy.cpp), each a no-op outside the pack: a decoy row for every slot
+// at a deathmatch map's start; player `slot` using item `item` (true when it was the Doppleganger,
+// set down or kept); a blow on entity `i` (true when it is a decoy); its tenth (the fall, the
+// turns, its end); its rows.
+void gz_decoys_reserve(Q2Server& s);
+bool gz_use_decoy(Q2Server& s, int slot, int item);
+bool gz_decoy_damage(Q2Server& s, int i, int attacker, int damage);
+void gz_decoys_frame(Q2Server& s);
+void gz_decoy_rows(Q2Server& s);
+// Whether player `slot`'s view rides a hunter sphere (or stopped where one ended).
+bool gz_sphere_view(const Q2Server& s, int slot);
+// A tenth of sphere `m`, or of a defender's bolt (`m` a green bolt a player owns); false for
+// anything else.
+bool gz_sphere_missile(Q2Server& s, Q2Missile& m);
 
 // TAG (`gamerules 2` in deathmatch, q2_gz_tag.cpp): one token on the map; its holder scores 3 a
 // kill (a quad every fifth), whoever kills him scores 5 and takes it at once, and a blow neither

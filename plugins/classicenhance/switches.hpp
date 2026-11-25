@@ -40,7 +40,7 @@ struct Switches {
   bool textures = true, upscaler = true, relief = true, parallax = true, glow = true,
        pictures = true;
   // Light
-  bool rebake = true, flicker = true, shadows = true;
+  bool rebake = true, flicker = true, shadows = true, ao = true;
   // World
   bool decals = true;
   // Liquids and sky
@@ -49,7 +49,7 @@ struct Switches {
   // Effects
   bool flames = true, bonfires = true, muzzles = true, explosions = true, trails = true,
        hits = true, blood = true, flares = true, bubbles = true, beams = true, warps = true,
-       burning = true, monsters = true, respawns = true;
+       burning = true, monsters = true, respawns = true, shells = true;
   // Air
   bool fog = true, clouds = true, wind = true, weather = true;
   // Picture

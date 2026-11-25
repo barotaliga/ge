@@ -240,6 +240,7 @@ void key_lines(Q2Server& s, const ge::brush::Entity& b) {
 constexpr std::string_view kReckoningSpawnable[] = {
     "func_object_repair", "misc_amb4",          "misc_crashviper", "misc_nuke",
     "misc_transport",     "misc_viper_missile", "rotating_light",  "target_mal_laser"};
+constexpr std::string_view kGroundZeroSpawnable[] = {"hint_path", "turret_invisible_brain"};
 
 // The game's own, or one the remix brings in from another game (Quake's monsters, its items), or
 // the pack's that plays.
@@ -248,7 +249,10 @@ bool spawnable(const Q2Server& s, std::string_view c) {
          monster_class(c, s.opt.pack) || sq_item(c, s.opt.pack) >= 0 ||
          (s.opt.pack == Q2Pack::reckoning &&
           std::find(std::begin(kReckoningSpawnable), std::end(kReckoningSpawnable), c) !=
-              std::end(kReckoningSpawnable));
+              std::end(kReckoningSpawnable)) ||
+         (s.opt.pack == Q2Pack::ground_zero &&
+          std::find(std::begin(kGroundZeroSpawnable), std::end(kGroundZeroSpawnable), c) !=
+              std::end(kGroundZeroSpawnable));
 }
 
 }  // namespace

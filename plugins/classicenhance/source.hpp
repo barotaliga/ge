@@ -27,6 +27,14 @@
 // path and kind (maps, sounds, models), never by a list of one release's files, so whatever the
 // packs hold is enhanced.
 //
+// **A mission pack.** A mission pack's first pack (its digest one of the profile's `packs`,
+// profile.hpp) is laid over its base game, found beside the pack's folder in any case
+// (`hipnotic/` next to `id1/`): the base game's packs first, then the mission pack's, read merged
+// like the full game's, and keyed by every pack's digest in that order (`Source::mission`). That
+// is the key a game reads with the mission pack mounted over the base
+// (classic/content/files.hpp's `content_cache`). A mission pack with no base game beside it is
+// refused: its textures need the base game's palette.
+//
 // **A release by its files.** Whatever packs hold them, the packs' files read merged are matched
 // against the known sets (known_sets.hpp: the full game's files, the remaster's), each file by
 // path, size and digest, files the set does not list ignored: the full game repackaged into one
@@ -44,7 +52,7 @@
 // ge:keywords source pack pak0 pak1 shareware registered release zip lha folder installed
 // ge:keywords verify sha256 known unchanged licence refuse identity merge layered later-pack
 // ge:keywords pk3 content-zip repack single-pack known-set remaster lay-out setup basedir
-// ge:keywords game-folder download url
+// ge:keywords game-folder download url mission-pack laid-over-base hipnotic rogue xatrix
 // ge:skill classicenhance
 // ge:test tests/classicenhance_source_test.cpp
 #pragma once
@@ -106,6 +114,9 @@ struct Source {
   bool content_zip = false;       // the first pack was read out of a content zip (its digest keys)
   const KnownSet* set = nullptr;  // the release every file of which the packs hold, or nullptr
   std::string set_note;           // with no set: the nearest and what of it is missing or changed
+  // A mission pack's folder was given: its packs follow the base game's in `later` (the base game
+  // found beside its folder), so the cache is the pack laid over the base game.
+  const MissionPack* mission = nullptr;
   // What the pipeline reads: the first pack alone, or every pack merged.
   const std::vector<uint8_t>& content() const { return merged.empty() ? pack : merged; }
 };
@@ -128,6 +139,8 @@ void match_known_set(Source* out, std::span<const KnownSet> sets = kKnownSets);
 // not read as a pack.
 bool add_later_packs(const std::string& dir, Source* out, std::string* error,
                      std::span<const KnownFile> packs = kKnownPacks);
+// `out->merged` and `out->set_sha256` from the first pack and every one of `out->later`.
+bool merge_later(Source* out, std::string* error);
 
 // Whether `out->pack` reads as a pack; sets `out->pack_sha256`, `out->profile` (the first row
 // whose palette the pack holds; the first row when none does) and `out->known` when it is one of

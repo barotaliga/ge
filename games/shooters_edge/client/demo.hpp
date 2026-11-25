@@ -256,6 +256,9 @@ struct DemoEffect {
   int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
                       // first colour (`count` its run's length); a Quake II puff's run's first
   int q2_specks = 0;  // Quake II: a hit's puff of this many specks off `way` (q2_temp_fx.hpp)
+  // Quake II: the gun's flash value a named flash is of (-1 none), and whether a monster's.
+  int flash = -1;
+  bool flash_monster = false;
 };
 
 inline constexpr double kNeverFlashed = -1e9;
@@ -398,6 +401,14 @@ struct DemoState {
   std::vector<DemoItemBack> items_back;
   int64_t frames = 0;  // frames read
 };
+
+// Whether a model index names one of the level's own brush models ("*1", "*2", ...): a door, a
+// lift, a train, never a player, a missile or an item.
+inline bool brush_model(const DemoState& st, int model) {
+  return model > 0 && static_cast<size_t>(model) < st.models.size() &&
+         st.models[static_cast<size_t>(model)].size() > 1 &&
+         st.models[static_cast<size_t>(model)][0] == '*';
+}
 
 // An item coming back told (svc 119): kept in place of what was told of the same entity; those a
 // second past their time let go.
@@ -545,6 +556,9 @@ struct Demo {
 // (demo_pack.hpp: `layers`, `inner_name` and `truncated` say what was peeled), positioned at its
 // first frame. False with the reason and the next step when it is none.
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error);
+// A Quake II protocol number of the extended recordings and servers (3434 to 3436), whose extra
+// bits (custom skins, the view's teleport bit) are read.
+bool q2_extended(int protocol);
 
 enum class DemoRead : uint8_t { frame, end, error };
 

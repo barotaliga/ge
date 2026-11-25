@@ -39,6 +39,10 @@ const SwitchSpec kSwitches[] = {
      &S::flicker, false},
     {"shadows", "LIGHT", "SHADOWS",
      "Live lights and the monsters cast shadows. Off: no cast shadows.", &S::shadows, false},
+    {"ao", "LIGHT", "CONTACT SHADE",
+     "Corners, creases and the floor under the monsters and items darken where little light "
+     "reaches. Off: the light as the map has it.",
+     &S::ao, false},
     {"decals", "WORLD", "DECALS",
      "Scorch marks, bullet holes and blood that age on the walls. Off: no marks.", &S::decals,
      false},
@@ -92,6 +96,10 @@ const SwitchSpec kSwitches[] = {
      "A body hit sprays blood by the weapon that hit it, and it splashes the walls and floor near. "
      "Off: the classic red specks.",
      &S::blood, false},
+    {"shells", "EFFECTS", "SPENT SHELLS",
+     "The shotguns and machine guns throw out their spent shells, which bounce, clatter and lie "
+     "where they fall for a while. Off: none.",
+     &S::shells, false},
     {"flares", "EFFECTS", "FLARES", "Lights flare as glows. Off: the pack's flare sprite.",
      &S::flares, false},
     {"bubbles", "EFFECTS", "BUBBLES",

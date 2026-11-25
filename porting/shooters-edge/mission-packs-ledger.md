@@ -41,23 +41,14 @@ a lab must show it before it is `done`), `missing` (rank 1: the campaign cannot 
 broken without it; 2: noticed in a normal game; 3: rare or cosmetic), `not-taken` (left out on
 purpose, the doc named). The missing count only goes down; a row found later is added here first.
 
-| Section | Rows | Done | Verify | Missing (rank 1 / 2 / 3) | Not taken |
-| --- | --- | --- | --- | --- | --- |
-| Taking the packs in (shared by all four) | 17 | 15 | 1 | 1 (0 / 1 / 0) | 0 |
-| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 8 | 64 | 1 (0 / 1 / 0) | 1 |
-| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 47 | 3 (0 / 2 / 1) | 1 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 21 | 3 | 16 (11 / 4 / 1) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 35 | 3 | 44 (19 / 23 / 2) | 0 |
-| **All** | **274** | **89** | **118** | **65 (30 / 31 / 4)** | **2** |
+Counts: `make ledger` counts this ledger's rows by section and the missing rows by rank (`porting/ledger-count.mjs`; `make ledger ARGS=--missing` for the missing count alone). No total is kept here by hand.
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **65 missing, 118 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's and Ground Zero's remix roles: 2 fewer; the end screens not taken: 2 fewer; The Reckoning's first part 18; Ground Zero's first batch 23; Ground Zero's tag and `randomrespawn` 4).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows**; `make ledger` gives the count now (the PR that moves it says what it filled).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
 
 ## Taking the packs in (shared by all four)
-
-count: done 15, verify 1, missing 1 (0 / 1 / 0), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -65,11 +56,11 @@ count: done 15, verify 1, missing 1 (0 / 1 / 0), not-taken 0
 | imp.q2_folder | a Quake II pack's folder (`xatrix`, `rogue`) taken in beside `baseq2` | done | 1 | same; a name both games use (`rogue`) told by the base folder beside it; real: Quake II with both packs |
 | imp.known | each pack's `pak0.pak` named by its SHA-256 and size (the four digests are in `/mnt/project-files/paks/README.md`) | done | 1 | plugins/classicenhance/profile.hpp `MissionPack`, `known_pack` (the four digests); tests/classicenhance_profile_test.cpp |
 | imp.release_zip | a release zip holding an installed tree (Scourge of Armagon's and Dissolution of Eternity's archives: `Quake/HIPNOTIC/PAK0.PAK` in capitals, the base game's packs beside it) | done | 1 | import.hpp § Release archives (`open_tree` reads a `.zip` whole, its tree walked as an install); tests/classic_content_import_test.cpp |
-| imp.q1_cd | the Quake packs' CD image (`QPacks.BIN` with its sheet, in both archives) | verify | 2 | engine/vfs/disc.hpp reads BIN/CUE |
+| imp.q1_cd | the Quake packs' CD image (`QPacks.BIN` with its sheet, in both archives) | done | 2 | measured (2026-11-23): the same disc in both archives (its sheet alike, both packs on its data track, eight audio tracks 2..9), and both packs' maps ask for tracks 2..9; the disc taken in gives each pack the tracks (plugins/classic/content/import.cpp); tests/classic_content_import_test.cpp `import_gives_a_discs_tracks_to_each_pack_on_it`; both packs taken in off one image with no base folder beside them, the second pack's folder name (shared with Ground Zero) settled by the first (`import_takes_both_quake_packs_off_their_cd_image`, with and without its sheet); real: the archive's disc, both packs' `music/` hold tracks 2..9 |
 | imp.cd_layout | the Quake II packs' CD layout: the pack at `Data/all/pak0.pak`, the movies under `Data/max/<folder>/video`, the patch under `Data/patch`; known by the pack's digest, not by a game folder | done | 1 | import.hpp § Mission packs, by digest: the pack, the shallowest folder named after it, `patch/<base>/`; real: The Reckoning's CD layout told by its digest |
 | imp.mode2 | a BIN/CUE whose data track is `MODE2/2352` (The Reckoning's) | done | 1 | engine/vfs/disc.hpp. Real (2026-11-23): `secli import` of The Reckoning's CUE and BIN (sha256 cd5d3917…2591, the sheet still naming `Q2MP1.BIN` after the download renamed both, read through the image with the sheet's name) took 131 files in 194 s on the debug build, the pack's digest matching, its 8 movies and its 10 disc tracks as lossless music; peak memory 1.2 GB. Test: vfs_disc_test `disc_reads_a_sheet_renamed_with_its_image` |
 | imp.raw2448 | a raw image of 2448-byte sectors (2352 and 96 of subchannel) with its `.mds` sheet (Ground Zero's MDF) | done | 1 | engine/vfs/disc.hpp: a `.mdf` alone, 2448-byte sectors told by the second sector's sync; tests/vfs_disc_test.cpp. Its `.mds` sheet: imp.mds |
-| imp.mds | an `.mdf`'s `.mds` sheet read for its audio tracks (Ground Zero's disc music) | missing | 2 | the data track is read without it (imp.raw2448) |
+| imp.mds | an `.mdf`'s `.mds` sheet read for its audio tracks (Ground Zero's disc music) | done | 2 | engine/vfs/disc.hpp: the sheet beside the `.mdf` (or opened itself), every track, the subchannel passed over; the format measured in porting/shooters-edge/q2-pack-sounds.md; tests/vfs_disc_test.cpp `disc_reads_an_mdf_by_its_mds_sheet_data_and_audio`; real: Ground Zero's disc gives its ten tracks (2..11) as music |
 | imp.7z | a 7z holding the image (Ground Zero's, a 607 MB archive of an MDF) taken in | done | 1 | import.hpp § Release archives: a 7z's one disc image unpacked into `<data>/.unpacking/` (read whole, 2 GiB limit), removed with its folder after. Real (2026-11-23): `secli import` of Ground Zero's CD 7z (sha256 53be82ea…0a59) took 93 files in 72 s on the debug build, the pack's digest matching, its 7 movies and the players' weapon patch with it; peak memory 2.6 GB on the debug build with its sanitizer (the archive and the image both held) |
 | imp.movies | the Quake II packs' movies copied into `<folder>/video/` | done | 1 | copied with the pack (its `video/`, from its own folder or the disc's `Data/max/<pack>/`) |
 | imp.vwep | Ground Zero's patch: the player models' weapons for its guns (`players/*/w_*.md2`, `a_grenades.md2`) | done | 2 | a `patch/<base folder>/` folder's content folders copied into the base folder |
@@ -77,28 +68,26 @@ count: done 15, verify 1, missing 1 (0 / 1 / 0), not-taken 0
 | imp.detect | found without being asked (Niclas, 2026-11-23): a pack in a store's library, on a mounted volume, as a disc image or archive in the folders the games page searches, or beside a base game being taken in, is offered and taken in | done | 1 | import.hpp `find_offers` over `store_folders` (stores' libraries, mounted volumes): a pack's folder, or a known pack's size on a disc, offered in the console at the start (client/take_in.hpp `offer_words`) and by `secli import`; beside a base game taken in: taken with it. Image and archive files: imp.detect_files |
 | imp.detect_files | a pack's disc image or release archive lying in those folders (a `.cue`, `.mdf`, `.zip`, `.7z`) offered too | done | 2 | import.hpp `find_offers`: a disc image (`.iso`, `.cue`, `.bin`, `.img`, `.mdf`) or `.zip` of 1 MiB or more, 64 at most, listed by seeks (`vfs::list_zip_file`, `vfs::open_disc`) and offered as itself when it holds a first pack of a known pack's size or in a pack's folder; a `.7z` is not looked in (its listing needs the whole archive) and is taken by `secli import <file>`. Test: classic_content_import_test `a_pack_on_a_disc_image_or_in_a_zip_in_the_store_folders_is_offered_as_itself` |
 | imp.games_page | each pack its own row on the games page (Quake: Scourge of Armagon, ...) starting the base game with the pack's folder | done | 1 | SELECT GAME: a row a pack under its game (client/installs.hpp `game_rows`, `packs_of`), opening the install with the pack's folder; the console's `games` names them |
-| imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | done | 2 | client/take_in.hpp `take_in_words`: the packs kept, "add Quake II too", the game playing left as it is |
+| imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | done | 2 | client/take_in.hpp `take_in_words`: the packs kept, "add Quake II too", the game playing left as it is; tests/shooters_edge_take_in_test.cpp (take_in_names_the_mission_packs_and_waits_for_their_game) |
 
 ## Scourge of Armagon (Quake, folder `hipnotic`)
 
-count: done 4, verify 67, missing 3 (0 / 1 / 2), not-taken 0
-
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| hip.program | the pack's `progs.dat` read and run: the base game's header checksum (5927), no builtin the base game's lacks, 52 fields of its own (checked from the file) | done |  | loads and runs hip1m1 (`se-client --game=<folder>/hipnotic --map=hip1m1 --progs=pack`, 2026-11-23) |
-| hip.campaign | NEW GAME from `start` through the five episodes to `hipend` (18 maps) | verify | 1 | a playthrough lab on the pack |
-| hip.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395) |
+| hip.program | the pack's `progs.dat` read and run: the base game's header checksum (5927), no builtin the base game's lacks, 52 fields of its own (checked from the file) | done |  | loads and runs hip1m1 (`se-client --game=<folder>/hipnotic --map=hip1m1 --progs=pack`, 2026-11-23); re-run on the real pack 2026-11-23 (verification sweep): hip1m1 loads and plays |
+| hip.campaign | NEW GAME from `start` through the five episodes to `hipend` (18 maps) | verify | 1 | a playthrough lab on the pack. Measured 2026-11-24 (se-q1-campaign with the pack laid over, 100% mode): on `hip1m1` the bot killed 39 of 58 and found 3 of 5 secrets in 20 minutes without reaching the exit, no fault; waits on hip.bot |
+| hip.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395); held by tests/shooters_edge_menu_test.cpp (episodes_for on the pack's maps) |
 | hip.hud.weapons | the status bar's laser cannon, Mjolnir and proximity gun, plain, lit and flashing, from the pack's `gfx.wad` (`INV_LASER`, `INV_MJOLNIR`, `INV_PROX_GREN`, `INV_GREN_PROX`, `INV_PROX` and their `INV2_` and `INVA1_`..`INVA5_` sets) | done | 1 | hud/classic_art.cpp loads the pack's set by name (`pack_art`), hud/layout.cpp draws it off the items word (`armagon_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on hip1m1 (`--fields`) |
 | hip.hud.items | the wetsuit's and the empathy shields' icons (`SB_WSUIT`, `SB_ESHLD`) | done | 1 | hud/classic_art.cpp loads the pack's set by name (`pack_art`), hud/layout.cpp draws it off the items word (`armagon_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on hip1m1 (`--fields`); the keys move to the main bar (`sbar_keys`) |
 | hip.cfg | the pack's `quake.rc` and `default.cfg` run at start | done |  | its `default.cfg` (in its pack) runs as what it adds to the base game's: 9 the laser cannon (impulse 225), 0 Mjolnir (impulse 226), the zoom aliases; the window's layout stands (client/install_configs.cpp, tests/shooters_edge_install_configs_test.cpp); its `quake.rc` adds only the demo list (hip.demos) |
 | hip.demos | the attract loop plays the pack's four demos | done |  | `menu_attract auto` takes the list from the pack's own `quake.rc` (hipdemo1..4); the se-attract lab with `--game=hipnotic` plays hipdemo1 on hip1m5 (2026-11-23) |
 | hip.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (the scratched one) drawn by the se-attract lab with `--game=hipnotic` (2026-11-23) |
 | hip.endtext | `end2.bin`, the text screen shown on quitting | not taken |  | the DOS build alone showed one; the Windows and Linux builds, which base Quake here follows, quit with nothing shown, so the packs do the same (decided 2026-11-23; printing it to the terminal on quit is the way back if wanted) |
-| hip.dm | `hipdm1` played by bots on the pack's program | verify | 2 |  |
-| hip.coop | co-op on the pack's program, a companion beside the player | verify | 2 |  |
+| hip.dm | `hipdm1` played by bots on the pack's program | done | 2 | games/shooters_edge/bots/pack_fight.hpp; `labs se-pack-dm --game=<id1> --mod=hipnotic --map=hipdm1 --seconds=300`: 4 fighters, 27 frags, 51 deaths, 83 items taken (the laser cannon among them), no fault. The fighters know only the base game's arsenal (the pack's own weapons: M63e) |
+| hip.coop | co-op on the pack's program, a companion beside the player | done | 2 | `labs se-q1-campaign --game=<dir>/id1 --mod=hipnotic --episodes=hip1m1 --party=2`: two bots in co-op on the pack's program, 24 of 58 monsters down in 240 s, no fault (2026-11-23) |
 | hip.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots' campaign module learns its monsters, weapons, items and traps |
 | hip.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the laser cannon as energy, Mjolnir as blast, the proximity gun as lobber, the wetsuit as protect; the empathy shields and the horn have no role and drop (tests/shooters_edge_remix_test.cpp) |
-| hip.ce | classic enhance's caches with the pack layered over the base packs (its textures, models, sounds) | verify | 2 |  |
+| hip.ce | classic enhance's caches with the pack layered over the base packs (its textures, models, sounds) | done | 2 | plugins/classicenhance/source.cpp (`open_source` lays a mission pack over the base game beside it), plugins/classic/content/files.cpp (`content_cache`); tests/classicenhance_source_test.cpp, tests/classic_content_files_test.cpp. Before: refused, no palette. Measured: 666 textures, 102 models, 292 sounds, 217 pictures; `se-client --game=<hipnotic> --map=hip1m1` draws from that cache |
 
 ### What the maps place that the base game's maps never do
 
@@ -106,136 +95,129 @@ Each row below is a classname the pack's maps place that no map of the base game
 many of the pack's maps place it and how many times. All of them are spawned by the pack's own
 program on our VM; a row turns `done` when a lab or a playthrough shows it as a player sees it.
 
-#### Monsters
+**The things lab** (2026-11-23): `labs se-campaign --game=<dir>/id1 --mod=hipnotic --map=<map>
+--things=1` on all 18 maps, each on its own at skill 1. Every thing the map's text placed is
+watched by its map class name (`QcServer::spawned_as`) while the map runs, while each weapon is
+picked up and fired, while each name the map targets is used and while each trigger is touched by
+the player (games/shooters_edge/labs/campaign_things.hpp). The pack's program faulted on none of
+them. It is a scripted look, not a playthrough: it says the pack's things work on our server, not
+that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pickups=1`.
 
-count: done 0, verify 3, missing 0, not-taken 0
+#### Monsters
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.monster_armagon | `monster_armagon` | Armagon, the final boss: a walker with rockets and lasers | 1 / 1 | verify | 1 | runs in the pack's program |
-| hip.ent.monster_gremlin | `monster_gremlin` | the gremlin: leaps, steals the player's weapon and fires it, multiplies by feeding on corpses | 9 / 74 | verify | 1 | runs in the pack's program |
-| hip.ent.monster_scourge | `monster_scourge` | the centroid: a scorpion-like walker firing nails from its tail | 9 / 46 | verify | 1 | runs in the pack's program |
+| hip.ent.monster_armagon | `monster_armagon` | Armagon, the final boss: a walker with rockets and lasers | 1 / 1 | done | 1 | the things lab: walks, turns, animates, sounds and throws its effects on hipend |
+| hip.ent.monster_gremlin | `monster_gremlin` | the gremlin: leaps, steals the player's weapon and fires it, multiplies by feeding on corpses | 9 / 74 | done | 1 | the things lab: all 62 animate, 30 woken walk and sound on 9 maps; the theft and the feeding are the program's own, not checked apart |
+| hip.ent.monster_scourge | `monster_scourge` | the centroid: a scorpion-like walker firing nails from its tail | 9 / 46 | done | 1 | the things lab: all 27 animate, 11 woken walk and sound on 9 maps |
 
 #### Weapons and items
 
-count: done 0, verify 6, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.item_artifact_empathy_shields | `item_artifact_empathy_shields` | empathy shields: half the damage taken is dealt back to the attacker | 12 / 12 | verify | 2 | runs in the pack's program; HUD row hip.hud.items |
-| hip.ent.item_artifact_wetsuit | `item_artifact_wetsuit` | the wetsuit: breathe and move freely under water for a while | 6 / 7 | verify | 2 | runs in the pack's program; HUD row hip.hud.items; remix role beside Quake II's rebreather |
-| hip.ent.item_hornofconjuring | `item_hornofconjuring` | the horn of conjuring: calls up a monster that fights on the player's side | 6 / 6 | verify | 2 | runs in the pack's program |
-| hip.ent.weapon_laser_gun | `weapon_laser_gun` | the laser cannon: laser bolts that bounce off walls, on cells | 17 / 19 | verify | 1 | runs in the pack's program; the HUD row hip.hud.weapons draws it |
-| hip.ent.weapon_mjolnir | `weapon_mjolnir` | Mjolnir: a hammer that strikes lightning across the floor, on cells | 15 / 17 | verify | 1 | runs in the pack's program; LIFT: the lightning drawn as Quake's beam (C465 and the lightning gun's own beam) |
-| hip.ent.weapon_proximity_gun | `weapon_proximity_gun` | the proximity gun: grenades that stick and wait for someone to come close, on rockets | 17 / 21 | verify | 1 | runs in the pack's program; LIFT: one proximity mine with Ground Zero's (gz.ent.weapon_proxlauncher) |
+| hip.ent.item_artifact_empathy_shields | `item_artifact_empathy_shields` | empathy shields: half the damage taken is dealt back to the attacker | 12 / 12 | done | 2 | se-campaign `--pickups`: taken (its model emptied) on all 8 maps; its effect is the program's |
+| hip.ent.item_artifact_wetsuit | `item_artifact_wetsuit` | the wetsuit: breathe and move freely under water for a while | 6 / 7 | done | 2 | se-campaign `--pickups`: taken on all 6 maps; its effect is the program's |
+| hip.ent.item_hornofconjuring | `item_hornofconjuring` | the horn of conjuring: calls up a monster that fights on the player's side | 6 / 6 | done | 2 | se-campaign `--pickups`: taken on all 6 maps; the monster it calls is the program's |
+| hip.ent.weapon_laser_gun | `weapon_laser_gun` | the laser cannon: laser bolts that bounce off walls, on cells | 17 / 19 | done | 1 | the things lab: picked up and fired on 6 maps (12 to 50 bolts in 3 s, their sounds, 4 to 29 cells spent); the HUD row hip.hud.weapons draws it |
+| hip.ent.weapon_mjolnir | `weapon_mjolnir` | Mjolnir: a hammer that strikes lightning across the floor, on cells | 15 / 17 | done | 1 | the things lab: picked up and fired on 4 maps (5 to 10 strikes, 15 to 30 cells spent); LIFT left: the lightning drawn as Quake's beam (C465) |
+| hip.ent.weapon_proximity_gun | `weapon_proximity_gun` | the proximity gun: grenades that stick and wait for someone to come close, on rockets | 17 / 21 | done | 1 | the things lab: picked up and fired on 5 maps (4 to 17 grenades, 4 or 5 rockets spent); LIFT left: one proximity mine with Ground Zero's |
 
 #### Rotating brushes
 
-count: done 0, verify 9, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.func_movewall | `func_movewall` | an invisible box that moves with a rotating group to block and push | 15 / 292 | verify | 1 | runs in the pack's program |
-| hip.ent.func_rotate_door | `func_rotate_door` | a door that swings open on a hinge | 13 / 47 | verify | 1 | runs in the pack's program; LIFT: our pushers rotate for Quake II's `func_rotating` (server/q2_map.hpp); a rotating brush's collision is the shared open gap (docs/porting/rules.md § Gaps) |
-| hip.ent.func_rotate_entity | `func_rotate_entity` | a brush model that turns continuously (fans, gears) | 6 / 13 | verify | 1 | runs in the pack's program; same LIFT as func_rotate_door |
-| hip.ent.func_rotate_train | `func_rotate_train` | a train that turns as it follows its path | 5 / 12 | verify | 1 | runs in the pack's program; same LIFT |
-| hip.ent.info_rotate | `info_rotate` | the point a rotating group turns about | 16 / 70 | verify | 1 | runs in the pack's program |
-| hip.ent.path_follow | `path_follow` | a path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program |
-| hip.ent.path_follow2 | `path_follow2` | the second kind of path corner a follower walks | 1 / 12 | verify | 2 | runs in the pack's program |
-| hip.ent.path_rotate | `path_rotate` | a path corner that also sets a rotating train's turn | 6 / 46 | verify | 1 | runs in the pack's program |
-| hip.ent.rotate_object | `rotate_object` | a brush model turned by its group's centre | 16 / 77 | verify | 1 | runs in the pack's program; needs the client to draw brush models at their angles |
+| hip.ent.func_movewall | `func_movewall` | an invisible box that moves with a rotating group to block and push | 15 / 292 | done | 1 | the things lab: 287 of 291 move with their groups on 15 maps |
+| hip.ent.func_rotate_door | `func_rotate_door` | a door that swings open on a hinge | 13 / 47 | done | 1 | the things lab: all 47 swing (turned and sounded) on 13 maps; the window draws brush models turned by their angles (client/world_models.cpp `place_brushes`, brush/app/bsp.wgsl) |
+| hip.ent.func_rotate_entity | `func_rotate_entity` | a brush model that turns continuously (fans, gears) | 6 / 13 | done | 1 | the things lab: all 13 turn on 6 maps; drawn turned as func_rotate_door |
+| hip.ent.func_rotate_train | `func_rotate_train` | a train that turns as it follows its path | 5 / 12 | done | 1 | the things lab: all 11 run their paths, 10 turning, on 5 maps; drawn turned as func_rotate_door |
+| hip.ent.info_rotate | `info_rotate` | the point a rotating group turns about | 16 / 70 | done | 1 | the things lab: all 69 taken up by their groups at the start (removed), on 16 maps |
+| hip.ent.path_follow | `path_follow` | a path corner a follower walks | 1 / 12 | done | 2 | the things lab: the nearest monster touched into one takes the path's corner as its new goal on hipend (the player's touch does nothing, as the facts say: porting/shooters-edge/q1-hipnotic-things.md) |
+| hip.ent.path_follow2 | `path_follow2` | the second kind of path corner a follower walks | 1 / 12 | done | 2 | the things lab: the nearest monster touched into one takes a new goal on hipend |
+| hip.ent.path_rotate | `path_rotate` | a path corner that also sets a rotating train's turn | 6 / 46 | done | 1 | the things lab: the rotate trains run along them (their 11 move and turn) |
+| hip.ent.rotate_object | `rotate_object` | a brush model turned by its group's centre | 16 / 77 | done | 1 | the things lab: all 76 turn with their groups on 16 maps; drawn turned as func_rotate_door |
 
 #### Movers and walls
 
-count: done 0, verify 9, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.func_bobbingwater | `func_bobbingwater` | a water brush that bobs up and down | 2 / 5 | verify | 2 | runs in the pack's program |
-| hip.ent.func_breakawaywall | `func_breakawaywall` | a wall removed when triggered | 2 / 6 | verify | 1 | runs in the pack's program; LIFT: debris with Quake II's `func_explosive` |
-| hip.ent.func_clock | `func_clock` | a clock whose hands turn with the level's time | 1 / 3 | verify | 3 | runs in the pack's program |
-| hip.ent.func_rubble | `func_rubble` | throws rubble when triggered | 3 / 9 | verify | 2 | runs in the pack's program |
-| hip.ent.func_rubble1 | `func_rubble1` | throws the first kind of rubble | 4 / 10 | verify | 2 | runs in the pack's program |
-| hip.ent.func_rubble2 | `func_rubble2` | throws the second kind of rubble | 3 / 10 | verify | 2 | runs in the pack's program |
-| hip.ent.func_rubble3 | `func_rubble3` | throws the third kind of rubble | 2 / 24 | verify | 2 | runs in the pack's program |
-| hip.ent.func_togglewall | `func_togglewall` | a wall switched solid and back by a trigger | 3 / 4 | verify | 2 | runs in the pack's program |
-| hip.ent.func_train2 | `func_train2` | a train with its own speed and wait at each corner | 11 / 68 | verify | 1 | runs in the pack's program |
+| hip.ent.func_bobbingwater | `func_bobbingwater` | a water brush that bobs up and down | 2 / 5 | done | 2 | the things lab: all 5 bob on 2 maps |
+| hip.ent.func_breakawaywall | `func_breakawaywall` | a wall removed when triggered | 2 / 6 | done | 1 | the things lab: all 5 removed when used |
+| hip.ent.func_clock | `func_clock` | a clock whose hands turn with the level's time | 1 / 3 | done | 3 | the things lab: its 3 hands turn |
+| hip.ent.func_rubble | `func_rubble` | throws rubble when triggered | 3 / 9 | done | 2 | the things lab: used, it throws its rubble (14 pieces made) |
+| hip.ent.func_rubble1 | `func_rubble1` | throws the first kind of rubble | 4 / 10 | done | 2 | the things lab: used, they throw their rubble (75 pieces made) |
+| hip.ent.func_rubble2 | `func_rubble2` | throws the second kind of rubble | 3 / 10 | done | 2 | the things lab: used, they throw their rubble (52 pieces made) |
+| hip.ent.func_rubble3 | `func_rubble3` | throws the third kind of rubble | 2 / 24 | done | 2 | the things lab: used, they throw their rubble (43 pieces made) |
+| hip.ent.func_togglewall | `func_togglewall` | a wall switched solid and back by a trigger | 3 / 4 | done | 2 | the things lab: 3 of 4 switched and sounded when used |
+| hip.ent.func_train2 | `func_train2` | a train with its own speed and wait at each corner | 11 / 68 | done | 1 | the things lab: all 68 run and sound on 11 maps |
 
 #### Effects and sounds
 
-count: done 0, verify 16, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.ambient_fan_blowing | `ambient_fan_blowing` | a fan's looping sound | 6 / 28 | verify | 2 | runs in the pack's program |
-| hip.ent.ambient_flouro_buzz | `ambient_flouro_buzz` | a fluorescent light's buzz | 2 / 3 | verify | 2 | runs in the pack's program; ours names it (rules/common_quake.cpp) |
-| hip.ent.ambient_humming | `ambient_humming` | a machine's hum | 6 / 21 | verify | 2 | runs in the pack's program |
-| hip.ent.ambient_light_buzz | `ambient_light_buzz` | a light's buzz | 4 / 7 | verify | 2 | runs in the pack's program; ours names it (rules/common_quake.cpp) |
-| hip.ent.ambient_riftpower | `ambient_riftpower` | the rift's power hum | 1 / 1 | verify | 3 | runs in the pack's program |
-| hip.ent.ambient_running_water | `ambient_running_water` | running water | 4 / 13 | verify | 2 | runs in the pack's program |
-| hip.ent.ambient_rushing | `ambient_rushing` | rushing air or water | 1 / 2 | verify | 3 | runs in the pack's program |
-| hip.ent.effect_finale | `effect_finale` | the last level's end sequence | 1 / 7 | verify | 1 | runs in the pack's program |
-| hip.ent.effect_teleport | `effect_teleport` | a teleport's sparkle at a point | 1 / 2 | verify | 2 | runs in the pack's program |
-| hip.ent.func_earthquake | `func_earthquake` | shakes everyone standing while it is on | 7 / 21 | verify | 1 | runs in the pack's program; LIFT: one quake shake with Dissolution's and Quake II's `target_earthquake` |
-| hip.ent.func_exploder | `func_exploder` | an explosion when triggered | 7 / 94 | verify | 1 | runs in the pack's program |
-| hip.ent.func_multi_exploder | `func_multi_exploder` | a run of explosions over an area | 2 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.func_particlefield | `func_particlefield` | a field of sparkles while on (a force field's look) | 3 / 12 | verify | 2 | runs in the pack's program |
-| hip.ent.info_startendtext | `info_startendtext` | where the end text starts | 1 / 1 | verify | 2 | runs in the pack's program |
-| hip.ent.play_sound_triggered | `play_sound_triggered` | plays a sound when triggered | 5 / 16 | verify | 2 | runs in the pack's program |
-| hip.ent.random_thunder_triggered | `random_thunder_triggered` | thunder at random while on | 4 / 6 | verify | 3 | runs in the pack's program |
+| hip.ent.ambient_fan_blowing | `ambient_fan_blowing` | a fan's looping sound | 6 / 28 | done | 2 | the things lab: all 28 loops started at their places |
+| hip.ent.ambient_flouro_buzz | `ambient_flouro_buzz` | a fluorescent light's buzz | 2 / 3 | done | 2 | the things lab: all 3 loops started |
+| hip.ent.ambient_humming | `ambient_humming` | a machine's hum | 6 / 21 | done | 2 | the things lab: all 21 loops started |
+| hip.ent.ambient_light_buzz | `ambient_light_buzz` | a light's buzz | 4 / 7 | done | 2 | the things lab: all 7 loops started |
+| hip.ent.ambient_riftpower | `ambient_riftpower` | the rift's power hum | 1 / 1 | done | 3 | the things lab: its loop started |
+| hip.ent.ambient_running_water | `ambient_running_water` | running water | 4 / 13 | done | 2 | the things lab: all 13 loops started |
+| hip.ent.ambient_rushing | `ambient_rushing` | rushing air or water | 1 / 2 | done | 3 | the things lab: both loops started |
+| hip.ent.effect_finale | `effect_finale` | the last level's end sequence | 1 / 7 | done | 1 | the things lab: used on hipend, it makes its end sequence's things (48) |
+| hip.ent.effect_teleport | `effect_teleport` | a teleport's sparkle at a point | 1 / 2 | done | 2 | the things lab: both sound when used |
+| hip.ent.func_earthquake | `func_earthquake` | shakes everyone standing while it is on | 7 / 21 | done | 1 | the things lab: used on 7 maps, it shakes the player (his speed changed in 3 uses); LIFT left: one quake shake with Dissolution's and Quake II's |
+| hip.ent.func_exploder | `func_exploder` | an explosion when triggered | 7 / 94 | done | 1 | the things lab: all 94 appear, animate, sound and go when used, on 7 maps |
+| hip.ent.func_multi_exploder | `func_multi_exploder` | a run of explosions over an area | 2 / 3 | done | 2 | the things lab: all 3 throw their explosions (9 made) and go |
+| hip.ent.func_particlefield | `func_particlefield` | a field of sparkles while on (a force field's look) | 3 / 12 | verify | 2 | runs in the pack's program; the things lab: set off by its counters on 3 maps, but its sparkles go only to a player who sees it and the lab found no spot beside the fields to stand in (porting/shooters-edge/q1-hipnotic-things.md) |
+| hip.ent.info_startendtext | `info_startendtext` | where the end text starts | 1 / 1 | done | 2 | the things lab: used on hipend (set off by the finale), it writes the end text to every client (the finale message); with hip.endtext |
+| hip.ent.play_sound_triggered | `play_sound_triggered` | plays a sound when triggered | 5 / 16 | done | 2 | the things lab: all 16 sound when used |
+| hip.ent.random_thunder_triggered | `random_thunder_triggered` | thunder at random while on | 4 / 6 | done | 3 | the things lab: all 6 sound when used |
 
 #### Triggers and traps
 
-count: done 0, verify 17, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| hip.ent.func_counter | `func_counter` | counts its triggers and fires by the count | 11 / 25 | verify | 1 | runs in the pack's program |
-| hip.ent.func_oncount | `func_oncount` | fires when a counter reaches its number | 8 / 62 | verify | 1 | runs in the pack's program |
-| hip.ent.func_spawn | `func_spawn` | spawns a monster or an item when triggered | 9 / 304 | verify | 1 | runs in the pack's program |
-| hip.ent.func_spawn_small | `func_spawn_small` | spawns a small thing when triggered | 2 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.info_notnull | `info_notnull` | a named point with no class of its own (a target) | 5 / 34 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_gods_wrath | `trap_gods_wrath` | lightning on everyone in its area when triggered | 1 / 2 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_gravity_well | `trap_gravity_well` | pulls whoever is near toward it | 2 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_lightning_switched | `trap_lightning_switched` | a lightning arc switched on and off | 2 / 19 | verify | 2 | runs in the pack's program; LIFT: Quake's beam drawing |
-| hip.ent.trap_lightning_triggered | `trap_lightning_triggered` | a lightning arc fired when triggered | 5 / 17 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_shooter | `trap_shooter` | a shooter of spikes or lasers on a timer | 1 / 2 | verify | 2 | runs in the pack's program; ours names it |
-| hip.ent.trap_spike_mine | `trap_spike_mine` | a floating mine that drifts toward a player and bursts into spikes | 4 / 29 | verify | 2 | runs in the pack's program |
-| hip.ent.trap_tesla_coil | `trap_tesla_coil` | a coil that zaps whoever comes close | 1 / 2 | verify | 2 | runs in the pack's program |
-| hip.ent.trigger_damagethreshold | `trigger_damagethreshold` | fires only after taking enough damage | 3 / 3 | verify | 2 | runs in the pack's program |
-| hip.ent.trigger_decoy_use | `trigger_decoy_use` | draws monsters to a decoy | 1 / 7 | verify | 2 | runs in the pack's program; LIFT: a decoy monsters chase, with Ground Zero's doppleganger |
-| hip.ent.trigger_setgravity | `trigger_setgravity` | sets the gravity of whoever is inside | 2 / 7 | verify | 1 | runs in the pack's program; the entity's gravity field is read by our physics (plugins/shooter/entity.hpp); LIFT with Quake II's trigger_gravity |
-| hip.ent.trigger_usekey | `trigger_usekey` | a trigger that needs a key | 1 / 2 | verify | 1 | runs in the pack's program |
-| hip.ent.trigger_waterfall | `trigger_waterfall` | pushes whoever is inside like falling water | 1 / 1 | verify | 2 | runs in the pack's program |
+| hip.ent.func_counter | `func_counter` | counts its triggers and fires by the count | 11 / 25 | done | 1 | the things lab: its ticks fire its targets on 7 maps (all 8 on hip2m5, 7 of them then removed at their count; start's looping counter fires its fields on its own) |
+| hip.ent.func_oncount | `func_oncount` | fires when a counter reaches its number | 8 / 62 | done | 1 | the things lab: set off by their counters on 5 maps (all 35 on hip2m5, 34 then fire their targets at the count; 6 of 10 on hip1m4, 4 of 4 on hip1m3, hip3m1); used by the player alone it does nothing, as the facts say |
+| hip.ent.func_spawn | `func_spawn` | spawns a monster or an item when triggered | 9 / 304 | done | 1 | the things lab: used, they make their monsters and items (9 uses made things), on 9 maps |
+| hip.ent.func_spawn_small | `func_spawn_small` | spawns a small thing when triggered | 2 / 3 | done | 2 | the things lab: used on hip3m1, the spawner goes and brings out its hidden thing (a spike mine, silent as the map asks) |
+| hip.ent.info_notnull | `info_notnull` | a named point with no class of its own (a target) | 5 / 34 | done | 2 | the things lab: a named point the program's things aim at; nothing of its own to do |
+| hip.ent.trap_gods_wrath | `trap_gods_wrath` | lightning on everyone in its area when triggered | 1 / 2 | done | 2 | the things lab: strikes (its sound) when used |
+| hip.ent.trap_gravity_well | `trap_gravity_well` | pulls whoever is near toward it | 2 / 3 | verify | 2 | runs in the pack's program; the things lab: the player stood 176 units from the wells on hip1m2 and hip1m5 and no pull was seen; the wells are under water, and the pull needs a line that does not cross from air into water (porting/shooters-edge/q1-hipnotic-things.md) |
+| hip.ent.trap_lightning_switched | `trap_lightning_switched` | a lightning arc switched on and off | 2 / 19 | done | 2 | the things lab: 15 of 19 strike when switched, making their bolts |
+| hip.ent.trap_lightning_triggered | `trap_lightning_triggered` | a lightning arc fired when triggered | 5 / 17 | done | 2 | the things lab: all 17 strike when used; LIFT left: Quake's beam drawing |
+| hip.ent.trap_shooter | `trap_shooter` | a shooter of spikes or lasers on a timer | 1 / 2 | done | 2 | the things lab: both on start fire on their own from the start (335 shots made in the look, by their owner) |
+| hip.ent.trap_spike_mine | `trap_spike_mine` | a floating mine that drifts toward a player and bursts into spikes | 4 / 29 | done | 2 | the things lab: all 14 turn, animate and sound on 4 maps |
+| hip.ent.trap_tesla_coil | `trap_tesla_coil` | a coil that zaps whoever comes close | 1 / 2 | done | 2 | the things lab: both on hip2m5 (placed live) make their bolts and hurt the player in reach |
+| hip.ent.trigger_damagethreshold | `trigger_damagethreshold` | fires only after taking enough damage | 3 / 3 | done | 2 | the things lab: hit, it fires its target and goes on hip1m1 (its 5 breakaway walls removed) and hip2m1; hip1m3's was not hit by the scripted rocket |
+| hip.ent.trigger_decoy_use | `trigger_decoy_use` | fires its targets once when the finale's walking decoy reaches it | 1 / 7 | done | 2 | the things lab: 4 of 7 fire their targets and go on hipend as the finale's decoy walks through them; it does not touch monsters (facts: porting/shooters-edge/q1-hipnotic-things.md) |
+| hip.ent.trigger_setgravity | `trigger_setgravity` | sets the gravity of whoever is inside | 2 / 7 | done | 1 | the things lab: touched, it changes the player's gravity (4 touches) |
+| hip.ent.trigger_usekey | `trigger_usekey` | a trigger that needs a key | 1 / 2 | done | 1 | the things lab: touched without the key, it says so (its sound) |
+| hip.ent.trigger_waterfall | `trigger_waterfall` | pushes whoever is inside like falling water | 1 / 1 | done | 2 | the things lab: touched on hip3m3, its push changes the player's speed at once (angle -2, straight down) |
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
 
-count: done 7, verify 50, missing 4 (0 / 2 / 2), not-taken 0
-
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23) |
-| rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | a playthrough lab on the pack |
-| rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | verify | 1 | the base game's `b_` boxes load the same way |
-| rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | done | 1 | net/qw_frame.cpp's `items_word` (`items2` from bit 23, in place of the runes), client/view.cpp's and client/timedemo.cpp's status; the se-client lab on r1m1 |
-| rog1.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395) |
-| rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | missing | 2 | facts in porting/shooters-edge/q1-qw-console-facts.md |
+| rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23); re-run on the real pack 2026-11-23 (verification sweep): r1m1 loads and plays |
+| rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | `labs se-q1-campaign --game=<dir> --mod=rogue --each=1 --episodes=start,r1m1,...` runs each map with its class census; r2m1 loads since a key's trailing spaces are dropped (its changelevel trigger spells `"map "`, plugins/progs/entity_text.cpp) |
+| rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | done |  | the census: the pack's boxes stand as models on 15 maps and are taken |
+| rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | done | 1 | net/qw_frame.cpp's `items_word` (`items2` from bit 23, in place of the runes), client/view.cpp's and client/timedemo.cpp's status; the se-client lab on r1m1; the word itself held by tests/shooters_edge_qw_server_test.cpp (the_items_stat_carries_items2_for_a_program_with_it_else_the_runes) |
+| rog1.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395); held by tests/shooters_edge_menu_test.cpp (episodes_for on the pack's maps) |
+| rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | done |  | menu/main_menu.cpp `teamplay_choices` (teamplay 3 to 6 offered when the packs hold r1m1); held by tests/shooters_edge_menu_test.cpp; facts in porting/shooters-edge/q1-qw-console-facts.md |
 | rog1.hud.weapons | the lava nailguns, the multi launchers and the plasma gun on the status bar (`R_LAVA`, `R_SUPERLAVA`, `R_GREN`, `R_MULTIROCK`, `R_PLASMA`, the bars `R_INVBAR1`, `R_INVBAR2`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`) |
 | rog1.hud.ammo | their ammunition (`R_AMMOLAVA`, `R_AMMOMULTI`, `R_AMMOPLASMA`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); the main bar's icon off bits 26-28 |
 | rog1.hud.items | the power shield and the anti-grav belt (`R_SHIELD1`..`5`, `R_AGRAV1`..`5`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); only `R_SHIELD1` and `R_AGRAV1` are drawn, as the pack drew them |
 | rog1.hud.team | the team colour's border in team games (`R_TEAMBORD`) | done | 2 | hud/layout.cpp (`sbar_team`, `sbar_team_frags`): teamplay 4 to 6 in a game of more than one; the colours by the palette; tests/shooters_edge_hud_test.cpp |
-| rog1.runes | deathmatch's runes | done | 2 | the pack's program on the QC server, `gamecfg` the server's: the se-dissolution-dm lab (`--packs`) sees none at `gamecfg 0`, four out of the deathmatch spots at `gamecfg 1`, one taken with its name centre printed, a second refused, the held one falling where its holder dies, the untaken ones moved after two minutes (2026-11-24). The four effects are the program's own arithmetic |
-| rog1.grapple | the grappling hook in team games, its chain drawn | done | 2 | the se-dissolution-dm lab (`--packs`): none at `teamplay 0`; at `teamplay 4` impulse 22 and attack throw `progs/hook.mdl`, the chain sent as the beam temporary entity every frame, the player pulled across the arena to the wall, the hook gone on letting go (2026-11-24); the beam drawn by client/world_fx.cpp (C465) |
-| rog1.motd | the pack's message of the day on joining | verify | 3 |  |
+| rog1.runes | deathmatch's runes | verify | 2 |  |
+| rog1.grapple | the grappling hook in team games, its chain drawn | verify | 2 | the beam model is drawn (C465) |
+| rog1.motd | the pack's message of the day on joining | done | 3 | the pack's own program shows it as a centre print, only with teamplay 3 to 6 (porting/shooters-edge/q1-rogue-team-modes.md § 1): `labs se-client --game=<dir>/rogue --map=ctf1 --progs=pack --server="deathmatch 1;teamplay 4" --say=...` notes the welcome four times in its first six seconds, the team it was put on, the teams' score line and the 50 green armour kit (2026-11-24) |
 | rog1.cfg | the pack's configs run at start | done |  | the pack ships no `default.cfg` or `quake.rc` (its pack read 2026-11-23), so the base game's start runs, as it does |
 | rog1.demos | the attract loop plays the pack's three demos | done |  | the pack's own demo1..3 win over the base's by the search path; the se-attract lab with `--game=rogue` plays its demo1 on r1m5 (2026-11-23) |
 | rog1.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (its logo at the right) drawn by the se-attract lab with `--game=rogue` (2026-11-23) |
 | rog1.endtext | `end1.bin`, `end2.bin`, the text screens on quitting | not taken |  | as hip.endtext |
 | rog1.dm | `ctf1` and the team modes played by bots | verify | 2 |  |
-| rog1.teams | the team modes on the server: capture the flag with two flags, one flag and three teams, tag; the program's colours stuffed and its team change refused | done | 2 | the pack's program on the QC server; the server sets a single-player-form program's `team` from the pants colour as it changes (server/commands.cpp `pants_team`; tests/shooters_edge_qc_server_test.cpp). The se-dissolution-dm lab (`--packs`): joiners put on red and blue, the enemy flag taken, captured for 15 and sent home, dropped by a killed carrier and returned, a change of pants refused, three teams at `teamplay 6`, the neutral flag captured at 5, the tag token at 3 (2026-11-24) |
 | rog1.coop | co-op on the pack's program | verify | 2 |  |
 | rog1.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| rog1.remix | the pack's weapons and items as roles for remix | missing | 3 | plugins/classic/item_roles.hpp |
+| rog1.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: lava nails, multi rockets and plasma read as the ammunition of the same weapon; the shield, belt, sphere and random powerup have no part in another game and drop; held by tests/shooters_edge_remix_test.cpp |
 | rog1.ce | classic enhance's caches with the pack layered over the base packs | verify | 2 |  |
 
 ### What the maps place that the base game's maps never do
@@ -246,45 +228,39 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 #### Monsters
 
-count: done 0, verify 10, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.dragon_corner | `dragon_corner` | a corner of the dragon's flight | 1 / 36 | verify | 1 | runs in the pack's program |
-| rog1.ent.info_overlord_destination | `info_overlord_destination` | a spot the Overlord teleports to | 4 / 25 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_dragon | `monster_dragon` | the dragon: flies a path of corners, breathes fire | 1 / 1 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_eel | `monster_eel` | the electric eel: swims and shocks | 6 / 58 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_lava_man | `monster_lava_man` | Hephaestus, the lava man: throws lava balls | 1 / 4 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_morph | `monster_morph` | the guardian that takes three looks | 3 / 3 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_mummy | `monster_mummy` | the mummy: a tougher zombie | 1 / 5 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_super_wrath | `monster_super_wrath` | the Overlord: a big wrath that teleports and throws seeking balls | 2 / 2 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_sword | `monster_sword` | the phantom swordsman: a knight statue come alive | 3 / 20 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_wrath | `monster_wrath` | the wrath: floats and throws seeking balls | 8 / 56 | verify | 1 | runs in the pack's program |
+| rog1.ent.dragon_corner | `dragon_corner` | a corner of the dragon's flight | 1 / 36 | done |  | runs in the pack's program; the census: the dragon on r2m8 flew its 36 corners |
+| rog1.ent.info_overlord_destination | `info_overlord_destination` | a spot the Overlord teleports to | 4 / 25 | verify | 1 | 25 markers kept (r1m7, r2m1, r2m4, r2m6); used only by a BossMode Overlord (spawnflag 2) teleporting and by the Guardian's copies on pain; not seen yet. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.monster_dragon | `monster_dragon` | the dragon: flies a path of corners, breathes fire | 1 / 1 | done |  | runs in the pack's program; the census (`se-q1-campaign --mod=rogue`, 2026-11-23): spawned on r2m8 and flew its corners |
+| rog1.ent.monster_eel | `monster_eel` | the electric eel: swims and shocks | 6 / 58 | done |  | runs in the pack's program; the census: 43 spawned on 6 maps, 9 swam |
+| rog1.ent.monster_lava_man | `monster_lava_man` | Hephaestus, the lava man: throws lava balls | 1 / 4 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m3: woken, it turned, animated, threw (made) and hurt |
+| rog1.ent.monster_morph | `monster_morph` | the guardian that takes three looks | 3 / 3 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m1, r2m4, r2m6: each woke, moved, turned, animated and hurt |
+| rog1.ent.monster_mummy | `monster_mummy` | the mummy: a tougher zombie | 1 / 5 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m4: all five moved, turned, animated and sounded |
+| rog1.ent.monster_super_wrath | `monster_super_wrath` | the Overlord: a big wrath that teleports and throws seeking balls | 2 / 2 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r1m7, r2m5: moved, turned, animated, made its shots and hurt |
+| rog1.ent.monster_sword | `monster_sword` | the phantom swordsman: a knight statue come alive | 3 / 20 | verify | 1 | 19 placed (r1m2, r1m7, r2m7); a normal monster that stands frozen for its "delay" (10 s) after it first sees its enemy, longer than the things lab's look; needs a playthrough. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.monster_wrath | `monster_wrath` | the wrath: floats and throws seeking balls | 8 / 56 | done |  | runs in the pack's program; the census: 32 spawned on 7 maps, 4 floated after the bot, 2 killed and removed |
 
 #### Weapons and items
 
-count: done 0, verify 9, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.item_lava_spikes | `item_lava_spikes` | lava nails: the nailguns fire lava spikes | 17 / 154 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_multi_rockets | `item_multi_rockets` | multi rockets: the launchers fire clusters | 17 / 103 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_plasma | `item_plasma` | plasma cells: the lightning gun becomes the plasma gun | 16 / 71 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_powerup_belt | `item_powerup_belt` | the anti-grav belt: low gravity for a while | 16 / 21 | verify | 1 | runs in the pack's program; HUD row rog1.hud.items; LIFT: the entity gravity factor |
-| rog1.ent.item_powerup_shield | `item_powerup_shield` | the power shield: takes damage in front | 17 / 24 | verify | 1 | runs in the pack's program; HUD row rog1.hud.items |
-| rog1.ent.item_random_powerup | `item_random_powerup` | a powerup chosen at random each time it comes back (deathmatch) | 8 / 12 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_sphere | `item_sphere` | the vengeance sphere: follows the player and strikes his killer | 15 / 27 | verify | 2 | runs in the pack's program; LIFT: Ground Zero's vengeance sphere |
-| rog1.ent.item_time_core | `item_time_core` | the time machine's core, carried to the finale | 1 / 1 | verify | 1 | runs in the pack's program |
-| rog1.ent.item_time_machine | `item_time_machine` | the time machine of the last level | 1 / 1 | verify | 1 | runs in the pack's program |
+| rog1.ent.item_lava_spikes | `item_lava_spikes` | lava nails: the nailguns fire lava spikes | 17 / 154 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 129 placed on 15 maps, 7 taken by the bot |
+| rog1.ent.item_multi_rockets | `item_multi_rockets` | multi rockets: the launchers fire clusters | 17 / 103 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 78 placed on 14 maps, 5 taken |
+| rog1.ent.item_plasma | `item_plasma` | plasma cells: the lightning gun becomes the plasma gun | 16 / 71 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 41 placed on 10 maps, 1 taken |
+| rog1.ent.item_powerup_belt | `item_powerup_belt` | the anti-grav belt: low gravity for a while | 16 / 21 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 7 placed on 6 maps (ctf1, r1m6, r1m7, r2m4, r2m6, r2m8), each taken on the touch and not shown again |
+| rog1.ent.item_powerup_shield | `item_powerup_shield` | the power shield: takes damage in front | 17 / 24 | done |  | runs in the pack's program; HUD row rog1.hud.items; the census: 13 placed on 11 maps, 1 taken |
+| rog1.ent.item_random_powerup | `item_random_powerup` | a powerup chosen at random each time it comes back (deathmatch) | 8 / 12 | verify | 2 | deathmatch only: removed at spawn in single player and co-op, as the things lab saw (none live on 17 maps); the pick of five wants a deathmatch look. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.item_sphere | `item_sphere` | the vengeance sphere: follows the player and strikes his killer | 15 / 27 | verify | 2 | deathmatch only: removed at spawn in single player and co-op, as the things lab saw (none live on 17 maps); the sphere's flight at a killer wants a deathmatch look. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.item_time_core | `item_time_core` | the time machine's core, carried to the finale | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: stands and turns |
+| rog1.ent.item_time_machine | `item_time_machine` | the time machine of the last level | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: stands and turns |
 
 #### Game modes
-
-count: done 0, verify 7, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | verify | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token) |
-| rog1.ent.func_ctf_wall | `func_ctf_wall` | a wall that stands only in some team modes | 14 / 185 | verify | 2 | runs in the pack's program |
+| rog1.ent.func_ctf_wall | `func_ctf_wall` | a wall that stands only in some team modes | 14 / 185 | verify | 2 | kept only at teamplay 4 to 6 (a plain solid wall), removed otherwise; single player (the things lab, r2m6) has none live; a CTF look still owed. Facts: porting/shooters-edge/q1-rogue-things.md. |
 | rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
 | rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
 | rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | verify | 2 | runs in the pack's program |
@@ -293,27 +269,23 @@ count: done 0, verify 7, missing 0, not-taken 0
 
 #### Movers and traps
 
-count: done 0, verify 13, missing 0, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.buzzsaw | `buzzsaw` | a saw blade running a path | 2 / 17 | verify | 1 | runs in the pack's program |
-| rog1.ent.earthquake | `earthquake` | the earthquake a trigger starts | 2 / 2 | verify | 1 | runs in the pack's program; LIFT: one quake shake (hip.ent.func_earthquake) |
-| rog1.ent.func_elvtr_button | `func_elvtr_button` | an elevator's call button | 1 / 4 | verify | 1 | runs in the pack's program |
-| rog1.ent.func_new_plat | `func_new_plat` | a plat with more ways to move | 15 / 60 | verify | 1 | runs in the pack's program |
-| rog1.ent.info_notnull | `info_notnull` | a named point with no class of its own | 1 / 1 | verify | 2 | runs in the pack's program |
-| rog1.ent.light_candle | `light_candle` | a candle model with its light | 8 / 113 | verify | 3 | runs in the pack's program |
-| rog1.ent.light_lantern | `light_lantern` | a lantern model with its light | 1 / 13 | verify | 3 | runs in the pack's program |
-| rog1.ent.ltrail_end | `ltrail_end` | a lightning trail's last link | 11 / 44 | verify | 2 | runs in the pack's program |
-| rog1.ent.ltrail_relay | `ltrail_relay` | a lightning trail's middle link | 2 / 3 | verify | 2 | runs in the pack's program |
-| rog1.ent.ltrail_start | `ltrail_start` | a lightning trail's first link | 11 / 72 | verify | 2 | runs in the pack's program; LIFT: Quake's beam drawing |
-| rog1.ent.pendulum | `pendulum` | a swinging blade | 4 / 12 | verify | 1 | runs in the pack's program |
-| rog1.ent.trigger_earthquake | `trigger_earthquake` | starts the earthquake | 4 / 7 | verify | 1 | runs in the pack's program |
-| rog1.ent.trigger_earthquake_kill | `trigger_earthquake_kill` | stops the earthquake | 1 / 1 | verify | 2 | runs in the pack's program |
+| rog1.ent.buzzsaw | `buzzsaw` | a saw blade running a path | 2 / 17 | done |  | runs in the pack's program; the census: all 17 ran their paths |
+| rog1.ent.earthquake | `earthquake` | the earthquake a trigger starts | 2 / 2 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r1m4, r2m8: used, it sounds and removes itself |
+| rog1.ent.func_elvtr_button | `func_elvtr_button` | an elevator's call button | 1 / 4 | verify | 1 | r1m7: pressed only by a player's touch, moving a func_new_plat elevator by floors; the things lab touches triggers, not buttons. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.func_new_plat | `func_new_plat` | a plat with more ways to move | 15 / 60 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 60 on 15 maps: the used ones moved, sounded, made and hurt |
+| rog1.ent.info_notnull | `info_notnull` | a named point with no class of its own | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: a point the map names, kept |
+| rog1.ent.light_candle | `light_candle` | a candle model with its light | 8 / 113 | done |  | made static at spawn by the program, so no live entity is left to watch; drawn as a static model like the base game's torches. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.light_lantern | `light_lantern` | a lantern model with its light | 1 / 13 | done |  | made static at spawn by the program, so no live entity is left to watch; drawn as a static model like the base game's torches. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.ltrail_end | `ltrail_end` | a lightning trail's last link | 11 / 44 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 44 on 11 maps: the bolts made and hurting |
+| rog1.ent.ltrail_relay | `ltrail_relay` | a lightning trail's middle link | 2 / 3 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m1, r2m6: used, they sound, make the bolt, hurt and push |
+| rog1.ent.ltrail_start | `ltrail_start` | a lightning trail's first link | 11 / 72 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 72 on 11 maps: used, they sound and make their bolts, which hurt |
+| rog1.ent.pendulum | `pendulum` | a swinging blade | 4 / 12 | done |  | the things lab (17 maps, 2026-11-24): all 12 animated and sounded from the start; a pendulum swings by its model's frames, not by turning, and starts on its own unless spawnflag 8, as seen. Facts: porting/shooters-edge/q1-rogue-things.md. |
+| rog1.ent.trigger_earthquake | `trigger_earthquake` | starts the earthquake | 4 / 7 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): 7 on 4 maps: touched, they sound, shake (push) and hurt |
+| rog1.ent.trigger_earthquake_kill | `trigger_earthquake_kill` | stops the earthquake | 1 / 1 | done |  | the things lab (`se-campaign --mod=rogue --things=1 --pickups=1`, 17 maps, 2026-11-24): r2m8: touched, it hurts |
 
 ## The Reckoning (Quake II, folder `xatrix`)
-
-count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -323,12 +295,13 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
 | xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
-| xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | verify | 2 | client/cinematic.hpp plays a chain |
+| xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | done | 2 | NEW GAME takes the level default.cfg names (`*logo.cin+xin.cin+xswamp`: client/game_folder.hpp `new_game_level`); the unit ends' movies come from the maps' level strings (server/q2_campaign.hpp); all eight decoded to their end, frames and sound |
 | xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
 | xat.menu | the pack's own pictures (console background, quit, victory) | verify | 3 |  |
-| xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
-| xat.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
-| xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`) |
+| xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp; held end to end by tests/shooters_edge_take_in_test.cpp (the window's music finds the remapped file; any case or a path) |
+| xat.sounds | the sounds the client plays itself for the pack: the ion ripper's and the phalanx's muzzle flashes, the hyper soldier's (the tank machine gun's five), none for its effect bits or its other temp entities | done |  | server/q2_flash.cpp (the player's blue hyperblaster flash made silent); tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
+| xat.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp; held by tests/shooters_edge_q2_flash_test.cpp (the_mission_packs_flashes_play_their_own_shots) |
+| xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`); the marks drawn held by tests/shooters_edge_q2_world_fx_test.cpp |
 | xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | done |  | server/q2_wire.cpp (28), client/q2_temp_fx.hpp and client/listen.cpp (the rocket's explosion, as the stock client draws it) |
 | xat.te.greenblood | the gekk's green blood (temporary entity 26) | done |  | server/q2_wire.cpp (26), client/q2_temp_fx.hpp (30 green specks) |
 | xat.dm | the seven deathmatch maps played by bots | missing | 2 |  |
@@ -344,8 +317,6 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 #### Weapons and items
 
-count: done 0, verify 0, missing 6, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | xat.ent.ammo_magslug | `ammo_magslug` | mag slugs for the phalanx | 25 / 88 | done |  | server/q2_items.hpp, q2_items.cpp (limits 50/75/100 under the pack) |
@@ -356,8 +327,6 @@ count: done 0, verify 0, missing 6, not-taken 0
 | xat.ent.weapon_phalanx | `weapon_phalanx` | the phalanx particle cannon: two magnesium slugs that burst | 24 / 35 | done |  | server/q2_combat.hpp, q2_fight.cpp (two balls, their splash), q2_choose.cpp (`use railgun`) |
 
 #### Monsters
-
-count: done 0, verify 0, missing 8, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -372,8 +341,6 @@ count: done 0, verify 0, missing 8, not-taken 0
 
 #### Map things
 
-count: done 0, verify 0, missing 7, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | xat.ent.func_object_repair | `func_object_repair` | a broken thing that sparks until the repair bot fixes it | 1 / 6 | done |  | server/q2_reckoning_things.cpp |
@@ -386,12 +353,11 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 ## Ground Zero (Quake II, folder `rogue`)
 
-count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
-
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | gz.switch | the pack's rules behind one switch its profile sets, Quake II's own unchanged | done | 1 | server/q2_pack.hpp, server/q2_gz_rules.cpp: the folder `rogue` sets it; the cvars only under it |
-| gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | missing | 1 | reader question: the whole list, per monster |
+| gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | done | 1 | server/q2_gz_ai.cpp (section 1 of `gz-monsters.md`: the dodge, a high shot ducked and a low one side-stepped, by skill, the duck held by eta and 0.1 a skill below nightmare, the next no sooner than 0.5 s; walkers strafing four times in ten at 8 a frame, fliers six, the daedalus eight, never round a tesla; blind fire at the last sighting by the light soldier, gunner, maiden and tanks, rarer with each try; jumps down and up ledges; hint paths after 5 s out of sight; the medic's reach of 1024 (400 holding), the last two medics that gave up on a corpse, 10 s to raise it, a corpse too near torn apart, the raised out of the count; shots between the tanks, the medics, the turret or the raised start no fight, Jorg's and the Makron's do), server/q2_gz_base_monsters.cpp (the hover's and the others' section 2 changes); tests/shooters_edge_q2_gz_ai_test.cpp, tests/shooters_edge_q2_gz_base_monsters_test.cpp. Left in gz.ai.rest |
+| gz.ai.rest | the rest of the pack's shared monster changes | done | 2 | the co-op spawn rule (4096 never in co-op, all three skill bits co-op only, `coop_baseq2`) in server/q2_gz_rules.cpp and server/q2_server.cpp; the Makron's torso red while a medic raises him in server/q2_monster_rows.cpp (tests/shooters_edge_q2_gz_triggers_test.cpp, tests/shooters_edge_q2_gz_bosses_test.cpp); plats ridden toward an enemy above or below, their bad area and the dead crushed under them in server/q2_gz_triggers.cpp (facts `gz-base6.md` § 7; tests/shooters_edge_q2_gz_triggers_test.cpp); the widow's power-up shells in server/q2_monster_rows.cpp (only she carries power-ups); a monster's rail held when its muzzle is inside a wall in server/q2_monster_shots.cpp; § 1.8's tesla in server/q2_gz_tesla.cpp (a tesla that hurt a monster marks its field for 30 s, monsters never step in and inside step only away; the monster turns on the tesla, a medic leaving its body, and fights it alone until it bursts, then goes back to the player it fought; its shots strike the tesla, the medic's bolt for 3; the tesla's health in server/q2_gz_weapons.cpp); facts `gz-monsters.md` § 1.4, 1.11 and 2. Done of § 2 in server/q2_gz_base_monsters.cpp: the soldiers' running fire and blind stand (spawn flag 8), the gunner's clear lob, the parasite's reach and its drain when blocked, the hover's flinch by skill, the maiden's `bitch2` model; the Makron's gibs already match (server/q2_gibs.cpp) |
 | gz.items_list | the item list grown by the pack's items, in its order | done | 1 | server/q2_bar.cpp (`kGroundZero`, 61 rows in the pack's order), server/q2_items.cpp |
 | gz.obits | the new weapons' and monsters' obituaries, word for word | done | 1 | server/q2_combat.cpp (`sq_obituary`): the six weapons and the A-M bomb; the monsters' with gz.ai |
 | gz.tesla | the tesla mine thrown from the inventory, its zaps | done | 1 | server/q2_gz_weapons.cpp; not yet shot down by damage (a partial: batch 2) |
@@ -401,37 +367,52 @@ count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
 | gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | done | 2 | server/q2_powers.cpp (`fight_multiplier`) |
 | gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
 | gz.dmflag.1048576 | `dmflags` 1048576: no spheres | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
-| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | missing | 2 | a setting of the pack's rules |
+| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | done | 2 | server/q2_gz_rules.cpp (the setting), server/q2_gz_spheres.cpp (the camera: the corpse thrown apart, the view at the sphere, field of view 140, not with dmflags 1024) |
 | gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | done | 3 | `gz_random_respawn`: health and armour by their odds, the rest one of its kind; the screens, the small health, the shard, the bandolier, the pack and the head kept |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | done | 2 | latched; any other value plays as 0 |
-| gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
-| gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | verify | 2 | client/cinematic.hpp |
+| gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | done | 1 | the units run off the maps' own level strings (rmine1 → `reu1_` → rware1 → `reu2_` → rhangar1 → `reu3_` → rammo1 → `reu4_` → rboss → `rend` and the victory picture); a new game starts on the map the pack's default.cfg names (classic/content/load_order.hpp `new_game_map`: rmine1), co-op's victory loops back there (net/q2_game.cpp); the unit configs' `give` lines take the pack's names; rboss hands out the A-M bomb selected (server/q2_gz_rules.cpp `gz_entered`); tests/shooters_edge_q2_gz_test.cpp |
+| gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | done | 2 | NEW GAME takes the level default.cfg names (`*rintro.cin+rmine1`: client/game_folder.hpp `new_game_level`); the unit ends' movies from the maps' level strings; all seven decoded to their end, frames and sound |
 | gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | done | 2 | the rules' item table names each icon (server/q2_bar.cpp); the pack's pics/ hold them all and win by name over the base's (tests/shooters_edge_game_adapter_test.cpp) |
 | gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | verify | 3 | pictures by name over the base pack's |
 | gz.vwep | the new guns in other players' hands (the patch's `w_*.md2`) | verify | 2 | plugins/morph/carry.hpp; needs imp.vwep |
-| gz.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
-| gz.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
-| gz.effects | the tracker's and the other entity effects, the disguise's figure, infra-red goggles' view | done |  | client/world_fx_q2.cpp, client/q2_look.hpp |
-| gz.te.blaster2 | a green blaster's hit (temporary entity 30) | missing | 2 | client ledger `te.blaster2`, not taken for the base game |
-| gz.te.lightning | a lightning beam between two things (33; the tesla) | missing | 1 | `te.lightning`; LIFT: Quake's lightning beam drawing |
-| gz.te.plain_explosion | an explosion with no specks (35) | missing | 2 | `te.plain_explosion` |
-| gz.te.heatbeam | the player's heat beam (38) | missing | 1 | `te.heatbeam`; LIFT: our own lightning beam (the smooth weapon thread's `cl_fakeshaft`) |
-| gz.te.monster_heatbeam | a monster's heat beam (39) | missing | 1 | `te.monster_heatbeam`; same LIFT |
-| gz.te.moreblood | a bigger burst of blood (42; the chainfist) | missing | 2 | `te.moreblood` |
-| gz.te.heatbeam_sparks | the heat beam's sparks (43) | missing | 2 | `te.heatbeam_sparks` |
-| gz.te.heatbeam_steam | the heat beam's steam (44) | missing | 2 | `te.heatbeam_steam` |
-| gz.te.electric_sparks | blue electric sparks (46) | missing | 2 | `te.electric_sparks` |
-| gz.te.tracker_explosion | the disruptor's dark burst (47) | missing | 1 | `te.tracker_explosion` |
-| gz.te.nukeblast | the A-M bomb's growing blast (51) | missing | 1 | `te.nukeblast` |
-| gz.te.explosion1_big | a bigger explosion (53; the bosses) | missing | 2 | `te.explosion1_big` |
-| gz.te.explosion1_np | an explosion with no specks (54) | missing | 2 | `te.explosion1_np` |
-| gz.te.flechette | a flechette's hit (55) | missing | 1 | `te.flechette` |
+| gz.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp; held end to end by tests/shooters_edge_take_in_test.cpp (the window's music finds the remapped file; any case or a path) |
+| gz.sounds | the sounds the client plays itself for the pack: the ETF rifle's and the disruptor's muzzle flashes, the monsters' flashes 138..210, none for its effect bits; its loops are the game's own | done |  | server/q2_flash.cpp; tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
+| gz.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp; held by tests/shooters_edge_q2_flash_test.cpp (the_mission_packs_flashes_play_their_own_shots) |
+| gz.effects | the tracker's and the other entity effects, the disguise's figure, infra-red goggles' view | done |  | client/world_fx_q2.cpp, client/q2_look.hpp; the marks drawn held by tests/shooters_edge_q2_world_fx_test.cpp |
+| gz.te.blaster2 | a green blaster's hit (temporary entity 30) | done | 2 | client/world_fx_q2.cpp (`q2_pack_point`): 40 specks of 0xd0.., the flare's green skin and a green light of 150; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.lightning | a lightning beam between two things (33; the tesla) | done | 1 | client/world_fx_q2.cpp (`q2_held_line`, `q2_draw_held`): 35-unit links over the length less 20, one alone at the end when short, held 0.2 s a pair; `weapons/tesla.wav` on the tesla; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.plain_explosion | an explosion with no specks (35) | done | 2 | client/q2_model_fx.hpp: the rocket's ball and light, no specks, silent; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.heatbeam | the player's heat beam (38) | done | 1 | client/world_fx_q2.cpp: 32-unit links spinning a degree a millisecond, the own beam from the gun along the view with its sliding rings, held 0.2 s (first 0.1 s); facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.monster_heatbeam | a monster's heat beam (39) | done | 1 | client/world_fx_q2.cpp: the beam's links and a shell of 40 specks at the gun; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.moreblood | a bigger burst of blood (42; the chainfist) | done | 2 | client/world_fx_q2.cpp: 250 specks of 0xe8..; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.heatbeam_sparks | the heat beam's sparks (43) | done | 2 | client/world_fx_q2.cpp: 50 specks of 0x08.. thrown along the face at 60 units/s, half the fall; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.heatbeam_steam | the heat beam's steam (44) | done | 2 | client/world_fx_q2.cpp: 20 specks of 0xe0.. as the sparks; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.electric_sparks | blue electric sparks (46) | done | 2 | client/world_fx_q2.cpp: 40 specks of 0x75..; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.tracker_explosion | the disruptor's dark burst (47) | done | 1 | client/world_fx_q2.cpp, app/effects.cpp (`q2_tracker_burst`): 128 black specks for 1.5..2 s, a darkening light of 150 for a tenth; `weapons/disrupthit.wav`; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.nukeblast | the A-M bomb's growing blast (51) | done | 1 | client/world_fx_q2.cpp (`q2_sustains`): 700 specks a frame on a sphere growing to 200 units over a second; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.explosion1_big | a bigger explosion (53; the bosses) | done | 2 | client/q2_model_fx.hpp: the rocket's ball at twice the size, its light as the plain one's; rocklx1a; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.explosion1_np | an explosion with no specks (54) | done | 2 | client/q2_model_fx.hpp: the rocket's ball and light, no specks; rocklx1a; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
+| gz.te.flechette | a flechette's hit (55) | done | 1 | client/world_fx_q2.cpp: 40 specks of 0x6f.., the flare's skin 2 and a pale blue light; lashit; facts: q2-pack-te.md, held by tests/shooters_edge_q2_pack_fx_test.cpp |
 | gz.dm | the fourteen deathmatch maps played by bots | missing | 2 |  |
 | gz.coop | co-op through the units (`info_player_coop_lava`) | missing | 2 |  |
-| gz.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
+| gz.save | saves of the pack's campaign | done | 2 | server/q2_save.cpp chunk version 13: the mines', tesla's and disruptor's stages, double damage, the IR goggles, the chainfist's swing; tests/shooters_edge_q2_gz_test.cpp loads a game with mines in flight and stuck and plays it on bit for bit; `se-q2-save --mod=rogue` on rmine1 and rlava1 |
 | gz.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | gz.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the ETF rifle as rapid, the plasma beam (both names) as beam, the prox launcher as lobber, the disruptor as launcher, their ammunition beside them, double damage as damage; the chainfist, the tesla, the A-M bomb, the spheres, the decoy and the goggles drop (tests/shooters_edge_remix_test.cpp) |
+| gz.sweep | every map of the pack started on its rules and run (the se-q2-map-sweep lab): spawn faults, missing models and sounds, maps left at once | done |  | labs/se_q2_map_sweep_lab.cpp; on the pack 2026-11-24: all 32 maps start and run 10 s, no model or sound missing; the classnames still unspawned are the rows below |
+| gz.base.trigger_multiple | `trigger_multiple`'s TOGGLE (8): off at the start, each use switches it, a use never fires it (rammo1's unit start toggles its exit) | done | 1 | server/q2_gz_world.cpp (`gz_used`, `gz_toggled`); facts gz-world.md § 6; tests/shooters_edge_q2_gz_test.cpp |
+| gz.base.items | an item's TRIGGER_SPAWN (1) kept: unseen where placed until used, then dropped to the floor; no "invalid spawnflags" for it | done | 1 | server/q2_server.cpp (`gz_trigger_spawned`, `q2_item_used`); facts porting/shooters-edge/gz-items.md; tests/shooters_edge_q2_gz_test.cpp; 40 items on rammo1, rbase1, rbase2, rlava1, rmine1, rsewer2 |
+| gz.base.trigger_push | `trigger_push`: a named one toggles, START_OFF (2) starts off (said when nothing names it), SILENT (4) | done | 2 | server/q2_gz_triggers.cpp (a named push toggles; START_OFF said and a solid wall when unnamed; SILENT) |
+| gz.base.target_earthquake | `target_earthquake`'s SILENT (1): no rumble | done | 3 | server/q2_targets.cpp, q2_gz_world.cpp (`gz_silent`) |
+| gz.base.func_door_rotating | `func_door_rotating`'s INACTIVE (8192): no touch and no damage until its first use, then a door like any other that no trigger uses again | done | 1 | server/q2_gz_world.cpp, q2_map.cpp (its touch field asleep); rhangar2, rsewer1; tests/shooters_edge_q2_gz_test.cpp |
+| gz.base.func_explosive | a named `func_explosive`'s INACTIVE (8): solid and unbreakable until used, breakable after, blown by a later use | done | 2 | server/q2_gz_world.cpp, q2_targets.cpp; rhangar1, rhangar2; tests/shooters_edge_q2_gz_test.cpp; a team member's removal from its chain not taken |
+| gz.base.func_train | `path_corner`'s speed, accel and decel; a train's `team` moving with it | done | 1 | server/q2_gz_trains.cpp (corners' speed, accel and decel; the team riding) |
+| gz.base.func_rotating | `func_rotating`'s ACCEL (8192), its targets fired as it starts and stops | done | 2 | server/q2_gz_trains.cpp (ACCEL; targets fired at start and stop) |
+| gz.base.target_laser | `target_laser`'s WINDOWSTOP (128); the beam passing on through things it hurt | done | 2 | server/q2_fight.cpp (`fight_laser`); all 7 placed (rammo2, rbase1) carry WINDOWSTOP, and our beam stops at windows already (the base game's passes them: a base row's gap); tests/shooters_edge_q2_gz_test.cpp |
+| gz.base.func_plat | `func_plat` used by monsters; 100 crush to a dead blocker; the bad area while it rises | done | 2 | server/q2_gz_triggers.cpp (monsters ride toward an enemy; 100 crush to a dead blocker; the bad area while it rises) |
+| gz.base.misc_explobox | the barrel in liquids (no slime harm, no drowning) | done | 3 | server/q2_gz_triggers.cpp (burns in lava, splashes, no slime harm) |
+| gz.base.trigger_gravity | `trigger_gravity`'s TOGGLE and START_OFF; gravity as a fraction | done | 3 | server/q2_gz_triggers.cpp (TOGGLE, START_OFF, the fraction; the player's move takes it) |
+| gz.base.spawn_filter | co-op's "not in co-op" (4096) and the three skills at once | done | 2 | the co-op spawn rule in server/q2_gz_rules.cpp (gz.ai.rest's row) |
 
 ### What the maps place that the base game's maps never do
 
@@ -439,8 +420,6 @@ Each row below is a classname the pack's maps place that no map of the base game
 as above). Our Quake II rules spawn none of them: each is built in C++ beside the base game's.
 
 #### Weapons and items
-
-count: done 16, verify 0, missing 5, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -450,12 +429,12 @@ count: done 16, verify 0, missing 5, not-taken 0
 | gz.ent.ammo_nuke | `ammo_nuke` | the A-M bomb: thrown, a huge blast after a delay | 15 / 15 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.ammo_prox | `ammo_prox` | prox grenades | 32 / 179 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.ammo_tesla | `ammo_tesla` | the tesla mine: thrown, zaps whatever comes close | 32 / 114 | done | 1 | server/q2_items.cpp, server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
-| gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | missing | 2 | not in our rules; LIFT: Scourge of Armagon's decoy |
+| gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | done | 2 | server/q2_gz_decoy.cpp: set down 48 ahead where it fits over ground within 64, the player's figure standing and turning, 30 health and 30 s, a sphere at the one who wounded it; deathmatch only, one carried (tests/shooters_edge_q2_gz_decoy_test.cpp; facts `gz-weapons.md` § 15). Not drawn: the growth effect where it appears |
 | gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | done | 1 | server/q2_powers.cpp (`fight_multiplier`, the quad's timer lifted) |
 | gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | done | 2 | server/q2_powers.cpp, server/q2_server.cpp (the view bit) |
-| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | missing | 2 | not in our rules; LIFT: Dissolution's sphere |
+| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | done | 2 | server/q2_gz_spheres.cpp (the half before armour, the green bolt at the last attacker, the splash; one out at a time, the bar's timer); the second shell model not drawn |
+| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | done | 2 | server/q2_gz_spheres.cpp (the chase in sight, the lurk where it lost him, 10 000 past armour, the 512 blast; the doppleganger's `gz_release_sphere`) |
+| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | done | 2 | server/q2_gz_spheres.cpp (called by a blow leaving its owner under 25; Dissolution's runs in its own program, so nothing to lift) |
 | gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | done | 1 | server/q2_items.cpp (a key row) |
 | gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | missing | 1 | not in our rules |
 | gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
@@ -468,22 +447,19 @@ count: done 16, verify 0, missing 5, not-taken 0
 
 #### Monsters
 
-count: done 0, verify 0, missing 8, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | missing | 1 | not in our rules; LIFT: the base hover |
-| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | missing | 1 | not in our rules; LIFT: the base medic |
-| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | missing | 1 | not in our rules |
-| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | missing | 1 | not in our rules |
-| gz.ent.monster_widow | `monster_widow` | the black widow, the last boss's first form | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.monster_widow2 | `monster_widow2` | the black widow's second form | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | missing | 2 | not in our rules |
+| gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (its guns, grenades, rockets, rail, fliers from 3/6/6/9 slots, the co-op rear volley, pains; the base boss wreck); lab `se-gz-bosses`. Muzzle points are ours; the grenades' flash sent as 53 |
+| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | done | 1 | server/q2_monster_kinds.hpp (the hover's body on skin 2, 450, mass 225, green bolts, the front screen of 100), server/q2_monster_pain.cpp (its cries; a heavy blow's long flinch 0.45 - 0.1 x skill) |
+| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | done | 1 | server/q2_monster_kinds.hpp (the medic's body on skin 2, 600, green bolts), server/q2_gz_monsters.cpp (the call: strength roll, groups of 1, 3 or 5, five spots in front or behind, the grow, slots 3/4/6/6 given back at death, not counted), server/q2_monster_pain.cpp |
+| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | done | 1 | server/q2_gz_monsters.cpp (ceilings by reversed gravity, the jump up and the pounce, firing in the air, the false death and its twitch; the floor and ceiling walk in server/q2_monsters.cpp); its dodge jump with gz.ai |
+| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | done | 1 | server/q2_gz_monsters.cpp (floor, ceiling and wall mounts, arcs, 45 degrees a frame, blaster, machine gun and rockets with lead, the wall unit sliding out on use, no pain, the blast and debris); its blind fire with gz.ai; the wall unit's base piece not drawn yet |
+| gz.ent.monster_widow | `monster_widow` | the black widow, the last boss's first form | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (the turret blaster, the charge, rails, the kick, stalkers, the power-up answer, the beam-out and the legs); lab `se-gz-bosses`. Her large gibs fly as debris; the shell glow of her answer is not drawn |
+| gz.ent.monster_widow2 | `monster_widow2` | the black widow's second form | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (the heat beam, the disruptor, the tongue, stalkers at ±135, every stalker killed at her death, the blasts and the chain, the dead search, the settle); lab `se-gz-bosses`. Gibbed after the settle with the flesh set |
+| gz.ent.monster_kamikaze | `monster_kamikaze` | the kamikaze flyer: charges its enemy and bursts on him (the carrier's, and maps') | 0 / 0 | done | 1 | server/q2_gz_base_monsters.cpp (the charge at 400, 50 within 90, the harmless burst when blocked, no pain), its row in q2_monster_kinds.hpp; the rocket trail on its body not drawn. Row added while filling |
+| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | done | 2 | server/q2_gz_monsters.cpp, server/q2_targets.cpp (the breach's aim and fire shared with the turret driver): `killtarget` its first enemy, `delay`, used on and off |
 
 #### Game modes
-
-count: done 0, verify 0, missing 1, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -491,12 +467,10 @@ count: done 0, verify 0, missing 1, not-taken 0
 
 #### Map things
 
-count: done 0, verify 0, missing 10, not-taken 0
-
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | gz.ent.func_plat2 | `func_plat2` | a plat with more ways to move | 28 / 130 | missing | 1 | not in our rules |
-| gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | missing | 1 | not in our rules; LIFT: our bots' nav (plugins/shooterbots) may read the hints too |
+| gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | done | 1 | server/q2_gz_ai.cpp (`gz_hint_spawn`, `gz_hints`: chains from each END node, up to 100, cut at a fork or a loop; taken after 5 s out of sight, at most every 10 s, from a node within 512 the monster sees to one within 512 its enemy sees; a node's `wait` held; off the path once it sees him); tests/shooters_edge_q2_gz_ai_test.cpp |
 | gz.ent.info_player_coop_lava | `info_player_coop_lava` | a co-op start used once the lava has risen | 1 / 26 | missing | 2 | not in our rules |
 | gz.ent.misc_nuke_core | `misc_nuke_core` | the reactor core of the finale | 1 / 1 | missing | 1 | not in our rules |
 | gz.ent.target_anger | `target_anger` | makes monsters angry at a target | 9 / 18 | missing | 2 | not in our rules |

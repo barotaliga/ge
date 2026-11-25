@@ -120,4 +120,22 @@ TEST(a_glyph_sheet_is_a_square_pixel_font_shaded_by_its_brightness) {
   CHECK(lit(up.mask(up.glyph_index(' '), 32, 0)) == 0);
   CHECK(lit(up.mask(up.glyph_index('A'), 32, 0)) > 0);
   CHECK(lit(up.mask(129, 32, 0)) > 0);
+  // It is drawn at the classic sheet's sizes (whole multiples of 8 px), not of its 32 px cells,
+  // and filtered: a cell drawn at 16 px from 32 texels has partial cover at its ink's edges.
+  CHECK(up.metrics(20).ascent + up.metrics(20).descent == 16);
+  CHECK(up.metrics(8).ascent + up.metrics(8).descent == 8);
+  CHECK(std::fabs(up.advance("AB", 16) - 32) < 0.01f);
+  Image soft = make_image(512, 512, {0, 0, 0, 0});
+  for (int y = 9; y < 23; ++y)
+    for (int x = 9; x < 23; ++x) {  // an odd-edged square: its edges fall inside a pixel
+      uint8_t* px =
+          &soft.rgba[(static_cast<size_t>(4 * 32 + y) * 512 + static_cast<size_t>(1 * 32 + x)) * 4];
+      px[0] = px[1] = px[2] = px[3] = 255;
+    }
+  Font sf;
+  CHECK(sheet_font(soft, sf));
+  const GlyphMask& m = sf.mask(sf.glyph_index('A'), 16, 0);
+  bool partial = false;
+  for (const uint8_t v : m.alpha) partial = partial || (v > 0 && v < 255);
+  CHECK(m.h == 16 && lit(m) > 0 && partial);
 }

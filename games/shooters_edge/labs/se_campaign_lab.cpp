@@ -30,10 +30,12 @@
 #include "campaign_free.hpp"
 #include "campaign_movers.hpp"
 #include "campaign_pickups.hpp"
+#include "campaign_things.hpp"
 #include "classicenhance/source.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
+#include "pack_mod.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
@@ -117,7 +119,14 @@ bool load_program(gl::Lab& lab, Loaded& out) {
     lab.fail("se-campaign: " + error, "next: pass --game=<a release zip, a pack or a folder>");
     return false;
   }
-  const std::vector<uint8_t>& content = src.content();
+  std::vector<uint8_t> content = src.content();
+  // `--mod`: a mission pack's packs over the game's, its program and maps winning.
+  if (const std::string& mod = lab.arg("mod"); !mod.empty()) {
+    if (!la::lay_mod(game, mod, content, error)) {
+      lab.fail("se-campaign: " + error, "next: pass --mod=<the pack's folder beside id1>");
+      return false;
+    }
+  }
   ge::vfs::Pak pak;
   if (!ge::vfs::read_pak(content, &pak, &error)) {
     lab.fail("se-campaign: the pack does not read: " + error, "next: check the --game path");
@@ -472,11 +481,14 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
   std::string error;
   const std::string map = lab.arg("map");
   const bool ok = sv::campaign_new_game(c, l.progs, o, map, error);
+  la::ThingsWatch things;
+  if (ok && lab.arg_num("things") > 0) la::things_loaded(things, c);
   gl::LabTable t{"the campaign host on the player's own map", {"what", "value"}, {}};
   t.rows.push_back({"map", map});
   t.rows.push_back({"started", ok ? "yes" : "no: " + error});
   if (ok) {
     sv::campaign_join(c, 0, "player");
+    if (lab.arg_num("things") > 0) la::things_table(lab, things, c, l.progs, lab.arg_num("things"));
     if (lab.arg_num("movers") > 0) la::movers_table(lab, c, l.progs, lab.arg_num("movers"));
     if (lab.arg_num("pickups") > 0) {
       const la::PickupCounts n = la::pickups_table(lab, c, l.progs, lab.arg_num("pickups"));
@@ -896,6 +908,9 @@ const gl::LabSpec kSpec{
         {"progs", "",
          "with --game: a program of our own to run on the pack's maps (campaign); empty: the "
          "pack's own progs.dat"},
+        {"mod", "",
+         "with --game: a mission pack's folder (hipnotic, rogue) beside the game's, its packs "
+         "laid over the game's: its own program and maps"},
         {"map", "start", "with --game: the map the campaign starts on"},
         {"skill", "1", "with --game: the skill the campaign is played at"},
         {"coop", "0", "with --game: the `coop` setting the campaign starts with"},
@@ -914,6 +929,11 @@ const gl::LabSpec kSpec{
          "s: our campaign on the free episode: three fixture maps "
          "(a hall, five monsters to an exit, a key door and the rune) played by a scripted player "
          "this long"},
+        {"things", "0",
+         "with --game, s: every thing the map's entity text placed, watched while the map runs "
+         "this long and then while each name it targets is used in turn (this long each): what "
+         "each class did (moved, turned, shown, hidden, animated, removed, made, sounded, hurt), "
+         "by the class name the map gave it"},
         {"pickups", "0",
          "with --game, s: every item and weapon of the map touched by the player in turn, then "
          "the map run this long: whether each is still shown (in single player and co-op a taken "

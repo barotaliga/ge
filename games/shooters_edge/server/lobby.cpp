@@ -23,10 +23,9 @@ void lobby_apply(const RulesRunner& r, const Lobby& l, int slot) {
   r.user_info(slot, "team", team_name(t));
   r.user_info(slot, "topcolor", colour);
   r.user_info(slot, "bottomcolor", colour);
-  // A QC program also reads the team off its own field (the single-player form's is the pants
-  // colour plus one, set with the bottom colour above).
+  // A QC program also reads the team off its own field.
   QcServer* q = qc_of(r);
-  if (q == nullptr || q->progs == nullptr || ge::progs::vm_layout(q->q.vm).single_player) return;
+  if (q == nullptr || q->progs == nullptr) return;
   QcServer& s = *q;
   if (const ge::progs::Def* d = ge::progs::find_field(*s.progs, "team"); d != nullptr)
     *ge::progs::entity_field(s.q.vm, slot + 1, d->offset) =

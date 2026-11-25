@@ -125,6 +125,19 @@ int int_flag(const Ctx& ctx, const char* name, int fallback) {
   return v.empty() ? fallback : std::atoi(v.c_str());
 }
 
+// The router's line in a dedicated server's log (`--open-port`): what came of asking it to forward
+// the port, waited for up to `wait_ms` ("" when it has said nothing yet).
+std::string router_line(const std::string& log, int wait_ms) {
+  const auto start = std::chrono::steady_clock::now();
+  for (;;) {
+    std::ifstream f(log, std::ios::binary);
+    for (std::string l; f && std::getline(f, l);)
+      if (l.rfind("The router ", 0) == 0) return l;
+    if (std::chrono::steady_clock::now() - start >= std::chrono::milliseconds(wait_ms)) return "";
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  }
+}
+
 // What `host` answers once a program started: a dedicated server is asked once whether it serves,
 // and one that died says why from its log.
 int started(Ctx& ctx, const Hosted& h) {
@@ -138,17 +151,29 @@ int started(Ctx& ctx, const Hosted& h) {
           ctx, 1, "the server stopped as it started:\n" + tail(h.log, 12),
           "fix what its log says, then " + std::string(ctx.spec.cli) + " host --dedicated");
   }
+  // Asked to open the port: the router's answer (PCP and NAT-PMP answer in a moment; UPnP's
+  // search and a silent router take longer, and the log says it later).
+  const bool asked = dedicated && (ctx.has("open-port") || ctx.has("gateway"));
+  const std::string router = asked && serving ? router_line(h.log, 8000) : "";
+  const bool forwarded = router.rfind("The router forwards ", 0) == 0;
+  std::string where = "friends join this machine's address on port " + port +
+                      " (over the internet, with the port forwarded on the router)";
+  if (asked)
+    where = !router.empty() ? router
+                            : "the router has not answered yet; " + std::string(ctx.spec.cli) +
+                                  " logs dedicated-" + port + " says what came of it";
   return answer(
       ctx,
       json_obj({{"kind", json_str(h.kind)},
                 {"port", json_num(h.port)},
                 {"pid", json_num(h.pid)},
                 {"answering", json_bool(serving)},
+                {"router", json_str(router)},
+                {"forwarded", json_bool(forwarded)},
                 {"log", json_str(h.log)},
                 {"command", json_str(h.command)}}),
       h.kind + " server on port " + port + ", process " + std::to_string(h.pid) + ", log " + h.log,
-      serving ? "friends join this machine's address on port " + port +
-                    " (over the internet, with the port forwarded on the router)"
+      serving ? where
               : "started, but not answering yet; " + std::string(ctx.spec.cli) + " logs " + h.kind +
                     "-" + port + " says why",
       std::string(ctx.spec.cli) + " host stop " + port + " ends it");
@@ -168,6 +193,8 @@ int host_dedicated(Ctx& ctx, const HostAsk& ask) {
   sp.password = ask.password;
   sp.maxclients = ask.maxclients;
   sp.bots = ask.bots;
+  sp.open_port = ask.open_port;
+  sp.gateway = ask.gateway;
   if (ctx.has("cfg")) {
     std::ifstream f(ctx.flag("cfg"), std::ios::binary);
     if (!f)
@@ -210,11 +237,16 @@ int cmd_host(Ctx& ctx) {
   ask.port = int_flag(ctx, "port", ctx.spec.default_port);
   ask.maxclients = int_flag(ctx, "maxclients", 0);
   ask.bots = int_flag(ctx, "bots", -1);
+  ask.open_port = ctx.has("open-port") || ctx.has("gateway");
+  ask.gateway = ctx.flag("gateway");
   if (ask.port <= 0 || ask.port > 65535)
     return refuse(
         ctx, 2, "--port=" + ctx.flag("port") + " is no port (1..65535)",
         std::string(ctx.spec.cli) + " host --port=" + std::to_string(ctx.spec.default_port));
   const bool dedicated = ctx.has("dedicated");
+  if (ask.open_port && !dedicated)
+    return refuse(ctx, 2, "--open-port asks the router for a dedicated server only",
+                  std::string(ctx.spec.cli) + " host --dedicated --open-port");
   const char* program = dedicated ? ctx.spec.server : ctx.spec.window;
   if (program[0] == '\0' || (!dedicated && ctx.spec.listen_words == nullptr))
     return refuse(ctx, 1,
