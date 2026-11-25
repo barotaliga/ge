@@ -70,7 +70,9 @@ bool fight_use(Q2Server& s, int slot, int item) {
     return true;
   }
   if (it.kind != SqKind::powerup) return false;
-  if (s.opt.pack == Q2Pack::ground_zero && gz_use_sphere(s, slot, item)) return true;
+  if (s.opt.pack == Q2Pack::ground_zero &&
+      (gz_use_sphere(s, slot, item) || gz_use_decoy(s, slot, item)))
+    return true;
   p.body.counts[item]--;
   const auto extend = [&s, &it](double& until) {
     until = std::max(until, s.level_time) + it.amount;

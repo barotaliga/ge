@@ -73,8 +73,10 @@ bool gz_left_out(const Q2Server& s, int item) {
   const auto* disruptor = s.cvars.find("g_disruptor");
   if ((name == "weapon_disintegrator" || name == "ammo_disruptor") &&
       (disruptor == nullptr || !disruptor->on()))
-    return true;  // every mode
-  if (!s.cvars.find("deathmatch")->on()) return false;
+    return true;                          // every mode
+  if (!s.cvars.find("deathmatch")->on())  // deathmatch's alone
+    return name == "ammo_nuke" || name == "item_doppleganger" || name == "item_sphere_hunter" ||
+           name == "item_sphere_vengeance";
   const int flags = s.cvars.find("dmflags")->integer();
   const bool sphere = name.starts_with("item_sphere_");
   return ((flags & 131072) != 0 && (name == "ammo_prox" || name == "ammo_tesla")) ||
