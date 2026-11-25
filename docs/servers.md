@@ -515,6 +515,24 @@ full. The book asks the game to seat or unseat a player and says every line; the
 the seats again from a seed. Quake II's server plays it with `dmflags` 64 or 128, every player
 in his team's look.
 
+## Elections and picks
+
+`engine/server/election.hpp`. A role a player asks the others for (a captain, a coach, an admin)
+is an election: ONE is open on a server at a time whatever it is for (the role is data: its name
+and a team), the people playing are the voters and answer `yes` (`no` takes it back), the
+candidate's own vote counts when he is one (a coach who watches is not), and it passes on the
+round-up of a percent (51 to 100) of the voters, at least two. It times out after 60 seconds, the
+candidate may call it off, and he waits 30 seconds before he asks again. The game gives the role
+when one passes and says the lines in its own words.
+
+`engine/server/draft.hpp`. Two captains picking the other players in turn: each waiting player
+has a number (1, 2, 3... in slot order), the captain who picks first is drawn from the seed, then
+A, B, B, A, B, A...; the last one goes by himself, a late joiner takes the lowest free number,
+and a captain who leaves ends it. Our QuakeWorld server's captain mode is both in QuakeWorld's
+words (`games/shooters_edge/net/qw_captains.hpp`): `captain` before a match in team play, the
+numbers shown as frags, a pick by the number keys, each pick taking the captain's team name and
+colours, nobody firing and nobody changing team while they pick.
+
 ## Coaches
 
 `engine/server/coach.hpp`. A spectator who wants to help one team asks for it in the warmup of a
@@ -535,6 +553,16 @@ match), `tl <minutes>`, `changemap <map>`, `kick`, `kickban` and `ban <player> [
 default, 720 at most), `mute <player> [minutes]` (5 by default, 60 at most) and `unmute`,
 `shuffle`, `readyall` and `unreadyall`; `acommands` lists them. A wrong password is refused and
 logged; a referee is never kicked, banned or muted. The book hands the game each act to do.
+
+A game keeps its own words (`RefereeWords`): its login word, its spellings of the book's words,
+the wait after a try, how a player is named, a kick's reason and ban, and every line said; a word
+its table leaves out is not the book's and reaches the mod. Our QuakeWorld server's admin is the
+book in QuakeWorld's words (`games/shooters_edge/net/qw_referee.hpp`): `admin <code>` against
+`k_admincode` (`k_admins 0`: no admins; a wrong code holds the next try 5 seconds), `forcebreak`,
+`forcemap <map>` (refused during a lobby's match and for a map the server lacks), `kick <id or
+name> [reason]` (the address kept out 30 seconds), and QuakeWorld's own `forcestart` (a 10-second
+count, then the unready dropped and the match counted down) and `lock` (joiners watch for 15
+seconds). A mod's own program keeps its own admin: the words go to it untouched.
 
 ## Player aids: help for one chosen player
 
