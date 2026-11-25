@@ -7,6 +7,7 @@
 #include "shooters_edge/client/game_folder.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -19,6 +20,7 @@
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_pack.hpp"
 
@@ -365,7 +367,53 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
       find_file(files, ge::classicenhance::asset_path(content.maps, out.start_map), store).empty()
           ? std::string(game.fallback_map)
           : out.start_map;
+  // NEW GAME as the packs' default.cfg names it (a pack's own first map and its movies first),
+  // when the packs hold that map.
+  std::string map, shows;
+  const std::span<const uint8_t> cfg = find_file(files, "default.cfg", store);
+  if (new_game_level(std::string(cfg.begin(), cfg.end()), map, shows) &&
+      !find_file(files, ge::classicenhance::asset_path(content.maps, map), store).empty()) {
+    out.first_map = map;
+    out.new_game_shows = shows;
+  }
   return true;
+}
+
+bool new_game_level(const std::string& cfg, std::string& map, std::string& shows) {
+  // The words of `text` from `at` on, split at blanks; a `"` starts or ends a quoted word.
+  const auto word = [](const std::string& text, size_t& at) {
+    at = std::min(text.find_first_not_of(" \t\r", at), text.size());
+    const bool quoted = at < text.size() && text[at] == '"';
+    const size_t start = at + (quoted ? 1 : 0);
+    const size_t stop =
+        std::min(text.find_first_of(quoted ? "\"" : " \t\r;\"", start), text.size());
+    at = stop + (quoted && stop < text.size() ? 1 : 0);
+    return text.substr(start, stop - start);
+  };
+  size_t from = 0;
+  while (from < cfg.size()) {
+    const size_t end = std::min(cfg.find('\n', from), cfg.size());
+    std::string line = cfg.substr(from, end - from);
+    from = end + 1;
+    for (char& c : line) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    size_t at = 0;
+    if (word(line, at) != "alias" || word(line, at) != "newgame") continue;
+    const std::string body = word(line, at);  // its commands, `;` between them
+    for (size_t part = 0; part < body.size();) {
+      const size_t semi = std::min(body.find(';', part), body.size());
+      const std::string command = body.substr(part, semi - part);
+      part = semi + 1;
+      size_t w = 0;
+      if (word(command, w) != "map") continue;
+      const sv::LevelString ls = sv::level_string(word(command, w));
+      if (ls.map.empty()) return false;
+      map = ls.map;
+      shows = ls.shows;
+      return true;
+    }
+    return false;
+  }
+  return false;
 }
 
 namespace {
@@ -385,6 +433,7 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
                     listen.opt.companions = 0;
                     listen.opt.new_game = true;
                     next_map = content.first_map;
+                    listen.cinematic = content.new_game_shows;  // the pack's movies first
                   });
   con.add_command("coopgame",
                   "coopgame [bots] [novice|average|expert] [map]: a new coop game (everyone on "

@@ -43,6 +43,7 @@ const Font* charset_font(std::string_view name) {
 
 bool sheet_font(const Image& sheet, Font& out, std::string* why) {
   constexpr int kCells = 16;
+  constexpr int kClassicCell = 8;  // a classic sheet's cell, px
   if (sheet.empty() || sheet.width != sheet.height || sheet.width % kCells != 0) {
     if (why != nullptr)
       *why = "the glyph sheet is " + std::to_string(sheet.width) + " x " +
@@ -67,7 +68,7 @@ bool sheet_font(const Image& sheet, Font& out, std::string* why) {
   // letters leave their cells' edges clear, and the bars and box pieces, which tile edge to edge,
   // keep theirs.
   const int cell = size / kCells;
-  if (cell > 8) {
+  if (cell > kClassicCell) {
     const int rim = cell / 16;
     for (int y = 0; y < size; ++y)
       for (int x = 0; x < size; ++x) {
@@ -86,7 +87,10 @@ bool sheet_font(const Image& sheet, Font& out, std::string* why) {
                    .baseline = 0.875f,
                    .advance = 1.0f,
                    .missing = '?',
-                   .pixel_h = size / kCells});
+                   // A classic sheet's 8 px cells are drawn nearest at their multiples; an
+                   // upscaled one's at the same multiples of 8, filtered from its finer texels.
+                   .pixel_h = cell > kClassicCell ? 0 : cell,
+                   .snap_h = cell > kClassicCell ? kClassicCell : 0});
   return out.load_grid(std::move(faces), why);
 }
 

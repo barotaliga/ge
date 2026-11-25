@@ -230,6 +230,40 @@ TEST(the_content_packs_key_the_cache_as_the_pipeline_does) {
   fs::remove_all(root);
 }
 
+// A mission pack mounted over the base game: its packs follow the base's in the cache's key, and
+// the game reads the pack's own cache when it was made, else the base game's.
+TEST(a_mission_pack_keys_its_cache_laid_over_the_base_game) {
+  const fs::path root = make_tree();
+  write_pack(root / "Hipnotic" / "pak0.pak", {{"maps/hip1m1.bsp", bytes_of("H")}});
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), "Hipnotic", sp, error), error);
+  const auto base = cl::content_packs(sp);
+  const auto laid = cl::content_packs_with_mission(sp);
+  CHECK(base.size() == 2);
+  CHECK(laid.size() == 3);
+  const auto key_of = [](const std::vector<std::span<const uint8_t>>& packs) {
+    std::vector<std::string> digests;
+    digests.reserve(packs.size());
+    for (const auto p : packs) digests.push_back(ge::assets::sha256_hex(p));
+    return ge::classicenhance::set_key(digests);
+  };
+  const fs::path cache = root / "cache";
+  CHECK(cl::content_cache(sp, cache).empty());  // nothing enhanced yet
+  const fs::path base_dir = ge::classicenhance::pack_dir(cache, key_of(base));
+  CHECK(ge::classicenhance::write_record(base_dir, "textures", "k"));
+  CHECK(cl::content_cache(sp, cache) == base_dir);  // the base game's, until the pack's is made
+  const fs::path laid_dir = ge::classicenhance::pack_dir(cache, key_of(laid));
+  CHECK(ge::classicenhance::write_record(laid_dir, "textures", "k"));
+  CHECK(cl::content_cache(sp, cache) == laid_dir);
+  // Another game folder (not a mission pack) keys the base's cache alone.
+  cl::SearchPath mod;
+  CHECK_MSG(cl::open_game_dir(root.string(), "mod", mod, error), error);
+  CHECK(cl::content_packs_with_mission(mod).size() == 2);
+  CHECK(cl::content_cache(mod, cache) == base_dir);
+  fs::remove_all(root);
+}
+
 TEST(a_content_zip_standing_in_for_the_first_pack_keys_the_cache) {
   const fs::path root = make_tree();
   const fs::path base = root / std::string(ge::classicenhance::q1_profile().base_dir);

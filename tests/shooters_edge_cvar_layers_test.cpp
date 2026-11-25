@@ -574,11 +574,17 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
   con::ConsoleView view(w.console);  // con_height, con_bgalpha, con_font: the console's own
-  v.add({.name = "vid_vsync", .fallback = "0"});    // the window's (platform/pacing.cpp)
-  v.add({.name = "scr_showfps", .fallback = "0"});  // the window's too
+  v.add({.name = "vid_vsync", .fallback = "0"});       // the window's (platform/pacing.cpp)
+  v.add({.name = "scr_showfps", .fallback = "0"});     // the window's too
+  v.add({.name = "sv_maxclients", .fallback = "32"});  // the listen server's (listen_console)
   w.console.add_command("playdemo", "the window's (client/demo_playback.cpp)",
                         [](con::Console&, const con::Args&) {});
+  w.console.add_command("snd_restart", "the window's (client/menu_sound.cpp)",
+                        [](con::Console&, const con::Args&) {});
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});  // read again with them
+  CHECK(w.console.has_command("s_restart"));     // QuakeWorld's spelling of the sound restart
+  v.set("maxplayers", "8", con::Source::local);  // Quake's word for the next game's players
+  CHECK(v.find("sv_maxclients")->value == "8");
   v.set("scr_consize", "0.3", con::Source::local);
   v.set("scr_conalpha", "0.6", con::Source::local);
   v.set("gl_consolefont", "povo5", con::Source::local);
@@ -613,6 +619,8 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   v.set("gl_swapinterval", "1", con::Source::local);  // its spelling of the window's vsync
   CHECK(v.find("vid_vsync")->value == "1");
   CHECK(w.console.has_command("demo"));  // its spelling of playdemo
+  CHECK(!w.console.has_command("s_restart"));
+  CHECK(v.find("maxplayers") == nullptr && v.synonym("maxplayers") == nullptr);
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
   CHECK(v.find("gl_swapinterval") == nullptr && v.find("in_grab")->value == "0");
   CHECK(!w.console.has_command("demo"));

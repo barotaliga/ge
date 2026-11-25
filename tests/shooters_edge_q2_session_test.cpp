@@ -136,6 +136,9 @@ TEST(cl_thirdperson_is_a_cheat_and_moves_the_view_back) {
   CHECK(cl::view_behind(front, 40, 180, nullptr) == 40);  // in front, looking back
   CHECK(std::abs(front.eye[2] - 40 * ge::brush::kUnitM) < 1e-9);
   CHECK(std::abs(std::abs(front.heading) - 3.14159265358979) < 1e-9);
+  ge::render::FrameView high;  // cam_up (Quake's chase_up): raised first, then back
+  CHECK(cl::view_behind(high, 40, 0, nullptr, {}, 16) == 40);
+  CHECK(std::abs(high.eye[1] - 16 * ge::brush::kUnitM) < 1e-9);
 }
 
 TEST(cl_thirdperson_stops_short_of_a_wall) {

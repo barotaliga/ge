@@ -13,6 +13,7 @@
 
 #include "check.hpp"
 #include "console/console.hpp"
+#include "server/listen_console.hpp"
 #include "server/main.hpp"
 #include "server/sample.hpp"
 #include "server/trial.hpp"
@@ -231,6 +232,25 @@ namespace {
 std::string g_map = "ring";
 void map_status(const void*, ge::net::Status& st) { st.map = g_map; }
 }  // namespace
+
+// The port is one setting under both names: a dedicated server's net_port and a hosting window's
+// sv_port, so one cfg line serves both.
+TEST(the_port_answers_to_both_names) {
+  ServerConfig c;
+  ge::console::Cvars dedicated(true);
+  add_server_cvars(dedicated, c, sample_game());
+  CHECK(dedicated.find("sv_port") != nullptr &&
+        dedicated.find("sv_port") == dedicated.find("net_port"));
+  ge::console::Cvars window(true);
+  bool lobby = false;
+  LobbySettings lobby_settings;
+  int port = 0, maxclients = 0;
+  LoginSettings login;
+  std::string hostname = "host";
+  add_listen_cvars(window, {lobby, lobby_settings, port, maxclients, login, hostname});
+  window.set("net_port", "27511", ge::console::Source::local);
+  CHECK(port == 27511 && window.find("net_port") == window.find("sv_port"));
+}
 
 // sv_mapcmd runs once after each map loads: the first map, then each the game's status names anew.
 TEST(sv_mapcmd_is_due_once_after_each_map_loads) {

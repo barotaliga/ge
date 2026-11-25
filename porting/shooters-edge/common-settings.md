@@ -21,8 +21,7 @@ is added to the table first, then lifted.
 Statuses: **one setting** every game's spelling reaches one setting of ours already; **lifted** made
 one by this work, its batch named; **to lift** one thing on two settings, or one game's
 alone in ours, with its batch (B2 to B5 below); **kept apart** two settings on purpose: another
-meaning, unit, value set or the opposite direction (the note says which); **sound thread** the
-sound settings, which the OpenAL thread lifts with its own work; **neither has it** a debug knob
+meaning, unit, value set or the opposite direction (the note says which); **neither has it** a debug knob
 neither client takes.
 
 ## Counts
@@ -30,15 +29,13 @@ neither client takes.
 | Status | Settings | Commands | All |
 | --- | --- | --- | --- |
 | one setting | 84 | 53 | 137 |
-| lifted | 15 | 1 | 16 |
-| to lift | 6 | 0 | 6 |
-| sound thread | 2 | 1 | 3 |
-| kept apart | 19 | 0 | 19 |
-| neither has it | 9 | 0 | 9 |
+| lifted | 20 | 2 | 22 |
+| to lift | 0 | 0 | 0 |
+| kept apart | 20 | 0 | 20 |
+| neither has it | 11 | 0 | 11 |
 | **common to Quake and Quake II** | **135** | **55** | **190** |
 
-**Left to lift: 6** (3 of them the screen rows the Quake gaps thread is building, 3 the server's
-names).
+**Left to lift: 0.** Every batch is done (B4 by the Quake gaps thread).
 
 ## The batches
 
@@ -56,7 +53,12 @@ names).
 - **B4 (done):** the graphs and the 2D switch every classic game's (`client/screen_2d.hpp`); Quake's
   `r_timegraph` and QuakeWorld's `r_drawhud` (0 to 0, 1 to 2) spell them. The server browser's sort
   and ping rate are kept apart (another value set each).
-- **B5, the server's names:** `cheats`, the recording's size, the port (with the Quake II server thread).
+- **B5 (done), the server's names:** Quake II's `cheats` is the engine's `sv_cheats` (latched in its
+  rules, as the game has it), and the port answers to `net_port` and `sv_port` alike. The recording's
+  size is kept apart: two recorders.
+- **B9 (done, the sound rows, settled with the sound thread):** QuakeWorld's `s_restart` a
+  synonym of `snd_restart`; `s_khz` and `s_show` taken by neither (a fixed mixing rate, a developer
+  tool). The mix-ahead (`s_mixahead`, Quake's `_snd_mixahead`) the sound thread lifted itself.
 - **B7 (done, Niclas 2026-11-23): what a competition player tunes, every classic game's.** One
   game's settings that every game now takes, in the classic layer, kept across a game change and
   checked by the rulesets by the same names in every game: the flat walls and their colours
@@ -249,12 +251,12 @@ names).
 | setting | `sb_infospersec` |  | `sb_infospersec` | `ui_pingrate` | shell | kept apart | server browser pings a second: Quake II's ui_pingrate takes 0 as worked out from rate, which sb_infospersec has no value for: another value set |
 | setting | `sb_sortservers` |  | `sb_sortservers` | `ui_sortservers` | shell | kept apart | server browser sort: Quake II's ui_sortservers one column number, ours a string of column codes: another value set |
 | setting | `scr_draw2d` |  | `r_drawhud` | `scr_draw2d` | classic | lifted B4 | 2D drawn, every game's (screen_2d.hpp): 0 nothing, 1 the crosshair alone of our HUD, 3 no scoreboard; QuakeWorld's r_drawhud 0/1 a value-mapped synonym (0 to 0, 1 to 2) |
-| setting | `sv_cheats` |  | `sv_cheats` | `cheats` | engine | to lift B5 | Quake II's server `cheats` a rules setting of its own |
-| setting | `sv_demomaxsize` |  | `sv_demomaxsize` | `sv_mvd_maxsize` | engine | to lift B5 | a recording's size limit: Quake II's sv_mvd_maxsize |
-| setting | `sv_port` | `port` |  | `net_port` | engine | to lift B5 | Quake II's net_port the port served on, Quake's port command a synonym already (the modern server's hostport is the public address: apart) |
-| command | `s_restart` |  | `s_restart` | `snd_restart` | shell | sound thread | Quake II's snd_restart and QuakeWorld's s_restart (the OpenAL thread lifts sound names) |
-| setting | `s_khz` |  | `s_khz` | `s_khz` |  | sound thread | the mixing rate (the OpenAL thread) |
-| setting | `s_show` |  | `s_show` | `s_show` |  | sound thread | sounds playing printed (the OpenAL thread) |
+| setting | `sv_cheats` |  | `sv_cheats` | `cheats` | engine | lifted B5 | Quake II's `cheats` a synonym of the engine's `sv_cheats` in its rules, latched there as the game has it (`server/q2_commands.cpp`); its status line now says the value set |
+| setting | `sv_demomaxsize` |  | `sv_demomaxsize` | `sv_mvd_maxsize` | engine | kept apart | two recorders: Quake II's limits its multiview stream (1000-byte units, beside `sv_mvd_maxtime` and `sv_mvd_maxmaps`); QuakeWorld's server demo and its size cap are M53g's server-side recording, not built |
+| setting | `sv_port` | `port` |  | `net_port` | engine | lifted B5 | one port under both names: the dedicated server's `net_port` answers `sv_port` and a hosting window's `sv_port` answers `net_port` (`engine/server/server.cpp`, `listen_console.cpp`); Quake's `port` a synonym already (the modern server's hostport is the public address: apart) |
+| command | `snd_restart` |  | `s_restart` | `snd_restart` | shell | lifted B9 | QuakeWorld's `s_restart` a synonym of our `snd_restart` (it says no restart is needed) |
+| setting | `s_khz` |  | `s_khz` | `s_khz` |  | neither has it | the mixing rate: ours mixes at 48 kHz always (`engine/audio/voice.hpp`), the device converts |
+| setting | `s_show` |  | `s_show` | `s_show` |  | neither has it | sounds playing printed: a developer tool, as Quake's `snd_show` (C304); ours are the labs and `soundinfo` |
 | setting | `cl_bobup` | `cl_bobup` | `cl_bobup` | `bob_up` |  | apart | Quake II the bob's height (server rule), Quake the share of a cycle spent rising |
 | setting | `cl_gibfilter` |  | `cl_gibfilter` | `cl_gibs` | classic | lifted B8 | gibs hidden: Quake II's cl_gibs a mapped synonym the other way round (its 1 our 0) |
 | setting | `cl_maxfps` |  | `cl_maxfps` | `cl_maxfps` | engine | apart | ours the frame cap; Quake II's its moves a second (own), its r_maxfps the cap |
