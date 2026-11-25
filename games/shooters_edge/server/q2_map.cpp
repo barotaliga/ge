@@ -25,6 +25,7 @@
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map_kinds.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -935,6 +936,7 @@ void explosion(Q2Server& s, int i, int activator, int depth) {
 void use(Q2Server& s, int target, int activator, int depth, int other) {
   Q2Entity& e = s.entities[size_t(target)];
   if ((e.gone && class_of(e) != kWall) || gz_push_use(s, e)) return;
+  if (s.opt.pack == Q2Pack::ground_zero && gz_used(s, e)) return;  // its toggles (q2_gz.hpp)
   switch (class_of(e)) {
     case kDoor:
     case kDoorRotating:
@@ -1114,11 +1116,8 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       explosion(s, target, activator, depth);
       return;
     case kNone:
-      if (e.item >= 0) {  // a power cube hidden until used appears, as a thing once
-        if (e.hidden && (e.spawnflags & 1) != 0) {
-          e.hidden = false;
-          e.spawnflags &= ~1;
-        }
+      if (e.item >= 0) {  // an item hidden until used appears, as a thing once
+        q2_item_used(s, size_t(target));
         return;
       }
       if (targets_use(s, target, activator)) return;
@@ -1439,7 +1438,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
     case kTriggerMultiple:
       if (c == kTriggerOnce && (e.spawnflags & 1) != 0) e.spawnflags = (e.spawnflags & ~1) | 4;
       if (c == kTriggerMultiple && e.wait == 0) e.wait = 0.2f;
-      e.trigger = (e.spawnflags & 4) == 0;
+      e.trigger = (e.spawnflags & 4) == 0 && !gz_toggled(s, e);  // a toggled one starts off
       e.state = e.trigger ? 1 : 0;
       e.dir = has_angle(s, e) ? way_of(s, e) : sh::Vec3f{};
       e.angles = {};
@@ -1522,7 +1521,8 @@ void link_doors(Q2Server& s) {
     if (e.gone || !is_door(class_of(e)) || e.team_master >= 0) continue;
     e.team_master = static_cast<int>(i);
     sh::Vec3f lo = abs_min(e), hi = abs_max(e);
-    bool field = e.targetname.empty() && e.max_health == 0 && e.classname != "func_water";
+    bool field = (e.targetname.empty() || gz_inactive(s, e)) && e.max_health == 0 &&
+                 e.classname != "func_water";
     if (!e.team.empty())
       for (size_t j = i + 1; j < count; j++) {
         Q2Entity& m = s.entities[j];
@@ -1556,7 +1556,7 @@ void link_doors(Q2Server& s) {
     if ((e.spawnflags & 1) != 0) door_portals(s, e, true);  // a door that starts open
     Q2Entity f;
     f.classname = "door_field";
-    f.trigger = true;
+    f.trigger = !gz_inactive(s, e);  // a sleeping door's wakes with it
     f.mins = lo - sh::Vec3f{60, 60, 0};
     f.maxs = hi + sh::Vec3f{60, 60, 0};
     f.owner = static_cast<int>(i);
@@ -1917,7 +1917,7 @@ bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, boo
     return true;
   }
   if (d.gone || d.health <= 0 || damage <= 0) return false;
-  if (!is_door(c) && c != kButton) return false;
+  if ((!is_door(c) && c != kButton) || gz_inactive(s, d)) return false;
   d.health -= damage;
   if (d.health > 0) return true;
   if (c == kButton) {

@@ -150,6 +150,11 @@ void torso_rows(Q2Server& s) {
     const int k = static_cast<int>((s.level_time - t.until) * 10 + 0.001);
     r.frame = 346 + (k < 2 ? 0 : (k - 1) % 19);
     r.loop = spine != s.sounds.end() ? static_cast<int>(spine - s.sounds.begin()) : 0;
+    // Ground Zero: a red shell while a medic raises him.
+    const bool raised =
+        s.opt.pack == Q2Pack::ground_zero && m >= 0 && s.monsters[size_t(m)].claimed;
+    r.effects = raised ? kSqColourShellEffect : 0;
+    r.render_fx = raised ? kSqRedShellRender : 0;
   }
 }
 
@@ -195,6 +200,7 @@ void monster_rows(Q2Server& s) {
         !m.dead)
       loop = "boss3/w_loop.wav";
     r.effects = 0;
+    r.render_fx = 0;
     if (m.flies_at > 0 && s.level_time >= m.flies_at && s.level_time < m.flies_at + 60) {
       loop = "infantry/inflies1.wav";
       r.effects = kSqFliesEffect;
@@ -209,8 +215,10 @@ void monster_rows(Q2Server& s) {
           {"item_invulnerability", m.boss.invulnerable_until}};
       for (const SqPower& pw : sq_powers())
         for (const auto& [item, until] : held)
-          if (std::string_view(pw.item) == item && sq_power_shown(until - s.level_time))
+          if (std::string_view(pw.item) == item && sq_power_shown(until - s.level_time)) {
             r.effects |= pw.effects;
+            r.render_fx |= pw.render;
+          }
     }
     if (loop != nullptr && !e.gone) {
       const auto at = std::find(s.sounds.begin(), s.sounds.end(), loop);

@@ -19,6 +19,7 @@
 #include "classic/content/web_downloads.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
+#include "prof/zones.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
@@ -476,6 +477,10 @@ void read_move(QwServer& s, int slot, const ClcMsg& m, const uint8_t* payload, b
   }
   if (s.buttons != nullptr && !c.spectator)
     for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
+  if (s.impulse != nullptr && !c.spectator)
+    for (int i = 0; i < 3; i++)
+      if (p.cmds[i].impulse != 0)
+        p.cmds[i].impulse = s.impulse(s.move_ctx, slot, p.cmds[i].impulse, i == 2);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
   // His moves made before he saw the server's turn of him go where he now faces.
   c.moves_turned +=
@@ -1169,7 +1174,8 @@ void tell_frags(QwServer& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     QwClient& c = s.clients[i];
     if (!c.rules_active) continue;
-    const int frags = static_cast<int>(s.game->world.clients[i].numbers.frags);
+    const int frags = c.pick_number != 0 ? c.pick_number
+                                         : static_cast<int>(s.game->world.clients[i].numbers.frags);
     if (frags == c.frags_told) continue;
     c.frags_told = frags;
     SvcMsg m;
@@ -1205,12 +1211,28 @@ void answer_zombie(QwServer& s, const gn::Address& from, uint16_t qport, const u
 
 }  // namespace
 
+namespace {
+
+// The frame's parts' timing zones (prof/zones.hpp), named once.
+uint32_t zone_receive() {
+  static const uint32_t id = ge::prof::zone_id("net.receive");
+  return id;
+}
+uint32_t zone_events() {
+  static const uint32_t id = ge::prof::zone_id("net.events");
+  return id;
+}
+
+}  // namespace
+
 void qw_frame(QwServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
   std::erase_if(s.zombies, [&s](const QwServer::Zombie& z) { return s.now > z.until; });
   if (s.started < 0) s.started = s.now;
   s.frames++;
   s.packets.clear();
+  ge::prof::ZoneParts part;
+  part.begin(zone_receive());  // the datagrams read
   gn::transport_pump(*s.transport, now_us);
   uint8_t buf[gn::kMaxDatagram];
   gn::Address from;
@@ -1268,8 +1290,10 @@ void qw_frame(QwServer& s, int64_t now_us) {
         s.game->sv.clients[static_cast<size_t>(p.client)].active)
       s.packets.push_back(p);
   s.local_moves.clear();
+  part.end();
 
   s.rules->frame(s.packets.data(), static_cast<int>(s.packets.size()));
+  part.begin(zone_events());  // what the frame did, told: frags, events, recordings, drops
   if (s.local_tap != nullptr) s.local_tap(s.local_ctx, *s.game);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the rules' turns, each for his next datagram
     sv::RulesCommon::Turn& t = s.game->turns[i];
@@ -1342,6 +1366,7 @@ void qw_frame(QwServer& s, int64_t now_us) {
       }
     }
   }
+  part.end();
   send_frames(s);
 }
 

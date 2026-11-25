@@ -65,6 +65,14 @@ inline constexpr Replacement kReplacements[] = {
      "a flash of light; the engine's shotgun fire bursts from the muzzle"},
     {"progs/enforcer.mdl", "monster.gun", true,
      "a flash of light; the engine's gun fire bursts from the muzzle"},
+    // Quake II's explosions: its models of a ball of fire and the BFG's burst, each drawn where
+    // the engine's blast goes off in their place.
+    {"models/objects/r_explode/tris.md2", "explosion", true,
+     "a painted ball; the engine's explosion is a lit, shaded volume with smoke and sparks"},
+    {"models/objects/explode/tris.md2", "explosion", true,
+     "a painted ball; the engine's explosion is a lit, shaded volume with smoke and sparks"},
+    {"sprites/s_bfg2.sp2", "explosion", true,
+     "a flat sprite; the engine's explosion is a lit, shaded volume with smoke and sparks"},
 };
 
 // The row for a pack path; nullptr when the engine draws the file itself.

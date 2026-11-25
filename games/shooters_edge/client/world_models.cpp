@@ -814,11 +814,20 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       opened.form = ModelForm::morph;
       opened.morph =
           ge::classicenhance::casing_model(static_cast<ge::classicenhance::Casing>(made), palette);
-    } else if (!game.open_model(game, files, name, opened, error) &&
-               !(vwep && stand_in(name, opened, skin_of[i]))) {
-      // Not in the files (the map itself is not in the packs by this name either) or refused.
-      if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
-      continue;
+    } else if (!game.open_model(game, files, name, opened, error)) {
+      if (own && rep != nullptr && rep->effect == "bubbles") {
+        // The engine's bubble with no pack sprite under it (Quake II's): its made frame alone,
+        // placed only while ce_bubbles is on (world_fx.cpp's own bubbles).
+        k.is = ModelKind::Is::sprite;
+        k.first = k.made = uint32_t(frames.size());
+        frames.push_back(gr::bubble_frame(kBubblePx));
+        continue;
+      }
+      if (!(vwep && stand_in(name, opened, skin_of[i]))) {
+        // Not in the files (the map itself is not in the packs by this name either) or refused.
+        if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
+        continue;
+      }
     }
     if (opened.form == ModelForm::morph) {
       const mo::Model& model = opened.morph;

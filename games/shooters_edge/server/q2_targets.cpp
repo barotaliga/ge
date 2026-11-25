@@ -19,6 +19,7 @@
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_gibs.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
@@ -1048,13 +1049,13 @@ bool targets_use(Q2Server& s, int i, int activator) {
 }
 
 bool targets_damage(Q2Server& s, int i, int attacker, int damage) {
-  if (reckoning_damage(s, i, damage)) return true;
+  if (reckoning_damage(s, i, damage) || gz_decoy_damage(s, i, attacker, damage)) return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (e.gone || damage <= 0) return false;
   switch (k) {
     case kExplosive:  // shootable unless only named (then a use blows it)
-      if (e.hidden || ((e.spawnflags & 1) == 0 && !e.targetname.empty())) return false;
+      if (e.hidden || ((e.spawnflags & (1 | kGzWoken)) == 0 && !e.targetname.empty())) return false;
       e.health -= damage;
       if (e.health <= 0) {  // its chunks fly away from who broke it
         const bool player = attacker >= 0 && attacker < sh::kMaxClients;
@@ -1091,6 +1092,7 @@ bool targets_damage(Q2Server& s, int i, int attacker, int damage) {
 void targets_frame(Q2Server& s) {
   reckoning_frame(s);
   gz_brains(s);
+  gz_decoys_frame(s);
   for (size_t n = 0; n < s.entities.size(); n++) {
     Q2Entity& e = s.entities[n];
     const int i = static_cast<int>(n);
@@ -1116,7 +1118,7 @@ void targets_frame(Q2Server& s) {
           e.tick_at = 0;
           break;
         }
-        if (s.level_time - e.touched_at > 0.5 + 0.001) {
+        if (s.level_time - e.touched_at > 0.5 + 0.001 && !gz_silent(s, e)) {
           e.touched_at = s.level_time;
           sound_at(s, i, e.origin, kShakeSound, true);
         }
@@ -1295,6 +1297,7 @@ void targets_turret(Q2Server& s, Q2Monster& m, int enemy) {
 
 void targets_rows(Q2Server& s) {
   reckoning_rows(s);
+  gz_decoy_rows(s);
   RulesWorld& w = s.world;
   for (size_t n = 0; n < s.entities.size(); n++) {
     const Q2Entity& e = s.entities[n];

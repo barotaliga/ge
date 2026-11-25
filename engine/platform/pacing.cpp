@@ -6,6 +6,7 @@
 #include "platform/pacing.hpp"
 
 #include <cmath>
+#include <cstdlib>
 #include <string>
 
 #include "console/console.hpp"
@@ -13,6 +14,22 @@
 #include "core/num_text.hpp"
 
 namespace ge::platform {
+
+namespace {
+
+// A report of many lines, a console line each.
+void print_lines(console::Console& c, const std::string& text) {
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = text.find('\n', at);
+    c.print(
+        std::string_view(text).substr(at, end == std::string::npos ? std::string::npos : end - at));
+    if (end == std::string::npos) break;
+    at = end + 1;
+  }
+}
+
+}  // namespace
 
 void add_pacing_cvars(console::Console& con, Pacing& p) {
   using console::CvarKind;
@@ -114,6 +131,32 @@ void add_pacing_cvars(console::Console& con, Pacing& p) {
                     }
                     c.print(pacing_text(p));
                   });
+  con.add_command("profile",
+                  "the next frames timed part by part (600 unless a count is given): each "
+                  "part's median, 99th percentile and worst, and what made the slowest frames "
+                  "slow; profile stop reports at once",
+                  [&p](console::Console& c, const console::Args& a) {
+                    if (a.size() > 1 && a[1] == "stop") {
+                      prof::frames_stop(p.profile);
+                      if (p.profile.done) print_lines(c, prof::frames_report(p.profile));
+                      p.profile.done = false;
+                      return;
+                    }
+                    const int n = a.size() > 1 ? std::atoi(std::string(a[1]).c_str()) : 600;
+                    if (n < 1 || n > 100000) {
+                      c.print("profile: give a count of frames from 1 to 100000, or stop");
+                      return;
+                    }
+                    prof::frames_start(p.profile, n);
+                    c.print("profile: timing the next " + std::to_string(n) +
+                            " frames; the report follows here");
+                  });
+}
+
+void profile_tick(console::Console& con, Pacing& p) {
+  if (!prof::frames_tick(p.profile)) return;
+  print_lines(con, prof::frames_report(p.profile));
+  p.profile.done = false;
 }
 
 uint64_t pace(const Window& window, Pacing& p, double gpu_wait_s) {

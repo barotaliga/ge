@@ -139,3 +139,32 @@ TEST(the_top_scores_name_the_best_and_every_tie) {
   r.players.pop_back();  // one player has no top scores
   CHECK(sv::stats_top_lines(g, r).empty());
 }
+
+TEST(the_stats_words_read_the_match_so_far_or_the_last) {
+  const sv::StatsGame& g = sv::q2_stats_game();
+  sv::StatsAsk ask;
+  ask.me = "ana";
+  std::string out;
+  CHECK(!sv::stats_words(g, "say hi", ask, out));
+  CHECK(sv::stats_words(g, "stats", ask, out));  // the warmup, and no match yet
+  CHECK_MSG(out == "There are no stats yet: no match has been played.", out);
+  gn::MatchReport last;
+  for (int k = 0; k < sv::stats_columns(g); k++)
+    last.columns.push_back(sv::stats_column_name(g, k));
+  gn::ReportPlayer p;
+  p.name = "ana";
+  p.score = p.frags = 2;
+  sv::PlayerStats s;
+  sv::stats_attack(&s, g.rl, 4);
+  sv::stats_hit(&s, g.rl, 1);
+  p.columns = sv::stats_row(g, s);
+  last.players = {p};
+  ask.last = &last;
+  ask.present = {"ana", "ben"};
+  CHECK(sv::stats_words(g, "laststats", ask, out));  // a rocket counts by its splash
+  CHECK_MSG(out.find("  Weapons: rl 0.0% (0/4)") != std::string::npos, out);
+  CHECK(sv::stats_words(g, "stats ben", ask, out));  // on the server, never counted
+  CHECK_MSG(out == "Nothing counted yet for ben.", out);
+  CHECK(sv::stats_words(g, "stats zed", ask, out));
+  CHECK_MSG(out == "There is no player zed in those stats.", out);
+}

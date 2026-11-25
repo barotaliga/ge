@@ -19,6 +19,14 @@ at the panel's native size halves it again. The lag fix read a 0 ms frame becaus
 games presented outside the pacing; every present path now goes through it, and `framestats`
 names the wait for a free image apart from the GPU's.
 
+**The frame by part (`profile N`, 2026-11-25):** the console's `profile [frames]`
+(`engine/prof/frames.hpp`, registered with the pacing) times the next frames by their timing zones
+and names what made the slowest frames slow, with each part's heap allocations a frame. In the
+container (llvmpipe, 320x180) the window's own CPU work on Quake's dm3 with three bots is a few ms
+a frame (the bots about 0.9 ms, the rules 0.7, the world's prepare and encode about 1) against
+150 ms or more of the software GPU's present and submit, so the slowness reported on the Mac is
+read there next with `profile` and `gpustats`.
+
 **Open:** the Mac's measurement again on a map (`framestats` windowed and fullscreen, with
 `r_quality auto` so the GPU's frame fits `r_budget` 8.3 ms, the issue labelled `needs-mac`); Fall Line's window wired the same way
 (its `vid_vsync` is latched today); the lag fix's margin measured on the Mac (`vid_vsync_lag_tweak` 0.5 to 2).

@@ -20,7 +20,10 @@
 //   face) and a yellow light of 150; explosion1 and a rocket's (in the air or in water) the ball's
 //   frames 0..14 or 15..29 at even odds, explosion2 and a grenade's frames 30..48, each turned to a
 //   random yaw, full bright, a light of 350 (1, 0.5, 0.5); the BFG ball's burst its sprite's 4
-//   frames and a green light of 350.
+//   frames and a green light of 350. Ground Zero's: a green blaster's hit the flare's green skin
+//   (1) and a green light of 150, a flechette's its skin 2 and a pale blue light; the plain
+//   explosion, the one with no specks and the big one (twice the size, the same light) the
+//   rocket's ball; the disruptor's burst a darkening light of 150 for a tenth, no model.
 // - THE PLAYER'S SAY: `cl_disable_explosions` leaves a rocket's or a grenade's ball out but keeps
 //   its light; `cl_dlight_hacks` 2 starts those lights at 200.
 // - CABLES: a parasite's drain, a medic's line and the grapple are a segment model laid as a
@@ -48,8 +51,19 @@ namespace shooters_edge::client {
 
 // The models these effects draw: models/objects/r_explode, models/objects/explode (the flare),
 // models/objects/smoke, models/objects/flash, the parasite's and the grapple's segments and
-// sprites/s_bfg2.sp2 (world_models.hpp's kEffectModels lists them in this order from `q2_fx`).
-enum class Q2FxModel : uint8_t { explosion, flare, smoke, flash, segment, ctf_segment, bfg };
+// sprites/s_bfg2.sp2, and Ground Zero's lightning and heat beam segments (models/proj/lightning,
+// models/proj/beam) (world_models.hpp's kEffectModels lists them in this order from `q2_fx`).
+enum class Q2FxModel : uint8_t {
+  explosion,
+  flare,
+  smoke,
+  flash,
+  segment,
+  ctf_segment,
+  bfg,
+  lightning,
+  heat_beam
+};
 
 enum class Q2FxClass : uint8_t { puff, flash, explosion };
 
@@ -64,6 +78,8 @@ struct Q2ModelFx {
   bool full_bright = false;
   bool see_through = false;  // drawn see-through from the start
   bool drawn = true;         // false: its light alone (cl_disable_explosions)
+  int skin = 0;              // a puff's skin (the flare's: 0 yellow, 1 green, 2 a flechette's)
+  float scale = 1;           // its size (2: the big explosion)
   float light = 0;           // its light's base reach, units (0: none)
   float rgb[3] = {};
 };
@@ -96,6 +112,7 @@ inline Q2FxPose q2_model_fx_pose(const Q2ModelFx& m, double now_s, bool smooth) 
     p.f = 1;
   }
   p.see_through = m.see_through;
+  p.skin = m.skin;
   switch (m.cls) {
     case Q2FxClass::puff:
       p.alpha = static_cast<float>(1 - age / life);
@@ -150,7 +167,9 @@ inline int q2_model_fx_of(int code, uint32_t pick, const float at[3], const floa
       flash.full_bright = true;
       return 2;
     }
-    case 2: {  // a blaster bolt's hit: the flare turned to the face
+    case 2:     // a blaster bolt's hit: the flare turned to the face
+    case 30:    // a green blaster's: the flare's green skin, a green light
+    case 55: {  // a flechette's: its pale blue skin and light
       Q2ModelFx& m = out[0];
       m = {};
       at_point(m);
@@ -167,10 +186,49 @@ inline int q2_model_fx_of(int code, uint32_t pick, const float at[3], const floa
         m.angles[1] = static_cast<float>(yaw);
       }
       m.light = 150;
-      m.rgb[0] = m.rgb[1] = 1;
+      if (code == 2) {
+        m.rgb[0] = m.rgb[1] = 1;
+      } else if (code == 30) {
+        m.skin = 1;
+        m.rgb[1] = 1;
+      } else {
+        m.skin = 2;
+        m.rgb[0] = 0.19f;
+        m.rgb[1] = 0.41f;
+        m.rgb[2] = 0.75f;
+      }
+      return 1;
+    }
+    case 35:    // the plain explosion: the ball, its light, no specks, no sound
+    case 53:    // the big one: the ball at twice its size (its light as the plain one's)
+    case 54: {  // one with no specks
+      Q2ModelFx& m = out[0];
+      m = {};
+      at_point(m);
+      m.model = Q2FxModel::explosion;
+      m.cls = Q2FxClass::explosion;
+      m.frames = 15;
+      m.base = (pick & 1) != 0 ? 15 : 0;
+      m.angles[1] = static_cast<float>((pick >> 1) % 360);
+      m.full_bright = true;
+      m.scale = code == 53 ? 2.0f : 1.0f;
+      m.light = 350;
+      m.rgb[0] = 1;
+      m.rgb[1] = m.rgb[2] = 0.5f;
+      return 1;
+    }
+    case 47: {  // the disruptor's burst: a darkening light of 150 for a tenth, no model
+      Q2ModelFx& m = out[0];
+      m = {};
+      at_point(m);
+      m.cls = Q2FxClass::flash;
+      m.drawn = false;
+      m.light = 150;
+      m.rgb[0] = m.rgb[1] = m.rgb[2] = -1;
       return 1;
     }
     case 5:     // explosion1
+    case 28:    // The Reckoning's plasma explosion: explosion1's
     case 7:     // a rocket's
     case 17:    // a rocket's in water
     case 28:    // The Reckoning's plasma burst, drawn as a rocket's
@@ -188,7 +246,7 @@ inline int q2_model_fx_of(int code, uint32_t pick, const float at[3], const floa
       m.angles[1] = static_cast<float>((pick >> 1) % 360);
       m.full_bright = true;
       // The player's say reaches the rocket's and the grenade's, never explosion1's or 2's.
-      const bool own = code != 5 && code != 6;
+      const bool own = code != 5 && code != 6 && code != 28;
       const uint8_t kind = grenade ? ge::classic::kQ2Grenade : ge::classic::kQ2Rocket;
       m.drawn = !own || (q.no_explosions & kind) == 0;
       m.light = own && (q.light_hacks & 2) != 0 ? 200 : 350;
@@ -214,8 +272,10 @@ inline int q2_model_fx_of(int code, uint32_t pick, const float at[3], const floa
 }
 
 // The kind byte of our rules' blast `name` (0: none of these): explosion1 5, explosion2 6, a
-// rocket's (and our rules' plain blast) 7, The Reckoning's plasma burst 28, a grenade's 8, the BFG
-// ball's burst 20 and its big one 21.
+// rocket's (our rules' plain blast) 7, a grenade's 8, The Reckoning's plasma burst 28 (drawn as
+// explosion1), the BFG ball's burst 20
+// and its big one 21; Ground Zero's plain blast 35, the disruptor's burst 47, the A-M bomb's 51,
+// the big explosion 53 and the one with no specks 54.
 constexpr int q2_blast_code(std::string_view name) {
   return name == "te_explosion1"                                   ? 5
          : name == "te_explosion2"                                 ? 6
@@ -224,6 +284,11 @@ constexpr int q2_blast_code(std::string_view name) {
          : name == "te_grenade_explosion"                          ? 8
          : name == "te_bfg_explosion"                              ? 20
          : name == "te_bfg_bigexplosion"                           ? 21
+         : name == "te_plain_explosion"                            ? 35
+         : name == "te_tracker_explosion"                          ? 47
+         : name == "te_nukeblast"                                  ? 51
+         : name == "te_explosion1_big"                             ? 53
+         : name == "te_explosion1_np"                              ? 54
                                                                    : 0;
 }
 // Which of cl_disable_explosions' and cl_disable_particles' kinds blast `code` is: a rocket's (in
@@ -238,5 +303,37 @@ constexpr uint8_t q2_blast_kind(int code) {
 inline constexpr double kQ2CableS = 0.2;
 // The BFG's laser lives this long; its colour one of palette 0xd0..0xd3.
 inline constexpr double kQ2BfgLaserS = 0.1;
+
+// GROUND ZERO'S HELD LINES: a lightning bolt (from the tesla to what it strikes) and a heat beam
+// live 0.2 s past the last message that set them (a heat beam's first one 0.1 s), 128 of each at
+// most. The A-M bomb's blast grows for a second, 32 at most.
+inline constexpr double kQ2HeldLineS = 0.2, kQ2HeldLineFirstS = 0.1, kQ2NukeS = 1;
+inline constexpr size_t kQ2HeldLines = 128, kQ2Nukes = 32;
+
+// The lightning bolt's links: 35 units each over its length less 20 (it stops short of the tesla);
+// more than one, the first at the start and the rest spread so the last ends there, each turned
+// back along the line; one or none (55 units or less), one alone at the far end, turned along it.
+// The heat beam's: 32 units each over the whole length, fitted the same way, turned back along the
+// line. `q2_bolt_links` gives the count and the share of the way each link starts at.
+struct Q2Links {
+  int n = 0;
+  double step = 0;     // units between the links' starts
+  double length = 0;   // the length laid (the bolt's less its 20)
+  bool alone = false;  // the bolt's one link at the far end, turned along the line
+};
+inline Q2Links q2_links(double length, bool bolt) {
+  Q2Links k;
+  const double each = bolt ? 35 : 32;
+  k.length = bolt ? length - 20 : length;
+  if (k.length <= 0) return k;
+  k.n = static_cast<int>(std::ceil(k.length / each));
+  if (bolt && k.n <= 1) {
+    k.n = 1;
+    k.alone = true;
+    return k;
+  }
+  k.step = k.n > 1 ? (k.length - each) / (k.n - 1) : 0;
+  return k;
+}
 
 }  // namespace shooters_edge::client

@@ -123,4 +123,16 @@ void party_work_command(PartyWork& w, Fighter& f, const MapNav& nav, const BotVi
 bool party_give_way(const BotView& s, int me, const std::vector<sh::Vec3f>& humans,
                     sh::MoveCmd& cmd);
 
+// A HOSTED GAME'S HELPERS, ONE FRAME'S ROUND: the people (every active client whose slot `bot`
+// does not mark: where each stands and looks), the helpers as the party (`helpers[i]`: slot i's
+// way, null for a person or an escort), then their split (party_share; none without a `nav`).
+// Called once a frame before the helpers plan; any game's hosted co-op shares it.
+struct PartyRound {
+  Party share;
+  std::vector<PartyMember> members;
+  PartyOptions people;
+};
+void party_round(PartyRound& r, const MapNav* nav, const BotView& s, std::span<const bool> bot,
+                 std::span<WayThrough* const> helpers);
+
 }  // namespace ge::shooterbots
