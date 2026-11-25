@@ -169,14 +169,12 @@
 #include "ui/draw.hpp"
 
 namespace {
-
 namespace out = ge::core::output;
 namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
 namespace sn = shooters_edge::net;
 namespace slm = shooters_edge::livemap;
 namespace sp = shooters_edge::profiles;
-
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
 }  // namespace
@@ -202,7 +200,6 @@ int run_main(int argc, char** argv) {
   if (!ge::play::apply_session_flags(session, nullptr, log_error))
     out::error("shooters_edge: the log file was not opened, the terminal only: " + log_error +
                "; next: name a file in a folder you can write");
-
   // The console: its lines on the terminal and in its scrollback; the client's commands.
   ge::console::Console console;
   ge::console::ConsoleView con_view(console);
@@ -855,19 +852,32 @@ int run_main(int argc, char** argv) {
     attract_at_start = false;
   }
   cl::TvWatch tv_watch{args.tv};  // `-tv <node>`: a live broadcast watched (client/tv_live.hpp)
-  // The world drawn again for `map`, with the models on `load` standing in it, through `from`
-  // (the demo's game folder while one plays, else the window's).
+  const auto window_at = [&](double t) {  // the new map's first view: where the player stands
+    cl::LoadWindow at{device.get(),
+                      static_cast<uint32_t>(w),
+                      static_cast<uint32_t>(h),
+                      surface.format(),
+                      &picture,
+                      weapons,
+                      &files,
+                      &adapter,
+                      &game_content,
+                      {}};
+    at.view = [&, t] {
+      cl::ViewState first;
+      return cl::frame_view(listen, first, 0, t, 0);
+    };
+    return at;
+  };
+  // The world drawn again for `map` and `load`'s models, through `from` (a demo's folder): `now`
+  // before the next frame, else read on a thread and built a step a frame (`keep`: the old drawn).
+  cl::MapLoad demo_load;
   const auto rebuild_world = [&](const cl::LoadedMap& map, const cl::ModelLoad& load,
-                                 const cl::SearchPath& from) {
-    world.reset();
-    world = cl::create_world_draw(*device, from, map, static_cast<uint32_t>(w),
-                                  static_cast<uint32_t>(h), surface.format(), picture, weapons,
-                                  error, load, adapter);  // the played game's palette and textures
-    if (!world)
-      out::error("shooters_edge: the world draw did not load: " + error +
-                 "; see docs/rendering.md");
-    if (world) cl::level_music(music, map.spec.entities);  // the level's own track
-    return world != nullptr;
+                                 const cl::SearchPath& from, bool now, bool keep = false) {
+    if (!keep) world.reset();
+    cl::load_world(demo_load, from, map, picture, load.names, adapter, 0, load.vweps);
+    cl::level_music(music, map.spec.entities);  // the level's own track
+    return !now || cl::step_demo_world(demo_load, window_at(0), true, world);
   };
   // The benchmark over: its report, vsync back, the listen server's world again.
   int bench_failed = 0;
@@ -946,7 +956,8 @@ int run_main(int argc, char** argv) {
       world.reset();
       return true;
     }
-    return rebuild_world(*listen.map, {listen.server->models, {}, listen.server->vwep}, files);
+    return rebuild_world(*listen.map, {listen.server->models, {}, listen.server->vwep}, files,
+                         true);
   };
 
   ge::input::Queue queue;
@@ -1390,22 +1401,9 @@ int run_main(int argc, char** argv) {
       next_map.clear();
     }
     if (!elsewhere) {
-      const cl::LoadWindow at{device.get(),
-                              static_cast<uint32_t>(w),
-                              static_cast<uint32_t>(h),
-                              surface.format(),
-                              &picture,
-                              weapons,
-                              &files,
-                              &adapter,
-                              &game_content,
-                              [&] {  // the new map's first view, from where the player stands
-                                cl::ViewState first;
-                                return cl::frame_view(listen, first, 0, t, 0);
-                              }};
       bool fresh = false;
-      if (const int code =
-              cl::take_load(loader, at, listen, console, measured, t, world, world_current, fresh))
+      if (const int code = cl::take_load(loader, window_at(t), listen, console, measured, t, world,
+                                         world_current, fresh))
         return code;
       if (fresh) forget_seen();
       if (fresh && listen.map) cl::level_music(music, listen.map->spec.entities);
@@ -1583,7 +1581,7 @@ int run_main(int argc, char** argv) {
           console.print(v);
           if (drawn_remote) console.append("disconnect");
         }
-        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
+        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from, !paced)) return 1;
         demo_world = true;
         demo_level_t = t;
         bench_models = ds.models.size();
@@ -1611,9 +1609,12 @@ int run_main(int argc, char** argv) {
       if (bench_map &&
           (ds.models.size() != bench_models || std::exchange(render_words.reload_asked, false))) {
         const cl::SearchPath& from = bench_folder.path ? *bench_folder.path : files;
-        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
+        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from, !paced, true))
+          return 1;
         bench_models = ds.models.size();
       }
+      if (cl::busy(demo_load) && !cl::step_demo_world(demo_load, window_at(t), false, world))
+        return 1;
       if (paced) {  // what the frames read carried: heard, and its lines shown
         synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
         std::vector<std::string> lines;
