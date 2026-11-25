@@ -59,7 +59,7 @@ gs::RefereeWords make_words() {
   w.not_one = "You are not an admin";
   w.list =
       "Admin: forcestart, forcebreak, forcemap <map>, kick <id or name> [reason], kick alone, "
-      "mkick <ids> [reason], lock; admin again gives it up.";
+      "mkick <ids> [reason], lock, lockmap, exclusive; admin again gives it up.";
   w.map_in_match = "Match currently in progress. Use break or forcebreak to terminate.";
   w.map_usage = "Usage: forcemap <mapname>";
   w.map_unknown = "Map {map} not available on this server.";
@@ -464,6 +464,38 @@ bool mkick(QwReferee& r, const QwRefereeGame& g, int slot, const std::string& li
   return true;
 }
 
+// A toggle's line: to everyone before a match, to the admin alone in one.
+void toggle_said(const QwRefereeGame& g, int slot, const std::string& all, const std::string& me) {
+  if (g.in_match)
+    tell(*g.qw, slot, me);
+  else
+    tell(*g.qw, -1, all);
+}
+
+// `lockmap`, `exclusive`: true when the word was one of them.
+bool toggle(QwReferee& r, const QwRefereeGame& g, int slot, const std::string& line) {
+  if (line != "lockmap" && line != "exclusive") return false;
+  QwServer& s = *g.qw;
+  if (!gs::referee_is(r.book, slot)) return tell(s, slot, "You are not an admin"), true;
+  const std::string& name = name_at(s, slot);
+  if (line == "lockmap") {
+    r.map_locked = !r.map_locked;
+    return toggle_said(g, slot, name + (r.map_locked ? " locks map" : " unlocks map"),
+                       r.map_locked ? "Map is locked" : "Map unlocked"),
+           true;
+  }
+  if (g.lobby == nullptr) return tell(s, slot, "There is no warmup on this server"), true;
+  if (g.in_match) return true;  // `exclusive` waits for the warmup
+  const int to = g.lobby->settings.lock_join == 0 ? 1 : 0;
+  g.lobby->settings.lock_join = to;
+  if (g.settings != nullptr) g.settings->lock_join = to;
+  return toggle_said(g, slot,
+                     to != 0 ? "Exclusive mode on: only the match's own players join it"
+                             : "Exclusive mode off: anyone may join a match",
+                     ""),
+         true;
+}
+
 }  // namespace
 
 const gs::RefereeWords& qw_referee_words() {
@@ -489,6 +521,10 @@ bool qw_referee_line(QwReferee& r, const QwRefereeGame& g, int slot, const std::
     return start_typing(r, g, slot);
   if (qw_captains_line(r.captains, captains_game(r, g), slot, line)) return true;
   if (kick_mode(r, g, slot, line)) return true;
+  if (toggle(r, g, slot, line)) return true;
+  if (r.map_locked && line.starts_with("vote map") && !gs::referee_is(r.book, slot))
+    return tell(*g.qw, slot, "MAP IS LOCKED!"), tell(*g.qw, slot, "You are NOT allowed to change!"),
+           true;
   if (line == "mkick" || line.starts_with("mkick ")) return mkick(r, g, slot, line);
   if (line == "forcestart") return force_start(r, g, slot);
   if (line == "lock") return lock(r, g, slot);

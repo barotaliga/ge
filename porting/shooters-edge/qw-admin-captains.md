@@ -449,7 +449,7 @@ not-taken (why named). Our own program runs these; a mod's program keeps its own
 | A14 | `forcestart`: the 10-second count, "Get ready!", the unready dropped, cancelled by the admin's break | done | needs sv_lobby; ours hands over to the lobby's countdown | |
 | A15 | `lock`: joins refused 15 seconds, the lines | done | a joining player watches instead (as sv_lockjoin) | |
 | A16 | `force_spec`: a player made a spectator or back | missing | | 2 |
-| A17 | `lockmap`, `prewar`, `exclusive`, `infolock` toggles | missing | `sv_prewar` and `sv_lockjoin` are settings already | 3 |
+| A17 | `lockmap`, `prewar`, `exclusive`, `infolock` toggles | missing | `lockmap` and `exclusive` done (net/qw_referee.cpp); `prewar` comes with the players' standby commands (engine/server); `infolock` has no extra spectator info to lock here | 3 |
 | A18 | admins' votes as a veto | missing | | 3 |
 | A19 | captain mode: `captain` elections, numbered picks in turn A B B A, the lines | done | net/qw_captains.hpp on the engine's election and draft; numbers as frags, picks by `impulse N`, no fire and no team change while picking; our fire line reads "Nobody fires while the captains pick" | |
 | A22 | team picking un-readies every waiting player | done | `qw_captains.cpp` un-readies each numbered player through the lobby; `shooters_edge_qw_captains_test` | |

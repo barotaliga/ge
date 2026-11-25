@@ -34,6 +34,10 @@
 //   turn, "Kick player <name>?"; `y` kicks him, `n` goes on; `kick` again (with or without a name)
 //   leaves it ("Kicking process terminated"), as do the end of the list and giving up admin; 60
 //   seconds: "Your kick mode has timed out"; nobody there: "Can't find anybody to kick".
+// - The toggles, told to everyone before a match and to the admin alone in one: `lockmap` ("<name>
+//   locks map" / "<name> unlocks map"; a player's `vote map` then reads "MAP IS LOCKED!");
+//   `exclusive`, outside a match, turns sv_lockjoin between 0 and 1 (a match's own players alone
+//   join it once it began; with the lobby only). Each holds across maps.
 // - `acommands`: the words.
 // The engine's other words (`tl`, `ban`, `mute`, `shuffle`, `readyall`) are not QuakeWorld's and
 // are left to the mod. A program of the server's own runs these; a mod's program (a `.dat`, a
@@ -70,7 +74,7 @@ struct QwRefereeGame {
   ge::server::Lobby* lobby = nullptr;
   shooters_edge::server::Announcer* announcer = nullptr;
   shooters_edge::server::OvertimeRun* overtime = nullptr;
-  const ge::server::ServerConfig* settings = nullptr;  // k_admins (unset: 1) and k_admincode
+  ge::server::ServerConfig* settings = nullptr;  // k_admins (unset: 1), k_admincode; toggled
   bool in_match = false;
   double now = 0;  // the server's clock, s
   bool (*map_known)(const void* ctx, std::string_view map) = nullptr;
@@ -92,6 +96,7 @@ struct QwReferee {
   int kick_by = -1;                                           // the admin in kick mode (-1: none)
   int kick_at = -1;                                           // the slot he is asked about
   double kick_ends = 0;                                       // kick mode times out
+  bool map_locked = false;  // `lockmap`: only an admin\'s map vote is taken
 };
 
 // QuakeWorld's words for the engine's book.

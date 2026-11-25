@@ -3,10 +3,10 @@
 // is refused and holds the next try 5 seconds; the right one makes the admin, told to everyone;
 // the admin kicks the other player with a reason and forces a map change, and an unknown map is
 // refused; kick mode asks about each other player and `y` kicks him; `mkick` names the ids it
-// cannot find; `lock` turns a joining player into a spectator for 15 seconds; `forcestart` in the
-// lobby's warmup counts down and drops the player who is not ready, and the match it starts
-// refuses `forcemap`; a player who is not the admin
-// is told so.
+// cannot find; `lockmap` and `exclusive` toggle; `lock` turns a joining player into a
+// spectator for 15 seconds; `forcestart` in the lobby's warmup counts down and drops the player who
+// is not ready, and the match it starts refuses `forcemap`; a player who is not the admin is told
+// so.
 //
 // ge:summary Tests: QuakeWorld's admin in the game: the code, kick, forcemap, lock, forcestart
 // ge:keywords test qw-referee k_admincode k_admins forcestart forcemap kick lock admin mkick
@@ -187,6 +187,20 @@ TEST(qw_referee_kick_mode_and_mkick) {
   CHECK(printed(ana, "Kicking process terminated"));
   CHECK(printed(ana, "ben was kicked by ana"));
   CHECK(printed(ben, "You were kicked from the server"));
+}
+
+TEST(qw_referee_the_toggles_lockmap_and_exclusive) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  Two r;
+  run(r, c, 500, {{150, "admin 4321"}, {170, "lockmap"}, {210, "exclusive"}},
+      {{160, "lockmap"}, {230, "vote map arena"}});
+  CHECK_MSG(r.opened, r.error);
+  const se::QwClientEnd& ben = r.clients[1];
+  CHECK(printed(ben, "You are not an admin"));
+  CHECK(printed(ben, "ana locks map"));
+  CHECK(printed(ben, "MAP IS LOCKED!"));
+  CHECK(printed(ben, "Exclusive mode on"));
 }
 
 TEST(qw_referee_lock_turns_a_joining_player_into_a_spectator) {
