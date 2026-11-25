@@ -207,14 +207,15 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | rog1.hud.ammo | their ammunition (`R_AMMOLAVA`, `R_AMMOMULTI`, `R_AMMOPLASMA`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); the main bar's icon off bits 26-28 |
 | rog1.hud.items | the power shield and the anti-grav belt (`R_SHIELD1`..`5`, `R_AGRAV1`..`5`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); only `R_SHIELD1` and `R_AGRAV1` are drawn, as the pack drew them |
 | rog1.hud.team | the team colour's border in team games (`R_TEAMBORD`) | done | 2 | hud/layout.cpp (`sbar_team`, `sbar_team_frags`): teamplay 4 to 6 in a game of more than one; the colours by the palette; tests/shooters_edge_hud_test.cpp |
-| rog1.runes | deathmatch's runes | verify | 2 |  |
-| rog1.grapple | the grappling hook in team games, its chain drawn | verify | 2 | the beam model is drawn (C465) |
+| rog1.runes | deathmatch's runes | done | 2 | the pack's program on the QC server, `gamecfg` the server's: the se-dissolution-dm lab (`--packs`) sees none at `gamecfg 0`, four out of the deathmatch spots at `gamecfg 1`, one taken with its name centre printed, a second refused, the held one falling where its holder dies, the untaken ones moved after two minutes (2026-11-24). The four effects are the program's own arithmetic |
+| rog1.grapple | the grappling hook in team games, its chain drawn | done | 2 | the se-dissolution-dm lab (`--packs`): none at `teamplay 0`; at `teamplay 4` impulse 22 and attack throw `progs/hook.mdl`, the chain sent as the beam temporary entity every frame, the player pulled across the arena to the wall, the hook gone on letting go (2026-11-24); the beam drawn by client/world_fx.cpp (C465) |
 | rog1.motd | the pack's message of the day on joining | done | 3 | the pack's own program shows it as a centre print, only with teamplay 3 to 6 (porting/shooters-edge/q1-rogue-team-modes.md § 1): `labs se-client --game=<dir>/rogue --map=ctf1 --progs=pack --server="deathmatch 1;teamplay 4" --say=...` notes the welcome four times in its first six seconds, the team it was put on, the teams' score line and the 50 green armour kit (2026-11-24) |
 | rog1.cfg | the pack's configs run at start | done |  | the pack ships no `default.cfg` or `quake.rc` (its pack read 2026-11-23), so the base game's start runs, as it does |
 | rog1.demos | the attract loop plays the pack's three demos | done |  | the pack's own demo1..3 win over the base's by the search path; the se-attract lab with `--game=rogue` plays its demo1 on r1m5 (2026-11-23) |
 | rog1.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (its logo at the right) drawn by the se-attract lab with `--game=rogue` (2026-11-23) |
 | rog1.endtext | `end1.bin`, `end2.bin`, the text screens on quitting | not taken |  | as hip.endtext |
 | rog1.dm | `ctf1` and the team modes played by bots | verify | 2 |  |
+| rog1.teams | the team modes on the server: capture the flag with two flags, one flag and three teams, tag; the program's colours stuffed and its team change refused | done | 2 | the pack's program on the QC server; the server sets a single-player-form program's `team` from the pants colour as it changes (server/commands.cpp `pants_team`; tests/shooters_edge_qc_server_test.cpp). The se-dissolution-dm lab (`--packs`): joiners put on red and blue, the enemy flag taken, captured for 15 and sent home, dropped by a killed carrier and returned, a change of pants refused, three teams at `teamplay 6`, the neutral flag captured at 5, the tag token at 3 (2026-11-24) |
 | rog1.coop | co-op on the pack's program | verify | 2 |  |
 | rog1.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | rog1.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: lava nails, multi rockets and plasma read as the ammunition of the same weapon; the shield, belt, sphere and random powerup have no part in another game and drop; held by tests/shooters_edge_remix_test.cpp |
@@ -259,13 +260,13 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | verify | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token) |
+| rog1.ent.dmatch_tag_token | `dmatch_tag_token` | the tag game's token: who holds it scores more | 16 / 16 | done | 2 | runs in the pack's program; LIFT: one tag mode with Ground Zero's (gz.ent.dm_tag_token); the se-dissolution-dm lab (`--packs`, 2026-11-24): the token stands at `teamplay 3` and a player takes it ("got the tag token!") |
 | rog1.ent.func_ctf_wall | `func_ctf_wall` | a wall that stands only in some team modes | 14 / 185 | verify | 2 | kept only at teamplay 4 to 6 (a plain solid wall), removed otherwise; single player (the things lab, r2m6) has none live; a CTF look still owed. Facts: porting/shooters-edge/q1-rogue-things.md. |
-| rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
-| rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | verify | 2 | runs in the pack's program |
-| rog1.ent.item_flag_team1 | `item_flag_team1` | team one's flag | 15 / 15 | verify | 2 | runs in the pack's program; LIFT: one capture the flag with Quake II's CTF |
-| rog1.ent.item_flag_team2 | `item_flag_team2` | team two's flag | 15 / 15 | verify | 2 | runs in the pack's program |
+| rog1.ent.info_player_team1 | `info_player_team1` | team one's start spot | 15 / 105 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): red's spots, the red joiners' starts |
+| rog1.ent.info_player_team2 | `info_player_team2` | team two's start spot | 15 / 105 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): blue's spots, the blue joiners' starts |
+| rog1.ent.item_flag | `item_flag` | the flag of one-flag capture the flag | 15 / 15 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): the neutral flag stands at `teamplay 5`, the team flags gone to bases, and is taken and captured at the enemy base |
+| rog1.ent.item_flag_team1 | `item_flag_team1` | team one's flag | 15 / 15 | done | 2 | runs in the pack's program; LIFT: one capture the flag with Quake II's CTF; the se-dissolution-dm lab (`--packs`, 2026-11-24): red's flag at its base, a carrier's capture there for 15 |
+| rog1.ent.item_flag_team2 | `item_flag_team2` | team two's flag | 15 / 15 | done | 2 | runs in the pack's program; the se-dissolution-dm lab (`--packs`, 2026-11-24): blue's flag taken, captured, sent home, dropped by a killed carrier and returned |
 
 #### Movers and traps
 
