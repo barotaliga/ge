@@ -59,6 +59,10 @@ std::string_view gz_classname(std::string_view classname);
 // rounds unless `g_disruptor`; in deathmatch, the mines (dmflags 131072), the A-M bomb (524288),
 // the spheres (1048576).
 bool gz_left_out(const Q2Server& s, int item);
+// Ground Zero's co-op spawn rule for spawnflags `flags` (outside deathmatch): 1 left out (4096,
+// never in co-op), 0 kept (all three skill bits: co-op only, at every skill), -1 the base game's
+// rule decides (single player, another pack, `coop_baseq2` 1, or any other flags).
+int gz_coop_left_out(const Q2Server& s, int flags);
 
 // A shot of Ground Zero's weapon in `slot`'s hand (q2_fight.cpp's fire hands it over).
 void gz_fire(Q2Server& s, int slot, int shots);

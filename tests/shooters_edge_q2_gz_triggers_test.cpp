@@ -10,6 +10,7 @@
 // ge:test tests/shooters_edge_q2_gz_triggers_test.cpp
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/read.hpp"
@@ -56,7 +57,8 @@ struct Hall {
 // A floored hall with a lava pool in its far corner; Ana starts at -1500 0. `models` are brush
 // models *1, *2 ... for `things`.
 std::unique_ptr<Hall> open_hall(bool pack, const std::vector<br::WorldBrush>& models,
-                                const std::vector<Pairs>& things) {
+                                const std::vector<Pairs>& things,
+                                const std::vector<std::string>& lines = {}) {
   br::BrushWorld w;
   w.models.resize(1);
   w.models[0].push_back(box(-2048, -1024, -16, 2048, 1024, 0));
@@ -75,6 +77,7 @@ std::unique_ptr<Hall> open_hall(bool pack, const std::vector<br::WorldBrush>& mo
   if (pack) o.pack = sv::Q2Pack::ground_zero;
   h->r = sv::q2_runner(sv::make_q2_server(o));
   h->r.console("deathmatch 0");
+  for (const std::string& l : lines) h->r.console(l);
   sv::MapSpec spec;
   spec.name = "hall";
   spec.brushes = map;
@@ -221,4 +224,33 @@ TEST(in_the_pack_a_walker_with_its_enemy_above_sends_the_plat_it_stands_on_up) {
   auto base = hall(false);
   base->s().monsters[0].enemy = 0;
   CHECK(!sv::gz_plat_ride(base->s(), base->s().monsters[0], {}));
+}
+
+TEST(in_the_pack_co_op_spawns_its_own_entities_and_leaves_out_the_not_in_co_op_ones) {
+  const auto hall = [](bool pack, std::vector<std::string> lines) {
+    return open_hall(
+        pack, {},
+        {{{"classname", "misc_explobox"}, {"origin", "0 0 0"}, {"spawnflags", "4096"}},
+         {{"classname", "misc_explobox"}, {"origin", "100 0 0"}, {"spawnflags", "1792"}},
+         {{"classname", "misc_explobox"}, {"origin", "200 0 0"}}},
+        lines);
+  };
+  const auto kept = [](const Hall& h) {
+    return std::to_string(!h.named("misc_explobox", 0).gone) +
+           std::to_string(!h.named("misc_explobox", 1).gone) +
+           std::to_string(!h.named("misc_explobox", 2).gone);
+  };
+  // Co-op in the pack: never-in-co-op left out, the three skill bits shown at every skill.
+  for (const char* skill : {"skill 0", "skill 1", "skill 2"}) {
+    auto h = hall(true, {"coop 1", skill});
+    CHECK_MSG(kept(*h) == "011", kept(*h));
+  }
+  // Single player, the base game's co-op, and coop_baseq2: the skill rule alone.
+  for (const auto& [pack, lines] :
+       {std::pair{true, std::vector<std::string>{}},
+        std::pair{false, std::vector<std::string>{"coop 1"}},
+        std::pair{true, std::vector<std::string>{"coop 1", "coop_baseq2 1"}}}) {
+    auto h = hall(pack, lines);
+    CHECK_MSG(kept(*h) == "101", kept(*h));
+  }
 }

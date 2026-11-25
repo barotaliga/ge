@@ -500,6 +500,7 @@ bool dm_left_out(const Q2Server& s, int item) {
 // Whether the map's entity is left out in this mode by its spawn flags.
 bool left_out(const Q2Server& s, int flags) {
   if (deathmatch(s)) return (flags & 0x800) != 0;
+  if (const int gz = gz_coop_left_out(s, flags); gz >= 0) return gz != 0;  // Ground Zero's co-op
   const int k = skill(s);
   return (k == 0 && (flags & 0x100) != 0) || (k == 1 && (flags & 0x200) != 0) ||
          (k >= 2 && (flags & 0x400) != 0);
