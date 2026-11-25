@@ -86,33 +86,8 @@ int row_of(const Q2Server& s, const Q2Monster& m) {
   return static_cast<int>(&m - s.monsters.data());
 }
 
-// Whether a body of `kd`'s box fits at `p` (or dropped onto it from 32 above), over solid, dry,
-// nearly flat ground within 256 below whose four corners are within 18 of the middle; the place
-// it stands in `out`.
 bool fits(const Q2Server& s, int skip, const Kind& kd, sh::Vec3f p, sh::Vec3f& out) {
-  ge::classic::Q2Trace t = map_trace(s, p, kd.mins, kd.maxs, p, kMonsterMask, skip);
-  if (t.start_solid || t.all_solid) {
-    t = map_trace(s, p + sh::Vec3f{0, 0, 32}, kd.mins, kd.maxs, p, kMonsterMask, skip);
-    if (t.start_solid || t.all_solid) return false;
-    p = t.end;
-  }
-  const ge::classic::Q2Trace down =
-      map_trace(s, p, kd.mins, kd.maxs, p - sh::Vec3f{0, 0, 256}, kMonsterMask, skip);
-  if (down.fraction >= 1 || down.normal.z < 0.7f) return false;
-  const sh::Vec3f foot{down.end.x, down.end.y, down.end.z + kd.mins.z - 1};
-  if ((map_contents(s, foot) & (sh::kSqSolid | sh::kSqWater | sh::kSqSlime | sh::kSqLava)) != 0 &&
-      (map_contents(s, foot) & sh::kSqSolid) == 0)
-    return false;
-  const float ground = down.end.z + kd.mins.z;
-  for (const float cx : {kd.mins.x, kd.maxs.x})
-    for (const float cy : {kd.mins.y, kd.maxs.y}) {
-      const sh::Vec3f top{down.end.x + cx, down.end.y + cy, ground + 1};
-      const ge::classic::Q2Trace c =
-          map_trace(s, top, {}, {}, top - sh::Vec3f{0, 0, 256}, kMonsterMask, skip);
-      if (c.fraction >= 1 || std::abs(c.end.z - ground) > 18) return false;
-    }
-  out = down.end;
-  return true;
+  return gz_spawn_spot(s, skip, kd.mins, kd.maxs, p, 256, out);
 }
 
 // The spot of the i-th position round commander `e`, behind it when `back`.
@@ -794,6 +769,33 @@ void gz_row(const Q2Server& s, const Q2Monster& m, ge::shooter::WorldEntity& r) 
   r.frame = 0;
   r.effects = kSphereTrans;
   r.mins = r.maxs = {};
+}
+
+bool gz_spawn_spot(const Q2Server& s, int skip, sh::Vec3f mins, sh::Vec3f maxs, sh::Vec3f p,
+                   float depth, sh::Vec3f& out) {
+  ge::classic::Q2Trace t = map_trace(s, p, mins, maxs, p, kMonsterMask, skip);
+  if (t.start_solid || t.all_solid) {
+    t = map_trace(s, p + sh::Vec3f{0, 0, 32}, mins, maxs, p, kMonsterMask, skip);
+    if (t.start_solid || t.all_solid) return false;
+    p = t.end;
+  }
+  const ge::classic::Q2Trace down =
+      map_trace(s, p, mins, maxs, p - sh::Vec3f{0, 0, depth}, kMonsterMask, skip);
+  if (down.fraction >= 1 || down.normal.z < 0.7f) return false;
+  const sh::Vec3f foot{down.end.x, down.end.y, down.end.z + mins.z - 1};
+  if ((map_contents(s, foot) & (sh::kSqSolid | sh::kSqWater | sh::kSqSlime | sh::kSqLava)) != 0 &&
+      (map_contents(s, foot) & sh::kSqSolid) == 0)
+    return false;
+  const float ground = down.end.z + mins.z;
+  for (const float cx : {mins.x, maxs.x})
+    for (const float cy : {mins.y, maxs.y}) {
+      const sh::Vec3f top{down.end.x + cx, down.end.y + cy, ground + 1};
+      const ge::classic::Q2Trace c =
+          map_trace(s, top, {}, {}, top - sh::Vec3f{0, 0, depth}, kMonsterMask, skip);
+      if (c.fraction >= 1 || std::abs(c.end.z - ground) > 18) return false;
+    }
+  out = down.end;
+  return true;
 }
 
 }  // namespace shooters_edge::server::monster_ai

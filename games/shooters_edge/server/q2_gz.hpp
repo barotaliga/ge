@@ -56,9 +56,14 @@ void gz_cvars(Q2Server& s);
 // gun and heat beam, and for the other pack's weapons and ammo); the same name otherwise.
 std::string_view gz_classname(std::string_view classname);
 // Whether item row `item` stays off the map under Ground Zero's rules: the disruptor and its
-// rounds unless `g_disruptor`; in deathmatch, the mines (dmflags 131072), the A-M bomb (524288),
-// the spheres (1048576).
+// rounds unless `g_disruptor` (every mode); outside deathmatch the A-M bomb, the Doppleganger and
+// the hunter and vengeance spheres; in deathmatch, the mines (dmflags 131072), the A-M bomb
+// (524288), the spheres (1048576).
 bool gz_left_out(const Q2Server& s, int item);
+// Ground Zero's co-op spawn rule for spawnflags `flags` (outside deathmatch): 1 left out (4096,
+// never in co-op), 0 kept (all three skill bits: co-op only, at every skill), -1 the base game's
+// rule decides (single player, another pack, `coop_baseq2` 1, or any other flags).
+int gz_coop_left_out(const Q2Server& s, int flags);
 
 // A shot of Ground Zero's weapon in `slot`'s hand (q2_fight.cpp's fire hands it over).
 void gz_fire(Q2Server& s, int slot, int shots);
@@ -117,6 +122,15 @@ void gz_sphere_remove(Q2Server& s, int slot);
 // A doppleganger of `owner` killed by `target` (a slot) releases a sphere at `from`: a hunter or a
 // vengeance one, hunting at once for 15 s, its kills the doppleganger's, never hurting its owner.
 void gz_release_sphere(Q2Server& s, int owner, int target, sh::Vec3f from, bool hunter);
+// The Doppleganger (q2_gz_decoy.cpp), each a no-op outside the pack: a decoy row for every slot
+// at a deathmatch map's start; player `slot` using item `item` (true when it was the Doppleganger,
+// set down or kept); a blow on entity `i` (true when it is a decoy); its tenth (the fall, the
+// turns, its end); its rows.
+void gz_decoys_reserve(Q2Server& s);
+bool gz_use_decoy(Q2Server& s, int slot, int item);
+bool gz_decoy_damage(Q2Server& s, int i, int attacker, int damage);
+void gz_decoys_frame(Q2Server& s);
+void gz_decoy_rows(Q2Server& s);
 // Whether player `slot`'s view rides a hunter sphere (or stopped where one ended).
 bool gz_sphere_view(const Q2Server& s, int slot);
 // A tenth of sphere `m`, or of a defender's bolt (`m` a green bolt a player owns); false for

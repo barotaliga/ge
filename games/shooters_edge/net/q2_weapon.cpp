@@ -71,6 +71,7 @@ int step_once(Q2HandRun& r, bool attack, double at, int32_t frame, Q2HandShot* o
     out->flash = flash >= 0 && sv::sq_flash_plays(flash, row.sound) ? flash : -1;
     // A hand grenade held to its fuse's end goes off in the hand: no throw heard.
     out->quiet = weapon == static_cast<int>(sv::SqWeapon::hand_grenade) && s.throw_speed <= 0;
+    out->speed = s.throw_speed;
   }
   return 1;
 }
@@ -414,7 +415,7 @@ void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2
         continue;
       weapon_shot_fired(st, r.hand.frame);
       const double sent = move_at[(k - first) & (kSqSentRing - 1)] + offset;
-      p.fired.push_back({k, e.weapon, r.hand.frame, std::max(0.0, c.now - sent)});
+      p.fired.push_back({k, e.weapon, r.hand.frame, e.speed, std::max(0.0, c.now - sent)});
       p.audit.predicted[p.audit.predicted_n++ & 31] = e.frame;
       if (e.quiet || !weapon_sound_plays(w.sound_mask, e.weapon + 1)) continue;
       if (e.flash < 0) {  // heard by name: the hand grenade's throw

@@ -46,11 +46,12 @@
 #include "shooters_edge/net/qw_coop.hpp"
 #include "shooters_edge/net/qw_coop_game.hpp"
 #include "shooters_edge/net/qw_endpoint_cfg.hpp"
-#include "shooters_edge/net/qw_game_rules.hpp"
+#include "shooters_edge/net/qw_game_names.hpp"
 #include "shooters_edge/net/qw_game_tv.hpp"
 #include "shooters_edge/net/qw_login.hpp"
 #include "shooters_edge/net/qw_match_rules.hpp"
 #include "shooters_edge/net/qw_qtv.hpp"
+#include "shooters_edge/net/qw_referee.hpp"
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/net/qw_sheet.hpp"
@@ -131,6 +132,7 @@ struct Game {
   // server's clock (`now_s`, which runs on through the pause).
   gs::TimeoutBook timeout;
   bool timeout_held = false;  // the rules paused for it
+  QwReferee referee;  // the admin in the game (qw_referee.hpp), on a program of the server's own
   double now_s = 0;
   // The stream port for QuakeWorld relays (qw_qtv.hpp; qtv_streamport 0: none).
   int qtv_port = 0;
@@ -181,44 +183,84 @@ void host_tap(void* ctx, const sv::RulesCommon& game) {
   if (h.tap != nullptr) h.tap(h.ctx, game);
 }
 
-// `*mods`: each package's name and version, ", " between, cut with "+N more" past what one
-// serverinfo value should take of the whole string's 512 bytes.
-std::string mods_info(const std::vector<std::unique_ptr<ge::mod::LoadedMod>>& packages) {
-  constexpr size_t kMax = 120;
-  std::string out;
-  for (size_t k = 0; k < packages.size(); k++) {
-    const ge::mod::Manifest& m = packages[k]->manifest;
-    std::string one = m.name + " " + m.version;
-    const std::string more = " +" + std::to_string(packages.size() - k) + " more";
-    if (out.size() + 2 + one.size() > kMax - (k + 1 < packages.size() ? more.size() : 0)) {
-      out += more;
-      break;
-    }
-    if (!out.empty()) out += ", ";
-    out += one;
-  }
-  return out;
-}
+// The mod's own rules a server owner sets (server.cfg, `+set fraglimit 20`); the mod server keeps
+// each one's default (server/qc_server.cpp), so an unset rule is left to it. The move's and the
+// loop's settings (plugins/shooter/settings.hpp: `sv_gravity`, `sv_mintic`, `pm_ktjump`) follow,
+// then the endpoint's own, which the mod never sees.
+constexpr gs::GameRule kModRules[] = {
+    {"deathmatch", "The match's rules as the mod reads them.", nullptr,
+     "0: no deathmatch, the mod's own game; 1..N: that deathmatch mode, as the mod numbers them"},
+    {"teamplay", "The team rules as the mod reads them.", nullptr,
+     "0: every player for himself; 1..N: that team mode, as the mod numbers them"},
+    {"fraglimit", "The frags a player needs to end the match.", nullptr,
+     "0: no limit; 1..N: that many frags"},
+    {"timelimit", "The match's length in minutes.", nullptr,
+     "0: no limit; 1..N: that many minutes"},
+    {"samelevel", "Whether the map stays the same when the match ends.", nullptr,
+     "0: the next map follows; 1: the same map again"},
+    {"pausable", "Whether a player may pause the game.", nullptr,
+     "0: only unpausing; 1: players may pause"},
+    // The aim help's weapons (server/shot_help.hpp): names, spaces between, `*` any characters.
+    {"sv_aimhelp_allow", "The weapons the aim help may bend, by name with spaces between.", nullptr,
+     "\"\": every weapon but the denied (the default); TEXT: only these, * matching any "
+     "characters"},
+    {"sv_aimhelp_deny", "The weapons the aim help never bends, by name with spaces between.",
+     nullptr, "\"\": none (the default); TEXT: these, such as rl lg"},
+    // Quake II's rules only; a map without brushes plays by the mod's own and leaves it alone.
+    {"dmflags", "Quake II's deathmatch rule bits, which Quake's maps ignore.", nullptr,
+     "0: none; N: the sum of the bits, such as 8192 for infinite ammunition"},
+    // The rocket jump helpers (server/rjump_rules.hpp): a mod's rule, live and voted per map.
+    {"sv_rjump", "Whether players may use the rocket jump helper, +rjump.", nullptr,
+     "0: not allowed (the default); 1: allowed"},
+    {"sv_rrjump", "Whether players may use the reverse rocket jump helper, +rrjump.", nullptr,
+     "0: not allowed (the default); 1: allowed"},
+    {"k_midair", "Whether rockets count only on a player in the air.", nullptr,
+     "0: every hit counts (the default); 1: midair only, the map restarts"},
+    {"k_midair_minheight", "The least height a midair hit counts at.", nullptr,
+     "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"},
+    // The server's own chat when the mod leaves it to the server (server/chat_rules.hpp).
+    {"sv_spectalk", "Whether a spectator's public chat reaches the players during a match.",
+     nullptr,
+     "0: during a match only the other spectators hear it; 1: everyone hears it (the default)"},
+    {"sv_sayteam_to_spec",
+     "When spectators read the team messages of the team they follow (never a line typed by hand).",
+     nullptr, "0: never; 1: during a match (the default); 2: outside a match; 3: always"},
+    {"cheats", "Whether the server runs with cheats, which its info then says as *cheats ON.",
+     nullptr, "0: no cheats (the default); 1: cheats, set at start"},
+    {"sv_mapcheck", "Whether a player whose map file differs from the server's is turned away.",
+     nullptr, "0: anyone joins; 1: only the server's map (the default)"},
+    {"sv_highchars", "Whether a joining player's name and info may hold coloured characters.",
+     nullptr, "0: only plain letters, digits and signs are kept; 1: any (the default)"},
+    {"zombietime",
+     "Seconds a dropped player's packets are still answered with the goodbye, so his game learns "
+     "it was dropped.",
+     nullptr, "0: none; 2: two seconds (the default)"},
+};
 
-// The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
-// own table before they start: each mod sees the server it runs on, not a default of its own.
-void game_names(sv::RulesCommon& rules, const gs::ServerConfig& c) {
-  const struct {
-    const char* name;
-    std::string value;
-    const char* help;
-  } values[] = {
-      {"hostname", c.hostname, "The server's name, which is sv_hostname."},
-      {"maxclients", std::to_string(c.maxclients), "The most players, which is sv_maxclients."},
-      {"maxspectators", std::to_string(c.max_spectators),
-       "The most spectators, which is sv_maxspectators."},
-  };
-  for (const auto& v : values) {
-    if (rules.cvars.find(v.name) == nullptr)
-      rules.cvars.add({v.name, v.value, ge::console::kServer, v.help, ge::console::CvarKind::text});
-    else
-      rules.cvars.set(v.name, v.value, ge::console::Source::code);
-  }
+// Every rule, in the order `--explain` lists them: built once.
+const std::vector<gs::GameRule>& all_rules() {
+  static const std::vector<gs::GameRule> rules = [] {
+    std::vector<gs::GameRule> out(std::begin(kModRules), std::end(kModRules));
+    int count = 0;
+    const sh::Setting* table = sh::settings_table(count);
+    for (int i = 0; i < count; i++)
+      out.push_back({table[i].name, table[i].help, nullptr, table[i].values});
+    for (const gs::GameRule& r : endpoint_rules()) out.push_back(r);
+    out.insert(out.end(), std::begin(gs::kOvertimeRules), std::end(gs::kOvertimeRules));
+    // The rest of what every classic mod's runner registers (server/rules_runner.hpp), so a
+    // server.cfg may set them and the check knows them. Not `hostname`, which is the core's
+    // sv_hostname by another name, nor `sv_progs`, which only a test match reads.
+    for (const srv::ModSetting& m : srv::mod_settings()) {
+      if (m.name == nullptr || std::string_view(m.name) == "hostname" ||
+          std::string_view(m.name) == "sv_progs")
+        continue;
+      const auto same = [&m](const gs::GameRule& r) { return std::string_view(r.name) == m.name; };
+      if (std::none_of(out.begin(), out.end(), same))
+        out.push_back({m.name, m.help, nullptr, m.values, m.info});
+    }
+    return out;
+  }();
+  return rules;
 }
 
 // A file of the game's search path, for a compiled module's reads.
@@ -229,14 +271,6 @@ bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& by
   if (found.empty()) return false;
   bytes.assign(found.begin(), found.end());
   return true;
-}
-
-// The loop's client slots: the players' and, when spectators have their own, theirs.
-int slots(const gs::ServerConfig& c) {
-  int vip = 0;
-  if (const auto v = c.rules.find("sv_maxvipspectators"); v != c.rules.end())
-    vip = std::max(0, std::atoi(v->second.c_str()));
-  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
 // A save of Quake II's game the window asked to load (ListenHost::load): asked of `rules`, the
@@ -281,7 +315,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     // hulls (q2_native.hpp).
     sv::NativeQ2Options no;
     no.library = g.native_library;
-    no.max_clients = slots(c);
+    no.max_clients = qw_slots(c);
     no.game = std::filesystem::path(g.native_library).parent_path().filename().string();
     no.settings.emplace_back("deathmatch", "1");
     no.settings.emplace_back("hostname", c.hostname);
@@ -298,12 +332,12 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     so.speedjump = speedjump;
     so.pack = sv::q2_pack_of_folder(g.files.folder);  // a mission pack's folder plays its rules
     std::unique_ptr<sv::Q2Server> sq = sv::make_q2_server(so);
-    sq->sv.set.maxclients = slots(c);
+    sq->sv.set.maxclients = qw_slots(c);
     rules = sv::q2_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = slots(c);
+    so.loop.maxclients = qw_slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     so.read_file = &read_game_file;
@@ -317,7 +351,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   } else {
     sv::QcServerOptions so;
     so.seed = c.seed;
-    so.loop.maxclients = slots(c);
+    so.loop.maxclients = qw_slots(c);
     so.loop.max_edicts = 1024;
     so.loop.move.speedjump = speedjump;
     std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*g.program, so, error);
@@ -337,9 +371,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     for (const std::string& line : g.info_lines) rules.console(line);
   }
   // The C++ mods it runs, for a browser and a hub to show (docs/mods.md § Distribution).
-  if (const std::string mods = mods_info(g.packages); !mods.empty())
+  if (const std::string mods = qw_mods_info(g.packages); !mods.empty())
     rules.console("serverinfo *mods \"" + mods + "\"");
-  game_names(*rules, c);
+  qw_game_names(*rules, c);
   // The settings a config made with `set` (a match mod's switches), before the map starts.
   if (!brushes && g.native_library.empty())
     for (const auto& [setting, value] : c.created)
@@ -708,7 +742,7 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
   if (name == "kick" || name == "map") return act_vote_check(g, name, value, out);
   const std::string rule(name), text(value);
   bool known = false;
-  for (const gs::GameRule& r : qw_game_rules()) known = known || rule == r.name;
+  for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
   if (!known) {
     out.error = rule +
                 " is not a setting of this server. Type \"vote rules\" to see what may be "
@@ -753,7 +787,7 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
 // The settings sheet (qw_sheet.hpp) as the server stands now, and sent to everyone keeping it.
 void sheet_rows(const Game& g, gs::SettingsSheet& out) {
   QwSheetFacts f;
-  f.rules = qw_game_rules();
+  f.rules = all_rules();
   f.value = [&g](std::string_view name) {
     if (const auto it = g.settings.rules.find(std::string(name)); it != g.settings.rules.end())
       return it->second;
@@ -1309,9 +1343,24 @@ bool mate_words(Game& g, int slot, const std::string& line) {
   return true;
 }
 
-// A client's words the server takes before the mod: the vote's (`vote ...`, and `yes` and `no`
-// while one is open) from anyone; with a room, `addbot [skill]` and `removebot` from the leader,
-// and with sv_lobby the lobby's own (ready, break, team, start, lobby).
+// The admin's view of the game (qw_referee.hpp); none (`qw` null) while a mod's program plays.
+QwRefereeGame referee_game(Game& g) {
+  if (!g.qw || !g.progs_crc.empty() || !g.module.empty() || !g.native_library.empty()) return {};
+  cl::Room* room = g.room && g.settings.lobby != 0 ? g.room.get() : nullptr;
+  QwRefereeGame f{
+      g.qw.get(),  &g.rules,   room ? &room->lobby : nullptr, room ? &room->announcer : nullptr,
+      &g.overtime, &g.settings};
+  f.in_match = !room || room->lobby.phase == gs::LobbyPhase::match;
+  f.now = g.now_s;
+  f.map_known = [](const void* c, std::string_view m) {
+    gs::VoteCheck out;
+    return act_vote_check(*static_cast<const Game*>(c), "map", m, out);
+  };
+  f.map_ctx = &g;
+  return f;
+}
+
+// A client's words before the mod: the admin's, the vote's, a room's `addbot`, sv_lobby's own.
 bool room_words(void* ctx, int slot, const std::string& line) {
   Game& g = *static_cast<Game*>(ctx);
   if (g.qw && line.starts_with("ge_sheet") && slot >= 0 && slot < 32) {  // qw_sheet.hpp
@@ -1325,6 +1374,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     return true;
   }
   if (g.qw) {
+    if (qw_referee_line(g.referee, referee_game(g), slot, line)) return true;
     const gs::VoteTarget target{&g, vote_check};
     if (gs::vote_command(g.vote, target, slot, line, g.rules->sv.time)) {
       vote_turn(g);
@@ -1437,15 +1487,16 @@ void load_bans(QwServer& s) {
   }
 }
 
-// A client's words: a login's first (qw_login.hpp), then the lobby's and the votes'.
-// The lobby's lock and prewar on a client (qw_match_rules.hpp).
+// The lobby's lock and prewar on a client (qw_match_rules.hpp); the referee's lock and picking.
 bool may_play(void* ctx, const std::string& name, std::string& why) {
   const Game& g = *static_cast<const Game*>(ctx);
-  if (g.room && g.settings.lobby != 0) why = lock_refusal(g.room->lobby, name);
+  why = qw_referee_lock(g.referee, g.now_s);
+  if (why.empty() && g.room && g.settings.lobby != 0) why = lock_refusal(g.room->lobby, name);
   return why.empty();
 }
 uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
   Game& g = *static_cast<Game*>(ctx);
+  buttons = qw_referee_buttons(g.referee, referee_game(g), slot, buttons);
   if (!g.room || g.settings.lobby == 0 || slot < 0 || slot >= gs::kLobbySeats) return buttons;
   std::string tell;
   buttons = prewar_buttons(g.room->lobby, slot, buttons, g.rules->sv.time,
@@ -1453,7 +1504,6 @@ uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
   if (!tell.empty() && g.qw) client_print(*g.qw, slot, 2, tell);
   return buttons;
 }
-
 // The stats words the mod left (qw_stats.hpp `qw_stats_words`).
 bool stats_after(void* ctx, int slot, const std::string& line) {
   Game& g = *static_cast<Game*>(ctx);
@@ -1466,6 +1516,7 @@ bool stats_after(void* ctx, int slot, const std::string& line) {
   return true;
 }
 
+// A client's words: a login's first (qw_login.hpp), then the lobby's and the votes'.
 bool game_words(void* ctx, int slot, const std::string& line) {
   Game& game = *static_cast<Game*>(ctx);
   if (game.login && qw_login_line(*game.login, slot, line)) return true;
@@ -1557,8 +1608,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   game.qw->game_ctx = &game;
   game.qw->may_play = may_play;
   game.qw->buttons = move_buttons;
-  // Logins, on a dedicated server and on the window's own match alike (its player is a local seat,
-  // never asked).
+  qw_referee_hooks(*game.qw, game.referee);
+  // Logins, on a dedicated server and on the window's own match (its local seat never asked).
   if (qw_login_wanted(game.settings)) {
     game.login = std::make_unique<QwLogin>();
     if (!qw_login_open(*game.login, *game.qw, game.settings, error)) return false;
@@ -1605,6 +1656,7 @@ void net_frame(void* g, int64_t now_us) {
   gs::timeout_tick(game.timeout, game.now_s);
   home_turn(game);
   timeout_turn(game);
+  qw_referee_frame(game.referee, referee_game(game));
   lobby_turn(game);
   change_if_asked(game);
   lobby_words(game);
@@ -1674,7 +1726,7 @@ void fill_status(const void* g, ge::net::Status& st) {
   for (const char* name : {"fraglimit", "timelimit"}) {
     st.keys.emplace_back(name, std::to_string(number(name)));
   }
-  if (const std::string mods = mods_info(game.packages); !mods.empty())
+  if (const std::string mods = qw_mods_info(game.packages); !mods.empty())
     st.keys.emplace_back("*mods", mods);
   // The classic game the match is of (its content id): the hub draws its map and its board from
   // that game's files (hub/cards.hpp).
@@ -1819,8 +1871,8 @@ gs::ServerGame make() {
   g.max_clients = 32;
   g.default_map = "arena";
   g.base_dir = kGameFolder;
-  g.rules = qw_game_rules().data();
-  g.rule_count = static_cast<int>(qw_game_rules().size());
+  g.rules = all_rules().data();
+  g.rule_count = static_cast<int>(all_rules().size());
   g.names = qw_setting_names().data();
   g.name_count = static_cast<int>(qw_setting_names().size());
   g.metas = qw_game_metas().data();

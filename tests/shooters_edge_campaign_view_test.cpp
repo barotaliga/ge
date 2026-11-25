@@ -241,7 +241,7 @@ TEST(a_coop_campaign_seats_companions_carries_them_and_lets_them_go) {
   CHECK(l.prints.back().find("helper") != std::string::npos);
   for (int i = 0; i < 72; i++) cl::listen_frame(l, {});
   CHECK(l.failed.empty());
-  CHECK(l.party->people.exit_held && l.party->people.humans.size() == 1);
+  CHECK(l.party->round.people.exit_held && l.party->round.people.humans.size() == 1);
   CHECK(l.party->mates[3]->work->way.stats.plans > 0);
   CHECK(cl::listen_lobby(l, "addbot average spy"));
   CHECK(l.prints.back().find("unknown word \"spy\"") != std::string::npos);
