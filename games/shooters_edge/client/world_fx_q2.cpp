@@ -94,8 +94,8 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
   }
 }
 
-bool q2_pack_hit(FxState& s, int code, const double p[3], const double normal[3], double t,
-                 FxFrame& out) {
+bool q2_enhance_pack_hit(FxState& s, int code, const double p[3], const double normal[3], double t,
+                         FxFrame& out) {
   Q2PackHit h;
   if (!q2_pack_hit_of(code, &h)) return false;
   fx::tinted_hit(p, normal, h.hit, s.seed++, &out.births);
@@ -138,7 +138,7 @@ void q2_laser(FxState& s, const Effect& e, double t) {
   if (s.q2_lasers.size() < 256) s.q2_lasers.push_back(z);  // the classic's 256: one more dropped
 }
 
-void q2_heat_beam(FxState& s, const Effect& e, double t) {
+void q2_enhance_heat_beam(FxState& s, const Effect& e, double t) {
   FxState::Q2Laser z;
   z.from = e.at;
   z.to = e.end;

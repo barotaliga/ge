@@ -1402,7 +1402,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                  (h >> 8) % 628 / 100.0, h >> 24, t);
           }
         }
-        if (s.on.hits && l.q2 && q2_pack_hit(s, e.code, p, normal, t, out)) {
+        if (s.on.hits && l.q2 && q2_enhance_pack_hit(s, e.code, p, normal, t, out)) {
           // a mission pack's hit in its own colour (world_fx_q2.cpp)
         } else if (s.on.hits) {
           // A gunshot's count is its pellets (a match's); each its own hit.
@@ -1483,7 +1483,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           break;
         }
         if (l.q2 && s.on.beams && (e.code == 38 || e.code == 39)) {  // a heat beam: a hot strip
-          q2_heat_beam(s, e, t);
+          q2_enhance_heat_beam(s, e, t);
           break;
         }
         double normal[3], dir[3];

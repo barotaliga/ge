@@ -618,8 +618,8 @@ void q2_place_bubbles(FxState& s, int effect_models, double t, FxFrame& out);
 void q2_model_fx(FxState& s, int code, const sh::Vec3f& at, const sh::Vec3f& way, double t);
 // A mission pack's hit that is not a bullet's under ce_hits (q2_enhance_fx.hpp), its spark light
 // with it: false for any other code.
-bool q2_pack_hit(FxState& s, int code, const double p[3], const double normal[3], double t,
-                 FxFrame& out);
+bool q2_enhance_pack_hit(FxState& s, int code, const double p[3], const double normal[3], double t,
+                         FxFrame& out);
 bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[3], bool no_specks,
                       double t, FxFrame& out);
 bool q2_cable(FxState& s, const Effect& e, double t);
@@ -627,7 +627,7 @@ void q2_laser(FxState& s, const Effect& e, double t);
 // A heat beam (38, 39) under ce_beams: a hot strip in kQ2HeatBeamRgb, kQ2HeatBeamU units
 // wide, as long as the BFG's laser lives (the next message brings the next), never the arc gun's
 // bolt.
-void q2_heat_beam(FxState& s, const Effect& e, double t);
+void q2_enhance_heat_beam(FxState& s, const Effect& e, double t);
 void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int me_entity, double t,
                       FxFrame& out);
 // The widow beam-outs still growing at `t`: a sphere of specks each frame (client/world_fx_q2.cpp).
