@@ -108,6 +108,7 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   int third_person = 0;  // `cam_thirdperson`: the watched player seen from behind
   float behind = 100;    // `cam_dist`: how far behind, units
   float side = 0;        // `cam_side`: how far to the player's left, units (negative: right)
+  float up = 0;          // `cam_up`: how far above his eye, units
   int lock_pos = 0;      // `cam_lockpos`: the third-person camera stays put, turned to the player
   float zoom_accel = 2000, zoom_top = 300;  // `cam_zoomaccel`, `cam_zoomspeed`: units/s², units/s
   float zoom_speed = 0;                     // the zoom's speed now, units/s

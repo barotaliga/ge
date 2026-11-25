@@ -43,6 +43,7 @@ constexpr float kTurnRate = 400;     // a hand turning round on the spot, degree
 constexpr float kFlipFacing = 25;    // a flip goes with the view this near straight behind, deg
 constexpr float kFlipSpare_s = 0.05f;  // a flip's turn starts this much earlier than it takes, s
 constexpr float kOnLine = 10;          // a jump is run at on its line within this across, units
+constexpr float kHarmUnder = 48;       // `over_harm`: lava or slime this near across under the way
 
 // A FLIP on the route ahead past only walks: true, `back` the view's heading at its shot (behind,
 // away from its target) and `v` its speed; `d_to_flip` how far along the route its start is.
@@ -241,6 +242,17 @@ bool lip_ahead(const MoveWorld& world, Vec3f o, Vec3f v, int msec) {
   return !tr.startsolid && !tr.allsolid && tr.fraction >= 1;
 }
 
+// Whether a jump from `S` to `T` flies over lava or slime: a harm node (nav.hpp `nav_harm_near`)
+// under a quarter, the half or three quarters of its way, at the higher end's height.
+bool over_harm(const NavGraph& g, Vec3f S, Vec3f T) {
+  if (g.harm.empty()) return false;
+  const float z = S.z > T.z ? S.z : T.z;
+  for (const float f : {0.25f, 0.5f, 0.75f})
+    if (nav_harm_near(g, {S.x + (T.x - S.x) * f, S.y + (T.y - S.y) * f, z}, kHarmUnder))
+      return true;
+  return false;
+}
+
 // `flip`: a rocket jump played as the flip (nav.hpp `RocketJumpSpec::back`): the view turned round
 // into the jump from `rocket_flip_lead_s` before its start, strafing through the turn (the keys a
 // hand presses nearest the way, `flip_keys`), and the shot only with the view behind.
@@ -346,7 +358,11 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
       along >= -kFlyFrom && along <= kPastStart && shot_view_ready(p)) {
     const bool strict = along >= -2 && lat_abs <= kOnLine && along_v >= kJumpAlong * v &&
                         along_v <= kJumpOver * v + 16 && cosv >= kJumpAim;
-    flown = !strict && jump_flies(p, s, msec, T);
+    // Over lava or slime, where the air's keys carry the flight (`air_carries`), only on the
+    // proof's own line and speed: a flight guessed from off it (a knock, a fight's keys) that
+    // lands short ends in the pit (mintro's ledge over its lava).
+    flown =
+        !strict && (!air_carries(p.g->move) || !over_harm(*p.g, S, T)) && jump_flies(p, s, msec, T);
   }
   if (p.mode == PilotMode::jump && !flown) {
     // Off the line at the start (the run steers back onto it before), or past it without the

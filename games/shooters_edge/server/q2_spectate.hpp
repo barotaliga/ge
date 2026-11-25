@@ -1,7 +1,8 @@
 // Quake II's spectators in deathmatch (q2_server.hpp states the rules): the `spectator` wish a
 // player's user info carries, the switch to or from watching 5 s after his last respawn with its
 // passwords, limit and words, and the chase camera a spectator rides behind a player.
-// Only q2_server.cpp, q2_commands.cpp and q2_bar.cpp call these.
+// q2_server.cpp, q2_commands.cpp and q2_bar.cpp call these; the match (net/q2_match.cpp) ends a
+// coach's chase off his team.
 //
 // ge:summary Quake II's spectators: the spectator wish, the switch mid-match, the chase camera
 // ge:keywords q2 spectator spectating chase chase-camera sidelines joined-the-game password
@@ -33,6 +34,9 @@ void spectate_frame(Q2Server& s, bool placed[]);
 // A spectator's command: attack's press starts or ends a chase, the up move's press starts one or
 // steps to the next player. True when he is chasing, so his own move is not run.
 bool spectate_command(Q2Server& s, int slot, const ge::shooter::MoveCmd& c);
+
+// Player `slot`'s chase ended: he flies free from where the camera was.
+void spectate_stop(Q2Server& s, int slot);
 
 // `invnext` (`dir` 1) and `invprev` (-1) while chasing: the next or previous player. False when
 // he is not chasing (the command then selects items as usual).

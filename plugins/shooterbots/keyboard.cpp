@@ -165,8 +165,19 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
                      ge::core::libm::atan2(velocity.y, velocity.x) * (180 / ge::core::kPi))) <
           kMashView)
     curve = p.curve_keys;
+  // The brink's keys on the ground, and in the air only where the feet are free (as the brink
+  // guard's, fighter.cpp) when the air's keys carry the flight (`air_carries`: Quake II's): a
+  // jump's flight is the pilot's own there, and one over lava let go of its keys lands in it
+  // (mintro's jump to the ledge over the pit fell short so). Under a capped air the keys move
+  // the flight little and the guard stays on.
+  const sb::PilotMode pm = p.mode;
+  const bool free_feet = pm == sb::PilotMode::walk || pm == sb::PilotMode::strafe ||
+                         pm == sb::PilotMode::hop || pm == sb::PilotMode::idle ||
+                         pm == sb::PilotMode::arrived || pm == sb::PilotMode::wait;
   const KeysNear near{f.bot.pilot.world, p.g, origin};
-  press_keys(f.keys, f.features, cmd, velocity, onground, curve, &near);
+  press_keys(
+      f.keys, f.features, cmd, velocity, onground, curve,
+      (onground || free_feet || !sb::air_carries(p.g->move)) && !p.brink_free ? &near : nullptr);
 }
 
 void press_keys(KeyHand& keys, const sb::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,

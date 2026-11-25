@@ -194,6 +194,9 @@ TEST(a_level_string_names_the_movies_the_map_its_spot_and_a_new_unit) {
   CHECK(l.shows.empty() && l.map == "boss1" && l.spawn == "bosstart" && l.unit);
   l = sv::level_string("base2");
   CHECK(l.map == "base2" && l.spawn.empty() && !l.unit);
+  // A pack's NEW GAME: the star on the first movie, two movies before the map.
+  l = sv::level_string("*logo.cin+xin.cin+xswamp");
+  CHECK(l.shows == "logo.cin+xin.cin" && l.map == "xswamp" && l.unit);
 }
 
 TEST(a_units_end_plays_its_movie_after_the_intermission_then_the_next_unit) {

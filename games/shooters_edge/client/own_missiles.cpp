@@ -26,8 +26,26 @@ const char* model_of(OwnMissileKind k) {
       return "progs/missile.mdl";
     case OwnMissileKind::grenade:
       return "progs/grenade.mdl";
+    case OwnMissileKind::laser:
+      return "progs/lasrspik.mdl";
+    case OwnMissileKind::prox:
+      return "progs/proxbomb.mdl";
+    case OwnMissileKind::lava_nail:
+      return "progs/lspike.mdl";
+    case OwnMissileKind::multi_grenade:
+      return "progs/mervup.mdl";
+    case OwnMissileKind::multi_rocket:
+      return "progs/rockup.mdl";
+    case OwnMissileKind::plasma:
+      return "progs/plasma.mdl";
   }
   return nullptr;
+}
+
+// Thrown and falling: the grenades.
+bool falls(OwnMissileKind k) {
+  return k == OwnMissileKind::grenade || k == OwnMissileKind::prox ||
+         k == OwnMissileKind::multi_grenade;
 }
 
 int model_index(const DemoState& s, const char* name) {
@@ -46,14 +64,29 @@ sh::Vec3f flight_angles(const sh::Vec3f& v) {
 
 // `o` flown from `o.at_s` to `t`: false when it hit a wall (a nail or a rocket: it goes).
 bool fly(OwnMissile& o, const sh::Hull* world, float gravity, double t) {
+  if (o.stuck) {
+    o.at_s = t;
+    return true;
+  }
+  if (o.go_s >= 0 && o.at_s < o.go_s) {  // the plasma ball still, then away along the aim
+    if (t < o.go_s) {
+      o.at_s = t;
+      return true;
+    }
+    o.at_s = o.go_s;
+    o.velocity = o.aim * kPlasmaSpeedU;
+    o.angles = flight_angles(o.velocity);
+  }
+  const bool falling = falls(o.kind);
   while (o.at_s < t) {
-    const double dt = std::min(t - o.at_s, o.kind == OwnMissileKind::grenade ? kStepS : t - o.at_s);
+    const double dt = std::min(t - o.at_s, falling ? kStepS : t - o.at_s);
     const auto f = static_cast<float>(dt);
-    if (o.kind == OwnMissileKind::grenade) {
+    if (falling) {
       o.velocity.z -= gravity * f;
-      for (float* a : {&o.angles.x, &o.angles.y, &o.angles.z}) {
-        *a += kGrenadeSpinDeg * f;
-        if (*a >= 360) *a -= 360;
+      float* axes[3] = {&o.angles.x, &o.angles.y, &o.angles.z};
+      for (int k = 0; k < 3; k++) {
+        *axes[k] += (o.kind == OwnMissileKind::prox ? kProxSpinDeg[k] : kGrenadeSpinDeg) * f;
+        if (*axes[k] >= 360) *axes[k] -= 360;
       }
     }
     const sh::Vec3f to = o.origin + o.velocity * f;
@@ -63,10 +96,16 @@ bool fly(OwnMissile& o, const sh::Hull* world, float gravity, double t) {
       continue;
     }
     const sh::HullTrace tr = sh::trace_hull(*world, o.origin, to);
-    if (tr.allsolid || tr.startsolid) return o.kind == OwnMissileKind::grenade;
+    if (tr.allsolid || tr.startsolid) return falling;
     o.origin = tr.endpos;
     if (tr.fraction >= 1) continue;
-    if (o.kind != OwnMissileKind::grenade) return false;
+    if (!falling) return false;
+    if (o.kind == OwnMissileKind::prox) {  // it sticks where it lands
+      o.stuck = true;
+      o.velocity = {0, 0, 0};
+      o.at_s = t;
+      return true;
+    }
     const float into = sh::dot(o.velocity, tr.plane.normal);
     o.velocity = o.velocity - tr.plane.normal * (into * kGrenadeBounce);
   }
@@ -75,6 +114,39 @@ bool fly(OwnMissile& o, const sh::Hull* world, float gravity, double t) {
 
 }  // namespace
 
+int own_shot_kind(ge::classic::WeaponSound sound, int copies, int weapon,
+                  ge::classic::WeaponRules rules, OwnMissileKind& kind) {
+  namespace wc = ge::classic;
+  const bool pack = rules == wc::WeaponRules::dissolution;
+  const bool lava = pack && (weapon == wc::kItLavaNailgun || weapon == wc::kItLavaSuperNailgun);
+  const bool multi = pack && (weapon == wc::kItMultiGrenade || weapon == wc::kItMultiRocket);
+  switch (sound) {
+    case wc::WeaponSound::nailgun:
+      kind = lava ? OwnMissileKind::lava_nail : OwnMissileKind::nail;
+      return 1;
+    case wc::WeaponSound::super_nailgun:
+      kind = lava ? OwnMissileKind::lava_nail : OwnMissileKind::super_nail;
+      return 1;
+    case wc::WeaponSound::rocket:
+      kind = multi ? OwnMissileKind::multi_rocket : OwnMissileKind::rocket;
+      return multi ? 4 : 1;
+    case wc::WeaponSound::grenade:
+      kind = multi ? OwnMissileKind::multi_grenade : OwnMissileKind::grenade;
+      return 1;
+    case wc::WeaponSound::laser:  // the twin bolts one to each side, the single one between
+      kind = OwnMissileKind::laser;
+      return copies > 1 ? 2 : 1;
+    case wc::WeaponSound::proximity:
+      kind = OwnMissileKind::prox;
+      return 1;
+    case wc::WeaponSound::plasma:
+      kind = OwnMissileKind::plasma;
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 bool own_missile_fire(OwnMissiles& m, const OwnShot& shot, double now_s, double latency_s,
                       int ping_ms, const sh::Vec3f& player) {
   if (!m.on || ping_ms <= 0) return false;
@@ -82,12 +154,32 @@ bool own_missile_fire(OwnMissiles& m, const OwnShot& shot, double now_s, double 
   OwnMissile o;
   o.kind = shot.kind;
   o.id = m.next_id++;
-  if (shot.kind == OwnMissileKind::grenade) {
+  if (falls(shot.kind)) {
     o.origin = shot.origin;
     o.velocity = v.forward * kGrenadeAheadU + v.up * kGrenadeUpU;
+  } else if (shot.kind == OwnMissileKind::laser) {
+    o.origin = shot.origin + v.forward * kLaserAheadU + sh::Vec3f{0, 0, kLaserUpU} +
+               v.right * (kLaserSideU * static_cast<float>(shot.side));
+    o.velocity = v.forward * kNailSpeedU;
+    o.angles = flight_angles(o.velocity);
+  } else if (shot.kind == OwnMissileKind::plasma) {
+    o.origin = shot.origin + v.forward * kPlasmaAheadU + sh::Vec3f{0, 0, 16};
+    o.aim = v.forward;
+    o.angles = flight_angles(v.forward);
+  } else if (shot.kind == OwnMissileKind::multi_rocket) {
+    const int k = std::clamp(shot.spread, 0, 3);
+    o.origin = shot.origin + v.forward * 8 + sh::Vec3f{0, 0, 16};
+    if (shot.deathmatch) {
+      sh::Vec3f turned = shot.angles;
+      turned.y += kMultiRocketYaw[k];
+      o.velocity = sh::angle_vectors(turned).forward * kRocketSpeedU;
+    } else {
+      o.velocity = v.forward * kRocketSpeedU + v.right * kMultiRocketSide[k];
+    }
+    o.angles = flight_angles(o.velocity);
   } else {
     o.origin = shot.origin + v.forward * 8 + sh::Vec3f{0, 0, 16};
-    if (shot.kind == OwnMissileKind::nail)
+    if (shot.kind == OwnMissileKind::nail || shot.kind == OwnMissileKind::lava_nail)
       o.origin = o.origin + v.right * (4.0f * static_cast<float>(shot.side));
     const float speed = shot.kind == OwnMissileKind::rocket
                             ? (shot.midair ? kMidairRocketSpeedU : kRocketSpeedU)
@@ -96,9 +188,9 @@ bool own_missile_fire(OwnMissiles& m, const OwnShot& shot, double now_s, double 
     o.angles = flight_angles(o.velocity);
   }
   o.at_s = now_s - shot.age_s;
+  if (shot.kind == OwnMissileKind::plasma) o.go_s = o.at_s + kPlasmaWaitS;
   o.show_s = now_s + std::max(0.0, latency_s - kOwnMissileLeadS - ping_ms * 0.001) - shot.age_s;
-  o.end_s = now_s + latency_s + (shot.kind == OwnMissileKind::grenade ? 0 : kOwnMissileLeadS) +
-            kOwnMissileWaitS;
+  o.end_s = now_s + latency_s + (falls(shot.kind) ? 0 : kOwnMissileLeadS) + kOwnMissileWaitS;
   if (static_cast<int>(m.flying.size()) >= kOwnMissilesMost) {
     auto far = std::max_element(
         m.flying.begin(), m.flying.end(), [&](const OwnMissile& a, const OwnMissile& b) {
@@ -136,8 +228,11 @@ namespace {
 
 // The kind a server model is (false: not a missile thrown ahead).
 bool kind_of_model(std::string_view name, OwnMissileKind& k) {
-  for (const OwnMissileKind c : {OwnMissileKind::nail, OwnMissileKind::super_nail,
-                                 OwnMissileKind::rocket, OwnMissileKind::grenade})
+  for (const OwnMissileKind c :
+       {OwnMissileKind::nail, OwnMissileKind::super_nail, OwnMissileKind::rocket,
+        OwnMissileKind::grenade, OwnMissileKind::laser, OwnMissileKind::prox,
+        OwnMissileKind::lava_nail, OwnMissileKind::multi_grenade, OwnMissileKind::multi_rocket,
+        OwnMissileKind::plasma})
     if (name == model_of(c)) {
       k = c;
       return true;

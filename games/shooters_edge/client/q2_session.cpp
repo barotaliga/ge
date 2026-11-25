@@ -94,6 +94,7 @@ void add_shared_session_cvars(con::Cvars& v, Q2Session& s) {
   // The camera's distance behind the player is ours, `cam_dist`, the one a player watched in a
   // demo is seen from too (demo_playback.cpp registers it first, in this layer).
   s.dist = v.find("cam_dist");
+  s.up = v.find("cam_up");
   v.add({.name = "net_clientport",
          .fallback = "-1",
          .help = "The network port your client sends from; a change applies at once.",
@@ -337,14 +338,27 @@ void q2_session_frame(con::Console& c, Q2Session& s, const net::Remote& remote,
 }
 
 double view_behind(ge::render::FrameView& view, double units, double angle_deg,
-                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers) {
+                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers,
+                   double up) {
   if (!(units > 0)) return 0;
   constexpr double kWallGap = 4;  // units the camera keeps off a wall
+  const double unit = ge::brush::kUnitM;
+  if (up > 0) {  // raised first, short of a ceiling (map units: z up, the engine's y)
+    double lift = up;
+    if (world != nullptr && world->hulls[0].nodes != nullptr && world->hulls[0].planes != nullptr) {
+      const ge::shooter::Vec3f from{float(view.eye[0] / unit), float(view.eye[2] / unit),
+                                    float(view.eye[1] / unit)};
+      const ge::shooter::HullTrace tr = ge::shooter::trace_hull(
+          world->hulls[0], from, {from.x, from.y, float(from.z + up + kWallGap)});
+      if (tr.startsolid) return 0;
+      if (tr.fraction < 1) lift = std::max(0.0, tr.fraction * (up + kWallGap) - kWallGap);
+    }
+    view.eye[1] += lift * unit;
+  }
   const double heading = view.heading - angle_deg * kDeg;
   // Back along the way it looks (engine axes: heading clockwise from +z, pitch up positive).
   const double back[3] = {-std::sin(heading) * std::cos(view.pitch), -std::sin(view.pitch),
                           -std::cos(heading) * std::cos(view.pitch)};
-  const double unit = ge::brush::kUnitM;
   double reach = units;
   if (world != nullptr) {
     const ge::shooter::Hull& hull = world->hulls[0];
@@ -385,7 +399,8 @@ double own_figure_alpha(double behind) {
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
                        const ge::shooter::BrushModel* world, std::span<const BehindMover> movers) {
   const double range = s.dist != nullptr ? s.dist->number : s.third_range;  // cam_dist
-  return s.third_person ? view_behind(view, range, s.third_angle, world, movers) : 0;
+  const double up = s.up != nullptr ? s.up->number : 0;                     // cam_up
+  return s.third_person ? view_behind(view, range, s.third_angle, world, movers, up) : 0;
 }
 
 }  // namespace shooters_edge::client

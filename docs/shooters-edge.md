@@ -753,7 +753,7 @@ server's frames go on under it). Its pages are Quake's:
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`), SPENT SHELLS (`ce_shells`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
-| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
+| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_ao`, `ce_ao_strength`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `r_arrival`, `ce_respawns`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
@@ -1692,7 +1692,11 @@ every pass, and judged by captioned screenshots:
   (`client/world_extras.hpp`) the modern look also draws the water, the lava and the slime as
   real liquids, the torches' burning gas and the weather through the open sky, and the map's
   textures come from classic-enhance's cache when the pack was enhanced, each behind its `ce_`
-  switch; `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
+  switch. A mission pack is enhanced laid over its base game (`ge tool classicenhance -- run
+  <install>/hipnotic` finds `id1` beside it): its cache is keyed by the base game's packs then the
+  pack's, the key the window reads with the pack mounted (`content_cache`), falling back to the
+  base game's own cache until the pack's is made (M63b);
+  `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
   both looks, for private pictures only. The `se-world` lab pictures every named view in both. The player sets the picture with
   cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
   effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and
