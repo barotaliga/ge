@@ -1,7 +1,7 @@
 // The classic games' teleporters as a client foresees them (teleporters.hpp).
 //
 // ge:summary The classic games' teleporters as a client foresees them, read off the level
-// ge:keywords teleporters q1_teleporters q2_teleporters q2_teleport_state
+// ge:keywords teleporters q1_teleporters q2_teleporters q2_teleport_state q1_pushers q2_pushers
 // ge:skill classic shooter net
 // ge:test tests/classic_teleporters_test.cpp
 #include "classic/teleporters.hpp"
@@ -94,6 +94,57 @@ sh::Teleporters q2_teleporters(const ge::brush::Map& map) {
   return out;
 }
 
+namespace {
+
+// A push trigger's way, as both games' rules read it: −1 up, −2 down, else the forward of its
+// angles (`angles`, or `angle` as the yaw); no angle at all: none.
+sh::Vec3f push_way(const ge::brush::Entity& e) {
+  const std::string& angle = e.get("angle");
+  if (!angle.empty()) {
+    const float a = std::strtof(angle.c_str(), nullptr);
+    if (a == -1) return {0, 0, 1};
+    if (a == -2) return {0, 0, -1};
+  }
+  const sh::Vec3f ang = angles_of(e);
+  if (ang.x == 0 && ang.y == 0 && ang.z == 0) return {};
+  return sh::angle_vectors(ang).forward;
+}
+
+// The level's trigger_push entities that stay (spawnflag 1 clear) with a brush model's box.
+sh::Teleporters pushers(const ge::brush::Map& map, bool q2) {
+  sh::Teleporters out;
+  for (const ge::brush::Entity& e : map.entities) {
+    if (e.get("classname") != "trigger_push") continue;
+    if ((std::atoi(e.get("spawnflags").c_str()) & 1) != 0) continue;  // gone after one touch
+    const std::string& model = e.get("model");
+    if (model.size() < 2 || model[0] != '*') continue;
+    const int k = std::atoi(model.c_str() + 1);
+    if (k <= 0 || static_cast<size_t>(k) >= map.models.size()) continue;
+    const ge::brush::Model& m = map.models[static_cast<size_t>(k)];
+    const sh::Vec3f at = vec_of(e.get("origin"));
+    float speed = std::strtof(e.get("speed").c_str(), nullptr);
+    if (speed == 0) speed = kPushSpeed;
+    sh::Teleporter t;
+    t.lo = at + sh::Vec3f{m.mins[0], m.mins[1], m.mins[2]} - kGrow;
+    t.hi = at + sh::Vec3f{m.maxs[0], m.maxs[1], m.maxs[2]} + kGrow;
+    t.velocity = push_way(e) * (speed * 10);
+    if (q2)
+      for (float* v : {&t.velocity.x, &t.velocity.y, &t.velocity.z})
+        *v = *v > kQ2PushHeld ? kQ2PushHeld : *v < -kQ2PushHeld ? -kQ2PushHeld : *v;
+    t.push = true;
+    out.push_back(t);
+  }
+  return out;
+}
+
+}  // namespace
+
+sh::Teleporters q1_pushers(const ge::brush::Map& map) { return pushers(map, false); }
+sh::Teleporters q2_pushers(const ge::brush::Map& map) { return pushers(map, true); }
+sh::Teleporters level_pushers(const ge::brush::Map& map) {
+  return pushers(map, map.family == ge::brush::Family::v38);
+}
+
 sh::Teleporters level_teleporters(const ge::brush::Map& map) {
   return map.family == ge::brush::Family::v38 ? q2_teleporters(map) : q1_teleporters(map);
 }
@@ -112,6 +163,13 @@ void q2_teleport_state(Q2State& s, const sh::Teleporter& t, const int16_t cmd_an
         static_cast<int16_t>(num::to_int32(static_cast<double>(ang[i]) * (65536.0 / 360.0)));
     s.delta_angles[i] = static_cast<int16_t>(want - cmd_angles[i]);
   }
+}
+
+void q2_push_state(Q2State& s, const sh::Teleporter& t) {
+  const float v[3] = {t.velocity.x, t.velocity.y, t.velocity.z};
+  for (int i = 0; i < 3; i++)
+    s.velocity[i] = static_cast<int16_t>(num::to_int32(static_cast<double>(v[i]) * 8));
+  s.flags = static_cast<uint16_t>(s.flags & ~kSqOnGround);
 }
 
 }  // namespace ge::classic

@@ -228,13 +228,14 @@ TEST(the_arsenal_message_holds_the_weapons_by_row_and_each_ammunition) {
   b.ammo[static_cast<int>(sv::SqAmmo::slugs)] = 7;
   b.ammo[static_cast<int>(sv::SqAmmo::grenades)] = 2;
   const std::vector<uint8_t> m = cn::q2_arsenal_message(b);
-  CHECK(m.size() == 14);
-  const int held = m[0] | m[1] << 8;
+  CHECK(m.size() == 5 + 2 * (sv::kSqAmmoKinds - 1));
+  CHECK(m[4] == sv::kSqAmmoKinds);
+  const uint32_t held = m[0] | m[1] << 8 | m[2] << 16 | static_cast<uint32_t>(m[3]) << 24;
   CHECK((held & 1 << static_cast<int>(sv::SqWeapon::blaster)) != 0);
   CHECK((held & 1 << static_cast<int>(sv::SqWeapon::railgun)) != 0);
   CHECK((held & 1 << static_cast<int>(sv::SqWeapon::hand_grenade)) != 0);  // grenades held
   CHECK((held & 1 << kRocket) == 0);
-  CHECK(m[2 + 2 * (static_cast<int>(sv::SqAmmo::slugs) - 1)] == 7);
+  CHECK(m[5 + 2 * (static_cast<int>(sv::SqAmmo::slugs) - 1)] == 7);
 }
 
 // THE WINDOW JOINED TO OUR SERVER OF QUAKE II, on a link of 60 ms each way.

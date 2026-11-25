@@ -257,4 +257,26 @@ void party_work_command(PartyWork& w, Fighter& f, const MapNav& nav, const BotVi
   if (exits_keep_off(f, s, me, cmd)) w.exits_turned++;
 }
 
+void party_round(PartyRound& r, const MapNav* nav, const BotView& s, std::span<const bool> bot,
+                 std::span<WayThrough* const> helpers) {
+  r.members.clear();
+  r.people.humans.clear();
+  r.people.facing.clear();
+  r.people.leash = kPartyLeash;
+  r.people.exit_held = true;
+  const int slots = std::min({static_cast<int>(s.sv.clients.size()), static_cast<int>(bot.size()),
+                              static_cast<int>(helpers.size())});
+  for (int i = 0; i < slots; i++) {
+    if (!s.sv.clients[static_cast<size_t>(i)].active) continue;
+    const sh::Edict& e = s.sv.edicts[static_cast<size_t>(i) + 1];
+    if (!bot[static_cast<size_t>(i)]) {
+      r.people.humans.push_back(e.origin);
+      r.people.facing.push_back(s.world.entities[static_cast<size_t>(i) + 1].view_angles.y);
+    } else if (WayThrough* way = helpers[static_cast<size_t>(i)]; way != nullptr) {
+      r.members.push_back({way, i + 1, e.health > 0});
+    }
+  }
+  if (!r.members.empty() && nav != nullptr) party_share(r.share, r.members, *nav, s, r.people);
+}
+
 }  // namespace ge::shooterbots

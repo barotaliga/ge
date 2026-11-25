@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooterbots/way_through.hpp"
 #include "shooterbots/way_bosses.hpp"
+#include "shooterbots/way_exits.hpp"
 #include "shooterbots/way_gates.hpp"
 #include "shooterbots/way_shots.hpp"
 
@@ -968,6 +969,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     if (start >= 0) way_fall_steps(w, nav, s, reach);
   }
+  way_exit_links(w, g);  // an exit is walked into only as the step he is on
 }
 
 void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -1157,10 +1159,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   for (const int32_t b : w.barred)
     if (!is_wall(w, b) && !is_lift(w, f, b)) f.bot.pilot.pilot.shut.push_back(b);
   f.bot.pilot.pilot.hollow = w.cars;  // and a car at rest is walked through
-  if (w.barred != w.barred_was || w.hatch_shut != w.hatch_shut_was ||
-      closed_now) {  // nor onto a bridge still in
+  if (w.barred != w.barred_was || w.hatch_shut != w.hatch_shut_was || closed_now ||
+      (!w.exit_links.empty() && w.step != w.exit_step_was)) {  // nor onto a bridge still in
     w.barred_was = w.barred;
     w.hatch_shut_was = w.hatch_shut;
+    w.exit_step_was = w.step;
     std::vector<sb::NavExtraLink>& sl = f.bot.pilot.pilot.shut_links;
     sl.clear();
     for (size_t a = 0; a < g.nodes.size(); a++) {
@@ -1189,6 +1192,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
           const sb::NavLink& l = g.links[static_cast<size_t>(li)];
           sl.push_back({h.from, l.to, l.kind, l.time_s});
         }
+    way_shut_exits(w, g, sl);  // nor into an exit but the one he is on
   }
   int32_t from = sb::nav_nearest(g, self);
   // None near (in the air, falling: `end` starts him high over its water): the nearest node at all

@@ -17,8 +17,10 @@
 #include <vector>
 
 #include "check.hpp"
+#include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/chain.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/q2_enhance_fx.hpp"
 #include "shooters_edge/client/q2_temp_fx.hpp"
 
 namespace cl = shooters_edge::client;
@@ -165,4 +167,27 @@ TEST(the_grapples_cable_starts_at_its_start_plus_its_offset) {
   const cl::DemoEffect& e = d.state.effects[0];
   CHECK(e.name == "te_grapple_cable" && e.entity == 2);
   CHECK(e.at.x == 8 && e.at.z == 16 && e.end.x == 80 && e.way.z == 16);
+}
+
+// The mission packs under classic enhance: each blast's kind by its code, the hits that are not a
+// bullet's in their own colours (only the electric sparks lighting the face), a heat beam a hot
+// strip 3 units wide.
+TEST(the_mission_packs_blasts_hits_and_heat_beams_under_classic_enhance) {
+  namespace fx = shooters_edge::effects;
+  static_assert(cl::q2_blast_of(7) == fx::BlastOf::common);
+  CHECK(cl::q2_blast_of(53) == fx::BlastOf::big && cl::q2_blast_of(51) == fx::BlastOf::huge);
+  CHECK(cl::q2_blast_of(47) == fx::BlastOf::dark && cl::q2_blast_of(35) == fx::BlastOf::bare);
+  CHECK(cl::q2_blast_of(54) == fx::BlastOf::bare && cl::q2_blast_of(17) == fx::BlastOf::common);
+  cl::Q2PackHit h;
+  CHECK(!cl::q2_pack_hit_of(0, &h) && !cl::q2_pack_hit_of(9, &h));
+  CHECK(cl::q2_pack_hit_of(30, &h) && h.hit.rgb[1] > h.hit.rgb[0] && !h.flick);  // green
+  CHECK(cl::q2_pack_hit_of(46, &h) && h.flick && h.hit.rgb[2] == 1);             // blue-white, lit
+  CHECK(cl::q2_pack_hit_of(44, &h) && h.hit.fall < 0);                           // steam rises
+  for (const int code : {43, 55}) CHECK(cl::q2_pack_hit_of(code, &h) && !h.flick);
+  fx::Particles sparks;
+  const double p[3] = {0, 0, 0}, up[3] = {0, 1, 0};
+  CHECK(cl::q2_pack_hit_of(43, &h));
+  fx::tinted_hit(p, up, h.hit, 4, &sparks);
+  CHECK(int(sparks.size()) == h.hit.count && sparks[0].tint[0] == 1);
+  CHECK(cl::kQ2HeatBeamU == 3 && cl::kQ2HeatBeamRgb[0] == 1 && cl::kQ2HeatBeamRgb[2] < 0.2f);
 }

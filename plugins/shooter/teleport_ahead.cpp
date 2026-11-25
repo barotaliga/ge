@@ -6,6 +6,8 @@
 // ge:test tests/shooter_teleport_ahead_test.cpp
 #include "shooter/teleport_ahead.hpp"
 
+#include <utility>
+
 namespace ge::shooter {
 
 namespace {
@@ -34,8 +36,29 @@ int teleporter_at(const Teleporters& t, Vec3f origin, Vec3f mins, Vec3f maxs, fl
   const Vec3f g{grow, grow, grow};
   const Vec3f lo = origin + mins - g, hi = origin + maxs + g;
   for (size_t i = 0; i < t.size(); i++)
-    if (static_cast<int>(i) != skip && overlaps(t[i], lo, hi)) return static_cast<int>(i);
+    if (!t[i].push && static_cast<int>(i) != skip && overlaps(t[i], lo, hi))
+      return static_cast<int>(i);
   return -1;
+}
+
+int pusher_at(const Teleporters& t, Vec3f origin, Vec3f mins, Vec3f maxs, float grow) {
+  const Vec3f g{grow, grow, grow};
+  const Vec3f lo = origin + mins - g, hi = origin + maxs + g;
+  for (size_t i = 0; i < t.size(); i++)
+    if (t[i].push && overlaps(t[i], lo, hi)) return static_cast<int>(i);
+  return -1;
+}
+
+void TeleTables::fill(Teleporters teleporters, const Teleporters& pushes) {
+  tele = std::move(teleporters);
+  with_push = tele;
+  with_push.insert(with_push.end(), pushes.begin(), pushes.end());
+  push_only = pushes;
+}
+
+const Teleporters* TeleTables::table(bool teleports, bool pushes) const {
+  const Teleporters* t = teleports ? (pushes ? &with_push : &tele) : pushes ? &push_only : nullptr;
+  return t != nullptr && !t->empty() ? t : nullptr;
 }
 
 void teleport_state(MoveState& s, const Teleporter& t) {
@@ -46,12 +69,25 @@ void teleport_state(MoveState& s, const Teleporter& t) {
 
 MoveState predict_player_teleports(const NetPlayer& acked, const MoveCmd* cmds, int count,
                                    const MoveSettings& set, const MoveWorld& world, MoveState* each,
-                                   const Teleporters* tele, int skip, TeleHit* hit) {
+                                   const Teleporters* tele, int skip, TeleHit* hit,
+                                   const ClientModel* movers, int mover_count,
+                                   const float* mover_at) {
   MoveState s = unquantize_player(acked, set);
   if (hit != nullptr) *hit = {};
+  MoveWorld ahead;  // the movers run on (a copy only when there are some)
+  if (mover_count > 0) ahead = world;
+  const MoveWorld& w = mover_count > 0 ? ahead : world;
+  float movers_now = 0;  // seconds the movers have run on
   for (int i = 0; i < count; i++) {
-    run_command(s, cmds[i], set, world);
+    if (mover_count > 0) {
+      const float to = mover_at != nullptr ? mover_at[i] : movers_now + cmds[i].msec * 0.001f;
+      if (to > movers_now) advance_movers(ahead, s, movers, mover_count, to - movers_now);
+      movers_now = to > movers_now ? to : movers_now;
+    }
+    run_command(s, cmds[i], set, w);
     if (tele != nullptr && s.type == MoveType::normal) {
+      const int pk = pusher_at(*tele, s.origin, kPlayerMins, kPlayerMaxs, kTeleLinkGrow);
+      if (pk >= 0) s.velocity = (*tele)[static_cast<size_t>(pk)].velocity;
       const int k = teleporter_at(*tele, s.origin, kPlayerMins, kPlayerMaxs, kTeleLinkGrow, skip);
       if (k >= 0) {
         teleport_state(s, (*tele)[static_cast<size_t>(k)]);

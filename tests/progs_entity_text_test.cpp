@@ -66,6 +66,11 @@ TEST(the_text_splits_into_blocks_of_pairs) {
   CHECK(std::string(pg::block_value(blocks[1], "origin")) == "1 2 3");
   CHECK(pg::block_value(blocks[1], "angle") == nullptr);
   CHECK(pg::parse_entity_text("", blocks, error) && blocks.empty());
+  // A key spelled with trailing spaces (a shipped map's changelevel trigger) is the key.
+  CHECK(pg::parse_entity_text("{ \"classname\" \"trigger_changelevel\" \"map  \" \"r2m2\" }",
+                              blocks, error));
+  CHECK(pg::block_value(blocks[0], "map") != nullptr &&
+        std::string(pg::block_value(blocks[0], "map")) == "r2m2");
 }
 
 TEST(a_broken_text_names_its_block_and_line) {

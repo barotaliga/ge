@@ -6,7 +6,8 @@
 // THE TEXT: white space and `//` comments between tokens; `{` and `}` are tokens of their own; a
 // `"` starts a token that runs to the next `"` (the quotes dropped); anything else runs to white
 // space. A block is `{`, then key and value tokens in pairs, then `}`. A missing `}`, a key with
-// no value or a value that is a brace is a parse error naming the block.
+// no value or a value that is a brace is a parse error naming the block. A key's trailing spaces
+// are dropped (a shipped map's `"map "` is `map`).
 //
 // A KEY (`apply_entity_block`), in order: a key starting with `_` is ignored; `angle` becomes
 // `angles` with the value "0 <value> 0"; `light` becomes `light_lev`; `alpha` and `colormod` go

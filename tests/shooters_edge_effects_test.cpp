@@ -775,6 +775,30 @@ TEST(quake2_line_effects_space_their_specks_along_the_line) {
   CHECK(ion[0].v[0] == -ion[1].v[0]);            // side to side
 }
 
+// Under ce_bubbles Quake II's bubbles are the engine's bubble sprites: one where each speck would
+// be, moving as it would (map units, z up), from the same seed's numbers; so the switch changes the
+// look, never where or how many.
+TEST(quake2_bubbles_as_the_engine_s_are_where_the_specks_would_be) {
+  const double a[3] = {0, 0, 0}, b[3] = {100 * 0.025, 0, 0};
+  const double ma[3] = {0, 0, 0}, mb[3] = {100, 0, 0};
+  for (const bool second : {false, true}) {
+    fx::Particles specks;
+    fx::q2_bubbles(a, b, second, 3, {}, &specks);
+    std::vector<fx::RisingBubble> bubbles;
+    fx::q2_rising_bubbles(ma, mb, second, 3, &bubbles);
+    CHECK(bubbles.size() == specks.size());
+    for (size_t i = 0; i < bubbles.size() && i < specks.size(); ++i) {
+      // The speck's velocity is in engine metres a second, y up; the bubble's in map units, z up.
+      CHECK(std::fabs(bubbles[i].vel[2] - specks[i].v[1] / 0.025) < 1e-3);
+      CHECK(bubbles[i].vel[2] > 0);
+      CHECK(std::fabs(double(specks[i].life) - bubbles[i].life) < 1e-6);
+    }
+    double up[3];
+    fx::rising_bubble_at(bubbles[0], 0.5, up);
+    CHECK(std::fabs(up[2] - (bubbles[0].at[2] + 0.5 * bubbles[0].vel[2])) < 1e-9);
+  }
+}
+
 // Quake II's bursts: steam's count along its jet, the blue hyperblaster's 40 blue specks, the
 // widow's 256 round it, and a plain light whose level is its reach over 128 units.
 TEST(quake2_bursts_throw_their_counts_and_lights) {
