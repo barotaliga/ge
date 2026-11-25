@@ -124,6 +124,10 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       why = std::string(arg) + " was renamed: use -timedemo <demo>.";
       return false;
     }
+    if (arg == "-h" || arg == "-help" || arg == "--help") {
+      a.help = true;
+      continue;
+    }
     if (flag_like(arg) && !known_flag(arg)) {
       why = "unknown flag " + std::string(arg) +
             (a.plus.empty() ? std::string()

@@ -1077,3 +1077,16 @@ TEST(a_multiview_recording_counts_its_match_starts) {
   CHECK_MSG(end == cl::DemoRead::end, error);
   CHECK_MSG(d.state.match_starts == 1, "one start marker read, the other line not one");
 }
+
+// A map run from a cfg as the title's demo is about to start is not held behind the whole demo:
+// the demo gives way to anything else asked for, and to nothing when nothing was.
+TEST(a_title_demo_gives_way_to_a_map_asked_for_before_it_starts) {
+  using shooters_edge::client::AskedElsewhere;
+  using shooters_edge::client::demo_gives_way;
+  CHECK(!demo_gives_way(AskedElsewhere{}));
+  CHECK(demo_gives_way(AskedElsewhere{.map = true}));
+  CHECK(demo_gives_way(AskedElsewhere{.save = true}));
+  CHECK(demo_gives_way(AskedElsewhere{.folder = true}));
+  CHECK(demo_gives_way(AskedElsewhere{.joined = true}));
+  CHECK(demo_gives_way(AskedElsewhere{.demo = true}));
+}

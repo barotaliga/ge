@@ -991,7 +991,8 @@ TEST(a_download_cut_short_is_resumed_from_what_is_held) {
   resumed.read_file = [](const std::string& path) {
     return path.starts_with("maps/") ? std::vector<uint8_t>(1, 1) : std::vector<uint8_t>{};
   };
-  resumed.held = ge::classic::content::held_in_folder([dir] { return dir.string(); });
+  const std::string folder = dir.string();
+  resumed.held = ge::classic::content::held_in_folder([folder] { return folder; });
   cn::Q2ClientConfig fresh = resumed;
   fresh.name = "fresh";
   int adds = 0, fresh_adds = 0;

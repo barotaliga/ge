@@ -215,6 +215,35 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK(sv::lobby_seated(l.room->lobby) == 3);
 }
 
+// A deathmatch with sv_lobby 0 and no sv_bots has no room at its start: its first `addbot`
+// opens one and seats the bot, the next ones seat more, and the match plays on.
+TEST(addbot_seats_bots_in_a_deathmatch_with_no_lobby) {
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(cl::baseline_progs(progs, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 1"};
+  opt.lobby = false;
+  cl::SearchPath none;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(l.room == nullptr);
+  l.prints.clear();
+  for (int i = 0; i < 2; i++) CHECK(cl::listen_lobby(l, "addbot"));
+  for (const std::string& line : l.prints)
+    CHECK_MSG(line.find("lobby") == std::string::npos &&
+                  line.find("match has started") == std::string::npos,
+              line);
+  CHECK(l.room != nullptr);
+  CHECK(sv::lobby_seated(l.room->lobby) == 3);
+  sh::MoveCmd idle;
+  for (int f = 0; f < 5; f++) cl::listen_frame(l, idle);
+  CHECK(l.server->clients[1].active);
+  CHECK(l.server->clients[2].active);
+}
+
 TEST(the_lobby_words_are_console_commands) {
   ge::console::Console con;
   cl::Listen l;

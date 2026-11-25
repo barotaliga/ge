@@ -82,6 +82,16 @@ TEST(a_request_is_due_once) {
   CHECK(!shots.due());
 }
 
+TEST(a_request_is_asked_until_its_frame_is_taken) {
+  // A window keeps drawing while one is asked, so `screenshot` then `quit` still writes it.
+  gc::Screenshots shots(fresh_dir("ge_screenshot_asked").string(), "x");
+  CHECK(!shots.asked());
+  shots.request();
+  CHECK(shots.asked());
+  CHECK(shots.due());
+  CHECK(!shots.asked());
+}
+
 TEST(a_frame_is_written_and_reads_back_the_same) {
   const fs::path dir = fresh_dir("ge_screenshot_write") / "made" / "screenshots";
   gc::Screenshots shots(dir.string(), "game", &kPng);

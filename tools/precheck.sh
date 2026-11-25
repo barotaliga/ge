@@ -94,7 +94,7 @@ if ! grep -Evq "$gate_only" <<<"$touched"; then
   exit 0
 fi
 
-# The debug build's ASan test executables alone reach about 20 GB, so a small cloud disk fills
+# The debug build's ASan test executables alone reach about 34 GB, so a small cloud disk fills
 # mid-build. Say so before the build starts, with the safe cleanup (link outputs only: the
 # objects stay, and only the executables a later build needs are linked again).
 free_gb=$(df -Pk "$build" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}')
@@ -105,7 +105,7 @@ if [[ -n "$free_gb" ]] && ((free_gb < ${PRECHECK_MIN_FREE_GB:-10})); then
 fi
 # Every object compiles (a compile error anywhere is caught, and the include graph the reach and
 # the lint read is whole), and every library and program links, but no test executable: those
-# are about 20 GB under ASan, so only the ones the change reaches are linked, below.
+# are about 34 GB under ASan, so only the ones the change reaches are linked, below.
 # PRECHECK_FULL_BUILD=1 builds everything, as `make build` does.
 lean_build() {
   tools/ccache-share.sh restore || true
@@ -162,13 +162,14 @@ mapfile -t test_targets < <(ninja -C "$build" -t targets all 2>/dev/null |
   sed -n 's/^\(tests\/[a-z0-9_]*_test\): .*EXECUTABLE_LINKER.*/\1/p' |
   grep -xF -f <(printf 'tests/%s\n' "${tests[@]}") || true)
 # A change to a low library (engine/core) reaches every test, and their ASan executables (about
-# 32 MB each) outgrow a small cloud disk. When the free space cannot hold them all with half to
+# 200 MB each now that every test links the whole tree; 169 of them were 34 GB) outgrow a small
+# cloud disk. When the free space cannot hold them all with half to
 # spare, they are linked, run and deleted a batch at a time (PRECHECK_TEST_BATCH sets the size;
 # the objects stay, so a later build links only what it needs again).
 batch=${PRECHECK_TEST_BATCH:-}
 if [[ -z "$batch" && -n "$free_gb" ]]; then
   free_now=$(df -Pk "$build" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}')
-  batch=$(( ${free_now:-$free_gb} * 16 ))
+  batch=$(( ${free_now:-$free_gb} * 2 ))  # 200 MB each, half the space to spare
   ((batch < 8)) && batch=8
 fi
 jobs="$(nproc 2>/dev/null || sysctl -n hw.ncpu)"

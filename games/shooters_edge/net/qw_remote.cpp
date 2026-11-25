@@ -1221,7 +1221,11 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
-      r.why = "the server's message did not read: " + error;
+      // The reader's words are a recording's; a live server's message is the server's.
+      if (const size_t cut = error.find(": the recording is damaged"); cut != std::string::npos)
+        error.resize(cut);
+      r.why = "the server sent a message this game cannot read (" + error +
+              "); the server may be newer than the game";
       said.push_back("dropped: " + r.why);
       remote_disconnect(r);
       return RemoteStep::dropped;

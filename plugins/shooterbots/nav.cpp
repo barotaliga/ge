@@ -15,6 +15,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/parallel.hpp"
 #include "shooter/slide.hpp"
 
 namespace ge::shooterbots {
@@ -423,31 +424,65 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     NavKind kind;
     float speed;
   };
-  auto prove_in = [&](const MoveWorld& on, size_t a, int32_t b, const Try* tries, int n,
-                      std::vector<NavLink>& out) {
+  // A candidate's proof as a value, so the build can prove candidates side by side (each one a
+  // pure function of the map and the two nodes) and then take them in the serial order: the
+  // graph and its counts come out the same bits for any number of threads.
+  struct Proven {
+    NavLink link{};
+    bool kept = false;
+    int32_t proofs = 0, no_run_up = 0;
+    int64_t commands = 0;
+  };
+  auto prove_value = [&](const MoveWorld& on, size_t a, int32_t b, const Try* tries, int n) {
+    Proven p;
     const Vec3f from = g.nodes[a].origin, to = g.nodes[static_cast<size_t>(b)].origin;
     for (int q = 0; q < n; q++) {
       const NavProof pr = prove_link(on, move, from, to, tries[q].kind, tries[q].speed, set);
-      g.counts.proofs++;
-      g.counts.commands += pr.commands;
+      p.proofs++;
+      p.commands += pr.commands;
       if (!pr.reached) continue;
       if (tries[q].kind == NavKind::jump && tries[q].speed > 0 &&
           !room_to_run_up(on, from, to, set.run_up)) {
-        g.counts.no_run_up++;
+        p.no_run_up++;
         continue;
       }
       NavKind kind = tries[q].kind;
       if (kind == NavKind::walk && to.z < from.z - kStepHeight) kind = NavKind::drop;
       // A standing jump is the way of last resort: harder on a person's hands than a run's.
       const float cost = kind == NavKind::jump && tries[q].speed <= 0 ? kStandingJump_s : 0;
-      out.push_back({b, kind, pr.time_s + cost, mover_at(movers, pr.lo, pr.hi), tries[q].speed});
-      g.counts.by_kind[static_cast<int>(kind)]++;
+      p.link = {b, kind, pr.time_s + cost, mover_at(movers, pr.lo, pr.hi), tries[q].speed};
+      p.kept = true;
+      return p;
+    }
+    return p;
+  };
+  // One candidate's tries, in order, until one reaches; the link kept, or the refusal counted.
+  auto take = [&](const Proven& p, std::vector<NavLink>& out) {
+    g.counts.proofs += p.proofs;
+    g.counts.commands += p.commands;
+    g.counts.no_run_up += p.no_run_up;
+    if (!p.kept) {
+      g.counts.refused++;
       return;
     }
-    g.counts.refused++;
+    out.push_back(p.link);
+    g.counts.by_kind[static_cast<int>(p.link.kind)]++;
   };
+  auto prove_in = [&](const MoveWorld& on, size_t a, int32_t b, const Try* tries, int n,
+                      std::vector<NavLink>& out) { take(prove_value(on, a, b, tries, n), out); };
   auto prove = [&](size_t a, int32_t b, const Try* tries, int n, std::vector<NavLink>& out) {
     prove_in(world, a, b, tries, n, out);
+  };
+  // Every node's work on the calling thread and the pool's, node a on thread a % workers (the
+  // nodes of a room cost alike, so neighbours are spread over the threads). `body(a, scratch)`
+  // writes only what belongs to node a.
+  const size_t workers = ge::core::default_workers();
+  auto each_node_parallel = [&](size_t count, auto&& body) {
+    ge::core::parallel_bands(workers, workers, [&](size_t lo, size_t hi) {
+      ai::Search scratch;
+      for (size_t k = lo; k < hi; k++)
+        for (size_t a = k; a < count; a += workers) body(a, scratch);
+    });
   };
   Try jumps[std::size(kJumpShares)];
   int njumps = 0;
@@ -468,8 +503,10 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     }
   };
 
-  // PASS 1: the neighbours, walked (or jumped onto when higher than a step).
-  for (size_t a = 0; a < g.nodes.size(); a++) {
+  // PASS 1: the neighbours, walked (or jumped onto when higher than a step). Proven side by side,
+  // then taken in node order.
+  std::vector<std::vector<Proven>> proven(g.nodes.size());
+  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search&) {
     const NavNode& na = g.nodes[a];
     each_column(na, 1, [&](int32_t, int32_t, int32_t b) {
       if (static_cast<size_t>(b) == a) return;
@@ -482,18 +519,22 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         for (int q = 0; q < njumps; q++) tries[n++] = jumps[q];
         tries[n++] = {NavKind::jump, 0};  // a standing jump: a stair's tread has no run-up
       }
-      prove(a, b, tries, n, out[a]);
+      proven[a].push_back(prove_value(world, a, b, tries, n));
     });
-  }
+  });
+  for (size_t a = 0; a < g.nodes.size(); a++)
+    for (const Proven& p : proven[a]) take(p, out[a]);
 
   // PASS 2: further jumps, only to a node the walks of pass 1 do not reach in about the time a
   // straight run would take (kDetour of it): onto something higher than a step within
-  // kUpAcross columns, or across a gap from an edge to an edge.
+  // kUpAcross columns, or across a gap from an edge to an edge. Node a's search sees the jumps
+  // kept for the nodes before it, so the candidates are found in node order; but a search over
+  // pass 1's links alone reaches less, so the candidates it finds are every one the ordered walk
+  // can find, in the same order: those are proven side by side first, and the ordered walk takes
+  // its own from them.
   const int32_t span = static_cast<int32_t>(set.reach / set.spacing) + 1;
   const double limit = kDetour * set.reach / move.maxspeed + kDetourSlack_s;
-  ai::Search walked(g.nodes.size());
-  for (size_t a = 0; a < g.nodes.size(); a++) {
-    const NavNode& na = g.nodes[a];
+  auto walk_from = [&](size_t a, ai::Search& walked) {
     walked.reset(g.nodes.size());
     walked.seed(static_cast<int32_t>(a));
     walked.run(
@@ -504,6 +545,9 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
           }
         },
         [](int32_t) { return false; });
+  };
+  auto candidates = [&](size_t a, const ai::Search& walked, auto&& fn) {
+    const NavNode& na = g.nodes[a];
     each_column(na, span, [&](int32_t i, int32_t j, int32_t b) {
       if (static_cast<size_t>(b) == a) return;
       if (i - na.col <= 1 && na.col - i <= 1 && j - na.row <= 1 && na.row - j <= 1) return;
@@ -515,7 +559,27 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         return;
       const bool up = rise > kStepHeight && d <= set.spacing * kUpAcross;
       if (!up && (!edge[a] || !edge[static_cast<size_t>(b)] || !gap_between(na.origin, to))) return;
-      prove(a, b, jumps, njumps, out[a]);
+      fn(b);
+    });
+  };
+  std::vector<std::vector<std::pair<int32_t, Proven>>> ahead(g.nodes.size());
+  each_node_parallel(g.nodes.size(), [&](size_t a, ai::Search& walked) {
+    walk_from(a, walked);
+    candidates(a, walked, [&](int32_t b) {
+      ahead[a].emplace_back(b, prove_value(world, a, b, jumps, njumps));
+    });
+  });
+  ai::Search walked(g.nodes.size());
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    walk_from(a, walked);
+    size_t next = 0;  // the ordered candidates are a subsequence of those proven ahead
+    candidates(a, walked, [&](int32_t b) {
+      while (next < ahead[a].size() && ahead[a][next].first != b) next++;
+      if (next < ahead[a].size()) {
+        take(ahead[a][next++].second, out[a]);
+      } else {
+        prove(a, b, jumps, njumps, out[a]);  // never: kept so a mistake costs time, not links
+      }
     });
   }
 

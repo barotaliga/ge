@@ -137,6 +137,7 @@ void add_game_metas(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game) {
       }
       levels.push_back(std::move(level));
     }
+    if (first == nullptr) continue;      // never: the names are the rows' own
     std::string& field = c.metas[name];  // a map's node: its address outlives the inserts
     if (field.empty()) field = "0";
     cvars.bind({.name = name,

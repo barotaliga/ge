@@ -198,6 +198,13 @@ int run_main(int argc, char** argv) {
                "; next: rerun with only those flags.");
     return 2;
   }
+  if (args.help) {  // the usage and every flag, one a line, and nothing started
+    std::printf("%s\n", cl::usage().c_str());
+    for (const ge::console::FlagDoc& f : cl::flag_docs())
+      std::printf("  %s%s%s  %s\n", f.name.c_str(), f.arg.empty() ? "" : " ", f.arg.c_str(),
+                  f.help.c_str());
+    return 0;
+  }
   // Every line on the terminal, and in `-logfile <file>` too when it is named.
   if (!ge::play::apply_session_flags(session, nullptr, log_error))
     out::error("shooters_edge: the log file was not opened, the terminal only: " + log_error +
@@ -1107,7 +1114,9 @@ int run_main(int argc, char** argv) {
   double longest = 0;        // the longest frame, s: a hitch a load or a stall made
   if (!args.manual.empty())  // every command and setting registered: the manual's source
     return cl::write_manual(console, game_cvars, bindings, game_start, *adapter.game, args.manual);
-  while ((args.frames == 0 || presented < args.frames) && !quit) {
+  int quit_frames = 0;  // frames drawn after `quit` for a screenshot asked before it (at most 3)
+  while ((args.frames == 0 || presented < args.frames) &&
+         (!quit || (shots.asked() && quit_frames++ < 3))) {
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
@@ -1115,7 +1124,9 @@ int run_main(int argc, char** argv) {
     cl::hear_swap(synth, under_ear);                      // s_swapstereo
     cl::hear_ears(synth, under_ear);                      // s_hrtf
     picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
-    if (std::exchange(attract_at_start, false) && !remote.active && !start_attract())
+    // The title's first demo, unless a map was asked for before it (`+map`, a cfg's `map`).
+    if (std::exchange(attract_at_start, false) && !remote.active && next_map.empty() &&
+        !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
       cl::start_begin(game_start, con_view, console, game_t,
@@ -1152,6 +1163,7 @@ int run_main(int argc, char** argv) {
     ge::input::update(held, queue);
     // What the console and menu ask this frame, against before (a demo held behind it, below).
     const std::string map_before = next_map;
+    const std::string demo_before = bench_ask;  // a title demo asked for and not started yet
     const bool joined_before = remote.active;
     con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
     ge::ui::feed_console(console, con_view, queue, con_keys);
@@ -1234,11 +1246,20 @@ int run_main(int argc, char** argv) {
     }
     // Something else asked for while a played demo is up (a map, a save, a game folder, a server,
     // another demo): the demo stopped, so it is not held behind what comes next.
-    if (watched && (next_map != map_before || !load_ask.empty() || !folder_ask.empty() ||
-                    (remote.active && !joined_before) || !bench_ask.empty())) {
+    // The same asked as the title's demo was about to start: that demo is not started.
+    const cl::AskedElsewhere elsewhere_ask{next_map != map_before, !load_ask.empty(),
+                                           !folder_ask.empty(), remote.active && !joined_before,
+                                           bench_ask != demo_before};
+    if (watched && cl::demo_gives_way(elsewhere_ask)) {
       bench.quit_after = false;  // `-playdemo`'s window stays for what was asked
       if (!end_bench("the player asked for something else", t, true)) return 1;
       game_menu.hide();
+    }
+    if (attract_asked && !bench.active && cl::demo_gives_way(elsewhere_ask)) {
+      if (bench_ask == demo_before) bench_ask.clear();  // another demo asked for plays instead
+      attract_asked = false;
+      play_ask = !bench_ask.empty();
+      if (std::exchange(demo_hold, false) && !game_start.loading) con_view.set_full(false);
     }
     // The mouse is the look's whenever the window has the focus: a click on the window or on the
     // app's icon in the Dock takes it, no click in the window needed. Only what `in_mouse_release`

@@ -424,10 +424,11 @@ void hold_limits(const sv::RulesRunner& rules) {
   rules.console("timelimit 0");
 }
 
-// The room: the lobby (a player needed before a countdown), the `sv_bots` fighters seated.
-bool open_room(Game& g, std::string& error) {
+// The room: the lobby (a player needed before a countdown), the `sv_bots` fighters seated. With
+// neither none is opened until `asked` (a deathmatch's first `addbot`).
+bool open_room(Game& g, std::string& error, bool asked = false) {
   const gs::ServerConfig& c = g.settings;
-  if (c.bots == 0 && c.lobby == 0) return true;
+  if (c.bots == 0 && c.lobby == 0 && !asked) return true;
   g.room = std::make_unique<cl::Room>();
   cl::Room& r = *g.room;
   r.seats.seed = c.seed;
@@ -1381,6 +1382,17 @@ bool room_words(void* ctx, int slot, const std::string& line) {
       return true;
     }
     if (timeout_words(g, slot, line)) return true;
+  }
+  // A deathmatch with no lobby and no `sv_bots` has no room until its first bot is asked for.
+  if (!g.room && (line == "addbot" || line.starts_with("addbot ")) &&
+      rule_number(g, "deathmatch") != 0 && g.qw) {
+    std::string error;
+    if (!open_room(g, error, true)) {
+      g.room.reset();
+      client_print(*g.qw, slot, 2, "addbot: " + error + "\n");
+      return true;
+    }
+    if (g.host != nullptr) g.host->room = g.room.get();
   }
   if (!g.room) return mate_words(g, slot, line);
   cl::Room& r = *g.room;
