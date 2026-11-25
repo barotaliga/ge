@@ -15,7 +15,8 @@
 // the third has a secret and the exit out of the unit. With `--game=<folder>` (the folder holding
 // Quake II's base folder) the unit comes from its packs (`--first`, the full game's first map by
 // default; `--first=base2$base1` starts on base2 as if arrived from base1), for PRIVATE pictures
-// only. Built on the release preset a map's run takes seconds, not the debug build's minutes.
+// only. `--mod=xatrix` plays The Reckoning's rules over its maps from its own first map. Built on
+// the release preset a map's run takes seconds, not the debug build's minutes.
 //
 // ge:summary Lab: a unit of Quake II played start to end by a script: exits, keys, objectives
 // ge:keywords lab se-q2-unit q2 unit play-through scripted-playthrough run_q2_unit
@@ -259,6 +260,7 @@ void run(gl::Lab& lab) {
   cl::SearchPath files;
   const bool own = lab.arg("game").empty();
   std::string first = "unit1";
+  sv::Q2Pack pack = sv::Q2Pack::base;
   if (own) {
     std::vector<uint8_t> pak;
     if (!unit(pak, error) || !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
@@ -266,12 +268,15 @@ void run(gl::Lab& lab) {
       return;
     }
   } else {
-    if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content)) {
+    const std::string mod = lab.arg("mod");
+    if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod,
+                           files, error, content)) {
       lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
                           "/pak0.pak>. Skill: shooter.");
       return;
     }
-    first = "base1";
+    pack = sv::q2_pack_of_folder(mod);
+    first = pack == sv::Q2Pack::base ? "base1" : std::string(sv::q2_pack_start_map(pack));
   }
   if (!lab.arg("first").empty()) first = lab.arg("first");
   Loader loader;
@@ -280,6 +285,7 @@ void run(gl::Lab& lab) {
   opt.load = &load;
   opt.load_ctx = &loader;
   opt.first = first;
+  opt.pack = pack;
   opt.maps = static_cast<int>(lab.arg_num("maps"));
   opt.map_seconds = lab.arg_num("seconds");
   opt.plan = !lab.arg("plan").empty();
@@ -379,7 +385,9 @@ const gl::LabSpec kSpec{
     "its first map to the exit out of it, taking every key and reaching every objective on the "
     "way?",
     {{"game", "", "the folder holding Quake II's base folder (none: a fixture unit of three)"},
-     {"first", "", "the unit's first map (default unit1; base1 with --game)"},
+     {"mod", "", "with --game: a mission pack's folder beside the base one (xatrix: its rules)"},
+     {"first", "",
+      "the unit's first map (default unit1; base1 with --game, the pack's own with --mod)"},
      {"maps", "12", "at most this many maps entered"},
      {"seconds", "600", "a map's time before it is called unfinished, s"},
      {"plan", "", "any value: note every change of the script's plan"},

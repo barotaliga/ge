@@ -294,9 +294,9 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 | xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | done |  | server/q2_bar.cpp (`kReckoning`, its 47 items); tests/shooters_edge_q2_reckoning_test.cpp |
 | xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
-| xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
+| xat.campaign | the four units in order, the help computer's lines, the end | verify |  | NEW GAME in the pack's folder starts on `xswamp` (server/q2_pack.cpp `q2_pack_start_map`, client/game_folder.cpp); the maps' own level strings chain the six units through the base campaign (`xu1`..`xu4` between, `xout` and the victory picture at the end), help lines are the maps' `target_help`; `se-q2-unit --mod=xatrix` plays a unit by script; a full run on the release build settles it |
 | xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | done | 2 | NEW GAME takes the level default.cfg names (`*logo.cin+xin.cin+xswamp`: client/game_folder.hpp `new_game_level`); the unit ends' movies come from the maps' level strings (server/q2_campaign.hpp); all eight decoded to their end, frames and sound |
-| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
+| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | done |  | the rules' item table names each icon (server/q2_bar.cpp); the pack's pics/ hold them all and win by name over the base's (tests/shooters_edge_game_adapter_test.cpp) |
 | xat.menu | the pack's own pictures (console background, quit, victory) | done |  | the pack's folder over the base's (`open_game_dir`): its own `conback`, `quit` and `victory` win by name; held by tests/shooters_edge_game_adapter_test.cpp |
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp; held end to end by tests/shooters_edge_take_in_test.cpp (the window's music finds the remapped file; any case or a path) |
 | xat.sounds | the sounds the client plays itself for the pack: the ion ripper's and the phalanx's muzzle flashes, the hyper soldier's (the tank machine gun's five), none for its effect bits or its other temp entities | done |  | server/q2_flash.cpp (the player's blue hyperblaster flash made silent); tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
@@ -304,11 +304,11 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 | xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`); the marks drawn held by tests/shooters_edge_q2_world_fx_test.cpp |
 | xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | done |  | server/q2_wire.cpp (28), client/q2_temp_fx.hpp and client/listen.cpp (the rocket's explosion, as the stock client draws it) |
 | xat.te.greenblood | the gekk's green blood (temporary entity 26) | done |  | server/q2_wire.cpp (26), client/q2_temp_fx.hpp (30 green specks) |
-| xat.dm | the seven deathmatch maps played by bots | missing | 2 |  |
+| xat.dm | the seven deathmatch maps played by bots | done |  | games/shooters_edge/bots/arsenals.cpp `q2_arsenal(pack)`: the pack's items and ammunition in the bots' tables, the Ionripper and the Phalanx as bot weapons; `se-q2-bots --pack=xatrix` loads xdm1..xdm7, the bots pick up and hold the pack's guns and score frags on six of the seven in 30 s |
 | xat.coop | co-op through the units | missing | 2 |  |
-| xat.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
+| xat.save | saves of the pack's campaign | done |  | server/q2_save.cpp (v12: the pack's rows, the trap's state, dual fire); tests/shooters_edge_q2_reckoning_test.cpp saves a pack game mid-trap and plays on bit for bit (an item's row now follows its drop to the floor, which a loaded game showed and a running one did not) |
 | xat.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| xat.remix | the pack's weapons and items as roles for remix | missing | 3 |  |
+| xat.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the Ionripper as the energy weapon, the Phalanx as the launcher, mag slugs its ammunition, traps as grenades, DualFire as damage; listed in kPackItems so cr_expansions takes or leaves them |
 
 ### What the maps place that the base game's maps never do
 

@@ -554,6 +554,10 @@ bool drop_item(Q2Server& s, size_t i, float reach) {
     return false;
   }
   e.origin = t.end;
+  // Its row too (built as the map started, before the drop): drawn where it lies, as a loaded
+  // game, whose rows are built after the drop, draws it.
+  if (const size_t row = 1 + sh::kMaxClients + i; row < s.world.entities.size())
+    s.world.entities[row].origin = e.origin;
   return t.fraction < 1;
 }
 
