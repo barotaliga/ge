@@ -226,6 +226,11 @@ bool spectate_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   return true;
 }
 
+void spectate_stop(Q2Server& s, int slot) {
+  if (slot < 0 || slot >= sh::kMaxClients) return;
+  stop_chase(s.players[slot]);
+}
+
 bool spectate_step(Q2Server& s, int slot, int dir) {
   Q2Player& p = s.players[slot];
   if (!s.clients[slot].spectator || p.chase < 0) return false;

@@ -23,12 +23,6 @@ constexpr uint8_t kAsk[] = {0xff, 0xff, 0xff, 0xff, 'i', 'n', 'f', 'o', ' ', '3'
 
 gn::Transport& socket_of(PingSweep& s) { return s.link != nullptr ? *s.link : s.own; }
 
-bool same_host(const gn::Address& a, const gn::Address& b) {
-  gn::Address x = a, y = b;
-  x.port = y.port = 0;
-  return x == y;
-}
-
 }  // namespace
 
 void add_pingservers_command(ge::console::Console& con, PingSweep& sweep, double (*now_s)()) {
@@ -74,7 +68,7 @@ void pingservers_step(PingSweep& s, double now_s, int64_t now_us, std::vector<st
     if (n < 9 || std::memcmp(buf, "\xff\xff\xff\xffinfo\n", 9) != 0) continue;
     // The newest ask it answers: a broadcast takes any answer, an address its own server's.
     auto it = std::find_if(s.asks.rbegin(), s.asks.rend(), [&](const PingSweep::Ask& a) {
-      return now_s <= a.until_s && (a.broadcast || same_host(a.to, from));
+      return now_s <= a.until_s && (a.broadcast || gn::same_host(a.to, from));
     });
     if (it == s.asks.rend()) continue;
     std::string text(reinterpret_cast<const char*>(buf) + 9,

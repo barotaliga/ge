@@ -143,8 +143,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
                          const fs::path& cache_root) {
   ClassicPictures out;
   out.enhanced = enhance;
-  if (enhance && !content_packs(files).empty())
-    out.cache = ge::classicenhance::find_cache(content_packs(files), cache_root);
+  if (enhance) out.cache = content_cache(files, cache_root);
   const auto find = [&files](std::string_view p, std::vector<uint8_t>& store) {
     return find_file(files, p, store);
   };

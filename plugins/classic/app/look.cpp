@@ -170,6 +170,24 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                   "angle give, a dried pool mirroring nothing at any strength (1 the default)"},
        &picture.blood_reflect);
   bind(cv,
+       {.name = "ce_ao_radius",
+        .flags = gc::kArchive,
+        .help = "How far a wall, a step or a figure still darkens the surface beside it, with "
+                "ce_ao on.",
+        .min = 8,
+        .max = 256,
+        .values = "8..256: that many units (48 the default, about a crate's width)"},
+       &picture.ao_radius);
+  bind(cv,
+       {.name = "ce_ao_strength",
+        .flags = gc::kArchive,
+        .help = "How dark the closed corners and the floor under figures grow, with ce_ao on.",
+        .min = 0,
+        .max = 1,
+        .values = "0: no darkening; 0..1: that share of the light a closed corner loses (0.8 the "
+                  "default)"},
+       &picture.ao_strength);
+  bind(cv,
        {.name = "ce_blood_amount",
         .flags = gc::kArchive,
         .help = "How much bodies bleed with ce_blood on: the spray, the splashes and pools, the "
@@ -925,6 +943,9 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.flicker = picture.ce.flicker;  // ce_flicker: the flames' light and the styles waver
     // ce_reflections: the room mirrored in the faces by their gloss.
     base.reflections = picture.ce.reflections ? std::max(picture.reflect, 0.0) : 0;
+    // ce_ao: the corners, creases and the floor under the figures darkened by how little they see.
+    base.ao = picture.ce.ao ? std::clamp(picture.ao_strength, 0.0, 1.0) : 0;
+    base.ao_radius_m = std::max(picture.ao_radius, 1.0) * ge::brush::kUnitM;
   }
   return base;
 }

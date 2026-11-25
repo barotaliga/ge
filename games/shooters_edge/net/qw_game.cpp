@@ -281,10 +281,12 @@ constexpr gs::GameMeta kMetas[] = {
 constexpr gs::SettingName kSettingNames[] = {
     {"hostname", "sv_hostname"},
     {"maxclients", "sv_maxclients"},
+    {"maxplayers", "sv_maxclients"},  // Quake's word for the next map's player count
     {"maxspectators", "sv_maxspectators"},
     {"password", "sv_password"},
     {"spectator_password", "sv_spectatorpassword"},
     {"timeout", "sv_timeout"},
+    {"net_messagetimeout", "sv_timeout"},  // Quake's: seconds of silence before a drop
     {"floodprot", "sv_floodprot"},
     {"floodprotmsg", "sv_floodprotmsg"},
     {"sv_maplist", "sv_maprotation"},
@@ -539,7 +541,7 @@ bool open_room(Game& g, std::string& error) {
   if (c.bots == 0 && c.lobby == 0) return true;
   g.room = std::make_unique<cl::Room>();
   cl::Room& r = *g.room;
-  r.seed = c.seed;
+  r.seats.seed = c.seed;
   r.lobby.settings.humans = 1;  // bots alone warm up until a player joins
   r.lobby.settings.countdown_s = c.countdown_s;
   r.lobby.settings.intermission_s = c.intermission_s;
@@ -1305,13 +1307,14 @@ void sync_seats(Game& g) {
   const double now = now_rules.sv.time;
   for (int i = 0; i < gs::kLobbySeats && i < sh::kMaxClients; i++) {
     const auto at = static_cast<size_t>(i);
-    const bool bot = r.bots[at] != nullptr;
+    const bool bot = r.seats.bots[at] != nullptr;
     if (cs.clients[i].local && !bot && !(i == 0 && g.host != nullptr)) {
       cs.clients[i].rules_active = false;  // the room let it go from the rules
       qw_drop(cs, i, "left the room");
     }
     std::string error;
-    if (bot && cs.clients[i].state == ConnState::free) qw_add_local(cs, i, r.bots[at]->name, error);
+    if (bot && cs.clients[i].state == ConnState::free)
+      qw_add_local(cs, i, r.seats.bots[at]->name, error);
     const QwClient& c = cs.clients[i];
     gs::LobbySeat& seat = r.lobby.seats[at];
     if (!c.local && c.state == ConnState::free && seat.used && !seat.bot) {
@@ -1489,7 +1492,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     std::string error;
     if (word == "removebot") {
       for (int i = gs::kLobbySeats - 1; i > 0; i--)
-        if (r.bots[static_cast<size_t>(i)]) {
+        if (r.seats.bots[static_cast<size_t>(i)]) {
           cs.clients[i].rules_active = false;  // room_remove_bot lets it go from the rules
           break;
         }
@@ -1505,9 +1508,9 @@ bool room_words(void* ctx, int slot, const std::string& line) {
                    "addbot: unknown skill \"" + named + "\" (use novice, average or expert)\n");
       return true;
     }
-    r.held = 0;
+    r.seats.held = 0;
     for (int i = 0; i < sh::kMaxClients; i++)
-      if (cs.clients[i].state != ConnState::free) r.held |= 1u << i;
+      if (cs.clients[i].state != ConnState::free) r.seats.held |= 1u << i;
     if (cl::room_add_bot(r, g.rules, g.map->spec, skill, error) < 0)
       client_print(cs, slot, 2, "addbot: " + error + "\n");
     sync_seats(g);
@@ -1552,7 +1555,7 @@ void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_frame(*game.coop);
   std::vector<sh::Packet> moves;
-  if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
+  if (game.room) cl::room_packets(*game.room, game.rules, frame_msec(game), moves);
   if (game.mates) cl::q2_party_packets(*game.mates, game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   tally(game);
@@ -1713,7 +1716,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
 void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_net_frame(*game.coop, now_us);
-  if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), game.qw->local_moves);
+  if (game.room) cl::room_packets(*game.room, game.rules, frame_msec(game), game.qw->local_moves);
   if (game.mates)
     cl::q2_party_packets(*game.mates, game.rules, frame_msec(game), game.qw->local_moves);
   const gs::LobbyPhase phase = game.room ? game.room->lobby.phase : gs::LobbyPhase::warmup;
@@ -1824,7 +1827,7 @@ std::string status(const void* g) {
   if (game.room) {
     const gs::Lobby& l = game.room->lobby;
     int bots = 0;
-    for (const auto& b : game.room->bots) bots += b ? 1 : 0;
+    for (const auto& b : game.room->seats.bots) bots += b ? 1 : 0;
     out.append(" bots=").append(std::to_string(bots));
     if (game.settings.lobby != 0)
       out.append(" lobby=")
