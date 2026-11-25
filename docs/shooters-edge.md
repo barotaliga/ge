@@ -599,7 +599,16 @@ so the high-lag teleport is not asked for while it is on; a server that does not
 (a teleporter waiting to be switched on, a mod's own rule) is believed two commands later, the
 turn taken back and that teleporter left out while he stands in it, and a server's turn to the
 same facing is the guess's own. `make lab LAB=se-teleport` and `make lab LAB=se-q2-teleport
-ARGS="--game=<base> --map=city1"` measure it. Your own eye rides the same clock as the models: drawn one server frame behind, between
+ARGS="--game=<base> --map=city1"` measure it. A push trigger (a jump pad, a wind tunnel) is
+foreseen the same way (`cl_predict_push`). DOORS, PLATS AND TRAINS RUN ON in the prediction
+(`cl_predict_movers`, on by default; `shooter/predict.hpp`'s `MoverTrack`, `advance_movers`): each
+goes on at the speed its last two frames show, stops where it was seen standing (or where it was
+built), carries the player who stands on it and shoves him where it moves into him, so the lift
+under him and the door he runs through are where the server will have them when it runs his move;
+the window draws them there too. Quake II's server moves them once a 100 ms frame, so they step
+there a frame at a time. `make lab LAB=se-control ARGS="--basedir=<base> --game=<folder>
+--map=dm2 --event=plat"` (or `door`, `push`, `water`, `train`; a Quake II install's folder for its
+maps) counts the yanks both ways. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder
@@ -753,7 +762,7 @@ server's frames go on under it). Its pages are Quake's:
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`), SPENT SHELLS (`ce_shells`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
-| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
+| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_ao`, `ce_ao_strength`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `r_arrival`, `ce_respawns`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
@@ -1692,7 +1701,11 @@ every pass, and judged by captioned screenshots:
   (`client/world_extras.hpp`) the modern look also draws the water, the lava and the slime as
   real liquids, the torches' burning gas and the weather through the open sky, and the map's
   textures come from classic-enhance's cache when the pack was enhanced, each behind its `ce_`
-  switch; `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
+  switch. A mission pack is enhanced laid over its base game (`ge tool classicenhance -- run
+  <install>/hipnotic` finds `id1` beside it): its cache is keyed by the base game's packs then the
+  pack's, the key the window reads with the pack mounted (`content_cache`), falling back to the
+  base game's own cache until the pack's is made (M63b);
+  `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
   both looks, for private pictures only. The `se-world` lab pictures every named view in both. The player sets the picture with
   cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
   effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and

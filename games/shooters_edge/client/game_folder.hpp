@@ -31,7 +31,7 @@
 // ge:keywords install_of which-game content-profile q2
 // ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
 // ge:keywords campaign-program path-command search-path
-// ge:keywords choose_folder campaign_commands newgame coopgame save load
+// ge:keywords choose_folder campaign_commands newgame coopgame save load new_game_level intro
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #pragma once
@@ -116,7 +116,11 @@ struct GameContent {
   bool registered = false;    // the packs are the full game
   std::string start_map;      // the profile's start map
   sv::EpisodeOrder episodes;  // the start map and each episode's first map (the profile's)
-  std::string first_map;      // the start map when the packs hold it, else the game's fallback
+  // The first map NEW GAME starts: the map the packs' default.cfg names for `newgame` (a pack's
+  // own first map) when they hold it, else the start map when they hold it, else the game's
+  // fallback; `new_game_shows` the movies that cfg plays before it (`+` joined), else none.
+  std::string first_map;
+  std::string new_game_shows;
   // The game's item names and its server's words as server lines (profiles/items.hpp's
   // `item_name_lines`, profiles/words.hpp's `word_lines`) when the baseline mod plays the game's
   // packs, so its pickups, obituaries, clock and lobby speak the game's words; empty when the
@@ -127,6 +131,11 @@ struct GameContent {
   // (our programs' own rows).
   std::vector<std::string> arsenal;
 };
+
+// The level a game's default.cfg gives its `newgame` alias (`alias newgame "map *ntro.cin+base1"`,
+// in any case): true with its map and the movies before it (`+` joined, `*` taken off); false
+// when the cfg has no such alias or it starts no map.
+bool new_game_level(const std::string& cfg, std::string& map, std::string& shows);
 
 // `out` filled from `files` (`progs_path`: `-progs`, "" for the game's own); false with the
 // reason when the multiplayer program does not load. The status lines say which program runs.

@@ -75,8 +75,7 @@ const au::Pcm* DemoSounds::load(const std::string& named) {
   bool read = false;
   if (enhanced) {
     if (!cache_known_) {
-      const std::vector<std::span<const uint8_t>> packs = content_packs(files_);
-      if (!packs.empty()) cache_ = ge::classicenhance::find_cache(packs);
+      cache_ = content_cache(files_);
       cache_known_ = true;
     }
     std::vector<uint8_t> wav;

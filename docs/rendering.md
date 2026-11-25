@@ -2077,6 +2077,15 @@ boots, and a figure stands on the snow instead of floating over it:
   only a tenth of the search, so two it is. Fall
   Line keeps it on at 0.6 (`r_ao`): the snow's bounce fills the creases in life, so the full
   strength reads too dark.
+- **Applied after the fact** (`encode_ao_apply`, pass `ao.apply`, `ao_apply.wgsl`; M41w): a
+  renderer with no depth prepass (the classic maps', `plugins/brush`, drawing colour and depth in
+  one pass) runs `ao` after its opaque passes (the map and its models) and then multiplies the
+  colour drawn by the sky each pixel sees, read as `sky_seen` reads it; a pixel with no depth (the
+  sky, drawn after) is left alone. It darkens all of a pixel's light, which suits a world lit by
+  its lightmaps, whose light is all bounced. Shooter's Edge's modern look runs it under `ce_ao`
+  (`ce_ao_strength` 0.8, `ce_ao_radius` 48 units). Cost on Quake's demo1 at 960 x 540 on the
+  software rasterizer: `ao` 12.7 ms and `ao.apply` 3.8 ms; the timedemo's price for the switch
+  20.2 ms of a 365 ms median frame (about 5.5 %, the run's noise 7.6 ms).
 
 **As built (M35d): depth of field** (`render/dof.hpp`, `defocused` in `post.wgsl`; the `post`
 lab's `dof` variant and the `world` lab's `--cfg="r_dof …"`). The picture blurred away from a

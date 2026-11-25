@@ -1053,16 +1053,19 @@ void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Parti
   }
 }
 
-void blaster_hit(const double p[3], uint32_t seed, Particles* out) {
+void blaster_hit(const double p[3], uint32_t seed, Particles* out, bool green) {
   Rng r = ge::core::make_rng(seed);
   for (int i = 0; i < 24; ++i) {
     double d[3];
     unit(r, d);
-    Particle q = ember(p, d, rnd(r, 1.5, 4.0), 2600, 0.12, rnd(r, 0.15, 0.4), r);
+    Particle q = green ? shine(p, kBfgRgb, 2.0, 0.03, rnd(r, 0.15, 0.4), r)
+                       : ember(p, d, rnd(r, 1.5, 4.0), 2600, 0.12, rnd(r, 0.15, 0.4), r);
+    if (green) set_v(q, d, rnd(r, 1.5, 4.0));
     q.size = float(rnd(r, 0.02, 0.035));
     out->push_back(q);
   }
-  for (int i = 0; i < 6; ++i) out->push_back(shine(p, kBoltRgb, 3.0, 0.08, 0.15, r));
+  for (int i = 0; i < 6; ++i)
+    out->push_back(shine(p, green ? kBfgRgb : kBoltRgb, 3.0, 0.08, 0.15, r));
 }
 
 void bfg_burst(const double p[3], uint32_t seed, Particles* out) {

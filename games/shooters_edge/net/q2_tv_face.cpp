@@ -30,16 +30,6 @@ void note(Q2TvFace& f, std::string line) {
   if (f.log.size() < kLogKept) f.log.push_back(std::move(line));
 }
 
-uint64_t host_key(gn::Address a) {
-  a.port = 0;
-  return gn::address_hash(a);
-}
-
-bool same_host(gn::Address a, gn::Address b) {
-  a.port = b.port = 0;
-  return a == b;
-}
-
 int32_t i32_at(std::span<const uint8_t> b, size_t at) {
   uint32_t v = 0;
   if (at + 4 <= b.size()) std::memcpy(&v, b.data() + at, 4);  // little-endian
@@ -145,12 +135,17 @@ void connect(Q2TvFace& f, const gn::Address& from, const std::vector<std::string
   if (std::atoi(w[1].c_str()) != kQ2NetProtocol)
     return refuse(f, from, "Server is protocol version 34.");
   const auto qport = static_cast<uint16_t>(std::atoi(w[2].c_str()));
-  const auto at = f.challenges.find(host_key(from));
-  if (at == f.challenges.end()) return refuse(f, from, "No challenge for address.");
-  if (at->second != std::atoi(w[3].c_str())) return refuse(f, from, "Bad challenge.");
+  switch (ge::classic::challenge_check(f.challenges, from, std::atoi(w[3].c_str()))) {
+    case ge::classic::ChallengeCheck::none:
+      return refuse(f, from, "No challenge for address.");
+    case ge::classic::ChallengeCheck::bad:
+      return refuse(f, from, "Bad challenge.");
+    case ge::classic::ChallengeCheck::ok:
+      break;
+  }
   const std::string& userinfo = w[4];
   for (const Q2Viewer& v : f.viewers)
-    if (v.stage != Q2ViewerStage::free && same_host(v.address, from) &&
+    if (v.stage != Q2ViewerStage::free && gn::same_host(v.address, from) &&
         (v.qport == qport || v.address.port == from.port))
       return;  // already in: a repeat
   if (!f.cfg.password.empty() && info_get(userinfo, "password") != f.cfg.password)
@@ -180,14 +175,11 @@ void read_oob(Q2TvFace& f, const gn::Address& from, const uint8_t* data, size_t 
   const std::vector<std::string> w = q2_words(q2_oob_text(data, size));
   if (w.empty()) return;
   if (w[0] == "getchallenge") {
-    auto at = f.challenges.find(host_key(from));
-    if (at == f.challenges.end()) {
+    const int32_t number = ge::classic::challenge_issue(f.challenges, from, [&f] {
       f.next_challenge = f.next_challenge * 1103515245u + 12345u;
-      at = f.challenges
-               .emplace(host_key(from), static_cast<int32_t>((f.next_challenge >> 16) & 0x7FFFu))
-               .first;
-    }
-    send_oob(f, from, "challenge " + std::to_string(at->second) + " p=34");
+      return static_cast<int32_t>((f.next_challenge >> 16) & 0x7FFFu);
+    });
+    send_oob(f, from, "challenge " + std::to_string(number) + " p=34");
   } else if (w[0] == "connect") {
     connect(f, from, w);
   } else if (w[0] == "info") {
@@ -299,7 +291,8 @@ void q2_tv_send(Q2Viewer& v, std::span<const uint8_t> msg) {
 
 Q2Viewer* q2_tv_find(Q2TvFace& f, const gn::Address& host, uint16_t qport) {
   for (Q2Viewer& v : f.viewers)
-    if (v.stage != Q2ViewerStage::free && v.qport == qport && same_host(v.address, host)) return &v;
+    if (v.stage != Q2ViewerStage::free && v.qport == qport && gn::same_host(v.address, host))
+      return &v;
   return nullptr;
 }
 
@@ -415,7 +408,7 @@ void q2_tv_frame(Q2TvFace& f, int64_t now_us) {
     if (!peek_qport(buf, size, qport)) continue;
     Q2Viewer* v = nullptr;
     for (Q2Viewer& c : f.viewers)
-      if (c.stage != Q2ViewerStage::free && c.qport == qport && same_host(c.address, from)) {
+      if (c.stage != Q2ViewerStage::free && c.qport == qport && gn::same_host(c.address, from)) {
         v = &c;
         break;
       }

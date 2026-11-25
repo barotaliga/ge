@@ -56,7 +56,7 @@ maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and
 | imp.q2_folder | a Quake II pack's folder (`xatrix`, `rogue`) taken in beside `baseq2` | done | 1 | same; a name both games use (`rogue`) told by the base folder beside it; real: Quake II with both packs |
 | imp.known | each pack's `pak0.pak` named by its SHA-256 and size (the four digests are in `/mnt/project-files/paks/README.md`) | done | 1 | plugins/classicenhance/profile.hpp `MissionPack`, `known_pack` (the four digests); tests/classicenhance_profile_test.cpp |
 | imp.release_zip | a release zip holding an installed tree (Scourge of Armagon's and Dissolution of Eternity's archives: `Quake/HIPNOTIC/PAK0.PAK` in capitals, the base game's packs beside it) | done | 1 | import.hpp § Release archives (`open_tree` reads a `.zip` whole, its tree walked as an install); tests/classic_content_import_test.cpp |
-| imp.q1_cd | the Quake packs' CD image (`QPacks.BIN` with its sheet, in both archives) | done | 2 | measured (2026-11-23): the same disc in both archives (its sheet alike, both packs on its data track, eight audio tracks 2..9), and both packs' maps ask for tracks 2..9; the disc taken in gives each pack the tracks (plugins/classic/content/import.cpp); tests/classic_content_import_test.cpp `import_gives_a_discs_tracks_to_each_pack_on_it`; real: the archive's disc, both packs' `music/` hold tracks 2..9 |
+| imp.q1_cd | the Quake packs' CD image (`QPacks.BIN` with its sheet, in both archives) | done | 2 | measured (2026-11-23): the same disc in both archives (its sheet alike, both packs on its data track, eight audio tracks 2..9), and both packs' maps ask for tracks 2..9; the disc taken in gives each pack the tracks (plugins/classic/content/import.cpp); tests/classic_content_import_test.cpp `import_gives_a_discs_tracks_to_each_pack_on_it`; both packs taken in off one image with no base folder beside them, the second pack's folder name (shared with Ground Zero) settled by the first (`import_takes_both_quake_packs_off_their_cd_image`, with and without its sheet); real: the archive's disc, both packs' `music/` hold tracks 2..9 |
 | imp.cd_layout | the Quake II packs' CD layout: the pack at `Data/all/pak0.pak`, the movies under `Data/max/<folder>/video`, the patch under `Data/patch`; known by the pack's digest, not by a game folder | done | 1 | import.hpp § Mission packs, by digest: the pack, the shallowest folder named after it, `patch/<base>/`; real: The Reckoning's CD layout told by its digest |
 | imp.mode2 | a BIN/CUE whose data track is `MODE2/2352` (The Reckoning's) | done | 1 | engine/vfs/disc.hpp. Real (2026-11-23): `secli import` of The Reckoning's CUE and BIN (sha256 cd5d3917…2591, the sheet still naming `Q2MP1.BIN` after the download renamed both, read through the image with the sheet's name) took 131 files in 194 s on the debug build, the pack's digest matching, its 8 movies and its 10 disc tracks as lossless music; peak memory 1.2 GB. Test: vfs_disc_test `disc_reads_a_sheet_renamed_with_its_image` |
 | imp.raw2448 | a raw image of 2448-byte sectors (2352 and 96 of subchannel) with its `.mds` sheet (Ground Zero's MDF) | done | 1 | engine/vfs/disc.hpp: a `.mdf` alone, 2448-byte sectors told by the second sector's sync; tests/vfs_disc_test.cpp. Its `.mds` sheet: imp.mds |
@@ -68,14 +68,14 @@ maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and
 | imp.detect | found without being asked (Niclas, 2026-11-23): a pack in a store's library, on a mounted volume, as a disc image or archive in the folders the games page searches, or beside a base game being taken in, is offered and taken in | done | 1 | import.hpp `find_offers` over `store_folders` (stores' libraries, mounted volumes): a pack's folder, or a known pack's size on a disc, offered in the console at the start (client/take_in.hpp `offer_words`) and by `secli import`; beside a base game taken in: taken with it. Image and archive files: imp.detect_files |
 | imp.detect_files | a pack's disc image or release archive lying in those folders (a `.cue`, `.mdf`, `.zip`, `.7z`) offered too | done | 2 | import.hpp `find_offers`: a disc image (`.iso`, `.cue`, `.bin`, `.img`, `.mdf`) or `.zip` of 1 MiB or more, 64 at most, listed by seeks (`vfs::list_zip_file`, `vfs::open_disc`) and offered as itself when it holds a first pack of a known pack's size or in a pack's folder; a `.7z` is not looked in (its listing needs the whole archive) and is taken by `secli import <file>`. Test: classic_content_import_test `a_pack_on_a_disc_image_or_in_a_zip_in_the_store_folders_is_offered_as_itself` |
 | imp.games_page | each pack its own row on the games page (Quake: Scourge of Armagon, ...) starting the base game with the pack's folder | done | 1 | SELECT GAME: a row a pack under its game (client/installs.hpp `game_rows`, `packs_of`), opening the install with the pack's folder; the console's `games` names them |
-| imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | done | 2 | client/take_in.hpp `take_in_words`: the packs kept, "add Quake II too", the game playing left as it is |
+| imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | done | 2 | client/take_in.hpp `take_in_words`: the packs kept, "add Quake II too", the game playing left as it is; tests/shooters_edge_take_in_test.cpp (take_in_names_the_mission_packs_and_waits_for_their_game) |
 
 ## Scourge of Armagon (Quake, folder `hipnotic`)
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | hip.program | the pack's `progs.dat` read and run: the base game's header checksum (5927), no builtin the base game's lacks, 52 fields of its own (checked from the file) | done |  | loads and runs hip1m1 (`se-client --game=<folder>/hipnotic --map=hip1m1 --progs=pack`, 2026-11-23); re-run on the real pack 2026-11-23 (verification sweep): hip1m1 loads and plays |
-| hip.campaign | NEW GAME from `start` through the five episodes to `hipend` (18 maps) | verify | 1 | a playthrough lab on the pack |
+| hip.campaign | NEW GAME from `start` through the five episodes to `hipend` (18 maps) | verify | 1 | a playthrough lab on the pack. Measured 2026-11-24 (se-q1-campaign with the pack laid over, 100% mode): on `hip1m1` the bot killed 39 of 58 and found 3 of 5 secrets in 20 minutes without reaching the exit, no fault; waits on hip.bot |
 | hip.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395); held by tests/shooters_edge_menu_test.cpp (episodes_for on the pack's maps) |
 | hip.hud.weapons | the status bar's laser cannon, Mjolnir and proximity gun, plain, lit and flashing, from the pack's `gfx.wad` (`INV_LASER`, `INV_MJOLNIR`, `INV_PROX_GREN`, `INV_GREN_PROX`, `INV_PROX` and their `INV2_` and `INVA1_`..`INVA5_` sets) | done | 1 | hud/classic_art.cpp loads the pack's set by name (`pack_art`), hud/layout.cpp draws it off the items word (`armagon_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on hip1m1 (`--fields`) |
 | hip.hud.items | the wetsuit's and the empathy shields' icons (`SB_WSUIT`, `SB_ESHLD`) | done | 1 | hud/classic_art.cpp loads the pack's set by name (`pack_art`), hud/layout.cpp draws it off the items word (`armagon_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on hip1m1 (`--fields`); the keys move to the main bar (`sbar_keys`) |
@@ -83,11 +83,11 @@ maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and
 | hip.demos | the attract loop plays the pack's four demos | done |  | `menu_attract auto` takes the list from the pack's own `quake.rc` (hipdemo1..4); the se-attract lab with `--game=hipnotic` plays hipdemo1 on hip1m5 (2026-11-23) |
 | hip.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (the scratched one) drawn by the se-attract lab with `--game=hipnotic` (2026-11-23) |
 | hip.endtext | `end2.bin`, the text screen shown on quitting | not-taken |  | the DOS build alone showed one; the Windows and Linux builds, which base Quake here follows, quit with nothing shown, so the packs do the same (decided 2026-11-23; printing it to the terminal on quit is the way back if wanted) |
-| hip.dm | `hipdm1` played by bots on the pack's program | verify | 2 |  |
+| hip.dm | `hipdm1` played by bots on the pack's program | done | 2 | games/shooters_edge/bots/pack_fight.hpp; `labs se-pack-dm --game=<id1> --mod=hipnotic --map=hipdm1 --seconds=300`: 4 fighters, 27 frags, 51 deaths, 83 items taken (the laser cannon among them), no fault. The fighters know only the base game's arsenal (the pack's own weapons: M63e) |
 | hip.coop | co-op on the pack's program, a companion beside the player | done | 2 | `labs se-q1-campaign --game=<dir>/id1 --mod=hipnotic --episodes=hip1m1 --party=2`: two bots in co-op on the pack's program, 24 of 58 monsters down in 240 s, no fault (2026-11-23) |
 | hip.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots' campaign module learns its monsters, weapons, items and traps |
 | hip.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the laser cannon as energy, Mjolnir as blast, the proximity gun as lobber, the wetsuit as protect; the empathy shields and the horn have no role and drop (tests/shooters_edge_remix_test.cpp) |
-| hip.ce | classic enhance's caches with the pack layered over the base packs (its textures, models, sounds) | verify | 2 |  |
+| hip.ce | classic enhance's caches with the pack layered over the base packs (its textures, models, sounds) | done | 2 | plugins/classicenhance/source.cpp (`open_source` lays a mission pack over the base game beside it), plugins/classic/content/files.cpp (`content_cache`); tests/classicenhance_source_test.cpp, tests/classic_content_files_test.cpp. Before: refused, no palette. Measured: 666 textures, 102 models, 292 sounds, 217 pictures; `se-client --game=<hipnotic> --map=hip1m1` draws from that cache |
 
 ### What the maps place that the base game's maps never do
 
@@ -200,16 +200,16 @@ that a map can be got through (hip.campaign, hip.bot). The items' rows add `--pi
 | rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23); re-run on the real pack 2026-11-23 (verification sweep): r1m1 loads and plays |
 | rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | a playthrough lab on the pack |
 | rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | verify | 1 | the base game's `b_` boxes load the same way |
-| rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | done | 1 | net/qw_frame.cpp's `items_word` (`items2` from bit 23, in place of the runes), client/view.cpp's and client/timedemo.cpp's status; the se-client lab on r1m1 |
+| rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | done | 1 | net/qw_frame.cpp's `items_word` (`items2` from bit 23, in place of the runes), client/view.cpp's and client/timedemo.cpp's status; the se-client lab on r1m1; the word itself held by tests/shooters_edge_qw_server_test.cpp (the_items_stat_carries_items2_for_a_program_with_it_else_the_runes) |
 | rog1.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395); held by tests/shooters_edge_menu_test.cpp (episodes_for on the pack's maps) |
-| rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | missing | 2 | facts in porting/shooters-edge/q1-qw-console-facts.md |
+| rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | done |  | menu/main_menu.cpp `teamplay_choices` (teamplay 3 to 6 offered when the packs hold r1m1); held by tests/shooters_edge_menu_test.cpp; facts in porting/shooters-edge/q1-qw-console-facts.md |
 | rog1.hud.weapons | the lava nailguns, the multi launchers and the plasma gun on the status bar (`R_LAVA`, `R_SUPERLAVA`, `R_GREN`, `R_MULTIROCK`, `R_PLASMA`, the bars `R_INVBAR1`, `R_INVBAR2`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`) |
 | rog1.hud.ammo | their ammunition (`R_AMMOLAVA`, `R_AMMOMULTI`, `R_AMMOPLASMA`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); the main bar's icon off bits 26-28 |
 | rog1.hud.items | the power shield and the anti-grav belt (`R_SHIELD1`..`5`, `R_AGRAV1`..`5`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); only `R_SHIELD1` and `R_AGRAV1` are drawn, as the pack drew them |
 | rog1.hud.team | the team colour's border in team games (`R_TEAMBORD`) | done | 2 | hud/layout.cpp (`sbar_team`, `sbar_team_frags`): teamplay 4 to 6 in a game of more than one; the colours by the palette; tests/shooters_edge_hud_test.cpp |
 | rog1.runes | deathmatch's runes | verify | 2 |  |
 | rog1.grapple | the grappling hook in team games, its chain drawn | verify | 2 | the beam model is drawn (C465) |
-| rog1.motd | the pack's message of the day on joining | verify | 3 |  |
+| rog1.motd | the pack's message of the day on joining | done | 3 | the pack's own program shows it as a centre print, only with teamplay 3 to 6 (porting/shooters-edge/q1-rogue-team-modes.md § 1): `labs se-client --game=<dir>/rogue --map=ctf1 --progs=pack --server="deathmatch 1;teamplay 4" --say=...` notes the welcome four times in its first six seconds, the team it was put on, the teams' score line and the 50 green armour kit (2026-11-24) |
 | rog1.cfg | the pack's configs run at start | done |  | the pack ships no `default.cfg` or `quake.rc` (its pack read 2026-11-23), so the base game's start runs, as it does |
 | rog1.demos | the attract loop plays the pack's three demos | done |  | the pack's own demo1..3 win over the base's by the search path; the se-attract lab with `--game=rogue` plays its demo1 on r1m5 (2026-11-23) |
 | rog1.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (its logo at the right) drawn by the se-attract lab with `--game=rogue` (2026-11-23) |
@@ -289,21 +289,21 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| xat.switch | the pack's rules behind one switch its profile sets, Quake II's own rules, goldens and digests unchanged without it | missing | 1 | server/q2_*; the CD's game library is built for one old system, so hosting it (server/q2_native.hpp) cannot run here |
+| xat.switch | the pack's rules behind one switch its profile sets, Quake II's own rules, goldens and digests unchanged without it | done |  | server/q2_pack.hpp (the switch); the pack's rows in q2_items.hpp, q2_combat.hpp, q2_powers.cpp, q2_reckoning*.cpp, behind `Q2ServerOptions::pack`; base lists unchanged (tests/shooters_edge_q2_pack_test.cpp) |
 | xat.brain_beta | the brain's beta form: its tentacles pull, its eyes fire lasers (no classname of its own) | missing | 1 | which brains are the beta: reader question |
-| xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | missing | 1 | reader question: the order |
+| xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | done |  | server/q2_bar.cpp (`kReckoning`, its 47 items); tests/shooters_edge_q2_reckoning_test.cpp |
 | xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
-| xat.dmflag | `dmflags` 65536: dual fire dropped on death | missing | 2 |  |
+| xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
 | xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
-| xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | verify | 2 | client/cinematic.hpp plays a chain |
+| xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | done | 2 | NEW GAME takes the level default.cfg names (`*logo.cin+xin.cin+xswamp`: client/game_folder.hpp `new_game_level`); the unit ends' movies come from the maps' level strings (server/q2_campaign.hpp); all eight decoded to their end, frames and sound |
 | xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings; all six are in the pack's `pics/` and resolve by name over the base's like any picture the rules name: `done` once the pack's rules send them |
 | xat.menu | the pack's own pictures (console background, quit, victory) | done |  | the pack's folder over the base's (`open_game_dir`): its `conback`, `quit` and `victory` win, the rest are the base's (`tests/shooters_edge_game_adapter_test.cpp`); the pack ships only those three of the base's names |
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp; held end to end by tests/shooters_edge_take_in_test.cpp (the window's music finds the remapped file; any case or a path) |
 | xat.sounds | the sounds the client plays itself for the pack: the ion ripper's and the phalanx's muzzle flashes, the hyper soldier's (the tank machine gun's five), none for its effect bits or its other temp entities | done |  | server/q2_flash.cpp (the player's blue hyperblaster flash made silent); tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
 | xat.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp; held by tests/shooters_edge_q2_flash_test.cpp (the_mission_packs_flashes_play_their_own_shots) |
 | xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`); the marks drawn held by tests/shooters_edge_q2_world_fx_test.cpp |
-| xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | missing | 1 | drawn as a plain explosion today (client ledger `te.plasma_explosion`, not taken for the base game) |
-| xat.te.greenblood | the gekk's green blood (temporary entity 26) | missing | 2 | drawn as red blood today (`te.greenblood`) |
+| xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | done |  | server/q2_wire.cpp (28), client/q2_temp_fx.hpp and client/listen.cpp (the rocket's explosion, as the stock client draws it) |
+| xat.te.greenblood | the gekk's green blood (temporary entity 26) | done |  | server/q2_wire.cpp (26), client/q2_temp_fx.hpp (30 green specks) |
 | xat.dm | the seven deathmatch maps played by bots | missing | 2 |  |
 | xat.coop | co-op through the units | missing | 2 |  |
 | xat.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
@@ -319,12 +319,12 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| xat.ent.ammo_magslug | `ammo_magslug` | mag slugs for the phalanx | 25 / 88 | missing | 1 | not in our rules |
-| xat.ent.ammo_trap | `ammo_trap` | the trap: laid on the floor, pulls monsters in and leaves a power cube to eat | 14 / 24 | missing | 1 | not in our rules |
-| xat.ent.item_quadfire | `item_quadfire` | dual fire: the weapons fire twice as fast for a while | 17 / 27 | missing | 1 | not in our rules; LIFT: the powerup timer and its HUD icon as the quad's |
-| xat.ent.key_green_key | `key_green_key` | the green key | 2 / 2 | missing | 1 | not in our rules; the keys' code done for the base game (server/q2_items.hpp) |
-| xat.ent.weapon_boomer | `weapon_boomer` | the ion ripper: glowing bolts that ricochet off walls, on cells | 24 / 33 | missing | 1 | not in our rules |
-| xat.ent.weapon_phalanx | `weapon_phalanx` | the phalanx particle cannon: two magnesium slugs that burst | 24 / 35 | missing | 1 | not in our rules |
+| xat.ent.ammo_magslug | `ammo_magslug` | mag slugs for the phalanx | 25 / 88 | done |  | server/q2_items.hpp, q2_items.cpp (limits 50/75/100 under the pack) |
+| xat.ent.ammo_trap | `ammo_trap` | the trap: laid on the floor, pulls monsters in and leaves a power cube to eat | 14 / 24 | done |  | server/q2_combat.cpp (the hand grenade's step), q2_reckoning_shots.cpp (the pull, the catch, the food cube) |
+| xat.ent.item_quadfire | `item_quadfire` | dual fire: the weapons fire twice as fast for a while | 17 / 27 | done |  | server/q2_powers.cpp (the shared timed powers' table), q2_fight.cpp (the hand stepped twice) |
+| xat.ent.key_green_key | `key_green_key` | the green key | 2 / 2 | done |  | server/q2_items.hpp |
+| xat.ent.weapon_boomer | `weapon_boomer` | the ion ripper: glowing bolts that ricochet off walls, on cells | 24 / 33 | done |  | server/q2_combat.hpp, q2_fight.cpp (the bolt that bounces), q2_choose.cpp (`use hyperblaster`) |
+| xat.ent.weapon_phalanx | `weapon_phalanx` | the phalanx particle cannon: two magnesium slugs that burst | 24 / 35 | done |  | server/q2_combat.hpp, q2_fight.cpp (two balls, their splash), q2_choose.cpp (`use railgun`) |
 
 #### Monsters
 
@@ -343,35 +343,36 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| xat.ent.func_object_repair | `func_object_repair` | a broken thing that sparks until the repair bot fixes it | 1 / 6 | missing | 2 | not in our rules |
-| xat.ent.misc_amb4 | `misc_amb4` | an ambient sound | 1 / 1 | missing | 3 | not in our rules |
-| xat.ent.misc_nuke | `misc_nuke` | the end level's nuke flash | 1 / 1 | missing | 2 | not in our rules |
-| xat.ent.misc_transport | `misc_transport` | a transport ship moving along its path | 1 / 1 | missing | 2 | not in our rules |
-| xat.ent.misc_viper_missile | `misc_viper_missile` | a missile a fly-by ship fires | 1 / 16 | missing | 2 | not in our rules |
-| xat.ent.rotating_light | `rotating_light` | a rotating warning light (spinning lights effect done in the client) | 3 / 11 | missing | 2 | not in our rules |
-| xat.ent.target_mal_laser | `target_mal_laser` | a laser that pulses on and off | 1 / 32 | missing | 2 | not in our rules; LIFT: the base `target_laser` |
+| xat.ent.func_object_repair | `func_object_repair` | a broken thing that sparks until the repair bot fixes it | 1 / 6 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.misc_amb4 | `misc_amb4` | an ambient sound | 1 / 1 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.misc_nuke | `misc_nuke` | the end level's nuke flash | 1 / 1 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.misc_transport | `misc_transport` | a transport ship moving along its path | 1 / 1 | done |  | server/q2_map.cpp (a ship running its path from the start, unseen until used) |
+| xat.ent.misc_viper_missile | `misc_viper_missile` | a missile a fly-by ship fires | 1 / 16 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.rotating_light | `rotating_light` | a rotating warning light (spinning lights effect done in the client) | 3 / 11 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.target_mal_laser | `target_mal_laser` | a laser that pulses on and off | 1 / 32 | done |  | server/q2_targets.cpp (the laser's beam, pulsed) |
 
 ## Ground Zero (Quake II, folder `rogue`)
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| gz.switch | the pack's rules behind one switch its profile sets, Quake II's own unchanged | missing | 1 | as xat.switch |
-| gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | missing | 1 | reader question: the whole list, per monster |
-| gz.items_list | the item list grown by the pack's items, in its order | missing | 1 | reader question |
-| gz.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
-| gz.tesla | the tesla mine thrown from the inventory, its zaps | missing | 1 | ammo row `ammo_tesla` places it |
-| gz.nuke | the A-M bomb thrown, its countdown and blast | missing | 1 | ammo row `ammo_nuke` places it |
+| gz.switch | the pack's rules behind one switch its profile sets, Quake II's own unchanged | done | 1 | server/q2_pack.hpp, server/q2_gz_rules.cpp: the folder `rogue` sets it; the cvars only under it |
+| gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | done | 1 | server/q2_gz_ai.cpp (section 1 of `gz-monsters.md`: the dodge, a high shot ducked and a low one side-stepped, by skill, the duck held by eta and 0.1 a skill below nightmare, the next no sooner than 0.5 s; walkers strafing four times in ten at 8 a frame, fliers six, the daedalus eight, never round a tesla; blind fire at the last sighting by the light soldier, gunner, maiden and tanks, rarer with each try; jumps down and up ledges; hint paths after 5 s out of sight; the medic's reach of 1024 (400 holding), the last two medics that gave up on a corpse, 10 s to raise it, a corpse too near torn apart, the raised out of the count; shots between the tanks, the medics, the turret or the raised start no fight, Jorg's and the Makron's do), server/q2_gz_base_monsters.cpp (the hover's and the others' section 2 changes); tests/shooters_edge_q2_gz_ai_test.cpp, tests/shooters_edge_q2_gz_base_monsters_test.cpp. Left in gz.ai.rest |
+| gz.ai.rest | the rest of the pack's shared monster changes: the co-op inhibit flags (the co-op filter, with the map things); the Makron's torso shell while a medic raises it | missing | 2 | plats ridden toward an enemy above or below, their bad area and the dead crushed under them in server/q2_gz_triggers.cpp (facts `gz-base6.md` § 7; tests/shooters_edge_q2_gz_triggers_test.cpp); the widow's power-up shells in server/q2_monster_rows.cpp (only she carries power-ups); a monster's rail held when its muzzle is inside a wall in server/q2_monster_shots.cpp; § 1.8's tesla in server/q2_gz_tesla.cpp (a tesla that hurt a monster marks its field for 30 s, monsters never step in and inside step only away; the monster turns on the tesla, a medic leaving its body, and fights it alone until it bursts, then goes back to the player it fought; its shots strike the tesla, the medic's bolt for 3; the tesla's health in server/q2_gz_weapons.cpp); facts `gz-monsters.md` § 1.4, 1.11 and 2. Done of § 2 in server/q2_gz_base_monsters.cpp: the soldiers' running fire and blind stand (spawn flag 8), the gunner's clear lob, the parasite's reach and its drain when blocked, the hover's flinch by skill, the maiden's `bitch2` model; the Makron's gibs already match (server/q2_gibs.cpp) |
+| gz.items_list | the item list grown by the pack's items, in its order | done | 1 | server/q2_bar.cpp (`kGroundZero`, 61 rows in the pack's order), server/q2_items.cpp |
+| gz.obits | the new weapons' and monsters' obituaries, word for word | done | 1 | server/q2_combat.cpp (`sq_obituary`): the six weapons and the A-M bomb; the monsters' with gz.ai |
+| gz.tesla | the tesla mine thrown from the inventory, its zaps | done | 1 | server/q2_gz_weapons.cpp; not yet shot down by damage (a partial: batch 2) |
+| gz.nuke | the A-M bomb thrown, its countdown and blast | done | 1 | server/q2_gz_weapons.cpp, server/q2_use.cpp; no screen flash yet (batch 2) |
 | gz.tag | the tag game (`gamerules 2`): the token, the bonus, three frags a kill while it, the lines | missing | 2 | LIFT with Dissolution's tag |
-| gz.dmflag.131072 | `dmflags` 131072: no A-M bombs, teslas or prox mines | missing | 2 |  |
-| gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | missing | 2 |  |
-| gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | missing | 2 |  |
-| gz.dmflag.1048576 | `dmflags` 1048576: no spheres | missing | 2 |  |
-| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | missing | 2 | a setting of the pack's rules |
-| gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | missing | 3 |  |
+| gz.dmflag.131072 | `dmflags` 131072: no A-M bombs, teslas or prox mines | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
+| gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | done | 2 | server/q2_powers.cpp (`fight_multiplier`) |
+| gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
+| gz.dmflag.1048576 | `dmflags` 1048576: no spheres | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
+| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | done | 2 | server/q2_gz_rules.cpp (the setting), server/q2_gz_spheres.cpp (the camera: the corpse thrown apart, the view at the sphere, field of view 140, not with dmflags 1024) |
+| gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
 | gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
-| gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | verify | 2 | client/cinematic.hpp |
+| gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | done | 2 | NEW GAME takes the level default.cfg names (`*rintro.cin+rmine1`: client/game_folder.hpp `new_game_level`); the unit ends' movies from the maps' level strings; all seven decoded to their end, frames and sound |
 | gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | verify | 2 | pictures named by the rules' configstrings; every one is in the pack's `pics/` and resolves by name over the base's: `done` once the pack's rules send them |
 | gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | done |  | the pack's folder over the base's: its `conback`, `quit`, `victory` and `tag1`/`tag2` win (`tests/shooters_edge_game_adapter_test.cpp`); its menu plates, banners and cursor are byte for byte the base game's (SHA-1 of every `pics/` file compared); `conchars_blue` is shipped but no picture name of the client reads it |
 | gz.vwep | the new guns in other players' hands (the patch's `w_*.md2`) | verify | 2 | plugins/morph/carry.hpp; needs imp.vwep |
@@ -408,40 +409,41 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.ammo_disruptor | `ammo_disruptor` | rounds for the disruptor | 12 / 41 | missing | 1 | not in our rules |
-| gz.ent.ammo_flechettes | `ammo_flechettes` | flechettes for the ETF rifle | 21 / 76 | missing | 1 | not in our rules |
-| gz.ent.ammo_nails | `ammo_nails` | a classname 24 maps place: probably dropped at spawn | 24 / 113 | verify | 3 | not in our rules; reader question |
-| gz.ent.ammo_nuke | `ammo_nuke` | the A-M bomb: thrown, a huge blast after a delay | 15 / 15 | missing | 1 | not in our rules |
-| gz.ent.ammo_prox | `ammo_prox` | prox grenades | 32 / 179 | missing | 1 | not in our rules |
-| gz.ent.ammo_tesla | `ammo_tesla` | the tesla mine: thrown, zaps whatever comes close | 32 / 114 | missing | 1 | not in our rules |
+| gz.ent.ammo_disruptor | `ammo_disruptor` | rounds for the disruptor | 12 / 41 | done | 1 | server/q2_items.cpp; left off unless `g_disruptor` (server/q2_gz_rules.cpp) |
+| gz.ent.ammo_flechettes | `ammo_flechettes` | flechettes for the ETF rifle | 21 / 76 | done | 1 | server/q2_items.cpp |
+| gz.ent.ammo_nails | `ammo_nails` | a classname 24 maps place: probably dropped at spawn | 24 / 113 | done | 3 | server/q2_gz_rules.cpp (`gz_classname`): spawns as flechettes |
+| gz.ent.ammo_nuke | `ammo_nuke` | the A-M bomb: thrown, a huge blast after a delay | 15 / 15 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.ammo_prox | `ammo_prox` | prox grenades | 32 / 179 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.ammo_tesla | `ammo_tesla` | the tesla mine: thrown, zaps whatever comes close | 32 / 114 | done | 1 | server/q2_items.cpp, server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | missing | 2 | not in our rules; LIFT: Scourge of Armagon's decoy |
-| gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | missing | 1 | not in our rules; LIFT: the quad's multiplier and timer |
-| gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | missing | 2 | not in our rules; LIFT: Dissolution's sphere |
-| gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | missing | 1 | not in our rules |
+| gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | done | 1 | server/q2_powers.cpp (`fight_multiplier`, the quad's timer lifted) |
+| gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | done | 2 | server/q2_powers.cpp, server/q2_server.cpp (the view bit) |
+| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | done | 2 | server/q2_gz_spheres.cpp (the half before armour, the green bolt at the last attacker, the splash; one out at a time, the bar's timer); the second shell model not drawn |
+| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | done | 2 | server/q2_gz_spheres.cpp (the chase in sight, the lurk where it lost him, 10 000 past armour, the 512 blast; the doppleganger's `gz_release_sphere`) |
+| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | done | 2 | server/q2_gz_spheres.cpp (called by a blow leaving its owner under 25; Dissolution's runs in its own program, so nothing to lift) |
+| gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | done | 1 | server/q2_items.cpp (a key row) |
 | gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | missing | 1 | not in our rules |
-| gz.ent.weapon_disintegrator | `weapon_disintegrator` | the disruptor: a slow bolt that tracks and disintegrates | 13 / 14 | missing | 1 | not in our rules |
-| gz.ent.weapon_etf_rifle | `weapon_etf_rifle` | the ETF rifle: fires flechettes | 18 / 25 | missing | 1 | not in our rules |
-| gz.ent.weapon_heatbeam | `weapon_heatbeam` | the plasma beam: a continuous beam on cells | 22 / 26 | missing | 1 | not in our rules; LIFT: the beam drawn and aimed as our own lightning beam (cl_fakeshaft, the smooth weapon thread) |
-| gz.ent.weapon_nailgun | `weapon_nailgun` | a classname 21 maps place that is not one of the pack's weapons: probably dropped by the library at spawn | 21 / 27 | verify | 3 | not in our rules; reader question |
-| gz.ent.weapon_plasmabeam | `weapon_plasmabeam` | a second name the maps use for the plasma beam | 12 / 14 | verify | 1 | not in our rules; which name the library spawns: reader question |
-| gz.ent.weapon_proxlauncher | `weapon_proxlauncher` | the prox launcher: grenades that stick and wait | 32 / 44 | missing | 1 | not in our rules; LIFT: one proximity mine with Scourge of Armagon's proximity gun |
+| gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.weapon_disintegrator | `weapon_disintegrator` | the disruptor: a slow bolt that tracks and disintegrates | 13 / 14 | done | 1 | server/q2_gz_weapons.cpp; left off unless `g_disruptor` |
+| gz.ent.weapon_etf_rifle | `weapon_etf_rifle` | the ETF rifle: fires flechettes | 18 / 25 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.weapon_heatbeam | `weapon_heatbeam` | the plasma beam: a continuous beam on cells | 22 / 26 | done | 1 | server/q2_gz_rules.cpp (`gz_classname`): spawns as the plasma beam |
+| gz.ent.weapon_nailgun | `weapon_nailgun` | a classname 21 maps place that is not one of the pack's weapons: probably dropped by the library at spawn | 21 / 27 | done | 3 | server/q2_gz_rules.cpp (`gz_classname`): spawns as the ETF rifle |
+| gz.ent.weapon_plasmabeam | `weapon_plasmabeam` | a second name the maps use for the plasma beam | 12 / 14 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.weapon_proxlauncher | `weapon_proxlauncher` | the prox launcher: grenades that stick and wait | 32 / 44 | done | 1 | server/q2_gz_weapons.cpp; one prox mine, Scourge of Armagon's is its own program's |
 
 #### Monsters
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | missing | 1 | not in our rules; LIFT: the base hover |
-| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | missing | 1 | not in our rules; LIFT: the base medic |
-| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | missing | 1 | not in our rules |
-| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | missing | 1 | not in our rules |
-| gz.ent.monster_widow | `monster_widow` | the black widow, the last boss's first form | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.monster_widow2 | `monster_widow2` | the black widow's second form | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | missing | 2 | not in our rules |
+| gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (its guns, grenades, rockets, rail, fliers from 3/6/6/9 slots, the co-op rear volley, pains; the base boss wreck); lab `se-gz-bosses`. Muzzle points are ours; the grenades' flash sent as 53 |
+| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | done | 1 | server/q2_monster_kinds.hpp (the hover's body on skin 2, 450, mass 225, green bolts, the front screen of 100), server/q2_monster_pain.cpp (its cries; a heavy blow's long flinch 0.45 - 0.1 x skill) |
+| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | done | 1 | server/q2_monster_kinds.hpp (the medic's body on skin 2, 600, green bolts), server/q2_gz_monsters.cpp (the call: strength roll, groups of 1, 3 or 5, five spots in front or behind, the grow, slots 3/4/6/6 given back at death, not counted), server/q2_monster_pain.cpp |
+| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | done | 1 | server/q2_gz_monsters.cpp (ceilings by reversed gravity, the jump up and the pounce, firing in the air, the false death and its twitch; the floor and ceiling walk in server/q2_monsters.cpp); its dodge jump with gz.ai |
+| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | done | 1 | server/q2_gz_monsters.cpp (floor, ceiling and wall mounts, arcs, 45 degrees a frame, blaster, machine gun and rockets with lead, the wall unit sliding out on use, no pain, the blast and debris); its blind fire with gz.ai; the wall unit's base piece not drawn yet |
+| gz.ent.monster_widow | `monster_widow` | the black widow, the last boss's first form | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (the turret blaster, the charge, rails, the kick, stalkers, the power-up answer, the beam-out and the legs); lab `se-gz-bosses`. Her large gibs fly as debris; the shell glow of her answer is not drawn |
+| gz.ent.monster_widow2 | `monster_widow2` | the black widow's second form | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (the heat beam, the disruptor, the tongue, stalkers at ±135, every stalker killed at her death, the blasts and the chain, the dead search, the settle); lab `se-gz-bosses`. Gibbed after the settle with the flesh set |
+| gz.ent.monster_kamikaze | `monster_kamikaze` | the kamikaze flyer: charges its enemy and bursts on him (the carrier's, and maps') | 0 / 0 | done | 1 | server/q2_gz_base_monsters.cpp (the charge at 400, 50 within 90, the harmless burst when blocked, no pain), its row in q2_monster_kinds.hpp; the rocket trail on its body not drawn. Row added while filling |
+| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | done | 2 | server/q2_gz_monsters.cpp, server/q2_targets.cpp (the breach's aim and fire shared with the turret driver): `killtarget` its first enemy, `delay`, used on and off |
 
 #### Game modes
 
@@ -454,7 +456,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | gz.ent.func_plat2 | `func_plat2` | a plat with more ways to move | 28 / 130 | missing | 1 | not in our rules |
-| gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | missing | 1 | not in our rules; LIFT: our bots' nav (plugins/shooterbots) may read the hints too |
+| gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | done | 1 | server/q2_gz_ai.cpp (`gz_hint_spawn`, `gz_hints`: chains from each END node, up to 100, cut at a fork or a loop; taken after 5 s out of sight, at most every 10 s, from a node within 512 the monster sees to one within 512 its enemy sees; a node's `wait` held; off the path once it sees him); tests/shooters_edge_q2_gz_ai_test.cpp |
 | gz.ent.info_player_coop_lava | `info_player_coop_lava` | a co-op start used once the lava has risen | 1 / 26 | missing | 2 | not in our rules |
 | gz.ent.misc_nuke_core | `misc_nuke_core` | the reactor core of the finale | 1 / 1 | missing | 1 | not in our rules |
 | gz.ent.target_anger | `target_anger` | makes monsters angry at a target | 9 / 18 | missing | 2 | not in our rules |

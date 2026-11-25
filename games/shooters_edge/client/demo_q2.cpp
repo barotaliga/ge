@@ -1165,12 +1165,16 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         break;
       }
       case kGeArsenal: {  // the weapons held (a mask by row), then each ammunition's count
-        const int held = m.u16();
-        int16_t ammo[7] = {};
-        for (int k = 1; k < 7; k++) ammo[k] = static_cast<int16_t>(m.i16());
+        const uint32_t held = static_cast<uint32_t>(m.i32());
+        const int kinds = m.u8();
+        int16_t ammo[Demo::kArsenalAmmo] = {};
+        for (int k = 1; k < kinds; k++) {
+          const auto n = static_cast<int16_t>(m.i16());
+          if (k < Demo::kArsenalAmmo) ammo[k] = n;
+        }
         if (m.bad) break;
         d.arsenal_told = true;
-        d.arsenal_weapons = static_cast<uint16_t>(held);
+        d.arsenal_weapons = held;
         std::copy(std::begin(ammo), std::end(ammo), std::begin(d.arsenal_ammo));
         break;
       }

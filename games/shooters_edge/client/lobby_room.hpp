@@ -11,9 +11,8 @@
 // - when the countdown runs out the listen restarts the map with every seat on it, the limits as
 //   the settings set them: the match. Whatever warmup scored is gone with the old server.
 //
-// The bots' NAV GRAPH is built once a map (shooterbots/nav.hpp, off the map's world model; on the
-// built-in arena its door and plat are its movers, as the `se-bots` lab's) the first time a bot
-// is seated, and kept for the restart.
+// The bots themselves are bots/bot_seats.hpp's, every game's: their nav is built once a map the
+// first time a bot is seated, and kept for the restart.
 //
 // Deterministic: the bots' hands are seeded off the listen's seed and their seat.
 //
@@ -31,9 +30,7 @@
 #include <vector>
 
 #include "shooterbots/aim.hpp"
-#include "shooterbots/fighter.hpp"
-#include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/arsenals.hpp"
+#include "shooters_edge/bots/bot_seats.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/lobby.hpp"
@@ -46,25 +43,10 @@ namespace sh = ge::shooter;
 namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 
-struct RoomBot {
-  bots::Fighter fighter;
-  sb::AimSkill skill = sb::AimSkill::average;
-  std::string name;     // its player's name on the server
-  sh::MoveCmd cmds[3];  // the three newest, oldest first
-  uint32_t sequence = 0;
-};
-
 struct Room {
   sv::Lobby lobby;
   sv::Announcer announcer;  // the lobby's words as the server's events (server/announce.hpp)
-  std::array<std::unique_ptr<RoomBot>, sv::kLobbySeats> bots;  // by slot (null: no bot)
-  std::unique_ptr<sb::NavGraph> graph;                         // the bots' map's
-  std::unique_ptr<sh::MoveWorld> world;                        // its solids (the hop's look)
-  std::string graph_of;                                        // the map it was built for
-  uint32_t seed = 1;
-  int bots_named = 0;               // bots ever seated (their names count up)
-  uint32_t held = 0;                // a bit a slot no bot may take (a dedicated server's clients)
-  std::vector<sh::Packet> packets;  // a frame's, the player's first (reused)
+  bots::BotSeats seats;  // the bots (bots/bot_seats.hpp): `seats.held` a dedicated server's clients
 };
 
 // A fighter of `skill` seated in the lowest free slot of `s` (playing `map`) and the lobby, under
@@ -78,7 +60,7 @@ bool room_remove_bot(Room& r, const sv::RulesRunner& s);
 // connected and its fighter made again, every seat's team applied, and in warmup the limits held.
 void room_enter(Room& r, const sv::RulesRunner& s, const sv::MapSpec& map);
 // The bots' packets for the next frame (each one `msec` long), appended to `out` in slot order.
-void room_packets(Room& r, const sv::RulesCommon& s, int msec, std::vector<sh::Packet>& out);
+void room_packets(Room& r, const sv::RulesRunner& s, int msec, std::vector<sh::Packet>& out);
 // What the lobby's banner and screen show of the room at server time `now`, slot `me` the
 // player's (the frags left 0: listen.hpp's `listen_lobby_view` reads them off the server).
 hud::LobbyView lobby_view(const Room& r, double now, int me);

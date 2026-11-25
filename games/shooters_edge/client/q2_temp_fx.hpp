@@ -34,7 +34,7 @@ inline constexpr Q2Puff kQ2Puffs[] = {
     {4, "te_shotgun", 20, 0x00},          {9, "te_sparks", 6, 0xe0},
     {12, "te_screen_sparks", 40, 0xd0},   {13, "te_shield_sparks", 40, 0xb0},
     {14, "te_bullet_sparks", 6, 0xe0},    {42, "te_moreblood", 250, 0xe8},
-    {46, "te_electric_sparks", 40, 0x75},
+    {46, "te_electric_sparks", 40, 0x75}, {26, "te_greenblood", 30, 0xdf},  // a pack's gekk
 };
 
 // The puff of kind byte `code`, or null.
@@ -105,6 +105,7 @@ constexpr Q2TempSound q2_temp_sound(int code, uint32_t pick, int splash = -1) {
       return {"weapons/railgf1a.wav", 1, true};
     case 5:  // explosion1, a rocket's
     case 7:
+    case 28:  // a pack's phalanx blast: drawn and heard as a rocket's
       return {"weapons/rocklx1a.wav"};
     case 6:  // explosion2, a grenade's
     case 8:

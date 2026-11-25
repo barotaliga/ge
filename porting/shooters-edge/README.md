@@ -43,6 +43,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `mission-packs-ledger.md` | The four mission packs (Scourge of Armagon, Dissolution of Eternity, The Reckoning, Ground Zero): every thing each adds over its base game, from the packs' own files, marked against our tree; what is shared; the readers' questions (M63) |
 | `mission-packs-hud.md` | The Quake packs' status bars: how the client knows a pack, the items word with `items2`, each pack's pictures, places, bits and drawing rules, the team border (reader's facts, M63b) |
 | `q1-pack-weapons.md` | The Quake packs' held weapons for weapon prediction: each new weapon's value and bits, ammunition fields, firing timeline, frames, samples, impulses, cycle and best-weapon orders, the changes to the base weapons, the view models (clean-room facts) |
+| `q1-rogue-team-modes.md` | Dissolution of Eternity's program in deathmatch and co-op: the message of the day, the runes, the grappling hook, the team modes (tag, capture the flag), the ammunition boxes, co-op (clean-room facts) |
 | `q2-flashes.md` | Muzzle flashes on the wire: a player's and a monster's flash values, their lights, sounds, models, who sends them and when, the guns' places rounded (read) |
 | `q2-weapon-prediction.md` | The held weapon on the wire and in the game: what each protocol and setting carries (no weapon state), what the client draws, when a press and a held trigger step the weapon, when the shot reaches the client, a weapon change by `use`, the silencer, the inventory (read) |
 | `q2-sp-fixes.md` | Single player's built-in map repairs (fact1, fact2, command, the eight maps' unnamed starts), item teams, the item and cheat commands' exact lines, `cycleweap` and `prefweap` (read) |
@@ -133,6 +134,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `hub.md` | The classic community's live-game and demo website (clean-room answers): its pages and API, the master and status queries, modes and match state, the broadcaster's advert, watching in a browser, the demo index (M56, `docs/hub.md`) |
 | `accounts.md` | Logins and match stats on the classic servers and both games' stock clients (clean-room answers): the console login, the accounts file, the web login and its token, the status and scoreboard keys, the match stats file, `lastscores`, frag logs (M59, `docs/accounts.md`) |
 | `team-messages.md` | Team messages at the modern client's extent (clean-room answers, M18k): each fun sequence's byte and the stock sheet's glyph there, the `^` rule, every percent code's text and its words' settings, the bracketed forms, field widths, hidden counts and message marks, the expansion order, each `f_` trigger's moment and gate, every canned message's text |
+| `ktx-coach.md` | The QuakeWorld match mod's coach (clean-room facts): who may ask, the spectator's election, tracking only the team, chat, what a coach blocks, stepping down, the map change, what is shown |
 
 The recorded-game formats are built (M18h, `games/shooters_edge/client/demo.hpp`) and their note
 retired. Every fact marked `verify` is checked by a lab before code depends on it.

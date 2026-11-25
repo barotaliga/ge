@@ -545,12 +545,16 @@ void commands_cvars(Q2Server& s) {
                .flags = con::kServer,
                .help = "Whether the tank commander's body can be shot apart.",
                .values = "0: it takes no harm (the default); 1: the first blow throws it apart"});
-  s.cvars.add({.name = "cheats",
-               .fallback = "0",
-               .flags = con::kServer | con::kServerInfo | con::kLatch,
-               .help = "Whether players may use give, god, notarget and noclip in deathmatch "
-                       "and co-op. A change takes hold on the next map.",
-               .values = "0: not in deathmatch (the default); 1: always"});
+  // Its `cheats` is the engine's sv_cheats under its name (one setting, so the status line and a
+  // cheat setting read the same), latched as the game has it: a change takes hold on the next map.
+  if (con::Cvar* cheats = s.cvars.find("sv_cheats"); cheats != nullptr) {
+    cheats->flags |= con::kLatch;
+    cheats->help =
+        "Whether players may use give, god, notarget and noclip in deathmatch and co-op. A "
+        "change takes hold on the next map.";
+    cheats->values = "0: not in deathmatch (the default); 1: always";
+  }
+  s.cvars.add_synonym("cheats", "sv_cheats");
   // The held weapon moved off its place, for whoever makes a weapon's model (a developer's tool).
   for (const auto& [name, way] :
        {std::pair{"gun_x", "right"}, std::pair{"gun_y", "forward"}, std::pair{"gun_z", "down"}})
@@ -627,7 +631,8 @@ bool commands_refuse_item(Q2Server& s, int slot, bool use, const std::string& na
   }
   const SqKind kind = w >= 0 ? SqKind::weapon : kSqItems[item].kind;
   const int row =
-      w >= 0 ? (kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item) : -1) : item;
+      w >= 0 ? (kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item, s.opt.pack) : -1)
+             : item;
   const bool able =
       use ? kind == SqKind::weapon || kind == SqKind::powerup || kind == SqKind::power_armour
           : fight_droppable(s, row);

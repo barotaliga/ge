@@ -51,7 +51,6 @@ constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key ta
 constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
 constexpr uint8_t kSvcGeBack = 119;        // the game's own: an item taken and when it comes back
 constexpr uint8_t kSvcGeArsenal = 118;     // the game's own: the weapons held, the ammunition
-constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (qw_voice_route.hpp)
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
@@ -60,7 +59,6 @@ constexpr size_t kLogKept = 512;
 constexpr ge::server::RateBounds kRateBounds{
     .none = 5000, .zero = 100, .low = 100, .none_held = false};
 constexpr int kRateFrames = 10;
-constexpr size_t kChallengesKept = 1024;
 // sv_nodelta 0: the whole frames a client may ask for before it is dropped.
 constexpr int kNoDeltaMost = 64;  // the frames whose sizes are summed (a second at 10 Hz)
 constexpr int kRateSlots = 60;    // the most: a second at `sv_fps` 60
@@ -87,14 +85,6 @@ std::vector<uint8_t> q2_feel_message(const ge::classic::Q2Feel& f) {
 
 void note(Q2NetServer& s, std::string line) {
   if (s.log.size() < kLogKept) s.log.push_back(std::move(line));
-}
-
-// A challenge's key: the address and its port, so clients on one machine each keep their own.
-uint64_t challenge_key(const gn::Address& a) { return gn::address_hash(a); }
-
-bool same_host(gn::Address a, gn::Address b) {
-  a.port = b.port = 0;
-  return a == b;
 }
 
 void send_to(Q2NetServer& s, const gn::Address& to, const uint8_t* data, size_t size) {
@@ -268,9 +258,16 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if (const std::string old = q2_extended_refusal(ext_of(s), ask); !old.empty())
     return refuse(s, from, old);
   const auto qport = static_cast<uint16_t>(std::atoi(w[2].c_str()));
-  const auto at = s.challenges.find(challenge_key(from));
-  if (at == s.challenges.end()) return refuse(s, from, "No challenge for address.");
-  if (at->second != std::atoi(w[3].c_str())) return refuse(s, from, "Bad challenge.");
+  // By the host and the number (classic/protocol/challenges.hpp): a port that moved still finds it.
+  const int32_t challenge = std::atoi(w[3].c_str());
+  switch (ge::classic::challenge_check(s.challenges, from, challenge)) {
+    case ge::classic::ChallengeCheck::none:
+      return refuse(s, from, "No challenge for address.");
+    case ge::classic::ChallengeCheck::bad:
+      return refuse(s, from, "Bad challenge.");
+    case ge::classic::ChallengeCheck::ok:
+      break;
+  }
   if (ge::server::ban_refuses(s.bans, s.cfg.ban_mode, from,
                               s.cfg.unix_time ? s.cfg.unix_time() : 0))
     return refuse(s, from, "Banned.");
@@ -281,7 +278,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   std::string carried_var, carried_value;
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !same_host(c.address, from) ||
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !gn::same_host(c.address, from) ||
         c.address.port != from.port)
       continue;
     if (c.stage == Q2Slot::zombie) {
@@ -297,7 +294,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if (s.cfg.locked) {  // sv_locked: only a client taking back the slot its address still holds
     bool back = false;
     for (const Q2NetClient& c : s.clients)
-      back = back || (c.stage == Q2Slot::zombie && same_host(c.address, from) &&
+      back = back || (c.stage == Q2Slot::zombie && gn::same_host(c.address, from) &&
                       (c.qport == qport || c.address.port == from.port));
     if (!back) return refuse(s, from, "Server is locked.");
   }
@@ -361,8 +358,11 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   int players = 0, watching = 0, slot = -1;
   for (int i = 0; i < q2_net_slots(s); i++) {
     const Q2NetClient& o = s.clients[i];
-    if (o.stage == Q2Slot::free) {
-      if (slot < 0) slot = i;
+    const sv::ClientInfo& seat = (**s.rules).clients[i];
+    if (o.stage == Q2Slot::free && seat.active && seat.bot) {
+      players++;  // a bot the server seated (sv_bots): a player, with no connection
+    } else if (o.stage == Q2Slot::free) {
+      if (slot < 0 && !seat.active) slot = i;
     } else if (o.stage != Q2Slot::dummy) {
       (o.spectator ? watching : players)++;
     }
@@ -377,8 +377,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if ((!spectator || !own) &&
       ge::server::vip_slots_refuse(s.cfg.max_clients, taken, s.cfg.vip_slots, vip))
     return full("Server and reserved slots are full.");
-  s.challenges.erase(challenge_key(from));  // used once
-  std::erase(s.challenge_order, challenge_key(from));
+  ge::classic::challenge_used(s.challenges, from, challenge);  // used once
   Q2NetClient& c = s.clients[slot];
   c = Q2NetClient{};
   c.stage = Q2Slot::signon;
@@ -428,7 +427,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   }
   answer += " map=" + (*s.rules)->map_name;
   send_oob(s, from, answer);
-  note(s, c.name + " connected");
+  note(s, c.name + " joins from " + gn::to_string(from));  // the rules say "connected" at its begin
 }
 
 void read_oob(Q2NetServer& s, const gn::Address& from, const uint8_t* data, size_t size) {
@@ -437,22 +436,14 @@ void read_oob(Q2NetServer& s, const gn::Address& from, const uint8_t* data, size
   if (w.empty()) return;
   if (s.killed && w[0] != "rcon") return;  // `killserver`: only the operator answered
   if (w[0] == "getchallenge") {
-    // A new number each time (31 bits, never 0), one an address and port, the oldest of 1024
-    // replaced.
-    const uint64_t key = challenge_key(from);
-    s.next_challenge = s.next_challenge * 1103515245u + 12345u;
-    const uint32_t high = s.next_challenge >> 16;
-    s.next_challenge = s.next_challenge * 1103515245u + 12345u;
-    const auto number =
-        static_cast<int32_t>(((high << 16) | (s.next_challenge >> 16)) & 0x7FFFFFFFu) | 1;
-    if (s.challenges.find(key) == s.challenges.end()) {
-      if (s.challenge_order.size() >= kChallengesKept) {
-        s.challenges.erase(s.challenge_order.front());
-        s.challenge_order.erase(s.challenge_order.begin());
-      }
-      s.challenge_order.push_back(key);
-    }
-    s.challenges[key] = number;
+    // 31 bits, never 0; one an address and port, the same one asked again, the oldest of 1024
+    // replaced (classic/protocol/challenges.hpp).
+    const int32_t number = ge::classic::challenge_issue(s.challenges, from, [&s] {
+      s.next_challenge = s.next_challenge * 1103515245u + 12345u;
+      const uint32_t high = s.next_challenge >> 16;
+      s.next_challenge = s.next_challenge * 1103515245u + 12345u;
+      return static_cast<int32_t>(((high << 16) | (s.next_challenge >> 16)) & 0x7FFFFFFFu) | 1;
+    });
     send_oob(s, from, "challenge " + std::to_string(number) + " p=34,35,36");
   } else if (w[0] == "connect") {
     connect(s, from, w);
@@ -1233,7 +1224,7 @@ int find_client(const Q2NetServer& s, const gn::Address& from, const uint8_t* da
   int zombie = -1;
   for (int i = 0; i < sh::kMaxClients; i++) {
     const Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !same_host(c.address, from))
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !gn::same_host(c.address, from))
       continue;
     bool match = false;
     if (c.protocol == kQ2NetProtocol) {
@@ -1301,11 +1292,13 @@ void write_items_back(const Q2NetServer& s, Q2NetClient& c, std::vector<uint8_t>
 
 std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body) {
   std::vector<uint8_t> out;
+  out.reserve(5 + 2 * (sv::kSqAmmoKinds - 1));
+  static_assert(sv::kSqWeaponCount <= 32, "the arsenal's mask holds 32 weapon rows");
   uint32_t held = 0;
   for (int w = 0; w < sv::kSqWeaponCount; w++)
     if (sv::sq_holds(body, w)) held |= 1u << w;
-  out.push_back(static_cast<uint8_t>(held & 255));
-  out.push_back(static_cast<uint8_t>(held >> 8));
+  for (int k = 0; k < 4; k++) out.push_back(static_cast<uint8_t>(held >> (8 * k)));
+  out.push_back(static_cast<uint8_t>(sv::kSqAmmoKinds));
   for (int k = 1; k < sv::kSqAmmoKinds; k++) {
     const int n = std::clamp(body.ammo[k], 0, 32767);
     out.push_back(static_cast<uint8_t>(n & 255));
@@ -1719,6 +1712,8 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
   if (s.game != nullptr)  // what the rules check a switch to or from watching against
     s.game->gate = {s.cfg.password, s.cfg.spectator_password,
                     s.cfg.max_spectators > 0 ? s.cfg.max_spectators : sh::kMaxClients};
+  packets.insert(packets.end(), s.local_moves.begin(), s.local_moves.end());  // the bots'
+  s.local_moves.clear();
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   if (s.game != nullptr)  // a seat watches as the rules say: a switch mid-match lands here
     for (int i = 0; i < sh::kMaxClients; i++)
