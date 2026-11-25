@@ -51,15 +51,73 @@ enum class SqWeapon : uint8_t {
   railgun,
   bfg,
   hand_grenade,
+  // The Reckoning's (q2_pack.hpp): the ion ripper, the phalanx and the trap (thrown as the hand
+  // grenade is).
+  ion_ripper,
+  phalanx,
+  trap,
+  // Ground Zero's (q2_gz.hpp): the chainfist, the ETF rifle, the prox launcher, the plasma beam,
+  // the disruptor and the thrown tesla.
+  chainfist,
+  etf_rifle,
+  prox_launcher,
+  plasma_beam,
+  disruptor,
+  tesla,
 };
-inline constexpr int kSqWeaponCount = 11;
+inline constexpr int kSqWeaponCount = 20;
 
-// What one shot is.
-enum class SqShot : uint8_t { bolt, pellets, bullet, grenade, rocket, rail, bfg, hand_grenade };
-inline constexpr int kSqShotKinds = 8;
+// What one shot is. The Reckoning's after the base game's: the ion ripper's bouncing bolt, the
+// hyper guard's blue bolt, the phalanx's plasma ball, the beta maiden's homing rocket, the gekk's
+// spit and the thrown trap.
+enum class SqShot : uint8_t {
+  bolt,
+  pellets,
+  bullet,
+  grenade,
+  rocket,
+  rail,
+  bfg,
+  hand_grenade,
+  ripper,
+  blue_bolt,
+  plasma,
+  heat_rocket,
+  spit,
+  trap,
+  // Ground Zero's: the flechette, the prox mine, the tesla, the disruptor's bolt, the A-M bomb, and
+  // the two that never fly (the plasma beam's line, the chainfist's reach).
+  flechette,
+  prox,
+  tesla,
+  tracker,
+  nuke,
+  heat_beam,
+  chainfist,
+  // Ground Zero's monsters' green bolt (the daedalus, the medic commander, the stalker, a
+  // turret's blaster) and the defender sphere's: the blaster's and the tracker's light in flight,
+  // its own mark where it lands.
+  green_bolt,
+  // Ground Zero's three spheres (q2_gz_spheres.cpp), which float by their owner rather than fly.
+  defender_sphere,
+  hunter_sphere,
+  vengeance_sphere,
+};
+inline constexpr int kSqShotKinds = 25;
 // Each kind's effect bits in flight (its trail and light on a client): a bolt the blaster's (8), a
-// grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000).
-inline constexpr int kSqShotEffects[kSqShotKinds] = {8, 0, 0, 32, 16, 0, 128 | 0x2000, 32};
+// grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000);
+// the ion ripper's trail (0x00100000), the blue bolt's (0x00400000), the plasma's (0x01000000,
+// its frames fast), the spit the blaster's; Ground Zero's mines and bomb the grenade's smoke, the
+// disruptor's bolt the tracker's (0x04000000), the green bolt the blaster's and the tracker's.
+inline constexpr int kSqShotEffects[kSqShotKinds] = {
+    8,  0, 0, 32, 16, 0,  128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000,
+    16, 8, 0, 0,  32, 32, 0x04000000,   32, 0,          0,          8 | 0x04000000,
+    0,  0, 0};
+// The render flag each kind is drawn with (8 full bright: the ion ripper's bolt, the flechette;
+// 0x8000 seen through IR goggles: Ground Zero's mines and bomb; its spheres both).
+inline constexpr int kSqShotRender[kSqShotKinds] = {
+    0, 0, 0,      0,      0, 0,      0, 0, 8, 0,          0,          0,         0,
+    0, 8, 0x8000, 0x8000, 0, 0x8000, 0, 0, 0, 8 | 0x8000, 8 | 0x8000, 8 | 0x8000};
 
 struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
@@ -107,10 +165,48 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
      50, 8, 32, 55, 58, 17, 17, SqShot::bfg, 200, 500, 0, 8, 8},
     {"Grenades", "ammo_grenades", "models/weapons/v_handgr/tris.md2", "weapons/hgrent1a.wav",
      SqAmmo::grenades, 1, 0, 15, 48, 48, 11, 12, SqShot::hand_grenade, 125, 125, 0, 8, 8},
+    // The Reckoning's (porting note: q2-reckoning-rules.md §§ 1 to 5). The phalanx takes its mag
+    // slug with the second ball (a pull's), the trap steps as the hand grenade does.
+    {"Ionripper", "weapon_boomer", "models/weapons/v_boomer/tris.md2", "weapons/rippfire.wav",
+     SqAmmo::cells, 2, 4, 6, 36, 39, 5, 5, SqShot::ripper, 30, 50, 1, 16, 7, Q2Pack::reckoning},
+    {"Phalanx", "weapon_phalanx", "models/weapons/v_shotx/tris.md2", "weapons/plasshot.wav",
+     SqAmmo::magslugs, 1, 5, 20, 58, 63, 7, 8, SqShot::plasma, 70, 70, 0, 0, 8, Q2Pack::reckoning},
+    {"Trap", "ammo_trap", "models/weapons/v_trap/tris.md2", "weapons/trapcock.wav", SqAmmo::traps,
+     1, 0, 15, 48, 48, 11, 12, SqShot::trap, 125, 125, 0, 8, 8, Q2Pack::reckoning},
+    // Ground Zero's (q2_gz.hpp). The chainfist swings from frame 6 (its hits on 8, 9, 16 to 18, 30
+    // and 31), the ETF rifle and the plasma beam loop while held, the tesla is held on frame 1 and
+    // thrown on 2; their firing sounds are their muzzle flashes'.
+    {"Chainfist", "weapon_chainfist", "models/weapons/v_chainf/tris.md2", "weapons/sawhit.wav",
+     SqAmmo::none, 0, 4, 32, 57, 60, 6, 31, SqShot::chainfist, 30, 15, 0, 0, 8,
+     Q2Pack::ground_zero},
+    {"ETF Rifle", "weapon_etf_rifle", "models/weapons/v_etf_rifle/tris.md2", "weapons/nail1.wav",
+     SqAmmo::flechettes, 1, 4, 7, 37, 41, 6, 7, SqShot::flechette, 10, 10, 3, 15, 8,
+     Q2Pack::ground_zero},
+    {"Prox Launcher", "weapon_proxlauncher", "models/weapons/v_plaunch/tris.md2",
+     "weapons/grenlf1a.wav", SqAmmo::prox, 1, 5, 16, 59, 64, 6, 6, SqShot::prox, 90, 90, 0, 8, 8,
+     Q2Pack::ground_zero},
+    {"Plasma Beam", "weapon_plasmabeam", "models/weapons/v_beamer/tris.md2", "weapons/bfg__l1a.wav",
+     SqAmmo::cells, 2, 8, 12, 39, 44, 9, 12, SqShot::heat_beam, 15, 15, 75, 7, 2,
+     Q2Pack::ground_zero},
+    {"Disruptor", "weapon_disintegrator", "models/weapons/v_dist/tris.md2", "weapons/disrupt.wav",
+     SqAmmo::rounds, 1, 4, 9, 29, 34, 5, 5, SqShot::tracker, 30, 45, 0, 24, 8, Q2Pack::ground_zero},
+    {"Tesla", "ammo_tesla", "models/weapons/v_tesla/tris.md2", "weapons/hgrent1a.wav",
+     SqAmmo::tesla, 1, 0, 8, 32, 32, 1, 2, SqShot::tesla, 3, 3, 8, 0, -4, Q2Pack::ground_zero},
 };
 
 // The pack each shot kind belongs to, by `SqShot` (its missile model registered only under it).
-inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {};
+inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {
+    Q2Pack::base,        Q2Pack::base,        Q2Pack::base,        Q2Pack::base,
+    Q2Pack::base,        Q2Pack::base,        Q2Pack::base,        Q2Pack::base,
+    Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,
+    Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::ground_zero, Q2Pack::ground_zero,
+    Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
+    Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
+    Q2Pack::ground_zero};
+// Whether a weapon steps and throws as the hand grenade does (the grenades and the trap).
+constexpr bool sq_thrown(int w) {
+  return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap);
+}
 // Whether weapon `w` plays under `pack` (the base game's always, a pack's under it).
 constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
   return w >= 0 && w < kSqWeaponCount && q2_pack_has(pack, kSqWeapons[w].pack);
@@ -148,6 +244,8 @@ struct SqHand {
   double click_at = -10;  // level time of the last no-ammo click
   int held_shots = 0;     // the machinegun's shots in a row (its climbing kick)
   double fuse_at = 0;     // the hand grenade's: level time its fuse ends; 0 not lit
+  float throw_speed = 0;  // Ground Zero's tesla: the speed of the throw this step asks for
+  int swing = 0;          // Ground Zero's chainfist: the swing played last (0 A, 1 B, 2 C)
 };
 
 // What a step asks of the runner.
@@ -167,6 +265,11 @@ struct SqStep {
 // advances a step (g_swap_speed; 1 the classic pace).
 SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool infinite = false,
                     int swap = 1);
+
+// A match server's faster weapon switch (`g_fast_weap_switch`), before the hand's step: `mode` 1
+// skips the lowering (the swap is this step's), 2 also the raising (ready the step after the swap);
+// 0 leaves the classic pace.
+void sq_hand_hasten(SqHand& hand, int mode);
 
 // Chooses weapon `w` for the hand (when held and not already in hand); true when chosen.
 bool sq_choose(SqHand& hand, const SqBody& body, int w);
@@ -188,11 +291,12 @@ struct SqHandSound {
   int channel;      // 0 any, 1 the weapon's
   int attenuation;  // the protocol's factor
 };
-inline constexpr int kSqHandSounds = 4;
+inline constexpr int kSqHandSounds = 5;
 inline constexpr SqHandSound kSqHandSound[kSqHandSounds] = {{"weapons/hgrena1b.wav", 1, 1},
                                                             {"weapons/chngnu1a.wav", 0, 2},
                                                             {"weapons/chngnd1a.wav", 0, 2},
-                                                            {"weapons/hyprbd1a.wav", 0, 1}};
+                                                            {"weapons/hyprbd1a.wav", 0, 1},
+                                                            {"weapons/trapcock.wav", 1, 1}};
 // The one-shot (kSqHandSound's row) the step that took weapon `weapon`'s hand from frame `was`
 // (firing or not) to `after` makes; -1 none. A weapon changed by the step makes none.
 int sq_hand_sound(int weapon, int was, bool was_firing, const SqHand& after);

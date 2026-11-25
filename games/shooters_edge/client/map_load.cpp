@@ -79,25 +79,14 @@ std::string load_caption(const MapLoad& l) {
 
 bool console_load_line(const MapLoad& load, LoadLine& line, ge::console::Console& con,
                        ge::console::ConsoleView& view, double now_s) {
-  if (!busy(load)) return false;
-  char text[160];
-  std::snprintf(text, sizeof text, "Loading %s... %.1fs", load.what.c_str(), now_s - load.since_s);
-  if (line.what != load.what || !view.rewrite(line.n, text)) {
-    con.print(text);
-    line.what = load.what;
-    line.n = view.newest();
-  }
-  view.set_full(true);
-  line.held = true;
+  if (!busy(load) || line.given_up) return false;
+  hold_load_line(load.what, load.since_s, line, con, view, now_s);
   return true;
 }
 
 void release_load_line(const MapLoad& load, LoadLine& line, ge::console::ConsoleView& view,
-                       bool keep) {
-  if (!line.held || busy(load)) return;
-  line.held = false;
-  line.what.clear();
-  if (!keep) view.set_full(false);
+                       bool keep, bool elsewhere) {
+  release_load_line(busy(load), elsewhere, line, view, keep);
 }
 
 void load_map(MapLoad& l, const SearchPath& files, const std::string& name, double now_s) {

@@ -24,7 +24,13 @@ namespace {
 using ge::ui::ItemKind;
 
 constexpr Choice kGameType[] = {{"COOPERATIVE", "0"}, {"DEATHMATCH", "1"}};
-constexpr Choice kTeamplay[] = {{"OFF", "0"}, {"NO FRIENDLY FIRE", "1"}, {"FRIENDLY FIRE", "2"}};
+// Teamplay's words; Dissolution of Eternity's games past the first three (shown only when its maps
+// are the packs', `teamplay_choices`).
+constexpr Choice kTeamplay[] = {
+    {"OFF", "0"},           {"NO FRIENDLY FIRE", "1"}, {"FRIENDLY FIRE", "2"},
+    {"TAG", "3"},           {"CAPTURE THE FLAG", "4"}, {"ONE FLAG CTF", "5"},
+    {"THREE TEAM CTF", "6"}};
+constexpr size_t kBaseTeamplay = 3;
 constexpr Choice kSkill[] = {{"EASY", "0"}, {"NORMAL", "1"}, {"HARD", "2"}, {"NIGHTMARE", "3"}};
 constexpr Choice kFragLimit[] = {{"NONE", "0"}, {"10", "10"}, {"20", "20"},  {"30", "30"},
                                  {"40", "40"},  {"50", "50"}, {"60", "60"},  {"70", "70"},
@@ -54,6 +60,9 @@ constexpr Choice kRulesets[] = {
     {"QCON", "qcon"},    {"THUNDERDOME", "thunderdome"}, {"MTFL", "mtfl"}};
 constexpr Choice kSides[] = {{"LEFT", "left"}, {"RIGHT", "right"}};
 constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
+// Whose a part of classic remix is (client/remix.hpp's cr_ settings): the played game's own, or
+// one game's by its id.
+constexpr Choice kRemixWhose[] = {{"OWN", ""}, {"QUAKE", "q1"}, {"QUAKE II", "q2"}};
 
 // The menu, page by page. A row's `needs` dims it while the console knows no such name.
 constexpr Entry kEntries[] = {
@@ -422,6 +431,12 @@ constexpr Entry kEntries[] = {
      .opens = "enhanced",
      .needs = "ce_textures"},
     {.page = "options",
+     .id = "remix",
+     .text = "CLASSIC REMIX",
+     .hint = "One classic game played with another's maps, items, monsters, looks and moves.",
+     .opens = "remix",
+     .needs = "cr_enabled"},
+    {.page = "options",
      .id = "ruleset",
      .text = "RULESET",
      .kind = ItemKind::choice,
@@ -436,6 +451,138 @@ constexpr Entry kEntries[] = {
      .hint = "The server's settings; the ones marked * change by a vote.",
      .opens = "server"},
     {.page = "options", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    {.page = "remix",
+     .id = "cr_enabled",
+     .text = "REMIX",
+     .kind = ItemKind::choice,
+     .hint = "Needs a second classic game loaded as a full game: its maps load too.",
+     .needs = "cr_enabled",
+     .target = Target::client,
+     .choices = kOnOff},
+    {.page = "remix",
+     .id = "cr_expansions",
+     .text = "MISSION PACKS",
+     .kind = ItemKind::choice,
+     .hint = "The packs installed beside each game join in: their maps, weapons and items.",
+     .needs = "cr_expansions",
+     .target = Target::client,
+     .choices = kOnOff},
+    {.page = "remix",
+     .id = "cr_items",
+     .text = "ITEMS",
+     .kind = ItemKind::choice,
+     .hint = "Whose weapons, ammunition, armour and powerups lie on every map.",
+     .needs = "cr_items",
+     .target = Target::client,
+     .choices = kRemixWhose},
+    {.page = "remix",
+     .id = "cr_monsters",
+     .text = "MONSTERS",
+     .kind = ItemKind::choice,
+     .hint = "Whose monsters a campaign map is played with, from the next map.",
+     .needs = "cr_monsters",
+     .target = Target::client,
+     .choices = kRemixWhose},
+    {.page = "remix",
+     .id = "cr_models",
+     .text = "PLAYER FIGURES",
+     .kind = ItemKind::choice,
+     .hint = "Whose figure every player is drawn as, from the next map.",
+     .needs = "cr_models",
+     .target = Target::client,
+     .choices = kRemixWhose},
+    {.page = "remix",
+     .id = "cr_physics",
+     .text = "MOVEMENT",
+     .kind = ItemKind::choice,
+     .hint = "Whose running, jumping and strafing the players move with, from the next map.",
+     .needs = "cr_physics",
+     .target = Target::client,
+     .choices = kRemixWhose},
+    {.page = "remix",
+     .id = "cr_sounds",
+     .text = "SOUNDS",
+     .kind = ItemKind::choice,
+     .hint = "Whose shots, blasts, pickups and voices are heard.",
+     .needs = "cr_sounds",
+     .target = Target::client,
+     .choices = kRemixWhose},
+    {.page = "remix",
+     .id = "cr_menu",
+     .text = "MENU",
+     .kind = ItemKind::choice,
+     .hint = "Whose pictures and titles the menu is drawn in.",
+     .needs = "cr_menu",
+     .target = Target::client,
+     .choices = kRemixWhose},
+    {.page = "remix",
+     .id = "cr_charset",
+     .text = "LETTERS",
+     .kind = ItemKind::choice,
+     .hint = "Whose letters the menu, the console and the counts are written in.",
+     .needs = "cr_charset",
+     .target = Target::client,
+     .choices = kRemixWhose},
+    {.page = "remix",
+     .id = "cr_over_mods",
+     .text = "OVER MODS",
+     .kind = ItemKind::choice,
+     .hint = "ON: the movement above holds while a mod plays too. A mod's weapons stay its own.",
+     .needs = "cr_over_mods",
+     .target = Target::client,
+     .choices = kOnOff},
+    {.page = "remix",
+     .id = "cr_strong_min",
+     .text = "STRONG AT LEAST",
+     .kind = ItemKind::slider,
+     .hint = "How many strong weapons, the rocket launcher's kind, a remixed map keeps at least.",
+     .needs = "cr_strong_min",
+     .target = Target::client,
+     .min = 0,
+     .max = 8,
+     .step = 1},
+    {.page = "remix",
+     .id = "cr_strong_share",
+     .text = "STRONG AT MOST",
+     .kind = ItemKind::slider,
+     .hint = "The share of a map's weapons that may be strong; the rest are lowered.",
+     .needs = "cr_strong_share",
+     .target = Target::client,
+     .min = 0,
+     .max = 1,
+     .step = 0.1},
+    {.page = "remix",
+     .id = "cr_strong_same",
+     .text = "SAME STRONG",
+     .kind = ItemKind::slider,
+     .hint = "How many of one strong weapon a map keeps; 0 no limit.",
+     .needs = "cr_strong_same",
+     .target = Target::client,
+     .min = 0,
+     .max = 8,
+     .step = 1},
+    {.page = "remix",
+     .id = "cr_weak_same",
+     .text = "SAME WEAK",
+     .kind = ItemKind::slider,
+     .hint = "How many of one weak weapon a map keeps, the rest its ammunition; 0 no limit.",
+     .needs = "cr_weak_same",
+     .target = Target::client,
+     .min = 0,
+     .max = 16,
+     .step = 1},
+    {.page = "remix",
+     .id = "cr_pool_radius",
+     .text = "GATHER WITHIN",
+     .kind = ItemKind::slider,
+     .hint = "How near small pickups lie to be gathered into the other game's larger ones.",
+     .needs = "cr_pool_radius",
+     .target = Target::client,
+     .min = 0,
+     .max = 512,
+     .step = 32},
+    {.page = "remix", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     {.page = "video",
      .id = "r_look",
@@ -576,6 +723,14 @@ constexpr Entry kEntries[] = {
      .hint = "Each shot's flash and smoke from the barrel.",
      .needs = "ce_muzzles",
      .target = Target::client},
+    {.page = "weapon",
+     .id = "ce_shells",
+     .text = "SPENT SHELLS",
+     .kind = ItemKind::toggle,
+     .hint = "The shotguns and machine guns throw out their spent shells, which clatter to the "
+             "floor and lie there a while.",
+     .needs = "ce_shells",
+     .target = Target::client},
     {.page = "weapon", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     // CLASSIC ENHANCED: what the game adds to the classic picture, page by subject. Only what a
@@ -618,7 +773,7 @@ constexpr Entry kEntries[] = {
     {.page = "enhanced",
      .id = "effects",
      .text = "EFFECTS",
-     .hint = "Teleports as dust and your own arrival's flash.",
+     .hint = "Teleports as dust and your own arrival's edges.",
      .opens = "ce_effects",
      .needs = "ce_warps"},
     {.page = "enhanced",
@@ -695,6 +850,23 @@ constexpr Entry kEntries[] = {
      .hint = "Live lights and the monsters cast shadows.",
      .needs = "ce_shadows",
      .target = Target::client},
+    {.page = "ce_light",
+     .id = "ce_ao",
+     .text = "CONTACT SHADE",
+     .kind = ItemKind::toggle,
+     .hint = "Corners, creases and the floor under monsters and items darken.",
+     .needs = "ce_ao",
+     .target = Target::client},
+    {.page = "ce_light",
+     .id = "ce_ao_strength",
+     .text = "SHADE LEVEL",
+     .kind = ItemKind::slider,
+     .hint = "How dark the closed corners and the floor under figures grow.",
+     .needs = "ce_ao_strength",
+     .target = Target::client,
+     .min = 0.2,
+     .max = 1,
+     .step = 0.1},
     {.page = "ce_light",
      .id = "ce_flicker",
      .text = "FLICKERING LIGHT",
@@ -863,10 +1035,10 @@ constexpr Entry kEntries[] = {
      .target = Target::client},
     {.page = "ce_effects",
      .id = "r_arrival",
-     .text = "ARRIVAL FLASH",
+     .text = "ARRIVAL EDGES",
      .kind = ItemKind::slider,
-     .hint = "How strongly your own arrival (a spawn, a teleporter) sweeps the whole view in a "
-             "flash and a warp; 0 none.",
+     .hint = "How strongly your own arrival (a spawn, a teleporter) tints the edges of the view "
+             "for a moment; the middle is never touched; 0 none.",
      .needs = "r_arrival",
      .target = Target::client,
      .min = 0,
@@ -992,6 +1164,7 @@ constexpr PageTitle kPages[] = {
     {"options", "OPTIONS"},
     {"video", "VIDEO"},
     {"weapon", "HELD WEAPON"},
+    {"remix", "CLASSIC REMIX"},
     {"enhanced", "CLASSIC ENHANCED"},
     {"ce_art", "TEXTURES, MODELS"},
     {"ce_light", "LIGHT AND SHADOW"},
@@ -1270,6 +1443,13 @@ std::vector<std::string> slot_names(const MenuTable& table) {
   return out;
 }
 
+namespace {}  // namespace
+
+size_t teamplay_choices(std::span<const std::string> maps) {
+  const bool dissolution = std::find(maps.begin(), maps.end(), "r1m1") != maps.end();
+  return dissolution ? std::size(kTeamplay) : kBaseTeamplay;
+}
+
 namespace {
 
 // The host page's EPISODE and LEVEL kept with its MAP row (episodes.hpp): `from` "map" sets the two
@@ -1344,6 +1524,17 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         for (const std::string_view w : figure_weapons(&game_table(table_of(host)) == &q2_menu()))
           it.choices.emplace_back(w);
         it.choice = std::clamp(was, 0, static_cast<int>(it.choices.size()) - 1);
+        continue;
+      }
+      if (e->page == "host" && e->id == "teamplay") {  // Dissolution's games with its maps
+        const size_t n = teamplay_choices(host.maps);
+        it.choices.resize(n);
+        for (size_t i = 0; i < n; i++) it.choices[i] = std::string(e->choices[i].text);
+        if (it.choice >= static_cast<int>(n)) it.choice = 0;
+        if (it.disabled) continue;
+        const std::string v = host_value(host, cvar_of(*e));
+        for (size_t i = 0; i < n; i++)
+          if (same_value(v, e->choices[i].value)) it.choice = static_cast<int>(i);
         continue;
       }
       if (e->page == "host" && (e->id == "episode" || e->id == "level")) {
@@ -1506,9 +1697,10 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
     return Outcome::none;
   }
   if (e.kind == ge::ui::EventKind::changed) {
-    if (entry->target == Target::client)
-      con.execute(std::string(entry->id) + " " + item_text(*entry, *it));
-    else if (entry->target == Target::server && e.page != "host")  // START sets the host page's
+    if (entry->target == Target::client) {
+      const std::string v = item_text(*entry, *it);  // "" quoted: set to nothing, not shown
+      con.execute(std::string(entry->id) + " " + (v.empty() ? std::string("\"\"") : v));
+    } else if (entry->target == Target::server && e.page != "host")  // START sets the host page's
       con.execute("sv " + std::string(entry->id) + " " + item_text(*entry, *it));
     return Outcome::none;
   }

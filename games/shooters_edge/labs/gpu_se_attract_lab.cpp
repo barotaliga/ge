@@ -37,6 +37,7 @@
 #include "brush/write.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
+#include "console/lex.hpp"
 #include "console/view.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
@@ -56,9 +57,11 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/game_start.hpp"
+#include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -130,7 +133,7 @@ void run(gl::Lab& lab) {
   std::string error;
   cl::SearchPath files;
   const ge::classicenhance::Profile* content = &ge::classicenhance::q1_profile();
-  std::string install;
+  std::string install, game;
   if (!real) {
     std::vector<uint8_t> pak;
     if (!fixture_pack(pak, error) || !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
@@ -139,8 +142,9 @@ void run(gl::Lab& lab) {
     }
   } else {
     content = cl::install_of(basedir, &install, &error);
-    if (content == nullptr ||
-        !cl::open_game_dir(install, cl::game_of(install, *content), files, error, *content)) {
+    if (content != nullptr)
+      game = lab.arg("game").empty() ? cl::game_of(install, *content) : lab.arg("game");
+    if (content == nullptr || !cl::open_game_dir(install, game, files, error, *content)) {
       lab.fail(error, "Pass --basedir=<the folder your game is installed in>. Skill: shooter.");
       return;
     }
@@ -158,9 +162,15 @@ void run(gl::Lab& lab) {
   ge::console::ConsoleView con_view(con);
   con.set_sink(
       [&con_view](std::string_view line) { con_view.add(ge::console::LineKind::output, line); });
+  cl::RemixSettings remix_rows;  // OPTIONS > CLASSIC REMIX's rows, live on their cr_ settings
+  cl::bind_remix(con.cvars(), &remix_rows);
   sm::GameMenu menu;
   menu.add_cvars(con);
-  cl::ClassicPictures pics = cl::load_classic_pictures(files, false, {}, &adapter);
+  // `--pictures=<cache>`: the pictures enhanced from that classic-enhance cache (ce_pictures 1),
+  // the console's letters among them.
+  const std::string pictures_cache = lab.arg("pictures");
+  cl::ClassicPictures pics =
+      cl::load_classic_pictures(files, !pictures_cache.empty(), pictures_cache, &adapter);
   menu.set_art(std::move(pics.menu));
   se::HudArt hud_art = std::move(pics.hud);
   hud_art.finish();
@@ -270,6 +280,16 @@ void run(gl::Lab& lab) {
          "A page under the root: its title the game's own picture (Quake II's banner over the "
          "screen's top), its rows in the game's glyph sheet.",
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    // CLASSIC REMIX: every cr_ setting on one page, the mission packs' among them.
+    menu.show(host, "remix");
+    menu.update(none, false, host, 1 / 60.0);
+    menu.settle();
+    shot("remix", "CLASSIC REMIX",
+         "OPTIONS > CLASSIC REMIX: remix on or off, the mission packs, whose items, monsters, "
+         "figures, movement, sounds, menu and letters, and the balance of a remixed map's "
+         "weapons and pickups, each a setting of the console.",
+         "every row lit (none dimmed), each value beside its words, the sliders' bars",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
     // SERVER SETTINGS: the first page, a subpage of the votes, and the question a turned vote asks.
     menu.show(host, "server");
@@ -500,7 +520,17 @@ void run(gl::Lab& lab) {
 
   // The recording, played to the frame the pictures are taken on.
   cl::Timedemo bench;
-  if (!cl::timedemo_start(files, lab.arg("demo"), bench, error, adapter)) {
+  // `title`: the first recording the title plays, a mod's own quake.rc list first (the window's
+  // `menu_attract auto`, client/main.cpp).
+  std::string demo = lab.arg("demo");
+  if (demo == "title") {
+    const std::string list =
+        real ? cl::mod_startdemos(install, game, *content, adapter.game->attract)
+             : std::string(adapter.game->attract);
+    const std::vector<std::string> words = ge::console::tokenize(list);
+    demo = words.empty() ? "demo1" : words.front();
+  }
+  if (!cl::timedemo_start(files, demo, bench, error, adapter)) {
     lab.fail(error, "Name a recording the packs hold (--demo=demo1). Skill: shooter.");
     return;
   }
@@ -608,8 +638,14 @@ const gl::LabSpec kSpec{
     "SELECT GAME first?",
     {{"size", "1280,800", "the frame's width and height, px"},
      {"basedir", "", "the folder a player's game is installed in: its own pack and recording"},
-     {"demo", "demo1", "the recording played behind the menu; none: the title's dark, on the CPU"},
-     {"frame", "400", "the recording's frame the pictures are taken on"}},
+     {"game", "", "the game folder played (a mission pack's); empty: the install's own"},
+     {"demo", "title",
+      "the recording played behind the menu; title: the first the title plays (a mod's own "
+      "quake.rc list first); none: the title's dark, on the CPU"},
+     {"frame", "400", "the recording's frame the pictures are taken on"},
+     {"pictures", "",
+      "a classic-enhance cache folder: the menu's, the console's and the bar's pictures "
+      "enhanced from it (ce_pictures); empty: the pack's own"}},
     "--size=640,400 --frame=120",
     run,
 };

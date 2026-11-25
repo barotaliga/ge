@@ -25,11 +25,15 @@
 #include "shooter/aim_help.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_gibs.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
+#include "shooters_edge/server/q2_reckoning.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
@@ -45,8 +49,14 @@ constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster | sh::kSqDeadMonster;  // and bodies
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
 constexpr uint32_t kEveryone = 0xffffffffu;
-// The carried weapons' names, in a client's order (it numbers them from 1).
-constexpr std::pair<SqWeapon, const char*> kCarried[] = {
+// The carried weapons' names, in a client's order (it numbers them from 1); a pack's after the
+// base game's, registered only under it (the trap has none).
+struct Carried {  // NOLINT(clang-analyzer-optin.performance.Padding): read in this order
+  SqWeapon weapon;
+  const char* name;
+  Q2Pack pack = Q2Pack::base;
+};
+constexpr Carried kCarried[] = {
     {SqWeapon::blaster, "#w_blaster.md2"},
     {SqWeapon::shotgun, "#w_shotgun.md2"},
     {SqWeapon::super_shotgun, "#w_sshotgun.md2"},
@@ -58,6 +68,13 @@ constexpr std::pair<SqWeapon, const char*> kCarried[] = {
     {SqWeapon::hyperblaster, "#w_hyperblaster.md2"},
     {SqWeapon::railgun, "#w_railgun.md2"},
     {SqWeapon::bfg, "#w_bfg.md2"},
+    {SqWeapon::phalanx, "#w_phalanx.md2", Q2Pack::reckoning},
+    {SqWeapon::ion_ripper, "#w_ripper.md2", Q2Pack::reckoning},
+    {SqWeapon::disruptor, "#w_disrupt.md2", Q2Pack::ground_zero},  // its numbers 12 to 16
+    {SqWeapon::etf_rifle, "#w_etfrifle.md2", Q2Pack::ground_zero},
+    {SqWeapon::plasma_beam, "#w_plasma.md2", Q2Pack::ground_zero},
+    {SqWeapon::prox_launcher, "#w_plauncher.md2", Q2Pack::ground_zero},
+    {SqWeapon::chainfist, "#w_chainfist.md2", Q2Pack::ground_zero},
 };
 
 constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris.md2",
@@ -67,7 +84,24 @@ constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris
                                                       "models/objects/rocket/tris.md2",
                                                       "",
                                                       "sprites/s_bfg1.sp2",
-                                                      "models/objects/grenade2/tris.md2"};
+                                                      "models/objects/grenade2/tris.md2",
+                                                      "models/objects/boomrang/tris.md2",
+                                                      "models/objects/blaser/tris.md2",
+                                                      "sprites/s_photon.sp2",
+                                                      "models/objects/rocket/tris.md2",
+                                                      "models/objects/loogy/tris.md2",
+                                                      "models/weapons/z_trap/tris.md2",
+                                                      "models/proj/flechette/tris.md2",
+                                                      "models/weapons/g_prox/tris.md2",
+                                                      "models/weapons/g_tesla/tris.md2",
+                                                      "models/proj/disintegrator/tris.md2",
+                                                      "models/weapons/g_nuke/tris.md2",
+                                                      "",
+                                                      "",
+                                                      "models/proj/laser2/tris.md2",
+                                                      "models/items/defender/tris.md2",
+                                                      "models/items/hunter/tris.md2",
+                                                      "models/items/vengnce/tris.md2"};
 constexpr const char* kClick = "weapons/noammo.wav";
 constexpr const char* kBoom = "weapons/rocklx1a.wav";
 constexpr const char* kGrenadeBoom = "weapons/grenlx1a.wav";
@@ -79,7 +113,10 @@ constexpr const char* kFuse = "weapons/hgrenc1b.wav";  // the hand grenade's fus
 constexpr const char* kLoops[kSqLoops] = {
     "misc/lasfly.wav",      "weapons/rockfly.wav",  kFuse,
     "weapons/bfg__l1a.wav", "weapons/rg_hum.wav",   "weapons/bfg_hum.wav",
-    "weapons/hyprbl1a.wav", "weapons/chngnl1a.wav", "player/fry.wav"};
+    "weapons/hyprbl1a.wav", "weapons/chngnl1a.wav", "player/fry.wav",
+    "weapons/traploop.wav", "weapons/phaloop.wav",  // The Reckoning's two, under it only
+    "spheres/d_idle.wav",   "spheres/h_idle.wav",   "spheres/h_active.wav",  // Ground Zero's five
+    "spheres/h_lurk.wav",   "spheres/v_idle.wav"};
 constexpr const char* kGib = "misc/udeath.wav";
 // A player's own voice, which each client takes from that player's model's folder (the `*`
 // names), and the body's plain sounds beside it (porting note: q2-player-sounds.md).
@@ -102,6 +139,11 @@ constexpr double kPainEvery = 0.75;  // a pain cry at most once in this long, s
 constexpr float kGibHealth = -40;    // a death under this throws the body apart
 
 bool grenade(SqShot k) { return k == SqShot::grenade || k == SqShot::hand_grenade; }
+// A bolt's kinds: a blow on what it meets and gone (the ion ripper's bounces off a wall).
+bool bolt_like(SqShot k) {
+  return k == SqShot::bolt || k == SqShot::blue_bolt || k == SqShot::spit || k == SqShot::ripper ||
+         k == SqShot::green_bolt;
+}
 
 bool deathmatch(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
 bool dmflag(const Q2Server& s, int bit) {
@@ -274,16 +316,6 @@ void print_all(Q2Server& s, std::string text, int level = 1) {
   event(s, std::move(ev));
 }
 
-// What a line met first: the world (a wall, the sky) or a player.
-struct Line {
-  float fraction = 1;
-  sh::Vec3f end;
-  sh::Vec3f normal;
-  bool sky = false;
-  int player = -1;
-  int mover = -1;  // the map's entity it met (a door, a plat), when it met one
-};
-
 // A line from `from` to `to` through the walls and the living players (not those in `skip`, a
 // bit per slot).
 Line shoot_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int skip_entity = -1) {
@@ -419,7 +451,10 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
     const float push = sq_knockback(knockback, kMass, attacker == target);
     pack(p.move.velocity, unpack(p.move.velocity) + dir * push);
   }
-  if (damage == 0) return;                                          // the push lands
+  if (damage == 0) return;  // the push lands
+  // Ground Zero's spheres: a defender halves the blow before anything else saves any of it.
+  const int by = attacker >= 0 ? attacker : s.blow_from >= 0 ? -2 - s.blow_from : -1;
+  if (s.opt.pack == Q2Pack::ground_zero) damage = gz_sphere_hurt(s, target, by, damage);
   if (p.invulnerable_until > s.level_time && !past_invulnerable) {  // the push lands
     if (s.level_time >= p.pain_sound_at + 2) {  // the blow turned aside, heard every 2 s at most
       p.pain_sound_at = s.level_time;
@@ -442,6 +477,7 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
   }
   if (damage - saved > 0) mark_hit(s, p, 1, damage - saved);
   fight_dealt(s, attacker, target + 1, damage);
+  stats_blow(s, attacker, target, weapon, damage);
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -449,6 +485,7 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
     fight_kill(s, target, attacker, weapon);
     return;
   }
+  if (s.opt.pack == Q2Pack::ground_zero) gz_sphere_hit(s, target, by);
   p.frame_damage += damage;  // the frame's pain cry hears it, the armour's share too
 }
 
@@ -471,9 +508,11 @@ struct BlowHow {
 };
 
 void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int ignore,
-           int weapon, bool energy = false, int ignore_entity = -1, int from = -1) {
+           int weapon, bool energy = false, int ignore_entity = -1, int from = -1,
+           uint32_t skip = 0) {
+  const FightBlowFrom by(s, from);
   for (int i = 0; i < sh::kMaxClients; i++) {
-    if (i == ignore || !fightable(s, i)) continue;
+    if (i == ignore || ((skip >> i) & 1u) != 0 || !fightable(s, i)) continue;
     const Q2Player& p = s.players[i];
     const sh::Vec3f o = unpack(p.move.origin);
     const sh::Vec3f lo = o + p.mins, hi = o + p.maxs;
@@ -548,7 +587,10 @@ void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_ent
   if (m.owner >= 0) monster_noise(s, m.owner, at, true);  // a player's: monsters may hear it
   const RocketBlow blow(s, m);
   sound(s, int(missile_row(s, m)), at, grenade(m.kind) ? kGrenadeBoom : kBoom);
-  effect(s, m.kind == SqShot::bfg ? "te_bfg_bigexplosion" : "te_explosion", at);
+  if (m.kind == SqShot::plasma)  // drawn 0.02 s of its flight back
+    effect(s, "te_plasma_explosion", at - m.velocity * 0.02f);
+  else
+    effect(s, m.kind == SqShot::bfg ? "te_bfg_bigexplosion" : "te_explosion", at);
   blast(s, at, m.owner, m.radius_damage, m.radius, ignore, m.weapon, m.kind == SqShot::bfg,
         ignore_entity, m.from);
   if (m.kind != SqShot::bfg) return;
@@ -639,8 +681,9 @@ void rail(Q2Server& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int da
 }
 
 // Quake II's weapons by the names the aim help's lists use (shot_help.hpp).
-constexpr const char* kSqAimNames[kSqWeaponCount] = {"blaster", "sg", "ssg", "mg",  "cg", "gl",
-                                                     "rl",      "hb", "rg",  "bfg", "hg"};
+constexpr const char* kSqAimNames[kSqWeaponCount] = {
+    "blaster", "sg", "ssg", "mg",   "cg", "gl",  "rl",   "hb", "rg",  "bfg",
+    "hg",      "ir", "ph",  "trap", "cf", "etf", "prox", "pb", "dis", "tesla"};
 
 // Whether the aim help acts for `slot`'s shot of weapon `w`: granted, and the weapon allowed.
 bool aim_helped_weapon(const Q2Server& s, int slot, int w) {
@@ -742,13 +785,14 @@ void offer_dodge(Q2Server& s, int slot, sh::Vec3f start, sh::Vec3f forward, floa
   if (skill(s) == 0 && ge::core::next(s.rng) > 0.25) return;
   const Line l = shoot_line(s, start, start + forward * 8192, 1u << slot);
   if (l.player >= 0 || l.mover < 0 || monster_index(s, l.mover) < 0) return;
-  monster_dodge(s, l.mover, slot, sh::length(l.end - start), speed);
+  monster_dodge(s, l.mover, slot, sh::length(l.end - start), speed, l.end);
 }
 
 // A missile from `start` along the axes; the hand grenade's `speed` and `fuse` are its throw's.
+// The phalanx's `splash` is its ball's own (the first ball's ×4 under the quad, the second's not).
 void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f start,
             const sh::ViewAxes& ax, int damage, int quad, int weapon, float speed = 600,
-            double fuse = 2.5) {
+            double fuse = 2.5, int splash = 0) {
   const Line reach = shoot_line(s, origin, start, 1u << slot);
   Q2Missile* m = new_missile(s);
   if (m == nullptr) return;
@@ -785,6 +829,19 @@ void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f star
       m->radius_damage = 120 * quad;
       m->radius = 120;
       break;
+    case SqShot::ripper:  // bounces off every wall until its life ends
+      m->velocity = ax.forward * 500;
+      m->dies_at = s.level_time + 3;
+      break;
+    case SqShot::plasma:
+      m->velocity = ax.forward * 725;
+      m->dies_at = s.level_time + 8000.0 / 725.0;
+      m->radius_damage = splash;
+      m->radius = 120;
+      break;
+    case SqShot::trap:
+      reckoning_trap_launch(s, *m, ax.forward, ax.right, ax.up, speed);
+      break;
     default:  // the BFG's ball
       m->velocity = ax.forward * 400;
       m->dies_at = s.level_time + 20;
@@ -813,26 +870,28 @@ void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f star
     } else if (kind == SqShot::bolt && reach.player < 0 && reach.mover >= 0) {
       map_damage(s, reach.mover, slot, m->damage);  // a pane or a button he stands against
     }
-    if (kind == SqShot::bolt)
+    if (bolt_like(kind))
       m->live = false;
-    else if (!grenade(kind))
+    else if (!grenade(kind) && kind != SqShot::trap)
       explode(s, *m, m->origin, reach.player, monster ? reach.mover : -1);
     return;
   }
-  if (!grenade(kind)) offer_dodge(s, slot, start, ax.forward, sh::length(m->velocity));
+  if (!grenade(kind) && kind != SqShot::trap)
+    offer_dodge(s, slot, start, ax.forward, sh::length(m->velocity));
 }
 
-// The hand grenade let go at `speed` with `fuse` left, or (no speed) held to the end of its fuse:
-// it explodes in the hand.
+// The hand grenade (or The Reckoning's trap) let go at `speed` with `fuse` left, or (no speed)
+// held to the end of its fuse: it explodes in the hand, a grenade's blast either way.
 void throw_grenade(Q2Server& s, int slot, float speed, double fuse) {
   Q2Player& p = s.players[slot];
-  const int w = int(SqWeapon::hand_grenade);
+  const int w = p.hand.weapon;
+  const bool trap = w == int(SqWeapon::trap);
   const SqWeaponRow& r = kSqWeapons[w];
   p.pose.threw = true;
   const sh::Vec3f origin = unpack(p.move.origin);
   const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
   const sh::Vec3f eye = origin + sh::Vec3f{0, 0, p.view_height - 8};
-  const int quad = p.quad_until > s.level_time ? 4 : 1;
+  const int quad = fight_multiplier(s, p);
   const int damage = r.damage_dm * quad;
   if (speed <= 0) {
     Q2Missile* m = new_missile(s);
@@ -848,13 +907,15 @@ void throw_grenade(Q2Server& s, int slot, float speed, double fuse) {
     explode(s, *m, origin, -1);
     return;
   }
-  sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
-  if (p.silencer_shots > 0) p.silencer_shots--;
-  if (quad > 1) body_sound(s, slot, kItemChannel, "items/damage3.wav");
+  if (!trap) {  // a trap leaves quietly, and the quad has no word for it
+    sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
+    if (p.silencer_shots > 0) p.silencer_shots--;
+    if (quad > 1) body_sound(s, slot, kItemChannel, fight_multiplier_sound(quad));
+  }
   const sh::Vec3f start = eye + ax.forward * r.forward + ax.right * r.right;
   sh::ViewAxes aimed = ax;
   aimed.forward = muzzle_aim(s, slot, start, ax.forward);
-  launch(s, slot, SqShot::hand_grenade, origin, start, aimed, damage, quad, w, speed, fuse);
+  launch(s, slot, r.shot, origin, start, aimed, trap ? 0 : damage, quad, w, speed, fuse);
 }
 
 // The view's kick a shot gives (plugins/classic/q2_view.hpp), for one rules frame: up and back
@@ -880,7 +941,11 @@ void weapon_kick(Q2Server& s, int slot, int w, sh::Vec3f forward) {
       up = 2, back = 2;
       break;
     case SqWeapon::railgun:
+    case SqWeapon::ion_ripper:
       up = 3, back = 3;
+      break;
+    case SqWeapon::phalanx:
+      up = 2, back = 2;
       break;
     case SqWeapon::machinegun:
     case SqWeapon::chaingun:
@@ -904,8 +969,11 @@ void weapon_kick(Q2Server& s, int slot, int w, sh::Vec3f forward) {
 void fire(Q2Server& s, int slot, int shots) {
   Q2Player& p = s.players[slot];
   const int w = p.hand.weapon;
+  if (kSqWeapons[w].pack == Q2Pack::ground_zero) return gz_fire(s, slot, shots);
+  // The phalanx's second ball (its frame then 9) makes no flash and no noise of its own.
+  const bool second = w == int(SqWeapon::phalanx) && p.hand.frame == 9;
   // A shot is a noise, but for a silenced one and a thrown grenade (heard when it bursts).
-  if (p.silencer_shots <= 0 && w != int(SqWeapon::hand_grenade)) monster_noise(s, slot);
+  if (p.silencer_shots <= 0 && w != int(SqWeapon::hand_grenade) && !second) monster_noise(s, slot);
   p.hostile_until = s.level_time + 1;
   p.pose.shot = true;
   const SqWeaponRow& r = kSqWeapons[w];
@@ -922,7 +990,7 @@ void fire(Q2Server& s, int slot, int shots) {
   if (w != int(SqWeapon::super_shotgun) && w != int(SqWeapon::chaingun))
     ax.forward = muzzle_aim(s, slot, start, ax.forward);
   const bool dm = deathmatch(s);
-  const int quad = p.quad_until > s.level_time ? 4 : 1;  // ×4 damage and kick
+  const int quad = fight_multiplier(s, p);  // ×4 damage and kick (a pack's double damage ×2)
   const int damage = (dm ? r.damage_dm : r.damage_sp) * quad;
   const int kick = r.kick * quad;
   // The shot's sound: in its muzzle flash (the light and the tails a client plays by the value),
@@ -930,11 +998,12 @@ void fire(Q2Server& s, int slot, int shots) {
   const int flash = sq_flash_value(w, shots);
   if (flash >= 0 && sq_flash_plays(flash, r.sound))
     muzzle_flash(s, slot, origin, flash | (p.silencer_shots > 0 ? kQ2FlashSilenced : 0));
-  else
+  else if (!second)
     sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
   if (p.silencer_shots > 0) p.silencer_shots--;
-  if (quad > 1) body_sound(s, slot, kItemChannel, "items/damage3.wav");
+  if (quad > 1) body_sound(s, slot, kItemChannel, fight_multiplier_sound(quad));
   weapon_kick(s, slot, w, view_forward);
+  stats_shot(s, slot, w, r.shot == SqShot::bullet ? shots : 1);
   switch (r.shot) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
@@ -971,6 +1040,21 @@ void fire(Q2Server& s, int slot, int shots) {
     case SqShot::rail:
       rail(s, slot, start, ax, damage, (dm ? 200 : 250) * quad, w);
       return;
+    case SqShot::ripper: {  // the yaw turned by up to a degree either way
+      sh::ViewAxes turned = sh::angle_vectors(
+          p.view_angles + sh::Vec3f{0, static_cast<float>(ge::core::range(s.rng, -1.0, 1.0)), 0});
+      turned.forward = muzzle_aim(s, slot, start, turned.forward);
+      launch(s, slot, r.shot, origin, start, turned, damage, quad, w);
+      return;
+    }
+    case SqShot::plasma: {  // ball one 1.5° left, ball two 1.5° right, each 70 + 0..9
+      const sh::ViewAxes turned =
+          sh::angle_vectors(p.view_angles + sh::Vec3f{0, second ? -1.5f : 1.5f, 0});
+      const int own = damage + ge::core::int_in(s.rng, 0, 9) * quad;
+      launch(s, slot, r.shot, origin, start, turned, own, quad, w, 600, 2.5,
+             second ? 30 : 120 * quad);
+      return;
+    }
     default:
       for (int i = 0; i < shots; i++) launch(s, slot, r.shot, origin, start, ax, damage, quad, w);
       return;
@@ -993,7 +1077,9 @@ void fight_precache(Q2Server& s) {
     if (sq_weapon_plays(w, s.opt.pack)) s.weapon_models[w] = model(kSqWeapons[w].view_model);
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
-  for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
+  for (const Carried& c : kCarried)
+    if (q2_pack_has(s.opt.pack, c.pack))
+      s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
   for (int k = 0; k < kSqShotKinds; k++)
     if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);
@@ -1007,9 +1093,16 @@ void fight_precache(Q2Server& s) {
        {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib, kSqHandSound[0].sample,
         kSqHandSound[1].sample, kSqHandSound[2].sample, kSqHandSound[3].sample})
     add_sound(name);
+  if (q2_pack_has(s.opt.pack, Q2Pack::reckoning))  // its trap's, its dual fire's
+    for (const char* name : {"weapons/trapsuck.wav", "weapons/trapdown.wav", "items/quadfire1.wav",
+                             "items/quadfire2.wav"})
+      add_sound(name);
   for (const char* name : kOwnSounds) add_sound(name);
   for (const char* name : kBodySounds) add_sound(name);
   for (int k = 0; k < kSqLoops; k++) {
+    if (k >= kSqBaseLoops && k < kSqReckoningLoops && !q2_pack_has(s.opt.pack, Q2Pack::reckoning))
+      continue;
+    if (k >= kSqReckoningLoops && !q2_pack_has(s.opt.pack, Q2Pack::ground_zero)) continue;
     add_sound(kLoops[k]);
     s.loop_sounds[k] =
         static_cast<int>(std::find(s.sounds.begin(), s.sounds.end(), kLoops[k]) - s.sounds.begin());
@@ -1018,11 +1111,12 @@ void fight_precache(Q2Server& s) {
 
 void fight_spawn(Q2Server& s, int slot) {
   Q2Player& p = s.players[slot];
+  stats_spawn(s, slot);
   p.hand = SqHand{};
   p.stepped = false;
   p.killer = -1;
   screens_spawned(s, slot);
-  p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
+  for (const SqPower& pw : sq_powers()) p.*pw.until = 0;
   p.silencer_shots = 0;
   p.power_on = false;
   p.power_flash = 0;
@@ -1034,6 +1128,8 @@ void fight_spawn(Q2Server& s, int slot) {
   p.pain_sound_at = -100;
   p.old_water_level = 0;
   p.gibbed = false;
+  p.hurt_by = -1;
+  p.hunter_cam = -1;
   p.view = {};
 }
 
@@ -1068,15 +1164,9 @@ bool body_frame(Q2Server& s, int slot) {
   const bool suit = p.suit_until > now;
   water_sounds(s, slot);
   // A power about to run out says so 30 frames before: the first held of these, alone.
-  const std::pair<double, const char*> warn[] = {{p.quad_until, "items/damage2.wav"},
-                                                 {p.invulnerable_until, "items/protect2.wav"},
-                                                 {p.suit_until, "items/airout.wav"},
-                                                 {p.breather_until, "items/airout.wav"}};
-  for (const auto& [until, sample] : warn)
-    if (until > now) {
-      if (std::floor((until - now) * 10 + 0.5) == 30) body_sound(s, slot, kItemChannel, sample);
-      break;
-    }
+  if (const SqPower* pw = sq_first_power(p, now))
+    if (std::floor((p.*pw->until - now) * 10 + 0.5) == 30 && pw->warn != nullptr)
+      body_sound(s, slot, kItemChannel, pw->warn);
   // Air: refilled by the rebreather or the suit (a breath every 2.5 s under water, counted to the
   // rebreather's end even under the suit alone); once it runs out under water, a blow each second
   // that grows by 2 to 15 (4 first), no armour against it, a gurp (the last: a drowning cry).
@@ -1256,29 +1346,36 @@ void fight_step(Q2Server& s, int slot, bool attack) {
   if (!fightable(s, slot)) return;
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
-  const SqStep step = fight_hand_step(s, slot, attack, fight_anyflag(s, 8192) || fight_midair(s),
-                                      swap > 1 && swap < 65535 ? swap : 1);
-  if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
-  if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
-    throw_grenade(s, slot, step.throw_speed, step.fuse_left);
-  else if (step.shots > 0)
-    fire(s, slot, step.shots);
+  if (const ge::console::Cvar* fast = s.cvars.find("g_fast_weap_switch"); fast != nullptr)
+    sq_hand_hasten(p.hand, fast->integer());
+  // Dual fire (q2_powers.hpp) steps the hand twice a frame, every weapon but the thrown ones.
+  const int steps = p.dual_fire_until > s.level_time && !sq_thrown(p.hand.weapon) ? 2 : 1;
+  for (int i = 0; i < steps; i++) {
+    const SqStep step = fight_hand_step(s, slot, attack, fight_anyflag(s, 8192) || fight_midair(s),
+                                        swap > 1 && swap < 65535 ? swap : 1);
+    if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
+    if (step.shots > 0 && sq_thrown(p.hand.weapon))
+      throw_grenade(s, slot, step.throw_speed, step.fuse_left);
+    else if (step.shots > 0)
+      fire(s, slot, step.shots);
+  }
 }
 
 void fight_missiles(Q2Server& s) {
   const float gravity = static_cast<float>(s.cvars.find("sv_gravity")->number);
   for (Q2Missile& m : s.missiles) {
-    if (!m.live) continue;
+    if (!m.live || gz_missile(s, m)) continue;  // Ground Zero's fly by their own rules
     if (s.level_time + 0.001 >= m.dies_at) {
       if (grenade(m.kind))
         explode(s, m, m.origin, -1);
       else
-        m.live = false;
+        reckoning_missile_end(s, m);  // The Reckoning's leave a mark; every other kind goes
+      m.live = false;
       continue;
     }
-    if (m.resting) continue;
+    if (reckoning_missile_think(s, m) || m.resting) continue;
     q2_hold_speed(s, m.velocity);
-    if (grenade(m.kind)) m.velocity.z -= gravity * s.step;
+    if (grenade(m.kind) || m.kind == SqShot::trap) m.velocity.z -= gravity * s.step;
     const sh::Vec3f to = m.origin + m.velocity * s.step;
     const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
     // sv_antilag 2 with sv_antilag_projectiles: it meets the players where its owner saw them.
@@ -1289,25 +1386,36 @@ void fight_missiles(Q2Server& s) {
     }
     // A direct hit on a monster: its blow (a grenade's less half its distance from the burst),
     // then the burst leaves it out; a bolt goes on as against a wall.
-    if (l.player < 0 && l.fraction < 1 && l.mover >= 0 && monster_index(s, l.mover) >= 0) {
+    if (l.player < 0 && l.fraction < 1 && l.mover >= 0 && monster_index(s, l.mover) >= 0 &&
+        m.kind != SqShot::trap) {
       const Q2Entity& t = s.entities[size_t(l.mover)];
       const float d = sh::length(l.end - (t.origin + (t.mins + t.maxs) * 0.5f));
       const int direct = grenade(m.kind) ? static_cast<int>(float(m.damage) - 0.5f * d) : m.damage;
       monster_damage(s, l.mover, monster_hurt_by(m.owner, m.from), direct, m.velocity, false,
                      &l.end);
-      if (m.kind == SqShot::bolt && m.owner >= 0) monster_noise(s, m.owner, l.end, true);
-      if (m.kind != SqShot::bolt) {
+      if (bolt_like(m.kind) && m.owner >= 0) monster_noise(s, m.owner, l.end, true);
+      if (m.kind == SqShot::ripper) m.live = false;  // gone into what it struck
+      if (!bolt_like(m.kind)) {
         explode(s, m, l.end, -1, l.mover);
         continue;
       }
     }
+    if (!m.live) continue;
     if (l.player >= 0) {
       const int hit = l.player;
+      const FightBlowFrom from(s, m.from);
       switch (m.kind) {
         case SqShot::bolt:
+        case SqShot::blue_bolt:
+        case SqShot::green_bolt:
+        case SqShot::spit:
+        case SqShot::ripper:
           hurt(s, hit, m.owner, m.velocity, m.damage, 1, true, m.weapon);
           if (m.owner >= 0) monster_noise(s, m.owner, l.end, true);
           m.live = false;
+          break;
+        case SqShot::trap:  // it stops against him and falls
+          m.velocity = {};
           break;
         case SqShot::grenade:
         case SqShot::hand_grenade: {
@@ -1333,13 +1441,26 @@ void fight_missiles(Q2Server& s) {
       }
       switch (m.kind) {
         case SqShot::bolt:  // a mover or a pane that takes blows takes the bolt's
+        case SqShot::blue_bolt:
+        case SqShot::green_bolt:  // its own green mark
+        case SqShot::spit:        // the spit leaves no mark
           if (l.mover >= 0 && monster_index(s, l.mover) < 0)
             map_damage(s, l.mover, m.owner, m.damage);
-          effect(s, "te_blaster", l.end, l.normal);
+          if (m.kind != SqShot::spit)
+            effect(s, m.kind == SqShot::green_bolt ? "te_blaster2" : "te_blaster", l.end, l.normal);
           if (m.owner >= 0) monster_noise(s, m.owner, l.end, true);
           m.live = false;
           break;
+        case SqShot::ripper:  // a blow on what takes one, else a bounce that loses nothing
+          if (l.mover >= 0 && map_damage(s, l.mover, m.owner, m.damage)) {
+            m.live = false;
+            break;
+          }
+          m.origin = l.end + l.normal * 0.1f;
+          m.velocity = m.velocity - l.normal * (2.0f * sh::dot(m.velocity, l.normal));
+          break;
         case SqShot::grenade:
+        case SqShot::trap:
         case SqShot::hand_grenade: {  // a bounce off the wall
           m.origin = l.end + l.normal * 0.1f;
           m.velocity = m.velocity - l.normal * (1.5f * sh::dot(m.velocity, l.normal));
@@ -1385,75 +1506,7 @@ void fight_choose(Q2Server& s, int slot, int w) {
   if (fightable(s, slot)) sq_choose(p.hand, p.body, w);
 }
 
-void fight_took(Q2Server& s, int slot, int item, int grenades_before) {
-  const int w = sq_weapon_of_item(item);
-  Q2Player& p = s.players[slot];
-  const SqItem& it = kSqItems[item];
-  const bool dm = deathmatch(s);
-  // The status bar's pickup (3 s), and the item selected when it has a use.
-  p.picked = sq_item_number(item, s.opt.pack);
-  p.picked_at = s.level_time;
-  if (sq_selects(p.picked, s.opt.pack)) p.body.selected = p.picked;
-  if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
-  if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
-    fight_use(s, slot, item);  // instant items
-  const bool may = !dm || p.hand.weapon == int(SqWeapon::blaster);
-  // Grenades, both ammunition and a weapon: the first ones held (none before) are taken in hand.
-  if (it.kind == SqKind::ammo && it.ammo == SqAmmo::grenades &&
-      (grenades_before >= 0 ? grenades_before == 0
-                            : p.body.ammo[static_cast<int>(SqAmmo::grenades)] == it.amount) &&
-      p.hand.weapon != int(SqWeapon::hand_grenade) && may)
-    sq_choose(p.hand, p.body, int(SqWeapon::hand_grenade));
-  if (w < 0 || p.body.counts[item] != 1) return;  // only a newly owned weapon
-  if (may) sq_choose(p.hand, p.body, w);
-}
-
-bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::string& arg) {
-  Q2Player& p = s.players[slot];
-  if (cmd == "use") {
-    const int w = sq_weapon_named(arg);
-    // g_select_empty 0: a held weapon short of a shot's ammunition is refused and the player told.
-    if (w >= 0 && w != int(SqWeapon::hand_grenade) && fightable(s, slot) && sq_holds(p.body, w) &&
-        !sq_can_fire(p.body, w) && !fight_anyflag(s, 8192) &&
-        !s.cvars.find("g_select_empty")->on()) {
-      std::string say = p.body.ammo[int(kSqWeapons[w].ammo)] > 0 ? "Not enough " : "No ";
-      for (const SqItem& it : kSqItems)
-        if (it.kind == SqKind::ammo && it.ammo == kSqWeapons[w].ammo) say += it.pickup;
-      print_to(s, slot, say + " for " + kSqWeapons[w].name + ".\n");
-      return true;
-    }
-    if (w >= 0)
-      fight_choose(s, slot, w);
-    else
-      fight_use(s, slot, sq_item_named(arg));
-    return true;
-  }
-  if (cmd == "drop") {
-    const int item = sq_item_named(arg);
-    const int w = sq_weapon_named(arg);
-    fight_drop(s, slot,
-               w >= 0 && kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item) : item);
-    return true;
-  }
-  if (cmd != "weapnext" && cmd != "weapprev") return false;
-  const int way = cmd == "weapnext" ? 1 : kSqWeaponCount - 1;
-  // g_quick_weap 1: from the weapon chosen but not yet raised, so presses skip ahead, its icon
-  // and name shown 0.9 s (the bar's pickup line, which shows 3 s, set 2.1 s back).
-  const bool quick = s.cvars.find("g_quick_weap")->on();
-  const int from = quick && p.hand.pending >= 0 ? p.hand.pending : p.hand.weapon;
-  for (int k = 1; k < kSqWeaponCount; k++) {
-    const int w = (from + way * k) % kSqWeaponCount;
-    if (sq_can_fire(p.body, w)) {
-      fight_choose(s, slot, w);
-      if (quick && p.hand.pending == w && kSqWeapons[w].item != nullptr) {
-        p.picked = sq_item_number(sq_item(kSqWeapons[w].item, s.opt.pack), s.opt.pack);
-        p.picked_at = s.level_time - 2.1;
-      }
-      break;
-    }
-  }
-  return true;
-}
+float fight_floor_gap(const Q2Server& s, int slot) { return midair_height(s, slot); }
 
 void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
   Q2Player& p = s.players[slot];
@@ -1489,6 +1542,7 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
     else
       line = sq_obituary(victim, other ? name_of(s, killer) : std::string(), killer == slot, weapon,
                          s.blow_how, gender, &by_killer);
+    stats_death(s, slot, other ? killer : -1, weapon, other && fight_teammates(s, killer, slot));
     if (deathmatch(s) && !fight_midair(s)) {
       if (by_killer)
         s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;
@@ -1514,7 +1568,8 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
     body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }
   fight_death_drops(s, slot);
-  p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
+  if (s.opt.pack == Q2Pack::ground_zero) gz_sphere_died(s, slot, killer);
+  for (const SqPower& pw : sq_powers()) p.*pw.until = 0;
   p.silencer_shots = 0;
 }
 
@@ -1556,12 +1611,13 @@ std::vector<std::string> fight_midair_report(const Q2Server& s) {
 
 void fight_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
                 int weapon, int flags) {
-  hurt(s, target, attacker, dir, damage, knockback, false, weapon, (flags & 1) != 0,
+  hurt(s, target, attacker, dir, damage, knockback, (flags & 4) != 0, weapon, (flags & 1) != 0,
        (flags & 2) != 0);
 }
 
-void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon) {
-  blast(s, at, attacker, damage, radius, -1, weapon);
+void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon,
+                 int ignore, bool energy, int ignore_entity, uint32_t skip) {
+  blast(s, at, attacker, damage, radius, ignore, weapon, energy, ignore_entity, -1, skip);
 }
 
 namespace {
@@ -1571,11 +1627,17 @@ namespace {
 WorldShot shot_kind(SqShot k) {
   switch (k) {
     case SqShot::rocket:
+    case SqShot::heat_rocket:
+    case SqShot::plasma:
       return WorldShot::rocket;
     case SqShot::grenade:
     case SqShot::hand_grenade:
       return WorldShot::grenade;
     case SqShot::bolt:
+    case SqShot::blue_bolt:
+    case SqShot::green_bolt:
+    case SqShot::ripper:
+    case SqShot::spit:
       return WorldShot::bolt;
     case SqShot::bfg:
       return WorldShot::ball;
@@ -1609,13 +1671,28 @@ int player_loop(const Q2Server& s, const Q2Player& p) {
 int shot_loop(const Q2Server& s, const Q2Missile& m) {
   switch (m.kind) {
     case SqShot::bolt:
+    case SqShot::blue_bolt:
+    case SqShot::green_bolt:
+    case SqShot::ripper:
       return loop_of(s, SqLoop::bolt);
     case SqShot::rocket:
+    case SqShot::heat_rocket:
+    case SqShot::plasma:
       return loop_of(s, SqLoop::rocket);
+    case SqShot::trap:
+      return loop_of(s, SqLoop::trap);
     case SqShot::hand_grenade:
       return loop_of(s, SqLoop::fuse);
     case SqShot::bfg:
       return loop_of(s, SqLoop::bfg_ball);
+    case SqShot::defender_sphere:
+      return loop_of(s, SqLoop::defender);
+    case SqShot::hunter_sphere:  // idle, hunting in sight, lurking where it lost its prey
+      return loop_of(s, m.stage == 0   ? SqLoop::hunter_idle
+                        : m.stage == 1 ? SqLoop::hunter_active
+                                       : SqLoop::hunter_lurk);
+    case SqShot::vengeance_sphere:
+      return loop_of(s, SqLoop::vengeance);
     default:
       return 0;
   }
@@ -1674,7 +1751,7 @@ void fight_rows(Q2Server& s) {
     const Q2Missile& m = s.missiles[k];
     WorldEntity& e = w.entities[first + size_t(k)];
     e = WorldEntity{};
-    if (!m.live) continue;
+    if (!m.live || !gz_drawn(m)) continue;
     e.free = false;
     e.origin = m.origin;
     e.velocity = m.velocity;
@@ -1684,78 +1761,14 @@ void fight_rows(Q2Server& s) {
     e.angles = {static_cast<float>(-ge::core::libm::atan2(m.velocity.z, flat) * kDegrees),
                 static_cast<float>(ge::core::libm::atan2(m.velocity.y, m.velocity.x) * kDegrees),
                 0};
+    if (gz_sphere_kind(m.kind)) e.angles = m.facing;  // a sphere turns by its own rules
     e.modelindex = s.missile_models[static_cast<int>(m.kind)];
     e.shot = shot_kind(m.kind);
     e.effects = m.effects >= 0 ? m.effects : kSqShotEffects[static_cast<int>(m.kind)];
+    e.render_fx = kSqShotRender[static_cast<int>(m.kind)];
+    e.frame = m.frame;
     e.loop = shot_loop(s, m);
   }
-}
-
-namespace {
-
-// The part of `skin` ("model/skin") that names a team: the skin after the slash, or the model;
-// a skin with no slash is its own team whole.
-std::string team_part(const std::string& skin, bool by_model) {
-  const size_t slash = skin.find('/');
-  if (slash == std::string::npos) return skin;
-  return by_model ? skin.substr(0, slash) : skin.substr(slash + 1);
-}
-
-std::string info(const Q2Server& s, int slot, const char* key) {
-  for (const auto& [k, v] : s.clients[slot].userinfo)
-    if (k == key) return v;
-  return {};
-}
-
-}  // namespace
-
-bool fight_teammates(const Q2Server& s, int a, int b) {
-  if (a < 0 || b < 0 || a >= sh::kMaxClients || b >= sh::kMaxClients) return false;
-  if (s.cvars.find("coop")->on()) return true;
-  return deathmatch(s) && fight_skin_mates(s, a, b);
-}
-
-bool fight_skin_mates(const Q2Server& s, int a, int b) {
-  if (a < 0 || b < 0 || a >= sh::kMaxClients || b >= sh::kMaxClients) return false;
-  if (!(fight_anyflag(s, 64) || fight_anyflag(s, 128))) return false;
-  const bool by_model = fight_anyflag(s, 128);
-  const std::string ta = team_part(info(s, a, "skin"), by_model);
-  return !ta.empty() && ta == team_part(info(s, b, "skin"), by_model);
-}
-
-float fight_fov(const Q2Server& s, int slot) {
-  if ((deathmatch(s) && dmflag(s, 32768)) || s.intermission_at > 0) return 90;
-  const std::string text = info(s, slot, "fov");
-  if (text.empty()) return 90;
-  const float fov = std::strtof(text.c_str(), nullptr);
-  return fov < 1 ? 1 : fov > 160 ? 160 : fov;
-}
-
-void fight_bury(Q2Server& s, int slot) {
-  const Q2Player& p = s.players[slot];
-  if (p.alive || p.gibbed || p.died_at <= 0) return;
-  Q2Body& b = s.bodies[s.next_body];
-  s.next_body = (s.next_body + 1) % kQ2Bodies;
-  b.live = true;
-  b.origin = unpack(p.move.origin);
-  b.yaw = p.view_angles.y;
-  b.health = p.health;
-  b.frame = p.pose.frame;
-}
-
-std::vector<std::string> fight_scores(const Q2Server& s) {
-  std::vector<int> order;
-  for (int i = 0; i < sh::kMaxClients; i++)
-    if (s.clients[i].active && !s.clients[i].spectator) order.push_back(i);
-  std::stable_sort(order.begin(), order.end(),
-                   [&](int a, int b) { return s.players[a].frags > s.players[b].frags; });
-  std::vector<std::string> lines;
-  for (const int i : order) {
-    std::string n = std::to_string(static_cast<int>(s.players[i].frags));
-    while (n.size() < 4) n.insert(n.begin(), ' ');
-    lines.push_back(n + "  " + name_of(s, i));
-  }
-  return lines;
 }
 
 void fight_print(Q2Server& s, int slot, const std::string& text, int level) {
@@ -1771,6 +1784,7 @@ void fight_monster_bullet(Q2Server& s, int from, sh::Vec3f start, sh::Vec3f end,
   sh::Vec3f dir = end - start;
   sh::normalize(dir);
   if (l.player >= 0) {
+    const FightBlowFrom by(s, from);
     hurt(s, l.player, -1, dir, damage, kick, false, cause);
     effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
@@ -1795,7 +1809,9 @@ void fight_monster_launch(Q2Server& s, int from, SqShot kind, sh::Vec3f start, s
   m->origin = start;
   m->damage = damage;
   m->velocity = dir * speed;
-  m->dies_at = s.level_time + (kind == SqShot::grenade ? 2.5 : 8000.0 / double(speed));
+  m->dies_at = s.level_time + (kind == SqShot::grenade       ? 2.5
+                               : kind == SqShot::heat_rocket ? 1e6  // no end but a wall
+                                                             : 8000.0 / double(speed));
   if (kind == SqShot::grenade) {  // a radius of its damage and 40
     m->velocity.z += 200;
     m->radius_damage = damage;
@@ -1803,6 +1819,10 @@ void fight_monster_launch(Q2Server& s, int from, SqShot kind, sh::Vec3f start, s
   } else if (kind == SqShot::rocket) {  // a splash of its damage within its damage and 20
     m->radius_damage = damage;
     m->radius = float(damage + 20);
+  } else if (kind == SqShot::heat_rocket) {  // its damage within 50, re-aimed from 0.1 s on
+    m->radius_damage = damage;
+    m->radius = 50;
+    m->think_at = s.level_time + 0.1;
   }
 }
 
@@ -1892,5 +1912,31 @@ void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
   (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
   (impact ? p.impact_at : p.noise_at) = at;
 }
+
+Line fight_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int skip_entity) {
+  return shoot_line(s, from, to, skip, skip_entity);
+}
+void fight_sound(Q2Server& s, int ent, sh::Vec3f at, const char* sample, float volume) {
+  sound(s, ent, at, sample, volume);
+}
+void fight_item_sound(Q2Server& s, int slot, const char* sample) {
+  body_sound(s, slot, kItemChannel, sample);
+}
+void fight_flash(Q2Server& s, int slot, int value) {
+  muzzle_flash(s, slot, unpack(s.players[slot].move.origin), value);
+}
+void fight_line_effect(Q2Server& s, const char* name, sh::Vec3f from, sh::Vec3f to, int ent) {
+  line_effect(s, name, from, to, ent);
+}
+Q2Missile* fight_new_missile(Q2Server& s) { return new_missile(s); }
+int fight_missile_entity(const Q2Server& s, const Q2Missile& m) { return int(missile_row(s, m)); }
+sh::Vec3f fight_aim(Q2Server& s, int slot, sh::Vec3f from, sh::Vec3f forward) {
+  return muzzle_aim(s, slot, from, forward);
+}
+float fight_crandom(Q2Server& s) { return crandom(s); }
+FightBlowFrom::FightBlowFrom(Q2Server& server, int from) : s(server), was(server.blow_from) {
+  s.blow_from = from;
+}
+FightBlowFrom::~FightBlowFrom() { s.blow_from = was; }
 
 }  // namespace shooters_edge::server

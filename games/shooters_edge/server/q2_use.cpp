@@ -11,7 +11,9 @@
 #include <string_view>
 
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -68,23 +70,19 @@ bool fight_use(Q2Server& s, int slot, int item) {
     return true;
   }
   if (it.kind != SqKind::powerup) return false;
+  if (s.opt.pack == Q2Pack::ground_zero && gz_use_sphere(s, slot, item)) return true;
   p.body.counts[item]--;
   const auto extend = [&s, &it](double& until) {
     until = std::max(until, s.level_time) + it.amount;
   };
   const std::string_view name = it.classname;
-  if (name == "item_quad") {
-    extend(p.quad_until);
-    item_sound(s, slot, "items/damage.wav");
-  } else if (name == "item_invulnerability") {
-    extend(p.invulnerable_until);
-    item_sound(s, slot, "items/protect.wav");
+  if (const SqPower* pw = sq_power(it.classname)) {
+    extend(p.*pw->until);
+    if (pw->use_sound != nullptr) item_sound(s, slot, pw->use_sound);
   } else if (name == "item_silencer") {
     p.silencer_shots += it.amount;
-  } else if (name == "item_breather") {
-    extend(p.breather_until);
-  } else if (name == "item_enviro") {
-    extend(p.suit_until);
+  } else if (name == "ammo_nuke") {  // Ground Zero's A-M bomb, thrown
+    gz_throw_nuke(s, slot);
   }
   return true;
 }

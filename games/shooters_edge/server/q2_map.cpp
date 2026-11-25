@@ -154,8 +154,11 @@ Class class_of(const Q2Entity& e) { return class_of(e.classname); }
 
 bool is_door(Class c) { return c == kDoor || c == kDoorRotating; }
 bool is_ship(const Q2Entity& e) {
-  return e.classname == "misc_viper" || e.classname == "misc_strogg_ship";
+  return e.classname == "misc_viper" || e.classname == "misc_strogg_ship" ||
+         e.classname == "misc_crashviper" || e.classname == "misc_transport";
 }
+// The Reckoning's transport: a ship that sets off at once, unseen until its first use.
+bool is_transport(const Q2Entity& e) { return e.classname == "misc_transport"; }
 
 int index_of(const Q2Server& s, const Q2Entity& e);
 
@@ -444,6 +447,7 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     }
     return;
   }
+  gz_plat_blocked(s, e, slot);  // Ground Zero's: a dead body crushed first
   crush();
   if (c == kPlat) {
     if (e.state == kGoing)
@@ -581,6 +585,7 @@ void train_next(Q2Server& s, Q2Entity& e) {
       return;
     }
     Q2Entity& corner = s.entities[size_t(c)];
+    gz_train_corner(s, e, e.owner);  // Ground Zero: the speeds of the corner it leaves
     e.wait = number(s, corner, "wait", 0);
     e.target = corner.target;
     e.pathtarget = key(s, corner, "pathtarget");
@@ -729,7 +734,7 @@ void think(Q2Server& s, Q2Entity& e) {
       e.origin = corner.origin - e.mins;
       e.target = corner.target;
       e.owner = c;
-      if (!is_ship(e) && ((e.spawnflags & 1) != 0 || e.targetname.empty())) {
+      if ((!is_ship(e) || is_transport(e)) && ((e.spawnflags & 1) != 0 || e.targetname.empty())) {
         e.spawnflags |= 1;  // running
         e.think_at = s.level_time + kStep;
         e.think = kTrainNext;
@@ -807,8 +812,23 @@ void teleport(Q2Server& s, Q2Entity& pad, int slot) {
   effect(s, "te_teleport", pad.origin);
   effect(s, "te_teleport", d.origin);
   sound_at(s, map_row(index_of(s, pad)), pad.origin, kTeleSound, 1, 2, 1);  // idle, the weapon's
-  place_player(s, slot, d.origin, d.angles);
+  // g_teleporter_nofreeze 1 (a match server's): the player leaves the exit at the speed he came in
+  // along the ground, pointed the exit's way, with no hold; 0 stops him dead and holds him 160 ms.
+  const ge::console::Cvar* nofreeze = s.cvars.find("g_teleporter_nofreeze");
+  const bool keep = nofreeze != nullptr && nofreeze->on();
   const Q2Player& p = s.players[slot];
+  const float speed =  // along the ground, eighths of a unit/s
+      sh::length(sh::Vec3f{float(p.move.velocity[0]), float(p.move.velocity[1]), 0});
+  place_player(s, slot, d.origin, d.angles);
+  if (keep) {
+    Q2Player& q = s.players[slot];
+    const sh::Vec3f ahead = sh::angle_vectors({0, d.angles.y, 0}).forward;
+    q.move.velocity[0] = num::to_int32(double(ahead.x * speed));
+    q.move.velocity[1] = num::to_int32(double(ahead.y * speed));
+    q.move.velocity[2] = 0;
+    q.move.flags &= static_cast<uint16_t>(~ge::classic::kSqTimeTeleport);
+    q.move.time = 0;
+  }
   sound_at(s, slot + 1, unpack(p.move.origin), kTeleSound, 1, 2, 1);
 }
 
@@ -831,7 +851,7 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
       pack(p.move.velocity, held);
       p.old_fall = held.z;  // no fall from the push
       p.ground = -1;
-      if (s.level_time + 0.001 >= p.windfly_at + 1.5) {
+      if (!gz_push_silent(s, e) && s.level_time + 0.001 >= p.windfly_at + 1.5) {
         p.windfly_at = s.level_time;
         sound_at(s, slot + 1, unpack(p.move.origin), kWindfly);
       }
@@ -914,7 +934,7 @@ void explosion(Q2Server& s, int i, int activator, int depth) {
 
 void use(Q2Server& s, int target, int activator, int depth, int other) {
   Q2Entity& e = s.entities[size_t(target)];
-  if (e.gone && class_of(e) != kWall) return;
+  if ((e.gone && class_of(e) != kWall) || gz_push_use(s, e)) return;
   switch (class_of(e)) {
     case kDoor:
     case kDoorRotating:
@@ -927,6 +947,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       secret_use(s, e);
       return;
     case kRotating:  // toggles: stops at once, or starts at full speed
+      if (gz_fan_use(s, e, activator)) return;
       if (e.avelocity.x != 0 || e.avelocity.y != 0 || e.avelocity.z != 0)
         e.avelocity = {};
       else
@@ -944,6 +965,10 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       if (!e.moved && e.state == kGoing && e.arrive == kNoAct) plat_go_down(s, e);
       return;
     case kTrain:
+      if (e.hidden && is_transport(e)) {  // already on its way: it shows itself where it is
+        e.hidden = false;
+        return;
+      }
       if (e.hidden) {  // a ship shows itself and sets off
         e.hidden = false;
         e.spawnflags |= 1;
@@ -1290,6 +1315,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       if ((e.spawnflags & 2) != 0) e.axis = e.axis * -1;
       e.angles = {};
       if ((e.spawnflags & 1) != 0) e.avelocity = e.axis * e.speed;
+      gz_fan_spawn(s, e);
       return;
     case kAreaPortal: {
       e.hidden = true;  // never drawn, never solid
@@ -1364,8 +1390,11 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
           e.gone = true;
           return;
         }
-        const char* model = e.classname == "misc_viper" ? "models/ships/viper/tris.md2"
-                                                        : "models/ships/strogg1/tris.md2";
+        const char* model = e.classname == "misc_viper"        ? "models/ships/viper/tris.md2"
+                            : e.classname == "misc_crashviper" ? "models/ships/bigviper/tris.md2"
+                            : is_transport(e)                  ? "models/objects/ship/tris.md2"
+                                                               : "models/ships/strogg1/tris.md2";
+        if (is_transport(e)) e.spawnflags |= 1;
         const auto found = std::find(s.models.begin(), s.models.end(), model);
         e.modelindex = static_cast<int>(found - s.models.begin());
         if (found == s.models.end()) s.models.emplace_back(model);
@@ -1424,6 +1453,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       e.speed = number(s, e, "speed", 1000);
       e.dir = has_angle(s, e) ? way_of(s, e) : sh::Vec3f{};
       e.angles = {};
+      gz_push_spawn(s, e);
       return;
     case kHurt:
       e.trigger = (e.spawnflags & 1) == 0;
@@ -1678,6 +1708,7 @@ void map_spawn(Q2Server& s) {
       e.modelindex = disc_model(s);
     }
   link_doors(s);
+  gz_train_teams(s);
   map_loops(s);
 }
 
@@ -1749,6 +1780,7 @@ void map_frame(Q2Server& s) {
     else
       fire_targets(s, d.entity, d.activator, 0, true);
   }
+  gz_movers_frame(s);  // Ground Zero: a train's riders, the fans that ramp
   // Each mover pushes, then steps; a blocked push skips the step (its schedule slides).
   std::vector<TeamFrame> teams;
   for (size_t i = 0; i < s.entities.size(); i++) {

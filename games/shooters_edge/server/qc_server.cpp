@@ -269,16 +269,9 @@ void update_visclients(QcServer& s) {
 // A forced view (`fixangle`, set by a program that turns a player: a spawn, a teleport) is sent
 // to the client once, at the end of the frame: the view becomes `angles` and the flag clears, so
 // the client's next command turns the view again. Left set, every command's angles would be
-// ignored and the player would aim along his spawn's angles forever.
-void send_forced_views(QcServer& s) {
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    if (!s.clients[i].active) continue;
-    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(i) + 1];
-    if (!ed.fixangle) continue;
-    ed.v_angle = ed.angles;
-    ed.fixangle = false;
-  }
-}
+// ignored and the player would aim along his spawn's angles forever. The turn is kept for the
+// protocol's server to send (RulesCommon::turns).
+void send_forced_views(QcServer& s) { s.take_turns(); }
 
 void run_command_buffer(QcServer& s) {
   while (!s.command_buffer.empty()) {
@@ -519,6 +512,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   for (std::string& l : s.lightstyles) l.clear();
   s.out = MessageSink{};
   s.map_messages.clear();
+  s.spawned_as.clear();
   s.loading = true;
   s.map_stopped = false;
   s.stop_reason.clear();
@@ -601,6 +595,9 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
       sim::leave_qc(s.q);
       continue;
     }
+    if (s.spawned_as.size() <= static_cast<size_t>(e))
+      s.spawned_as.resize(static_cast<size_t>(e) + 1);
+    s.spawned_as[static_cast<size_t>(e)] = classname;
     pg::set_global_int(vm, s.q.layout->g.self, pg::entity_value(vm, e));
     pg::set_global_int(vm, s.q.layout->g.other, 0);
     pg::set_global_float(vm, s.q.layout->g.time, static_cast<float>(s.sv.time));

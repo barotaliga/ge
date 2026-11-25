@@ -89,10 +89,20 @@ constexpr std::array kMtflLocks{
     RuleLock{.name = "gl_max_size", .min = 512},
 };
 
-// What the four strict rulesets refuse while a match is played, and our aids at all times.
+// What the four strict rulesets refuse while a match is played, and our aids and the recipe
+// commands at all times.
 constexpr std::array kStrictRefused{
     RuleRefusal{.command = "+rjump"},
     RuleRefusal{.command = "+rrjump"},
+    // The recipe commands (a window started with -recipes drives itself with them): never a hand
+    // that plays for the player, whatever the ruleset.
+    RuleRefusal{.command = "sleep"},
+    RuleRefusal{.command = "menu_press"},
+    RuleRefusal{.command = "menu_select"},
+    RuleRefusal{.command = "menu_list"},
+    RuleRefusal{.command = "entlist"},
+    RuleRefusal{.command = "enthide"},
+    RuleRefusal{.command = "entshow"},
     RuleRefusal{.command = "exec", .match_only = true},
     RuleRefusal{.command = "packet", .match_only = true},
     RuleRefusal{.command = "play", .match_only = true},
@@ -135,8 +145,19 @@ constexpr std::array<std::string_view, 30> kTeamMacroCommands{"if",
                                                               "tp_msgtrick",
                                                               "tp_msgcoming"};
 
-constexpr std::array kAidsRefused{RuleRefusal{.command = "+rjump"},
-                                  RuleRefusal{.command = "+rrjump"}};
+constexpr std::array kAidsRefused{
+    RuleRefusal{.command = "+rjump"},
+    RuleRefusal{.command = "+rrjump"},
+    // The recipe commands (a window started with -recipes drives itself with them): never a hand
+    // that plays for the player, whatever the ruleset.
+    RuleRefusal{.command = "sleep"},
+    RuleRefusal{.command = "menu_press"},
+    RuleRefusal{.command = "menu_select"},
+    RuleRefusal{.command = "menu_list"},
+    RuleRefusal{.command = "entlist"},
+    RuleRefusal{.command = "enthide"},
+    RuleRefusal{.command = "entshow"},
+};
 
 constexpr std::array kQw{
     Ruleset{.name = "default", .title = "No rules: every setting as you like it."},

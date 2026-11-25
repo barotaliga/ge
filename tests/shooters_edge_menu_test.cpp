@@ -245,6 +245,40 @@ TEST(new_game_start_runs_the_rules_then_the_map) {
   CHECK(!w.ran.empty() && w.ran.back() == "map dm1");
 }
 
+TEST(dissolution_offers_its_team_games_on_the_teamplay_row) {
+  World w;
+  Menu m = sm::build_menu();
+  ge::console::Cvars server(true);
+  for (const char* c : {"deathmatch", "fraglimit", "timelimit", "teamplay"})
+    server.add({.name = c, .fallback = "0"});
+  // The base game's packs: off, no friendly fire, friendly fire.
+  sm::Host base{.console = &w.con, .server = &server, .maps = {"start", "dm1"}};
+  sm::refresh(m, base);
+  CHECK(item(m, "host", "teamplay")->choices.size() == 3);
+  // Dissolution of Eternity's: its tag and flag games too, left of off wrapping to the last.
+  sm::Host rogue{.console = &w.con, .server = &server, .maps = {"start", "r1m1", "ctf1"}};
+  sm::refresh(m, rogue);
+  const std::vector<std::string> want = {"OFF",           "NO FRIENDLY FIRE", "FRIENDLY FIRE",
+                                         "TAG",           "CAPTURE THE FLAG", "ONE FLAG CTF",
+                                         "THREE TEAM CTF"};
+  CHECK(item(m, "host", "teamplay")->choices == want);
+  m.open("multi");
+  for (const MenuEvent& e : press(m, "host")) sm::apply_event(e, m, rogue);
+  CHECK(m.focus("teamplay"));
+  MenuInput left;
+  left.left = true;
+  for (const MenuEvent& e : m.input(left)) sm::apply_event(e, m, rogue);
+  for (const MenuEvent& e : press(m, "start")) sm::apply_event(e, m, rogue);
+  CHECK_MSG(std::find(w.ran.begin(), w.ran.end(), "sv teamplay 6") != w.ran.end(),
+            w.ran.empty() ? std::string() : w.ran.front());
+  // Set to capture the flag, the row shows it; the base game's packs show it as off.
+  server.set("teamplay", "4", ge::console::Source::local);
+  sm::refresh(m, rogue);
+  CHECK(item(m, "host", "teamplay")->choice == 4);
+  sm::refresh(m, base);
+  CHECK(item(m, "host", "teamplay")->choice == 0 && sm::teamplay_choices(rogue.maps) == 7);
+}
+
 TEST(ranked_game_looks_for_a_duel_once_the_console_can) {
   World w;
   Menu m = sm::build_menu();
@@ -1938,4 +1972,29 @@ TEST(the_ruleset_row_offers_the_games_book) {
   };
   check(shooters_edge::menu::classic_menu(), ge::classic::qw_rulesets());
   check(shooters_edge::menu::q2_menu(), ge::classic::q2_rulesets());
+}
+
+TEST(classic_remix_is_one_page_of_the_cr_settings) {
+  World w;
+  using K = ge::console::CvarKind;
+  w.con.cvars().add({"cr_enabled", "0", 0, "", K::boolean});
+  w.con.cvars().add({"cr_expansions", "1", 0, "", K::boolean});
+  w.con.cvars().add({"cr_items", "", 0, "", K::text});
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con};
+  sm::refresh(m, host);
+  CHECK(!item(m, "options", "remix")->disabled);
+  CHECK(item(m, "remix", "cr_expansions")->choice == 1);  // ON
+  CHECK(!item(m, "remix", "cr_items")->disabled);
+  m.open("remix");
+  CHECK(m.focus("cr_items"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value == "q1");
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value == "q2");
+  // Past QUAKE II it wraps back to the game's own: the cvar set to nothing, not shown.
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(w.con.cvars().find("cr_items")->value.empty());
 }

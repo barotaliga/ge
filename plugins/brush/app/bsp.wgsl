@@ -148,10 +148,12 @@ struct Light {
 @group(1) @binding(9) var rebake_dir: texture_2d<f32>;
 // the animated textures' frames
 @group(1) @binding(10) var<storage, read> frames: array<vec4f>;
-// The brush models: a run of vertices (first, end), 1 hidden; the offset it is drawn at now.
+// The brush models: a run of vertices (first, end), 1 hidden; the offset it is drawn at now and
+// its turn about the map's origin before it (a quaternion, x y z w).
 struct Mover {
   range: vec4u,
   offset: vec4f,
+  rotation: vec4f,
 };
 // [0] the world's
 @group(1) @binding(11) var<storage, read> movers: array<Mover>;
@@ -236,6 +238,14 @@ fn style_level(id: u32) -> f32 {
 
 // The texture frame the vertex's brush model asks (its frame + 1; 0: on the clock), set by `moved`.
 var<private> mover_frame: u32 = 0u;
+// The vertex's brush model's turn (a quaternion), set by `moved`; its normal turns with it.
+var<private> mover_turn: vec4f = vec4f(0.0, 0.0, 0.0, 1.0);
+
+// `v` turned by the unit quaternion `q`.
+fn turned(q: vec4f, v: vec3f) -> vec3f {
+  let t = 2.0 * cross(q.xyz, v);
+  return v + q.w * t + cross(q.xyz, t);
+}
 
 // The vertex `vi` at `pos` where its brush model stands now; w 0 when the model is hidden.
 fn moved(vi: u32, pos: vec3f) -> vec4f {
@@ -248,7 +258,8 @@ fn moved(vi: u32, pos: vec3f) -> vec4f {
     let m = movers[i];
     if (vi >= m.range.x && vi < m.range.y) {
       mover_frame = m.range.w;
-      return vec4f(pos + m.offset.xyz, select(1.0, 0.0, m.range.z != 0u));
+      mover_turn = m.rotation;
+      return vec4f(turned(m.rotation, pos) + m.offset.xyz, select(1.0, 0.0, m.range.z != 0u));
     }
   }
   return vec4f(pos, 1.0);
@@ -266,10 +277,10 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   o.world = at.xyz;
   o.st = v.st;
   o.lm = v.lm;
-  o.nrm = v.nrm;
+  o.nrm = turned(mover_turn, v.nrm);
   o.rect = v.rect;
   // An animated texture: the sequence's frame now, from this texture's own place in it.
-  let count = (v.anim >> 16u) & 255u;
+  let count = (v.anim >> 16u) & 127u;
   if (count > 1u) {
     // On the map's clock at its rate (the world's row's w; 0: kFrameRate), or the model's frame.
     let rate = select(kFrameRate, movers[0].offset.w, arrayLength(&movers) > 0u && movers[0].offset.w > 0.0);
@@ -279,6 +290,14 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
     }
     let at = (step + (v.anim >> 24u)) % count;
     o.rect = frames[(v.anim & 0xffffu) + at];
+  }
+  // A flowing texture (draw_data.hpp's kAnimFlowing): it slides toward -s, a warped liquid's half
+  // a width a second, any other face's 1.6, a whole width at a time seamless.
+  if ((v.anim & 0x800000u) != 0u) {
+    let warp = v.kind == kWater || v.kind == kSlime || v.kind == kLava || v.kind == kWarp ||
+               v.kind == kTele;
+    let rate = select(1.6, 0.5, warp);
+    o.st.x = o.st.x - o.rect.z * fract(max(bsp.info2.x, 0.0) * rate);
   }
   o.kind = v.kind;
   o.lm2 = v.lm2;

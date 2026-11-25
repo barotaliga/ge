@@ -10,32 +10,9 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 ## Totals
 
-| kind | done | missing | not-taken | rows |
-| --- | --- | --- | --- | --- |
-| Client console commands | 139 | 0 | 17 | 156 |
-| Client settings (cvars) | 239 | 0 | 111 | 350 |
-| Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
-| Menu pages and rows | 147 | 3 | 12 | 162 |
-| Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
-| Temporary entities (svc_temp_entity) | 39 | 0 | 26 | 65 |
-| Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
-| Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
-| Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 23 | 2 | 7 | 32 |
-| Configstrings | 10 | 0 | 6 | 16 |
-| The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
-| HUD and screen elements | 19 | 0 | 10 | 29 |
-| Messages printed to the player | 130 | 0 | 17 | 147 |
-| Demo playback and recording features | 13 | 0 | 10 | 23 |
-| Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
-| Sound and music | 13 | 0 | 0 | 13 |
-| Picture and video | 16 | 0 | 4 | 20 |
-| Connection, network, downloads and the rest | 16 | 0 | 2 | 18 |
-| **all** | 976 | 5 | 231 | 1212 |
+Counts: `make ledger` counts this ledger's rows by section and the missing rows by rank (`porting/ledger-count.mjs`; `make ledger ARGS=--missing` for the missing count alone). No total is kept here by hand.
 
 ## Client console commands
-
-done 139, missing 0, not-taken 17
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -199,8 +176,6 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.tests | `error`, `errordrop`, `freeze`, `crash`, `doublefree`, `printjunk`, `bsptest`, `wildtest`, `normtest`, `infotest`, `snprintftest`, `modeltest`, `imagetest`, `soundtest`, `activate`, `mdfourtest`, `mdfoursum`, `extcmptest`, `nextpathtest`, `extract`, `utf8test` | the test build's self-tests and fault triggers | not-taken | `client-gaps.md`: developer tools left out |
 
 ## Client settings (cvars)
-
-done 232, missing 8, not-taken 110
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -559,8 +534,6 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 
 ## Macros ($name in typed and bound text)
 
-done 26, missing 0, not-taken 4
-
 A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's value.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -598,8 +571,6 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 147, missing 3, not-taken 12
-
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -607,7 +578,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.look.background | menu background | black behind every page; the in-game page tinted blue at about 1/8 | not-taken | Our design: ours draws the classic menu's backdrop with Quake II's plates (C5) |
 | menu.look.font | menu font and cursor | the pack's `conchars` letters, `ch1` as the cursor | not-taken | Tail (decided 2026-11-23), cosmetic: quake II's plates and our carved letters; the `ch1` cursor not matched. |
 | menu.look.colours | row colours | normal and selected rows light blue, disabled grey | not-taken | Our design: ours the classic menu's colours (C5) |
-| menu.look.weapon | player-setup weapon | the figure on the player page holds the railgun's world model | missing | no figure drawn (C5) |
+| menu.look.weapon | player-setup weapon | the figure on the player page holds the railgun's world model | done | `games/shooters_edge/menu/player_view.cpp`: the figure holds the folder's carried weapon (`w_<name>.md2`, else its `weapon.md2`), the page's WEAPON row picks it; held by `tests/shooters_edge_player_view_test.cpp` |
 | menu.esc.disconnected | ESCAPE while not in a game | opens the main page | done | `games/shooters_edge/menu/main_menu.cpp` |
 | menu.esc.ingame | ESCAPE in a game | opens the compact in-game page (below) over the world | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.esc.layout | ESCAPE with a layout up | sends `putaway` (closes the help computer or inventory); held, opens the in-game page | done | `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, `Host::escape_held`): ESCAPE sends `putaway`; held on half a second (a key's first repeat), the in-game page opens |
@@ -649,7 +620,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.dmf.infiniteammo | flags: infinite ammo | dmflag 8192 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
 | menu.dmf.fixedfov | flags: fixed FOV | dmflag 32768 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
 | menu.dmf.quaddrop | flags: quad drop | dmflag 16384 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
-| menu.opt.player | options: player setup | opens the player page | missing | Missing, rank 1 (gameplay, daily use): `games/shooters_edge/menu/q2_pages.cpp`: name, model, skin and handedness; the figure drawn missing |
+| menu.opt.player | options: player setup | opens the player page | done | `games/shooters_edge/menu/q2_pages.cpp` (name, model, skin, handedness) with the figure beside the rows (`menu/player_view.cpp`) |
 | menu.opt.input | options: input setup | opens the input page | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.opt.keys | options: key bindings | opens the key page | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.opt.weapons | options: weapon bindings | opens the weapon-key page | done | `games/shooters_edge/menu/q2_pages.cpp` |
@@ -663,7 +634,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.pl.model | player: model | every figure in `players/` | done | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: male, female, then by name; written to `skin` |
 | menu.pl.skin | player: skin | the chosen figure's skins | done | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: a skin with its icon; a new model at its first skin |
 | menu.pl.hand | player: handedness | right, left, center (`hand`) | done | `games/shooters_edge/menu/q2_pages.cpp` |
-| menu.pl.figure | player: the figure drawn | the chosen figure and skin turning, holding the weapon | missing | C5 |
+| menu.pl.figure | player: the figure drawn | the chosen figure and skin turning, holding the weapon | done | `games/shooters_edge/menu/player_view.cpp`: the model live in its skin, turning, dragged round, firing on a click; `tests/shooters_edge_player_view_test.cpp` |
 | menu.pl.none | player: no figures | "No player models found." when none | done | `games/shooters_edge/menu/main_menu.cpp` (`apply_event`): "No player models found." and the page does not open |
 | menu.in.sens | input: mouse sens | a number field for `sensitivity` | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.in.autosens | input: auto sens | `m_autosens` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -769,8 +740,6 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 
 ## Server messages the client parses (svc)
 
-done 26, missing 0, not-taken 1
-
 Every message a server (or a recording) sends the client, and what the client does with it. Ours reads Quake II's protocol 34 in `games/shooters_edge/client/demo_q2.cpp` for both a joined server and a recording; the protocols above 34 (35, 36) are not spoken (C42).
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -804,8 +773,6 @@ Every message a server (or a recording) sends the client, and what the client do
 | svc.baselinestream | `svc_baselinestream` (26) | baselines in a stream (protocol 36's newer versions) | done | `net/q2_proto_in.cpp` |
 
 ## Temporary entities (svc_temp_entity)
-
-done 39, missing 0, not-taken 26
 
 Each one-off effect a server sends, what the client draws and plays for it. The window's own game draws its own effects from its rules' events (`app/weapon_fx.hpp`, `app/monster_fx.hpp`, `client/world_fx.cpp`); the status here is for a joined server and a recording, where the original's effect must come from the message.
 
@@ -879,8 +846,6 @@ Each one-off effect a server sends, what the client draws and plays for it. The 
 
 ## Muzzle flashes (svc_muzzleflash, a player's)
 
-done 19, missing 0, not-taken 1
-
 A player's gun fired (or the player entered, left, respawned). Every flash puts a light 18 units ahead of the player and 16 to the right, radius 200 to 231 (100 to 131 when silenced), lasting `cl_muzzlelight_time` (16 ms) unless the row says otherwise, plays the weapon's sound at full volume (0.2 when silenced) and, when the flash is the player's own, the newer game's flash model on the view weapon (`cl_muzzleflashes`). The rows give each flash's light colour, sound and model.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -907,8 +872,6 @@ A player's gun fired (or the player entered, left, respawned). Every flash puts 
 | mz.muzzlefx | the muzzle-flash model | the newer game's flash model drawn at the muzzle of the player's own view weapon for a moment, its size and offset by weapon (`cl_muzzleflashes`); other players' flashes get no model | not-taken | Visuals come from classic enhance (decided 2026-11-23): the remaster's flash model |
 
 ## Muzzle flashes (svc_muzzleflash2, a monster's)
-
-done 32, missing 0, not-taken 1
 
 A monster fired: the client places a light at the gun (the monster's per-flash offset turned by its angles and scaled by its size), radius 200 to 231 for `cl_muzzlelight_time` (16 ms), plays the shot's sound and, for guns, a few particles and a smoke-and-flash sprite; the newer muzzle-flash model is drawn at the gun. One row per monster and weapon (the flash numbers are one per gun barrel or animation frame).
 
@@ -950,8 +913,6 @@ A monster fired: the client places a light at the gun (the monster's per-flash o
 
 ## Entity effect bits (EF_)
 
-done 32, missing 0, not-taken 1
-
 Bits of an entity's effects field a server sends; the client draws trails, lights, shells and frame cycles from them. Ours: `games/shooters_edge/client/q2_look.hpp` reads them for Quake II's entities.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -992,8 +953,6 @@ Bits of an entity's effects field a server sends; the client draws trails, light
 
 ## Entity render bits (RF_) and view bits (RDF_)
 
-done 23, missing 2, not-taken 7
-
 Bits of an entity's render field, and of the player state's view flags.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -1006,7 +965,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.translucent | `RF_TRANSLUCENT` (32) | drawn at 0.7 | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.framelerp | `RF_FRAMELERP` (64) | blend between the old and new frame | not-taken | Our design: frames are always interpolated, so the bit has nothing to switch. |
 | rf.beam | `RF_BEAM` (128) | a laser beam of the frame's width in the skin's colour, at 0.3 | done | `games/shooters_edge/client/q2_look.hpp` |
-| rf.customskin | `RF_CUSTOMSKIN` (256) | the skin is a picture index | missing | not read |
+| rf.customskin | `RF_CUSTOMSKIN` (256) | the skin is a picture index | done | From an extended server or recording, the skin number names a picture of the server's list (`/path` or `pics/<name>.pcx`) the model wears in place of its own skin, the number then 0 (`client/q2_look.cpp`'s `q2_custom_skin`, `client/demo_video.cpp`); the picture listed beside the skins the first time it is seen (`client/world_models.cpp`'s `list_worn_pictures`, `Placed::skin_picture`); `tests/shooters_edge_q2_look_test.cpp` |
 | rf.glow | `RF_GLOW` (512) | the item's light pulses | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_red | `RF_SHELL_RED` (1024) | a red shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_green | `RF_SHELL_GREEN` (2048) | a green shell | done | `games/shooters_edge/client/q2_look.hpp` |
@@ -1026,14 +985,12 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.no_lod | `RF_NO_LOD` (1<<25) | no level-of-detail model | done | ours has no lower-detail models: every model is drawn whole, as the bit asks |
 | rf.stair_step | `RF_STAIR_STEP` (1<<26) | the stair step is smoothed for this entity | done | the game's client reads it nowhere; ours the same |
 | rdf.underwater | `RDF_UNDERWATER` (1) | the view is under water: the warp (`gl_waterwarp`) and the sound muffle (`s_underwater`) | not-taken | Tail (decided 2026-11-23), cosmetic: ours tints the view under water; warp and muffle missing (C21, C28) |
-| rdf.noworldmodel | `RDF_NOWORLDMODEL` (2) | a view with no world (the player-setup figure) | missing | no player figure page (C5) |
+| rdf.noworldmodel | `RDF_NOWORLDMODEL` (2) | a view with no world (the player-setup figure) | done | the player page's figure is drawn alone on the CPU with no world (`menu/player_view.cpp`, the engine's `overview/mesh_picture.hpp`) |
 | rdf.irgoggles | `RDF_IRGOGGLES` (4) | infra-red goggles on | done | client/demo_q2.cpp keeps the view's bits in `DemoState::rdflags`; `client/demo_video.cpp` marks the warm models |
 | rdf.uvgoggles | `RDF_UVGOGGLES` (8) | the other goggles bit | done | the game's client reads it nowhere; ours the same |
 | rdf.teleport | `RDF_TELEPORT_BIT` (16) | the extended protocol's teleport mark: no view interpolation this frame | done | `client/demo_q2.cpp` keeps the toggle (`DemoState::teleport_bit`: the view bit 16 in the extended protocol, else movement flag 128) and a flip since the frame before draws the view at the new frame, its eye, angles and field of view not eased, the bodies still between (`client/demo_lerp.cpp`); `tests/shooters_edge_demo_lerp_test.cpp` |
 
 ## Configstrings
-
-done 10, missing 0, not-taken 6
 
 The indexed strings a server sets (stock protocol 34 indices; the extended protocols move every range further on). Ours keeps them in `games/shooters_edge/client/demo_q2.cpp` (`set_string`) for a joined server and a recording; both layouts are read.
 
@@ -1057,8 +1014,6 @@ The indexed strings a server sets (stock protocol 34 indices; the extended proto
 | cs.general | `CS_GENERAL` (1568..) | free strings a layout prints (`stat_string`) | not-taken | Tail (decided 2026-11-23), mods only: the general strings range is not kept; only a mod using `stat_string` would show it. |
 
 ## The layout language (status bar and layouts)
-
-done 27, missing 0, not-taken 0
 
 The words of the status-bar and layout programs the client runs every frame on a virtual 320-wide screen anchored to the window. Ours: `games/shooters_edge/hud/q2_layout.cpp`.
 
@@ -1093,8 +1048,6 @@ The words of the status-bar and layout programs the client runs every frame on a
 | lay.errors | a bad index in a layout | drops the connection: "invalid stat index for pic", "invalid client index" and the like | done | Same meaning in our words (the player-text rule makes our words the intended ones): a bad layout is refused or skipped with our own line. |
 
 ## HUD and screen elements
-
-done 18, missing 0, not-taken 11
 
 What the client draws in 2D over the view, in its drawing order, and the settings that govern each (the settings themselves are rows of the settings table).
 
@@ -1131,8 +1084,6 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | hud.debugstats | debug overlays | `scr_showstats` (the stats as numbers), `scr_showpmove` (the move state) | not-taken | `client-gaps.md`: developer tools left out |
 
 ## Messages printed to the player
-
-done 130, missing 0, not-taken 17
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; since the regrade of 2026-11-23 a line with the same meaning in our words is done. Internal protocol faults are one row at the end.
 
@@ -1288,8 +1239,6 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 
 ## Demo playback and recording features
 
-done 13, missing 0, not-taken 10
-
 What a player can do with client recordings (`.dm2`) and multi-view recordings (`.mvd2`) in the client.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -1320,8 +1269,6 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 
 ## Keys: the fixed keys and the default bindings
 
-done 10, missing 0, not-taken 1
-
 Keys the client handles itself (a player cannot unbind them) and where the default bindings come from.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
@@ -1339,8 +1286,6 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 | key.defaults | the default bindings | none built in: the game's `default.cfg` (in the pack) binds the keys, then `config.cfg`; `bindlist` shows them | not-taken | Our design: the pack's `default.cfg` runs in Quake II's start order, and the window's move keys are kept over it on purpose (`client/install_configs.cpp`). |
 
 ## Sound and music
-
-done 13, missing 0, not-taken 0
 
 How the client makes sound, beyond the settings themselves.
 
@@ -1361,8 +1306,6 @@ How the client makes sound, beyond the settings themselves.
 | snd.cinematic | cinematic sound | a cinematic's own audio track | done | `games/shooters_edge/client/cinematic.cpp` |
 
 ## Picture and video
-
-done 16, missing 0, not-taken 4
 
 How the client sets up and draws the picture, beyond the settings themselves. Ours draws with its own renderer (`engine/render`, `plugins/classic/app/look.cpp`); the GL driver's internals are not taken (`client-gaps.md`).
 
@@ -1390,8 +1333,6 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 | vid.replacements | replacement content | `.png`/`.jpg`/`.tga` textures over `.pcx`/`.wal`, MD5 models over MD2 | not-taken | Our design: ours replaces by classic enhance (`plugins/classicenhance`), not loose replacement files; verify |
 
 ## Connection, network, downloads and the rest
-
-done 15, missing 1, not-taken 2
 
 Behaviour the client offers outside the screen.
 

@@ -253,6 +253,7 @@ make ge ARGS="new ../snow-racer"  # the ge command line (ge help): scaffold a ga
 make ge ARGS="asset build skier"  # a model rebuilt in headless Blender off the game's data (GE_BLENDER: a blender, or a python with bpy)
 make golden       # regenerate the golden tables (working area: porting/porting.mk, porting/README.md)
 make golden-libm  # the golden tables that reach a transcendental (same place)
+make ledger       # every porting ledger's counts from its rows (ARGS=--missing: the missing count); no ledger keeps a total by hand
 make libm-check   # no <cmath> transcendental in simulation code
 make manual       # the player's reference manual: build/manual/user-manual.html from every program's own registrations
 make release-check # the changeset fragments valid + tools/release.py's tests; prints the next version

@@ -123,6 +123,15 @@ TEST(the_last_classic_enhance_switches_reach_the_modern_looks_options) {
   // The classic look draws none of them.
   c.execute("ce_reflections 1");
   CHECK(lk::world_options(lk::Look::classic, {}, p).reflections == 0);
+  // ce_ao: the contact shade at its strength and its radius in metres, the classic look none.
+  CHECK(modern().ao == 0.8 && std::abs(modern().ao_radius_m - 48 * 0.025) < 1e-12);
+  c.execute("ce_ao_strength 0.5");
+  c.execute("ce_ao_radius 64");
+  CHECK(modern().ao == 0.5 && std::abs(modern().ao_radius_m - 1.6) < 1e-12);
+  c.execute("ce_ao 0");
+  CHECK(modern().ao == 0);
+  c.execute("ce_ao 1");
+  CHECK(lk::world_options(lk::Look::classic, {}, p).ao == 0);
 }
 
 // The classic look is shown as worked out (no exposure, no tone curve), and neither look's tone

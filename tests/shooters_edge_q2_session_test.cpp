@@ -136,6 +136,9 @@ TEST(cl_thirdperson_is_a_cheat_and_moves_the_view_back) {
   CHECK(cl::view_behind(front, 40, 180, nullptr) == 40);  // in front, looking back
   CHECK(std::abs(front.eye[2] - 40 * ge::brush::kUnitM) < 1e-9);
   CHECK(std::abs(std::abs(front.heading) - 3.14159265358979) < 1e-9);
+  ge::render::FrameView high;  // cam_up (Quake's chase_up): raised first, then back
+  CHECK(cl::view_behind(high, 40, 0, nullptr, {}, 16) == 40);
+  CHECK(std::abs(high.eye[1] - 16 * ge::brush::kUnitM) < 1e-9);
 }
 
 TEST(cl_thirdperson_stops_short_of_a_wall) {
@@ -232,4 +235,12 @@ TEST(the_download_switches_are_quake_iis_settings) {
   CHECK(all->value == "-1");
   r.c.execute("allow_download -2");  // out of range: held to -1
   CHECK(all->value == "-1");
+}
+
+TEST(developer_is_a_setting_every_game_s_window_knows) {
+  Rig r;
+  const ge::console::Cvar* d = r.c.cvars().find("developer");
+  CHECK(d != nullptr && !d->on());
+  r.c.execute("developer 1");  // a stock Quake II config's line
+  CHECK(r.c.cvars().find("developer")->on());
 }

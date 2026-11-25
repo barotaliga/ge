@@ -759,10 +759,13 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       if (!point_dir(DemoEffectKind::named)) return false;
       e.name = "te_blaster";
       break;
+    case 30:  // Ground Zero's green bolt landing: its green sparks and the mark
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.name = "te_blaster2";
+      break;
     case 9:
     case 12:
     case 13:
-    case 30:
     case 43:
     case 44:
     case 46:
@@ -1149,12 +1152,16 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         break;
       }
       case kGeArsenal: {  // the weapons held (a mask by row), then each ammunition's count
-        const int held = m.u16();
-        int16_t ammo[7] = {};
-        for (int k = 1; k < 7; k++) ammo[k] = static_cast<int16_t>(m.i16());
+        const uint32_t held = static_cast<uint32_t>(m.i32());
+        const int kinds = m.u8();
+        int16_t ammo[Demo::kArsenalAmmo] = {};
+        for (int k = 1; k < kinds; k++) {
+          const auto n = static_cast<int16_t>(m.i16());
+          if (k < Demo::kArsenalAmmo) ammo[k] = n;
+        }
         if (m.bad) break;
         d.arsenal_told = true;
-        d.arsenal_weapons = static_cast<uint16_t>(held);
+        d.arsenal_weapons = held;
         std::copy(std::begin(ammo), std::end(ammo), std::begin(d.arsenal_ammo));
         break;
       }
@@ -1361,5 +1368,7 @@ DemoRead next_q2(Demo& d, std::string& error) {
     if (d.ended) return DemoRead::end;
   }
 }
+
+bool q2_extended(int protocol) { return ext_of(protocol) > 0; }
 
 }  // namespace shooters_edge::client

@@ -141,9 +141,9 @@ struct Q2ShotAudit {
 // ammunition, so a weapon counts as held once seen in hand and an ammunition's count as known
 // once seen (until he dies), and a change to anything else is left to the server.
 struct Q2Known {
-  uint16_t weapons = 0;  // by kSqWeapons' row
-  int16_t ammo[7] = {};
-  bool ammo_seen[7] = {};
+  uint32_t weapons = 0;  // by kSqWeapons' row
+  int16_t ammo[::shooters_edge::server::kSqAmmoKinds] = {};
+  uint16_t ammo_seen = 0;    // a bit by ammunition kind
   int held = -1, last = -1;  // the weapon in hand, the one before it
   int32_t frame = -1;        // the newest frame folded in
 };

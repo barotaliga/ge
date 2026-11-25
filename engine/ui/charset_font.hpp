@@ -8,7 +8,9 @@
 // the byte's cell in reading order, each cell's coverage its pixels' brightness (the sheet's
 // see-through pixels none), so the sheet's own shading shows under the text's colour and a
 // classic game's console and messages are written in that game's letters, drawn at whole
-// multiples of its cell.
+// multiples of its cell. An upscaled sheet (classic enhance's, cells over 8 px) is drawn at the
+// same whole multiples of 8 px as the pack's own, filtered from its finer texels, so the console
+// keeps its size and gains the detail.
 //
 // ge:summary The engine's ten charsets as grid fonts the 2D layer draws text runs with
 // ge:keywords ui charset font bitmap-font grid-font monospace terminal mono atlas con_font

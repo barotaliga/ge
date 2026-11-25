@@ -67,6 +67,8 @@
 #include <string>
 #include <vector>
 
+#include "classic/protocol/challenges.hpp"
+#include "classic/protocol/lag_turn.hpp"
 #include "core/prng.hpp"
 #include "net/status.hpp"
 #include "net/transport.hpp"
@@ -91,6 +93,7 @@ namespace shooters_edge::net {
 
 namespace sv = shooters_edge::server;
 namespace gs = ge::server;
+namespace cp = ge::classic::protocol;
 
 struct MultiviewRecorder;
 
@@ -335,9 +338,18 @@ struct QwClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fields b
     std::vector<uint8_t> bytes;
   };
   std::vector<Held> held;
-  StrafeGuard strafe;      // sv_safestrafe
-  int colour_changes = 0;  // top colour changes in its window
-  int info_changes = 0;    // user info changes in its window
+  StrafeGuard strafe;  // sv_safestrafe
+  // THE SERVER'S TURN OF HIM (a teleport, a spawn: the rules' `turns`): a `setangle` waiting for
+  // his next datagram (`turn_pending`, to `turn_to`, `turn_teleport` its kind), then, under the
+  // high-lag teleport, his moves in flight turned until he acknowledges it (`lag`,
+  // classic/protocol/lag_turn.hpp). `last_yaw`: his last command's yaw, as he sent it.
+  bool turn_pending = false, turn_teleport = false;
+  sh::Vec3f turn_to;
+  cp::LagTurn lag;
+  float last_yaw = 0;
+  int64_t moves_turned = 0;  // commands turned by `lag`
+  int colour_changes = 0;    // top colour changes in its window
+  int info_changes = 0;      // user info changes in its window
 };
 
 struct ServerCounts {
@@ -351,12 +363,6 @@ struct ServerCounts {
   int64_t voice_in = 0, voice_out = 0, voice_refused = 0, voice_dropped = 0;
   int64_t chat_flooded = 0;                // say and say_team lines dropped by the flood rule
   int64_t rcon_run = 0, rcon_refused = 0;  // remote console lines run; refused or not answered
-};
-
-struct Challenge {
-  gn::Address address;  // the port ignored
-  int32_t value = 0;
-  int64_t made = 0;  // the order it was made, for replacing the oldest
 };
 
 // The frag log (net/qw_fraglog.hpp): the rules' frag lines read so far, the file `fraglogfile`
@@ -381,8 +387,7 @@ struct QwServer {
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
   QwClient clients[sh::kMaxClients];
-  Challenge challenges[64];
-  int64_t challenges_made = 0;
+  ge::classic::ChallengeBook challenges;  // classic/protocol/challenges.hpp
   ge::core::Rng rng{1};
   int spawncount = 1;
   int next_userid = 1;

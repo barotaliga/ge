@@ -22,6 +22,18 @@ namespace {
 
 namespace con = ge::console;
 
+// A player's team, as the campaign's programs read it: 1 (the default bottom colour plus one),
+// never 0. A monster's team is 0, so a player left on 0 is on the monsters' team: with teamplay on
+// (a co-op game's), a program that guards friendly fire by an equal team alone (Dissolution of
+// Eternity's) let no shot of his hurt a monster.
+void set_player_team(Campaign& c, int slot) {
+  QcServer* s = c.server ? qc_of(c.server) : nullptr;
+  if (s == nullptr || s->progs == nullptr) return;
+  const pg::Def* d = pg::find_field(*s->progs, "team");
+  if (d == nullptr) return;
+  *pg::entity_field(s->q.vm, slot + 1, d->offset) = pg::as_word(1.0f);
+}
+
 // Every setting the old server had changed from its default, kept for the next one.
 void keep_settings(Campaign& c) {
   if (!c.server) return;
@@ -116,6 +128,7 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
     CampaignPlayer& p = c.players[i];
     if (!p.active) continue;
     c.server.connect(i, p.name, false, false, p.carried ? p.parms : nullptr);
+    set_player_team(c, i);
     std::copy(std::begin(s.clients[i].spawn_parms), std::end(s.clients[i].spawn_parms),
               std::begin(p.entered));
   }
@@ -158,6 +171,7 @@ void campaign_join(Campaign& c, int slot, const std::string& name) {
   p.name = name;
   if (!c.server) return;
   c.server.connect(slot, name, false, false);
+  set_player_team(c, slot);
   const RulesCommon& s = *c.server;
   std::copy(std::begin(s.clients[slot].spawn_parms), std::end(s.clients[slot].spawn_parms),
             std::begin(p.entered));

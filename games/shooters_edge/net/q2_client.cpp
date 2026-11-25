@@ -344,10 +344,15 @@ std::string expand_settings(const Q2ClientEnd& c, const std::string& line) {
     size_t end = i + 1;
     while (end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '"') end++;
     const std::string name = line.substr(i + 1, end - i - 1);
+    std::string value;
     if (const auto it = c.stuffed_set.find(name); it != c.stuffed_set.end())
-      out += it->second;
-    else
-      out += c.cfg.setting ? c.cfg.setting(name) : std::string();
+      value = it->second;
+    else if (c.cfg.setting)
+      value = c.cfg.setting(name);
+    // `version` is the window's command, not a setting: a server asking `$version` (its version
+    // check) is told the one the userinfo carries.
+    if (value.empty() && name == "version") value = kProgramVersion;
+    out += value;
     i = end - 1;
   }
   return out;
@@ -406,6 +411,15 @@ void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
   if (c.cfg.shownet > 0 && c.cfg.trace != nullptr && c.cfg.trace->print)
     c.cfg.trace->print(std::to_string(size));  // cl_shownet
   if (size == 0) return;                       // a keep-alive
+  if (c.cfg.into != nullptr) {  // what the window was handed last frame is its, not this read's
+    cl::DemoState& was = q2_demo(c).state;
+    was.prints.clear();
+    was.effects.clear();
+    was.started.clear();
+    was.stopped.clear();
+    was.voice.clear();
+    was.centre.clear();
+  }
   const int levels = q2_demo(c).state.levels;
   const size_t block_at = c.level_record != nullptr ? c.level_record->size() : 0;
   const auto keep = [&c](const uint8_t* bytes, size_t n) {  // one block, read and recorded
@@ -520,6 +534,15 @@ void speak(Q2ClientEnd& c, gn::Writer& w, int samples) {
   gn::write_u16(w, static_cast<uint16_t>(frames.size()));
   gn::write_bytes(w, frames.data(), frames.size());
   c.voice_sent += n;
+  // A `record` keeps your own voice too, as the server relays everyone else's (it echoes no
+  // one's back to its talker): one block of its own, so the recording plays the whole talk.
+  if (c.level_record != nullptr) {
+    std::vector<uint8_t> b = {kSvcGeVoice};
+    write_voice_down(b, q2_demo(c).state.player, cl::kVoiceOpus << 4, seq, frames);
+    const auto len = static_cast<uint32_t>(b.size());
+    for (int k = 0; k < 4; k++) c.level_record->push_back(static_cast<uint8_t>(len >> (8 * k)));
+    c.level_record->insert(c.level_record->end(), b.begin(), b.end());
+  }
 }
 
 // 36's batched moves: whether a packet is due (`cl_maxpackets`'s gap, rounded down to a whole

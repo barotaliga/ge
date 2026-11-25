@@ -1,6 +1,7 @@
 // THE JOINED WINDOW'S WEAPON PREDICTED: from the acknowledged state over the commands in flight,
 // the shot heard and counted once at the shown command (never again on the next pass, nor when a
-// correction moves it by a command), the server's copy of the sound dropped and the axe's hit
+// correction moves it by a command; one a correction moves back onto a command already shown plays
+// then), the server's copy of the sound dropped and the axe's hit
 // kept, the bar's ammunition and the view model drawn from the prediction and put back to the
 // server's before its next frame, nothing predicted for a spectator or under `cl_nopred_weapon 1`;
 // and a whole session on the simulated network, where the predicted shot comes a round trip
@@ -114,11 +115,47 @@ TEST(a_shot_is_counted_once_at_the_shown_command) {
   CHECK(j.d.started.empty());
 }
 
-TEST(the_server_s_copies_are_dropped_and_the_axe_s_hit_kept) {
+TEST(a_shot_a_correction_moves_back_onto_a_shown_command_plays_once_then) {
   Joined j;
   cn::RemoteWeapon w;
-  j.send(false);
-  j.send(false);
+  j.send(true);
+  cn::weapon_predict(w, j.c, j.d, 0, {}, "");  // the first shot, at command 101
+  CHECK(j.d.own_shots == 1);
+  // The server ran 101; its refire ends at 5.113, past every command shown up to 108.
+  cn::weapon_restore(w, j.d);
+  cl::WeaponState& s = j.c.players[0].weapon;
+  s.clock = 5.013f;
+  s.attack_finished = 5.113f;
+  s.next_think = 5.113f;
+  s.ammo[1] = 48;
+  j.c.ch.incoming_acknowledged = 101;
+  for (int k = 0; k < 7; k++) j.send(true);
+  j.d.started.clear();
+  cn::weapon_predict(w, j.c, j.d, 0, {}, "");
+  CHECK(j.d.own_shots == 1 && j.d.started.empty());
+  // The server's next frame thinks earlier, at 5.08: the second shot falls on command 107, which
+  // the last pass already showed without it. It plays now, once.
+  cn::weapon_restore(w, j.d);
+  s.clock = 5.026f;
+  s.attack_finished = 5.08f;
+  s.next_think = 5.08f;
+  j.c.ch.incoming_acknowledged = 102;
+  cn::weapon_predict(w, j.c, j.d, 0, {}, "");
+  CHECK(j.d.own_shots == 2);
+  CHECK(j.d.started.size() == 1 && j.d.started[0].sound == 1);
+  cn::weapon_restore(w, j.d);
+  j.d.started.clear();
+  j.send(true);
+  cn::weapon_predict(w, j.c, j.d, 0, {}, "");
+  CHECK(j.d.own_shots == 2 && j.d.started.empty());
+}
+
+TEST(the_server_s_copy_of_a_played_shot_is_dropped_and_any_other_plays_late) {
+  Joined j;
+  cn::RemoteWeapon w;
+  j.send(true);
+  cn::weapon_predict(w, j.c, j.d, 0, {}, "");  // the shot played at command 101
+  CHECK(j.d.started.size() == 1 && j.d.started[0].sound == 1);
   dc::DemoSound nail;
   nail.entity = 1;
   nail.channel = 1;
@@ -127,16 +164,29 @@ TEST(the_server_s_copies_are_dropped_and_the_axe_s_hit_kept) {
   hit.sound = 2;
   dc::DemoSound other = nail;
   other.entity = 2;  // another player's: heard
+  // The server runs 101 and sends its copy with the axe's hit and another player's shot: the copy
+  // is that shot, dropped; the hit is never predicted, heard.
+  cn::weapon_restore(w, j.d);
+  j.c.ch.incoming_acknowledged = 101;
   j.d.started = {nail, hit, other};
   cn::weapon_predict(w, j.c, j.d, 0, {}, "");
   CHECK(j.d.started.size() == 2);
   CHECK(j.d.started[0].sound == 2 && j.d.started[1].entity == 2);
-  // Above 1, the super nailgun's bit (32) leaves its sound to the server; the axe's hit goes.
+  CHECK(w.filled_late == 0);
+  // A second copy matches no shot played: the prediction missed it, so it plays, late.
+  cn::weapon_restore(w, j.d);
+  j.d.started = {nail};
+  cn::weapon_predict(w, j.c, j.d, 0, {}, "");
+  CHECK(j.d.started.size() == 1 && j.d.started[0].sound == 1);
+  CHECK(w.filled_late == 1);
+  // Above 1, the super nailgun's bit (32) leaves its sound to the server: its copy is heard, and
+  // the axe's hit, the prediction's to play but not played, plays late.
   cn::weapon_restore(w, j.d);
   w.sound_mask = 32;
   j.d.started = {nail, hit};
   cn::weapon_predict(w, j.c, j.d, 0, {}, "");
-  CHECK(j.d.started.size() == 1 && j.d.started[0].sound == 1);
+  CHECK(j.d.started.size() == 2 && j.d.started[0].sound == 1);
+  CHECK(w.filled_late == 2);
 }
 
 TEST(nothing_is_predicted_for_a_spectator_or_with_cl_nopred_weapon) {

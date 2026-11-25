@@ -131,3 +131,38 @@ TEST(with_people_playing_a_stop_far_from_all_of_them_is_no_ones) {
   CHECK(t.a.mates_prey[5] == 2 && t.b.mates_prey[5] == 2);    // and the far monster
   CHECK(t.party.stats.leashed == 2);
 }
+
+TEST(by_the_walk_a_stop_behind_a_wall_goes_to_the_bot_who_reaches_it_first) {
+  Two t;
+  // Every step on a node of its own; each bot's search from his last plan times the walk there.
+  for (sb::WayThrough* w : {&t.a, &t.b})
+    for (size_t i = 0; i < w->steps.size(); i++) w->steps[i].node = static_cast<int32_t>(i);
+  t.a.search.reset(4);
+  t.b.search.reset(4);
+  t.a.search.seed(3);
+  t.b.search.seed(3);
+  // The button by the first bot is 0.3 s from him but behind a wall he must walk round: 9 s; the
+  // second bot reaches it by a door in 6 s. The secret by the second only he reaches at all.
+  t.a.search.reach(0, 9.0, 3);
+  t.b.search.reach(0, 6.0, 3);
+  t.b.search.reach(1, 0.5, 3);
+  t.share();
+  CHECK(t.a.mates_steps[0] == 1 && t.b.mates_steps[0] == 0);  // the button: the second's now
+  CHECK(t.a.mates_steps[1] == 1 && t.b.mates_steps[1] == 0);  // the secret: his, the only one
+  CHECK(t.party.stats.walked == 2);
+  // Within kPartyKeep_s the holder keeps it: the first's walk now 6.1 s.
+  t.a.search.reach(0, 6.1, 3);
+  t.share();
+  CHECK(t.b.mates_steps[0] == 0);
+}
+
+TEST(with_people_playing_the_exit_is_theirs_and_no_bots) {
+  Two t;
+  sb::PartyOptions opt;
+  opt.leash = 4000;
+  opt.humans = {{0, 0, 0}};
+  opt.exit_held = true;
+  t.share(opt);
+  CHECK(t.a.mates_steps[2] == 2 && t.b.mates_steps[2] == 2);
+  CHECK(t.a.mates_steps[0] == 0 && t.b.mates_steps[1] == 0);  // the work still split
+}

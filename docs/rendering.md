@@ -674,8 +674,10 @@ frame a list of `MorphDraw`s.
   its own, `pinch` draws the figure into a column stretched up, `shimmer` runs bands up it. A
   warped fragment is marked reactive, so TAA does not trail the cut. The view-model pass reads
   the same warp along an axis of the held frame, so a spawn assembles the gun in the hands.
-  Shooter's Edge times it at 0.7 s arriving and 0.8 s leaving
-  (`games/shooters_edge/client/warps.hpp`).
+  Shooter's Edge times it at 0.35 s arriving and 0.3 s leaving
+  (`games/shooters_edge/client/warps.hpp`), short so a player who just teleported in is seen whole
+  at once and one who left is never seen where he no longer is; the local player's own weapon is
+  never warped (he fights on at once).
 - **The blood** (`MorphBlood`): up to `kMorphWounds` (6) wounds a draw, each a soaked patch round
   where it struck and blood run down from it: a main stream and a thinner one beside it, wandering,
   narrowing and ending in a bead at `run`. A wound sits in the model's REST frame (its frame 0,
@@ -1968,9 +1970,10 @@ in tile memory):
   classic look bakes one that pulls every colour to the nearest of its palette's 256);
 - the screen's blend (`set_post_blend`): the whole picture mixed toward one colour after the
   grade, a game's hurt flash or the liquid round the eye, a uniform the game sets each frame;
-- the arrival (`set_post_warp`, `arrival_warp`): the whole view opening out of a flash and a warp
-  while the player arrives (a spawn, a teleport's far end): pulled in and streaked toward the
-  middle, washed out and tinted, a clear disc with a bright rim growing past the corners; a
+- the arrival (`set_post_warp`, `arrival_warp`): the view's edges touched for 0.3 s while the
+  player arrives (a spawn, a teleport's far end): outside a clear disc that holds the middle from
+  the first frame, streaked toward the middle, washed out and tinted, the disc growing past the
+  corners with a faint rim; no flash and no pull, so the aim is never covered or moved; a
   uniform too, its share 0 one uniform branch;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
 
@@ -2074,6 +2077,15 @@ boots, and a figure stands on the snow instead of floating over it:
   only a tenth of the search, so two it is. Fall
   Line keeps it on at 0.6 (`r_ao`): the snow's bounce fills the creases in life, so the full
   strength reads too dark.
+- **Applied after the fact** (`encode_ao_apply`, pass `ao.apply`, `ao_apply.wgsl`; M41w): a
+  renderer with no depth prepass (the classic maps', `plugins/brush`, drawing colour and depth in
+  one pass) runs `ao` after its opaque passes (the map and its models) and then multiplies the
+  colour drawn by the sky each pixel sees, read as `sky_seen` reads it; a pixel with no depth (the
+  sky, drawn after) is left alone. It darkens all of a pixel's light, which suits a world lit by
+  its lightmaps, whose light is all bounced. Shooter's Edge's modern look runs it under `ce_ao`
+  (`ce_ao_strength` 0.8, `ce_ao_radius` 48 units). Cost on Quake's demo1 at 960 x 540 on the
+  software rasterizer: `ao` 12.7 ms and `ao.apply` 3.8 ms; the timedemo's price for the switch
+  20.2 ms of a 365 ms median frame (about 5.5 %, the run's noise 7.6 ms).
 
 **As built (M35d): depth of field** (`render/dof.hpp`, `defocused` in `post.wgsl`; the `post`
 lab's `dof` variant and the `world` lab's `--cfg="r_dof …"`). The picture blurred away from a

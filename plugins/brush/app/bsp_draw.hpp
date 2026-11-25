@@ -121,6 +121,10 @@ struct Options {
   // faces by their gloss (the relief's roughness, else a polished stone's), at this strength; 0
   // none. The frame group must bind the kept scene.
   double reflections = 0;
+  // AMBIENT OCCLUSION over the frame (render/ao.hpp, applied after the map and its models are
+  // drawn: `encode_ao_apply`): the share of the light a closed corner loses, 0 none (the pass not
+  // run), and how far a surface still shades another, m. Read by the frame that draws the map.
+  double ao = 0, ao_radius_m = 1.2;
   // THE SHADOWS IN THE MAP DRAWN AGAIN FOR ITS WATER (bsp_views.hpp: the mirror, the view up):
   // 2 as the frame's own, 1 the walls' kept cubes alone, 0 none. The views draw no model, so a
   // figure's shadow there would be cast by nothing: 1 by default (the same price as 2, measured
@@ -323,11 +327,13 @@ struct GpuJob {
 };
 
 // A brush model as the shaders move it: its run of vertices (first, end), 1 hidden, its texture
-// frame + 1 (0: on the clock), and its offset; [0] the world's, its offset's w the textures' frames
-// a second (0: kFrameRate).
+// frame + 1 (0: on the clock), its offset and its turn (a quaternion, x y z w, about the map's
+// origin, before the offset); [0] the world's, its offset's w the textures' frames a second
+// (0: kFrameRate).
 struct GpuMover {
   uint32_t range[4];
   float offset[4];
+  float rotation[4] = {0, 0, 0, 1};
 };
 
 struct GpuBsp {
@@ -478,10 +484,12 @@ void set_shadow_casters(BspDraw& draw, std::span<const float> triangles,
 // entity the game removed). A model not named keeps its last place; all start at the map's.
 // `frame` steps its animated textures from each face's own place in its sequence (frame mod the
 // sequence's length; an entity's frame, as a family that drives them so asks); -1 turns them on
-// the map's clock as the world's.
+// the map's clock as the world's. `rotation` (a unit quaternion x, y, z, w in the engine's frame)
+// turns it about the map's own origin before the offset: a rotating door, a turning fan.
 struct Mover {
   uint32_t model = 0;
   double offset[3] = {0, 0, 0};
+  float rotation[4] = {0, 0, 0, 1};
   bool hidden = false;
   int32_t frame = -1;
 };

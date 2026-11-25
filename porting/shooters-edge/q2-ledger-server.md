@@ -49,22 +49,9 @@ count); `missing` not in our tree or different where it matters (ranked in its n
 
 ## Totals
 
-| kind | done | missing | not-taken | all |
-| --- | --- | --- | --- | --- |
-| Server console commands (the operator's words) | 59 | 0 | 17 | 76 |
-| General console commands and macros the server's console has (common) | 50 | 0 | 7 | 57 |
-| Server settings (cvars) with their defaults | 113 | 0 | 57 | 170 |
-| Server-to-client messages (svc) and protocol extensions the server writes | 47 | 0 | 6 | 53 |
-| What the server accepts from clients | 45 | 0 | 12 | 57 |
-| The game library interface | 66 | 0 | 22 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 63 | 0 | 9 | 72 |
-| Messages an admin sees on the server console, quoted exactly | 30 | 0 | 6 | 36 |
-| Server features beyond single words | 44 | 1 | 11 | 56 |
-| **all** | 517 | 1 | 147 | 665 |
+Counts: `make ledger` counts this ledger's rows by section and the missing rows by rank (`porting/ledger-count.mjs`; `make ledger ARGS=--missing` for the missing count alone). No total is kept here by hand.
 
 ## 1. Server console commands (the operator's words)
-
-done 59, missing 0, not-taken 17
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -150,8 +137,6 @@ done 59, missing 0, not-taken 17
 Our dedicated server's console is the engine console (`engine/console`), fed by `--commands` and
 `+commands`; rcon reaches only Quake II's admin words and the rules' console (S29).
 
-done 50, missing 0, not-taken 7
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | con.cmdlist | `cmdlist` | Lists commands (with a filter). | done | `engine/console/console_builtins.cpp` |
@@ -216,8 +201,6 @@ done 50, missing 0, not-taken 7
 
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
-
-done 113, missing 0, not-taken 57
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -394,8 +377,6 @@ done 113, missing 0, not-taken 57
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 47, missing 0, not-taken 6
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | svc.muzzleflash | message 1 | A player's weapon flash (light and sound) or login/logout flash, by entity and kind. | done | Our rules send every gun's flash (`q2_fight.cpp` muzzle_flash, `q2_monsters.cpp`), written by `q2_wire.cpp`; the shot's sound is in the flash, never sent twice |
@@ -453,8 +434,6 @@ done 47, missing 0, not-taken 6
 | proto.userinfo-mvdspec | `mvdspec` and `password` keys removed from user info | So a library never sees them. | done | games/shooters_edge/net/q2_net_server.cpp |
 
 ## 5. What the server accepts from clients: clc messages, string commands, out-of-band words
-
-done 45, missing 0, not-taken 12
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -520,8 +499,6 @@ done 45, missing 0, not-taken 12
 
 Ours: the native host (`games/shooters_edge/server/q2_native.hpp`, `q2_native_calls.cpp`,
 `q2_native_abi.hpp`, `q2_native_save.cpp`).
-
-done 66, missing 0, not-taken 22
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -618,8 +595,6 @@ done 66, missing 0, not-taken 22
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 63, missing 0, not-taken 9
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | msg.oob.protocol | `Unsupported protocol version <n>.` | Connect with an unknown protocol. | done | games/shooters_edge/net/q2_net_server.cpp (`q2_connect_ask`) |
@@ -700,8 +675,6 @@ done 63, missing 0, not-taken 9
 Developer-only prints (the reference's developer level) are left out; one row per message or per
 tight group of one command's answers.
 
-done 30, missing 0, not-taken 6
-
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | log.masters | `Only dedicated servers use masters.`, `Too many masters.`, `Couldn't resolve master: <addr>`, `Master server at <addr>.`, `There are no masters.`, the `num hostname lastmsg address` table | Master words. | done | games/shooters_edge/net/q2_game.cpp, plugins/classic/protocol/masters.cpp |
@@ -742,8 +715,6 @@ done 30, missing 0, not-taken 6
 | log.ac | anticheat console lines (violations, kicks, the service's state) | | not-taken | `q2-gaps2-server.md` B1 |
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
-
-done 44, missing 1, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -800,6 +771,6 @@ done 44, missing 1, not-taken 11
 | feat.save.dedicated | saves on a dedicated server | | done | games/shooters_edge/net/q2_game.cpp: save, autosave and load on the dedicated server, the level-start autosave kept as `save0` |
 | feat.save.autosave | level-start autosave into `save0` at each level change in a unit (not in deathmatch) | | not-taken | Our design: ours autosaves as a level is entered (`q2_native_save.cpp`, our rules too) in our own save format; the dedicated server keeps it as `saves/save0.save` (games/shooters_edge/net/q2_game.cpp, `keep_autosave`) |
 | feat.spectator-fly | extended clients' spectators fly faster, with the fly fix | | done | plugins/classic/q2_move (`fly_time`, `fly_friction`, `fly_glide`, `q2_fly_for_protocol`): a stock 35 or 36 client's spectator flies at twice the time, a 36 client's with friction 4 gliding on; a 34 client's keeps the original step; ours and bots fly as before. Our rules by `ClientInfo::protocol`, a hosted library by the thinking slot (`NativeHost::thinking`). Facts: porting/shooters-edge/q2-server-batch13-facts.md |
-| feat.ext-behaviours | what an extended server does beyond the wire | With the extensions: the map's extended contents in traces, a box starting all-solid stopped at once, players and projectiles clipped only by masks asking for them, entities flagged no-cull always sent, looping sounds culled by distance, the low-priority render flag dropped first when a frame overflows, a client's no-flares setting, the newer footstep and ladder events. | missing | Batch 13 facts § B 3-4 (porting/shooters-edge/q2-server-batch13-facts.md) |
+| feat.ext-behaviours | what an extended server does beyond the wire | With the extensions: the map's extended contents in traces, a box starting all-solid stopped at once, players and projectiles clipped only by masks asking for them, entities flagged no-cull always sent, looping sounds culled by distance, the low-priority render flag dropped first when a frame overflows, a client's no-flares setting, the newer footstep and ladder events. | done | plugins/brush/trace.cpp (`set_extended`: each leaf's contents with its brushes', a sweep that stays inside a brush stopped at 0 with its contents), server/q2_native_calls.cpp (players and projectiles flagged by the game clipped only by a mask asking for them), server/q2_wire.cpp (`Q2Sight::extended`: a looping sound by the hearing set and its reach; no-cull linked everywhere), server/q2_wire_ext.cpp (no flares, the newer steps, the rocket's gib trail kept). Not taken: the low-priority render flag (our hosted frames are uncapped, `cvar.sv_prioritize_entities` not taken). Facts: q2-server-batch13-facts.md § B 10 |
 | feat.recycle | quit telling clients to reconnect | | not-taken | `q2-server-gaps.md` row 15 |
 | feat.master | classic heartbeat (status text) every 300 s, first 5 s after a game starts; `shutdown` on quit | done | `plugins/classic/protocol/masters.cpp` (only while public and dedicated) |

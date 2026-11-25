@@ -16,9 +16,11 @@
 // shot a correction moves by a command is not played twice (one of the same sound within 0.05 s
 // of weapon clock is the same shot), and the lightning gun's hit at most once per 0.6 s. Each
 // counts in `DemoState::own_shots`, which the window's hand fires on (client/held.cpp). The
-// server's own copies on the player's entity are dropped while predicting: channel 1's weapon
-// sounds (the axe's hit kept under `cl_predict_weaponsound` 1), channel 0's lightning start; with
-// the setting above 1 its bits name the weapons left to the server (2 axe, 4 shotgun, 8 super
+// server's own copies on the player's entity (channel 1's weapon sounds, the axe's hit kept under
+// `cl_predict_weaponsound` 1, and channel 0's lightning start) are matched to the sounds the
+// prediction played, by kind and command (`WeaponPlayed`, net/weapon_shown.hpp), and dropped; a
+// copy that matches none is a shot the prediction missed and plays late. With the setting above 1
+// its bits name the weapons left to the server (2 axe, 4 shotgun, 8 super
 // shotgun, 16 nailgun, 32 super nailgun, 64 grenades, 128 rockets, 256 lightning).
 //
 // OFF: `cl_nopred_weapon 1`, `cl_nopred 1`, a spectator, a server that did not agree the bit or
@@ -42,6 +44,7 @@
 #include "classic/weapon_predict.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/weapon_shown.hpp"
 
 namespace shooters_edge::net {
 
@@ -54,14 +57,19 @@ struct RemoteWeapon {
   bool on = false;                 // it predicted
   ge::classic::WeaponState shown;  // the state at the shown command
   uint32_t played_to = 0;          // the newest command whose shots have played
-  float last_shot[10] = {};        // the weapon clock of each sound's last play
+  float last_shot[16] = {};        // the weapon clock of each sound's last play, by kind
   bool frames_live = false;        // the server has sent a weapon frame other than 0
+  WeaponPlayed played;             // the sounds played, by command, for the server's copies
+  uint32_t copies_from = 0;        // the acknowledged command at the last pass
+  uint32_t filled_late = 0;        // the server's copies that matched none and played (labs)
   // The shots this pass played first, with the command each was fired on (own_missiles.hpp
   // throws the nails, rockets and grenades among them).
   struct Fired {
     ge::classic::WeaponEvent shot;
     uint32_t command = 0;
     bool midair = false;  // the state's midair flag: the rocket flies at twice the speed
+    int weapon = 0;       // the weapon in hand that fired it, under `rules`
+    ge::classic::WeaponRules rules = ge::classic::WeaponRules::quake;
   };
   std::vector<Fired> fired;
   // What the drawn state held before the prediction drew over it (`applied`).
@@ -75,8 +83,9 @@ void weapon_restore(RemoteWeapon& w, client::DemoState& d);
 
 // One pass: the weapon run forward from `c`'s acknowledged state to the shown command and drawn
 // into `d` (the stats, the player's frame), its new shots added to `d.started` and counted in
-// `d.own_shots`, the server's copies dropped. `waterlevel` the predicted move's, `origin` the
-// player's drawn place; `w_rank` the player's best-weapon order ("" Quake's).
+// `d.own_shots`, the server's copies of them dropped (any other plays late). `waterlevel` the
+// predicted move's, `origin` the player's drawn place; `w_rank` the player's best-weapon order (""
+// Quake's).
 void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, client::DemoState& d, int waterlevel,
                     const ge::shooter::Vec3f& origin, const std::string& w_rank);
 

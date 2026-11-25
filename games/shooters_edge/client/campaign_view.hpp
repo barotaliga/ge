@@ -82,6 +82,10 @@ struct Effect {
   std::string name;        // a named effect's
   int colour = 0;          // a laser's sparks' palette index; a burst's; explosion2's first
   int q2_specks = 0;       // Quake II: a hit's puff of this many specks of `colour` off `way`
+  // Quake II: a gun's flash's value (q2_flash_fx.hpp; -1 none) and whether a monster's, for the
+  // spent cases its gun throws (shells.hpp).
+  int flash = -1;
+  bool flash_monster = false;
 };
 
 inline constexpr double kPrintSpeed = 8;  // scr_printspeed's default, characters a second

@@ -62,10 +62,10 @@
 
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <string>
 #include <vector>
 
+#include "classic/protocol/challenges.hpp"
 #include "net/transport.hpp"
 #include "server/bans.hpp"
 #include "server/cmdfilter.hpp"
@@ -374,10 +374,8 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   Q2Mvd mvd;               // the multiview recorder (sv_mvd_enable)
   int64_t mvd_frame = -1;  // the rules frame last recorded
   bool mvd_level = true;   // a level waits for its game state
-  // The challenges (1024 kept, one an address and port, each used once; the oldest
-  // replaced when full): by address, and the addresses oldest first.
-  std::map<uint64_t, int32_t> challenges;
-  std::vector<uint64_t> challenge_order;
+  // The challenges (classic/protocol/challenges.hpp), each used once.
+  ge::classic::ChallengeBook challenges;
   uint32_t next_challenge = 0;
   int32_t count = 0;           // the level's count, as the server data carries it
   int64_t written_frame = -1;  // the tenth last sent
@@ -387,6 +385,9 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
+  // The moves of players with no connection (the bots the game seats, bots/bot_seats.hpp), run in
+  // the next frame after the clients' and emptied.
+  std::vector<sh::Packet> local_moves;
   // A client's `nextserver <count>` (a cinematic or picture level watched to its end, while
   // `cfg.wire.show` names one): the game decides (q2_game.cpp); null: ignored.
   std::function<void(int32_t count)> nextserver;
@@ -404,6 +405,10 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   ge::server::TryBucket status_tries;                // sv_statusrate's
   double started = -1;                               // the network's time of the first frame, s
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
+  // Each move a client's packet brings, before the rules run it (the match's prewar holds fire
+  // and the jump: q2_match.hpp); null: none.
+  void (*move_hook)(void* ctx, int slot, sh::MoveCmd& cmd) = nullptr;
+  void* move_ctx = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;
@@ -426,8 +431,9 @@ bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t
 void q2_net_frame(Q2NetServer& s, int64_t now_us);
 
 // The arsenal's message (svc 118 after its id, to a client that agreed `*ge_ext` bit 4096): the
-// weapons `body` holds as a 16-bit mask by kSqWeapons' row, then its ammunition of each kind
-// (shells, bullets, grenades, rockets, cells, slugs) as 16-bit counts, little-endian.
+// weapons `body` holds as a 32-bit mask by kSqWeapons' row, the count of ammunition kinds (`none`
+// included) as a byte, then its ammunition of each kind from 1 (shells, bullets, grenades,
+// rockets, cells, slugs, then the mission packs' kinds) as 16-bit counts, little-endian.
 std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body);
 // Every client told the server is going, and dropped.
 void q2_net_stop(Q2NetServer& s);

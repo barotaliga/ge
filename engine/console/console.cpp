@@ -100,9 +100,14 @@ Button& Console::add_button(std::string_view name, std::string_view help) {
     ++b->held;
     b->pressed = true;
   });
-  add_command("-" + n, help, [b](Console&, const Args&) {
-    if (b->held > 0) --b->held;
-  });
+  // A server may let go of a button for the player (a classic program does at a respawn or an
+  // intermission), never press one.
+  add_command(
+      "-" + n, help,
+      [b](Console&, const Args&) {
+        if (b->held > 0) --b->held;
+      },
+      kStuffable);
   return *b;
 }
 
@@ -702,7 +707,11 @@ void Console::set_arg_values(std::string_view word, ArgValues values) {
 }
 
 std::vector<std::string> Console::arg_values(std::string_view word) const {
-  const auto it = arg_values_.find(lower(word));
+  auto it = arg_values_.find(lower(word));
+  if (it == arg_values_.end()) {  // a game's spelling of a command completes as the command does
+    const auto syn = command_synonyms_.find(lower(word));
+    if (syn != command_synonyms_.end()) it = arg_values_.find(syn->second.target);
+  }
   return it != arg_values_.end() ? it->second() : std::vector<std::string>();
 }
 

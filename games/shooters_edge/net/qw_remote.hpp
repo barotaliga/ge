@@ -87,6 +87,7 @@
 #include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
 #include "shooter/speedjump_assist.hpp"
+#include "shooter/teleport_ahead.hpp"
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -164,7 +165,7 @@ struct RconAway {
   bool opened = false;
 };
 
-struct Remote {
+struct Remote {  // NOLINT(clang-analyzer-optin.performance.Padding): one, the window's, by name
   // In the order that packs it (the lint holds the padding).
   gn::Transport* transport = nullptr;               // what it talks over (`own`, or remote_start's)
   const ge::console::Button* voip_key = nullptr;    // `+voip` (add_remote_commands)
@@ -238,8 +239,29 @@ struct Remote {
   client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
   int missiles_level = -1;       // the level they fly in (DemoState::levels)
   bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
-  uint32_t jump_played_to = 0;   // the newest command whose jump has played
-  int jumps_played = 0;          // jumps whose sound the prediction played (for the labs)
+  // cl_predict_teleport: the level's teleporters (classic/teleporters.hpp, `remote_teleporters`)
+  // taken in the prediction, so the window draws the far end and turns the view the command the
+  // player walks in; the guess the server has not answered (shooter/teleport_ahead.hpp). On, the
+  // high-lag teleport is not asked for: the moves after the teleport are made the new way already.
+  bool predict_teleports = true;
+  bool predict_pushes = true;  // cl_predict_push: the level's push triggers taken the same way
+  // cl_predict_movers: doors, plats and trains run on by their speed between the last two frames
+  // while the moves are replayed, carrying the player (shooter/predict.hpp, `advance_movers`).
+  bool predict_movers = true;
+  // The movers the last two predictions ran over (and their level): a new frame's correction
+  // predicts the newest command from the old frame over the old movers.
+  std::vector<sh::ClientModel> movers_last, movers_prev;
+  sh::MoverTrack movers_track;  // the brush models' motion over the frames (shooter/predict.hpp)
+  float movers_ahead_s = 0;     // how far on the newest move runs them (they are drawn there)
+  int movers_last_level = -1, movers_prev_level = -1;
+  uint32_t jump_played_to = 0;  // the newest command whose jump has played
+  int jumps_played = 0;         // jumps whose sound the prediction played (for the labs)
+  int64_t misses = 0;           // frames the server's word moved the prediction (for the labs)
+  float miss_units = 0;         // the last one's size, units, before any smoothing
+  int tele_hit_cmd = -1;        // the last main prediction's teleport: its place in the replay
+  int tele_hit_index = -1;
+  sh::TeleTables tele;  // the teleporters, and the push triggers (cl_predict_push) after them
+  sh::TeleGuess tele_guess;
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;
@@ -277,7 +299,6 @@ struct Remote {
   // net/qw_client.hpp's `to_run`), for the window's console to run as the server's; taken each
   // frame.
   std::vector<std::string> stuffed_run;
-  bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
   // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and
   // handed back later (`snap_take`). Unset: the server is told no, as with scr_allowsnap 0.
@@ -295,6 +316,7 @@ struct Remote {
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
   bool solid_players = true;                  // cl_solid_players: others block the prediction
   bool voip = true;                           // cl_voip: ask for voice when joining
+  bool kept = false;
   // cl_physfps, cl_physfps_spectator: the moves a second asked for (qw_client.hpp's
   // `client_move_rate`), taken by the client every step; the tick clock's fraction of a
   // microsecond.
@@ -358,9 +380,13 @@ void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
 // The level's brush models the prediction moves through ([0] the world), the window's once it
 // has loaded the level `remote_step` named (nullptr: nothing predicted); `brushes`, the level's
-// brushes, are what a server of Quake II's prediction traces.
+// brushes, are what a server of Quake II's prediction traces; `level`, its BSP view, gives the
+// teleporters it foresees (`remote_teleporters`; nullptr: left as they are).
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
-                  const ge::brush::Map* brushes = nullptr);
+                  const ge::brush::Map* brushes = nullptr, const ge::brush::Map* level = nullptr);
+// The level's teleporters the prediction foresees (classic/teleporters.hpp), off its BSP view
+// (nullptr: none), for a server of either game.
+void remote_teleporters(Remote& r, const ge::brush::Map* level);
 // Leaves: the server told (a disconnect, three times), the socket closed, the state cleared.
 void remote_disconnect(Remote& r);
 // One window frame of `wall_s` s: the ticks due run (each sending `r.hands` with `r.view`), every

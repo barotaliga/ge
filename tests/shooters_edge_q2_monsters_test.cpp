@@ -376,7 +376,8 @@ TEST(a_monster_without_a_duck_or_facing_away_never_ducks) {
     auto h = open_hall({{{"classname", k[0]}, {"origin", "0 0 24"}, {"angle", k[1]}}});
     run(*h, 10);
     for (int i = 0; i < 2 * kSecond; i++) {
-      sv::monster_dodge(h->s(), h->m().entity, 0, 600, 1000);  // every offer taken by its roll
+      sv::monster_dodge(h->s(), h->m().entity, 0, 600, 1000,
+                        {0, 0, 40});  // every offer taken by its roll
       run(*h, 1);
       CHECK_MSG(!h->m().ducked && h->m().duck_frame < 0, k[0]);
     }

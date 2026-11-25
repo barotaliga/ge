@@ -330,7 +330,8 @@ std::shared_ptr<const MarkFaces> receivers_of(const ge::brush::Map& m) {
         mesh.idx.push_back(static_cast<uint32_t>(mesh.pos.size()));
         mesh.pos.push_back(v);
       }
-      mesh.tag.push_back(0);
+      mesh.tag.push_back(
+          static_cast<uint16_t>(std::min<uint32_t>(sf.texture, 0xffff)));  // its texture
     }
   }
   faces->receivers = gd::bin_receivers(mesh, 1);  // points into faces->mesh, kept beside it
@@ -489,6 +490,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.blood_life_s = picture.blood_time > 0 ? picture.blood_time : -1;
   s.blood_amount = std::clamp(picture.blood_amount, 0.0, 3.0);
   s.respawns = picture.ce.respawns;
+  s.shells = picture.ce.shells;
   return s;
 }
 
@@ -889,15 +891,16 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   out.puffs.clear();
   out.flames.clear();
   out.beams.clear();
+  out.sounds.clear();
   // The marks' receivers, made once a map (ce_decals).
   const ge::brush::Map* faces = l.map ? &l.map->bsp.map : nullptr;
-  if ((s.on.decals || s.on.blood) && faces != s.marked) {
+  if ((s.on.decals || s.on.blood || s.on.shells) && faces != s.marked) {
     s.marked = faces;
     s.receivers = faces != nullptr ? receivers_of(*faces) : nullptr;
     s.marks = ge::detail::make_pool(kMarks);
     s.mark_light.assign(kMarks, {1, 1, 1});
   }
-  if (!s.on.decals && !s.on.blood) {
+  if (!s.on.decals && !s.on.blood && !s.on.shells) {
     s.marked = nullptr;
     s.receivers.reset();
   }
@@ -1284,7 +1287,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       m.warp = player_dust(m.origin, m.angles, m.entity).warp;
       m.warp.shown = float(shown);
     }
-    out.held_shown = own > 0 ? float(arrival_shown(s.warps, own, t)) : 1;
+    out.held_shown = 1;  // his own weapon is never warped: he fights on at once
     // His own arrival's warp of the whole view, in the colour of the pack's teleport fog (its
     // specks' brightest, 7..14), made as bright as a colour goes.
     out.arrival_s = -1;
@@ -1302,14 +1305,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     for (const Warp& w : s.warps.live) {
       const double age = t - w.t0, was = w.t0 >= t ? -1 : std::max(t - dt - w.t0, 0.0);
       if (w.arriving) {
+        // His own arrival throws no ash: it would gather before his eyes as he must aim.
+        if (w.entity == own) continue;
         // Onto his body as it stands now.
         const Placed m = placed_of(w.entity);
         fx::Dust d = player_dust(m.origin, m.angles, w.entity);
         if (s.models != nullptr && body_triangles(*s.models, m, t, s.skin)) d.skin = s.skin;
-        if (w.entity == own) {
-          d.keep_off_eye = true;
-          put(l.pose.eye, d.eye);
-        }
         warp_dust(w, d, was, age, s.seed++, &out.births);
         continue;
       }
@@ -1543,8 +1544,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_model_fx(s, 2, e.at, e.way, t);
           break;
         }
-        if (e.name == "te_blaster") {  // Quake II's bolt landing: yellow sparks
-          fx::blaster_hit(p, s.seed++, &out.births);
+        if (e.name == "te_blaster" || e.name == "te_blaster2") {
+          // Quake II's bolt landing: yellow sparks; Ground Zero's green bolt's are green.
+          fx::blaster_hit(p, s.seed++, &out.births, e.name == "te_blaster2");
           // On a wall: a small glowing mark, the bolt's heat left in it.
           double normal[3], dir[3];
           const ge::detail::SurfaceClass sc = face(eye_map, normal, dir);
@@ -1819,6 +1821,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     out.models.push_back(spr);
   }
   q2_draw_model_fx(s, l.effect_models, l.me, l.own > 0 ? l.me.entity : 0, t, out);
+  step_cases(l, s, t, dt, out);  // the guns' spent cases (ce_shells)
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.
@@ -1845,6 +1848,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
 
 bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {
   std::vector<fx::FireRow> rows;
+  f.ejects.clear();
+  if (!at_eye.empty()) {
+    for (const std::string_view name : at_eye) f.ejects.push_back(held_ejection(name));
+  } else {
+    for (int w = 0; w < view::kWeapons; ++w) f.ejects.push_back(own_set_ejection(w));
+  }
   if (!at_eye.empty()) {
     for (const std::string_view name : at_eye) {
       const ge::classicenhance::ClassicFire* c = ge::classicenhance::classic_fire_of(name);

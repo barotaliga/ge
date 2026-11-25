@@ -32,6 +32,7 @@
 // ge:keywords placed-model effect-models s_explod bolt effect_model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
+// ge:keywords rotating-brush-models func_rotating rotate_object
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
 // ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting filtered_models
 // ge:keywords player-figures choose_look worn_slot drawn_kind carried-weapons skin-files
@@ -116,6 +117,9 @@ struct Placed {
   // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
   // by `player_skin_morph`); empty: none named.
   std::string skin_name;
+  // A picture it wears in place of its model's own skin, by its path in the game's files (Quake
+  // II's custom skin: the skin number naming a picture of the server's list); empty: its own.
+  std::string skin_picture;
   // A player's `model` (its user info's: the figure in `players/<model>/` it is drawn as, over the
   // game's own); empty: none named.
   std::string model_name;
@@ -137,6 +141,9 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // pack has only its own, so the other draws nothing).
 // `figure_q2`: what a Quake II player's model 255 ("the client's own") is drawn as, in the look his
 // slot names (`Placed::skin_name`), when a recording or a joined server sends one.
+// `case_hull`, `case_brass`, `case_heavy`: the guns' spent cases (ce_shells, shells.hpp), made by
+// classic enhance (classicenhance/shells.hpp's `casing_model`, in the game's palette), in
+// classicenhance::Casing's order; never read from the packs.
 // `q2_fx` on: Quake II's model effects (q2_model_fx.hpp's Q2FxModel, in its order).
 enum class EffectModel : uint8_t {
   explosion,
@@ -146,6 +153,9 @@ enum class EffectModel : uint8_t {
   place_q1,
   place_q2,
   figure_q2,
+  case_hull,
+  case_brass,
+  case_heavy,
   q2_fx
 };
 inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
@@ -155,6 +165,9 @@ inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
                                                 "progs/h_player.mdl",
                                                 "models/items/c_head/tris.md2",
                                                 "players/male/tris.md2",
+                                                "ce/case_hull",
+                                                "ce/case_brass",
+                                                "ce/case_heavy",
                                                 "models/objects/r_explode/tris.md2",
                                                 "models/objects/explode/tris.md2",
                                                 "models/objects/smoke/tris.md2",
@@ -247,6 +260,8 @@ struct ModelKind {
   // A Quake player's figure from another game: its folder's `weapon.md2` (an index into the
   // figure kinds, in its own picture), drawn in its hand on the same frame; kNone: none.
   uint32_t held = kNone;
+  std::string path;  // its file in the game's files ("progs/soldier.mdl"), as the list names it
+  std::vector<std::string> frame_names;  // the players' own figure's frames' names (`player`)
 };
 
 // THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`
@@ -330,6 +345,9 @@ struct WorldModels {
   } slots;
 };
 
+// The pictures `placed` wear (`Placed::skin_picture`) listed beside the skins the first time one is
+// seen, each read the first time it is worn (`worn_slot`).
+void list_worn_pictures(WorldModels& m, std::span<const Placed> placed);
 // The kind `p` is drawn as, and what it wears: a player in their own skin, a second-game player as
 // their own figure, the weapon they carry from its folder.
 const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn);
@@ -369,8 +387,9 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
 void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, WorldModels& m,
                    const wgpu::BindGroupLayout& frame, ModelsRead read);
 // Where the map's own brush models stand this frame (doors, plats, buttons): each one an entity
-// of `placed` holds offset by that entity's origin; one no entity holds (removed by the game) is
-// hidden. Empty when the models were loaded with no server's list.
+// of `placed` holds offset by that entity's origin and turned by its angles (a rotating door, a
+// fan); one no entity holds (removed by the game) is hidden. Empty when the models were loaded with
+// no server's list.
 void place_brushes(const WorldModels& m, std::span<const Placed> placed, double t,
                    std::vector<ge::brush::app::Mover>& out);
 // This frame's draws of `placed` at `view` (its time the animations' clock), lit `brightness`

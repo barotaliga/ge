@@ -102,7 +102,7 @@ void movers_of(const ClientMirror& m, const ClientFrame& f, std::vector<sh::Clie
     if (name.size() < 2 || name[0] != '*') continue;
     const int k = std::atoi(name.c_str() + 1);
     if (k > 0 && static_cast<size_t>(k) < m.map_models.size())
-      out.push_back({&m.map_models[static_cast<size_t>(k)], e.origin});
+      out.push_back({&m.map_models[static_cast<size_t>(k)], e.origin, {}, 1e30f});
   }
 }
 

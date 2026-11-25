@@ -6,6 +6,10 @@
 // shows what the modern effects add (client/world_fx.cpp keyed by the shot's kind, which a
 // monster's shot of the same kind shares).
 //
+// With `--mod=xatrix` (The Reckoning's folder beside the base one) the pack's rules play and its
+// own weapons are fired too: the ion ripper's bouncing bolt, the phalanx's two balls and their
+// burst, the trap laid on the floor.
+//
 // Without `--game` the weapons are fired in a hall built here and what the effects read is
 // counted as deterministic metrics (the shots in flight by kind, the named effects by name), so CI
 // needs no game data. With `--game=<folder>` (the folder holding Quake II's base folder) they
@@ -14,7 +18,8 @@
 //
 // ge:summary Lab: Quake II's weapons fired, classic beside modern: bolts, smoke, rail, BFG
 // ge:keywords lab se-q2-weapon-fx q2 weapon-effects blaster hyperblaster railgun bfg
-// ge:keywords rocket grenade sparks glow-trail rail-beam modern-look screenshot
+// ge:keywords rocket grenade sparks glow-trail rail-beam modern-look screenshot spent-shells
+// ge:keywords ground-zero etf-rifle plasma-beam disruptor prox-mine tesla
 // ge:skill render labs
 // ge:test tests/shooters_edge_listen_test.cpp
 #include <cmath>
@@ -48,6 +53,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -74,7 +80,12 @@ struct Shot {
   bool held = false;
   // Fired, and the picture from the eye: the shot's flash, light and kick on the weapon in hand.
   bool eye = false;
-  int hold = 4;  // `wall`: the frames the trigger is held
+  int hold = 4;  // `wall` or `release`: the frames the trigger is held
+  // Let go after `hold` frames though not at a wall: a thrown mine, a single shot watched land.
+  bool release = false;
+  // With `wall`: the picture from half a metre above the spent shells the gun threw, wherever
+  // they came to lie (ce_shells).
+  bool shells = false;
 };
 constexpr Shot kShots[] = {
     {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
@@ -117,6 +128,37 @@ constexpr Shot kShots[] = {
      sv::SqWeapon::bfg, true, false, false, 2},
     {"bfg-marks-cool", "the flames out, thin smoke off the large mark as it cools", 420,
      sv::SqWeapon::bfg, true, false, false, 2},
+    // The spent shells (ce_shells): the brass a burst throws, the hulls a break drops.
+    {"machinegun-shells", "the burst's brass thrown out to the right, bounced and lying", 160,
+     sv::SqWeapon::machinegun, true, false, false, 50, false, true},
+    {"chaingun-shells", "the chain gun's brass, a heap of it beside the player", 160,
+     sv::SqWeapon::chaingun, true, false, false, 60, false, true},
+    {"super-shotgun-shells", "the two red hulls dropped as the gun broke open", 140,
+     sv::SqWeapon::super_shotgun, true, false, false, 4, false, true},
+};
+// Ground Zero's weapons (`--mod=rogue`): the shots its own rules fire (server/q2_gz.hpp).
+constexpr Shot kGroundZeroShots[] = {
+    {"etf-rifle", "a stream of flechettes in flight down the line", 16, sv::SqWeapon::etf_rifle},
+    {"plasma-beam", "the beam's straight line from the gun to the wall", 16,
+     sv::SqWeapon::plasma_beam},
+    {"disruptor", "the disruptor's bolt in flight", 10, sv::SqWeapon::disruptor},
+    {"prox-launcher", "a prox mine arcing out of the launcher", 20, sv::SqWeapon::prox_launcher,
+     false, false, false, 2, true},
+    {"prox-mine-armed", "the mine stuck where it landed, opened and armed", 260,
+     sv::SqWeapon::prox_launcher, false, false, false, 2, true},
+    {"tesla", "the tesla thrown, tumbling", 40, sv::SqWeapon::tesla, false, false, false, 8, true},
+    {"tesla-open", "the tesla at rest, opened, its prongs up", 500, sv::SqWeapon::tesla, false,
+     false, false, 8, true},
+};
+// The Reckoning's (`--mod=xatrix`).
+constexpr Shot kPackShots[] = {
+    {"ion-ripper", "a glowing bolt in flight, bouncing off the walls", 14,
+     sv::SqWeapon::ion_ripper},
+    {"ion-ripper-flash", "the ripper's flash at the muzzle, the gun kicked", 40,
+     sv::SqWeapon::ion_ripper, false, false, true},
+    {"phalanx", "two orange balls side by side in flight", 6, sv::SqWeapon::phalanx},
+    {"phalanx-burst", "the balls' bursts against the far wall", 40, sv::SqWeapon::phalanx},
+    {"trap", "the trap on the floor, opening", 180, sv::SqWeapon::trap, true, false, false, 2},
 };
 constexpr const char* kLooks[] = {"classic", "modern"};
 
@@ -163,7 +205,7 @@ bool arm(cl::Listen& l, const Shot& shot) {
   if (s == nullptr) return false;
   const sv::SqWeaponRow& row = sv::kSqWeapons[static_cast<int>(shot.weapon)];
   sv::SqBody& body = s->players[0].body;
-  if (row.item != nullptr) body.counts[sv::sq_item(row.item)] = 1;
+  if (row.item != nullptr) body.counts[sv::sq_item(row.item, row.pack)] = 1;
   if (row.ammo != sv::SqAmmo::none) body.ammo[static_cast<int>(row.ammo)] = 200;
   if (shot.weapon != sv::SqWeapon::blaster)
     l.rules->client_command(0, std::string("use ") + row.name);
@@ -283,7 +325,9 @@ void run(gl::Lab& lab) {
   const cl::GameAdapter& adapter = cl::adapter_of(game);
   const ge::classicenhance::Profile& content = pf::content_of(game);
   cl::SearchPath files;
-  if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content)) {
+  const std::string mod = lab.arg("mod");
+  if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod, files,
+                         error, content)) {
     lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
                         "/pak0.pak>. Skill: shooter.");
     return;
@@ -321,8 +365,12 @@ void run(gl::Lab& lab) {
       shots.push_back({held_ids[size_t(k)].c_str(),
                        "the weapon at rest in the right hand, in its own skin, at the eye", 30,
                        static_cast<sv::SqWeapon>(k), false, true});
+  } else if (sv::q2_pack_of_folder(mod) == sv::Q2Pack::ground_zero) {
+    shots.assign(std::begin(kGroundZeroShots), std::end(kGroundZeroShots));
   } else {
     shots.assign(std::begin(kShots), std::end(kShots));
+    if (sv::q2_pack_of_folder(mod) == sv::Q2Pack::reckoning)
+      shots.insert(shots.end(), std::begin(kPackShots), std::end(kPackShots));
   }
   for (const Shot& shot : shots) {
     if (!only.empty() && only != shot.id) continue;
@@ -330,6 +378,7 @@ void run(gl::Lab& lab) {
       if (shot.held && std::string_view(look_name) != "modern") continue;
       cl::ListenOptions opt = shooters_edge::net::listen_options();
       opt.console = {"deathmatch 1"};
+      opt.files = &files;  // the game folder: a mission pack's plays its rules
       cl::Listen l;
       std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
       if (!map || !cl::listen_start(l, progs(), std::move(map), opt, error)) {
@@ -393,6 +442,7 @@ void run(gl::Lab& lab) {
         cl::step_fx(l, shown, fx_state, t, kTic, fx);
         hand = cl::step_held(l, shown, held, {}, weapons, t, kTic);
         cl::fire_held(held_fire, hand, fx_state.on.muzzles, t, fx);
+        cl::held_cases(fx_state.cases, held_fire, hand, fx_state.on.shells, t);  // ce_shells
         cl::draw_world(*device, *frame, v, fx, &hand, kTic, {}, out.view);
       };
       sh::MoveCmd aim;
@@ -408,7 +458,8 @@ void run(gl::Lab& lab) {
       int fired_at = -1;
       for (int i = 0; i < shot.ticks; i++) {
         sh::MoveCmd cmd = aim;
-        if (!shot.held && (!shot.wall || i < shot.hold)) cmd.buttons = sh::kButtonAttack;
+        if (!shot.held && ((!shot.wall && !shot.release) || i < shot.hold))
+          cmd.buttons = sh::kButtonAttack;
         cl::listen_frame(l, cmd);
         step(i);
         // From the eye: the picture a frame after the shot leaves the muzzle (the flash lasts a
@@ -427,26 +478,56 @@ void run(gl::Lab& lab) {
         v.eye[1] += 0.25;
         v.heading -= 0.55;
       }
+      if (shot.shells) {
+        // The cases lying or flying (measured: the pictures show them).
+        lab.metric(std::string(shot.id) + "-" + look_name + ".cases",
+                   static_cast<double>(ge::detail::debris_count(fx_state.cases.pool)), "count",
+                   gl::Det::measured);
+        // Down at where the cases lie, from half a metre above them on the player's side, so a
+        // heap beside him and a pair dropped at his feet are both seen close.
+        double mid[3] = {0, 0, 0};
+        int n = 0;
+        for (const ge::detail::Debris& d : fx_state.cases.pool.pieces) {
+          if (d.serial == 0) continue;
+          mid[0] += d.at.x, mid[1] += d.at.y, mid[2] += d.at.z;
+          ++n;
+        }
+        if (n > 0) {
+          for (double& m : mid) m /= n;
+          double ax = v.eye[0] - mid[0], az = v.eye[2] - mid[2];
+          double len = std::sqrt(ax * ax + az * az);
+          if (len < 0.2) ax = -fx_, az = -fz, len = 1;
+          v.eye[0] = mid[0] + ax / len * 0.55;
+          v.eye[2] = mid[2] + az / len * 0.55;
+          v.eye[1] = mid[1] + 0.5;
+          const double dx = mid[0] - v.eye[0], dy = mid[1] - v.eye[1], dz = mid[2] - v.eye[2];
+          v.heading = ge::core::libm::atan2(dx, dz);
+          v.pitch = ge::core::libm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+        }
+      }
       cl::FxFrame still = fx;  // the same moment again: nothing born twice, nothing moved
       still.births.clear();
       // The weapon in hand only where the picture is the eye's own.
       cl::draw_world(*device, *frame, v, still,
-                     shot.wall || shot.held || shot.eye ? &hand : nullptr, 0, {}, out.view);
+                     (shot.wall && !shot.shells) || shot.held || shot.eye ? &hand : nullptr, 0, {},
+                     out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string id = std::string(shot.id) + "-" + look_name;
       lab.shot(
           {id,
            std::string(sv::kSqWeapons[static_cast<int>(shot.weapon)].name) + ", " + look_name,
-           shot.held ? std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
-                           " at rest in the player's hand on " + map_name +
-                           ", the game's own view model drawn at the eye."
-                     : std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
-                           " fired on " + map_name + " in the " + look_name +
-                           (shot.wall  ? " look at the floor a few steps ahead, seen from the eye "
-                            : shot.eye ? " look, seen from the eye "
-                                       : " look, seen from a step ahead and beside the player ") +
-                           (shot.eye ? std::string("a frame after the shot left the muzzle.")
-                                     : std::to_string(shot.ticks) + " frames after the trigger."),
+           shot.held
+               ? std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
+                     " at rest in the player's hand on " + map_name +
+                     ", the game's own view model drawn at the eye."
+               : std::string("The ") + sv::kSqWeapons[static_cast<int>(shot.weapon)].name +
+                     " fired on " + map_name + " in the " + look_name +
+                     (shot.shells ? " look, the spent shells seen from close above where they lie "
+                      : shot.wall ? " look at the floor a few steps ahead, seen from the eye "
+                      : shot.eye  ? " look, seen from the eye "
+                                  : " look, seen from a step ahead and beside the player ") +
+                     (shot.eye ? std::string("a frame after the shot left the muzzle.")
+                               : std::to_string(shot.ticks) + " frames after the trigger."),
            shot.look_for,
            {{"map", map_name}, {"weapon", shot.id}, {"look", look_name}}},
           gl::Picture{int(img.width), int(img.height), img.rgba}, gl::Det::measured);
@@ -468,6 +549,8 @@ const gl::LabSpec kSpec{
     "the modern look add glows, the rail's beam and the BFG's burst over the classic one?",
     {{"size", "640,400", "the screen's width and height, px"},
      {"game", "", "the folder holding Quake II's base folder (empty: a hall, counts only)"},
+     {"mod", "",
+      "with --game: a mission pack's folder beside the base one (xatrix, rogue: its weapons)"},
      {"held", "0", "1: every weapon at rest in hand from the eye, in place of the shots"},
      {"weapon", "", "only this weapon's pictures, by its id (blaster, railgun, ...; empty: all)"},
      {"map", "q2dm1", "the map to fire on (with --game)"},

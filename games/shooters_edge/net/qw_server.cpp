@@ -58,27 +58,11 @@ int16_t safe_strafe(StrafeGuard& g, int16_t side, int n) {
 
 namespace {
 
-bool same_host(const gn::Address& a, const gn::Address& b) {
-  gn::Address x = a, y = b;
-  x.port = y.port = 0;
-  return x == y;
-}
-
+// One an address, the same one asked again (classic/protocol/challenges.hpp).
 int32_t new_challenge(QwServer& s, const gn::Address& from) {
-  int slot = 0;
-  for (int i = 0; i < 64; i++) {
-    // One challenge an address (its port too), so clients sharing a host (players behind one
-    // router, bots from one machine) do not replace each other's before they connect.
-    // An address that asks again gets the same one: a client whose first answer came late (a
-    // page drawing its first frame) and asked again still connects with the first.
-    if (s.challenges[i].made > 0 && s.challenges[i].address == from) return s.challenges[i].value;
-    if (s.challenges[i].made < s.challenges[slot].made) slot = i;
-  }
-  Challenge& c = s.challenges[slot];
-  c.address = from;
-  c.value = static_cast<int32_t>(ge::core::next(s.rng) * 2147483647.0);
-  c.made = ++s.challenges_made;
-  return c.value;
+  return ge::classic::challenge_issue(s.challenges, from, [&s] {
+    return static_cast<int32_t>(ge::core::next(s.rng) * 2147483647.0);
+  });
 }
 
 void reply_challenge(QwServer& s, const gn::Address& from) {
@@ -223,18 +207,14 @@ void handle_connect(QwServer& s, const gn::Address& from, const std::string& tex
       const auto b = static_cast<uint8_t>(ch);
       return b < 32 || b > 127;
     });
-  int found = -1;
-  // The host's challenge that matches; any of the host's when none does (its reason a bad one). A
-  // port that moved between the two asks still finds its challenge by the host and the value.
-  for (int i = 0; i < 64; i++)
-    if (s.challenges[i].made > 0 && same_host(s.challenges[i].address, from) &&
-        (found < 0 || s.challenges[i].value == challenge))
-      found = i;
-  if (found < 0) {
+  // By the host and the number: a port that moved between the two asks still finds it.
+  const ge::classic::ChallengeCheck check =
+      ge::classic::challenge_check(s.challenges, from, challenge);
+  if (check == ge::classic::ChallengeCheck::none) {
     reject(s, from, "No challenge for address.");
     return;
   }
-  if (s.challenges[found].value != challenge) {
+  if (check == ge::classic::ChallengeCheck::bad) {
     reject(s, from, "Bad challenge.");
     return;
   }
@@ -285,7 +265,7 @@ void handle_connect(QwServer& s, const gn::Address& from, const std::string& tex
   bool back = false;  // taking back a seat: let in by a locked server (sv_locked)
   for (int i = 0; i < sh::kMaxClients; i++) {
     const QwClient& c = s.clients[i];
-    if (c.state == ConnState::free || c.local || !same_host(c.address, from) ||
+    if (c.state == ConnState::free || c.local || !gn::same_host(c.address, from) ||
         (c.ch.qport != qport && c.address.port != from.port))
       continue;
     if (s.cfg.reconnect_wait_s > 0 && s.game->sv.time - c.connect_time < s.cfg.reconnect_wait_s) {
@@ -497,6 +477,10 @@ void read_move(QwServer& s, int slot, const ClcMsg& m, const uint8_t* payload, b
   if (s.buttons != nullptr && !c.spectator)
     for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
+  // His moves made before he saw the server's turn of him go where he now faces.
+  c.moves_turned +=
+      cp::lag_turn_moves(c.lag, c.ch.incoming_sequence, c.ch.incoming_acknowledged, p.cmds);
+  c.last_yaw = m.cmds[2].angles.y;
   s.packets.push_back(p);
 }
 
@@ -1205,7 +1189,7 @@ namespace {
 void answer_zombie(QwServer& s, const gn::Address& from, uint16_t qport, const uint8_t* buf,
                    size_t size) {
   for (QwServer::Zombie& z : s.zombies) {
-    if (!same_host(z.address, from) || z.ch.qport != qport) continue;
+    if (!gn::same_host(z.address, from) || z.ch.qport != qport) continue;
     z.address = from;
     size_t at = 0;
     if (!channel_process(z.ch, buf, size, s.now, at)) return;
@@ -1249,7 +1233,7 @@ void qw_frame(QwServer& s, int64_t now_us) {
     int slot = -1;
     for (int i = 0; i < sh::kMaxClients; i++) {
       QwClient& c = s.clients[i];
-      if (c.state == ConnState::free || !same_host(c.address, from) || c.ch.qport != qport)
+      if (c.state == ConnState::free || !gn::same_host(c.address, from) || c.ch.qport != qport)
         continue;
       c.address = from;  // a NAT may have moved the port
       slot = i;
@@ -1287,6 +1271,16 @@ void qw_frame(QwServer& s, int64_t now_us) {
 
   s.rules->frame(s.packets.data(), static_cast<int>(s.packets.size()));
   if (s.local_tap != nullptr) s.local_tap(s.local_ctx, *s.game);
+  for (int i = 0; i < sh::kMaxClients; i++) {  // the rules' turns, each for his next datagram
+    sv::RulesCommon::Turn& t = s.game->turns[i];
+    if (!t.on) continue;
+    t.on = false;
+    QwClient& c = s.clients[i];
+    if (c.state != ConnState::spawned || c.local) continue;
+    c.turn_pending = true;
+    c.turn_teleport = t.teleport;
+    c.turn_to = t.angles;
+  }
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].rules_active)
       antilag_record(s.antilag, i, s.game->sv.time,

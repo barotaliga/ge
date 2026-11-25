@@ -149,6 +149,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
         e.entity = d.entity;
         e.at = d.at;
         e.end = d.end;
+        e.flash = d.flash;
         l.effects.push_back(std::move(e));
       }
       return;
@@ -157,6 +158,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   Effect e;
   e.code = -1;
   e.name = ev.text;
+  if (monster_flash) {  // its gun's spent cases (shells.hpp)
+    e.flash = static_cast<int>(ev.values[3]);
+    e.flash_monster = true;
+  }
   if (ev.kind == sv::EventKind::trail_effect) {
     e.kind = EffectKind::named_trail;
     e.entity = ev.ent;
@@ -180,13 +185,17 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   }
   // Quake II's own specks: a laser's sparks in its colour; a splash in its kind's (none, sparks,
   // blue water, brown mud, green slime, lava, blood).
-  if (listen_is_q2(l) && (name == "te_laser_sparks" || name.starts_with("te_splash"))) {
+  if (listen_is_q2(l) && (name == "te_laser_sparks" || name.starts_with("te_splash") ||
+                          name == "te_welding_sparks" || name == "te_tunnel_sparks")) {
     constexpr std::pair<std::string_view, int> kSplash[] = {
         {"te_splash", 0x00},      {"te_splash_sparks", 0xe0}, {"te_splash_water", 0xb0},
         {"te_splash_mud", 0x50},  {"te_splash_slime", 0xd0},  {"te_splash_lava", 0xe0},
         {"te_splash_blood", 0xe8}};
     e.kind = EffectKind::named;
-    e.name = name == "te_laser_sparks" ? "sq_laser_sparks" : "sq_splash";
+    e.name = name == "te_laser_sparks"     ? "sq_laser_sparks"
+             : name == "te_welding_sparks" ? "sq_welding"
+             : name == "te_tunnel_sparks"  ? "sq_tunnel_sparks"
+                                           : "sq_splash";
     e.at = e.end = ev.origin;
     e.way = {ev.values[0], ev.values[1], ev.values[2]};
     e.count = n >= 1 ? count : 8;  // none asked: the wire's 8
@@ -211,7 +220,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
                       name == "te_screen_sparks" || name == "te_shield_sparks" ||
                       name == "te_laser_sparks" || name == "te_shotgun";
-  if (uint8_t kind = 0; sv::qw_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
+  if (uint8_t kind = 0; sv::qw_temp_entity(sparks                    ? "te_gunshot"
+                                           : name == "te_greenblood" ? "te_blood"
+                                                                     : ev.text,
+                                           kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
       if (listen_is_q2(l)) {  // our rules' plain blast in Quake II: a rocket's
@@ -469,7 +481,10 @@ bool start_map(Listen& l, std::string& error) {
   h->lines.insert(h->lines.end(), l.opt.console.begin(), l.opt.console.end());
   if (h->module != nullptr || !h->native_library.empty())  // `cr_over_mods`: over the mod's own
     h->lines.insert(h->lines.end(), l.opt.over_mod.begin(), l.opt.over_mod.end());
-  h->lobby = l.opt.lobby;
+  // A lobby is a match's: a single-player or coop game (`deathmatch 0`) starts with the map, its
+  // monsters in it, whatever `sv_lobby` says.
+  const bool lobby = l.opt.lobby && !wants_campaign(l.opt);
+  h->lobby = lobby;
   h->lobby_settings = l.opt.lobby_settings;
   h->player = l.opt.player;
   h->speedjump = kListenSpeedJump;
@@ -482,7 +497,7 @@ bool start_map(Listen& l, std::string& error) {
   c.map = l.map->name;
   c.seed = l.opt.seed;
   c.maxclients = l.opt.maxclients;
-  c.lobby = l.opt.lobby ? 1 : 0;
+  c.lobby = lobby ? 1 : 0;
   c.port = l.opt.port;
   if (l.opt.voice) c.rules.emplace("sv_voip", "1");
   c.host = h.get();
@@ -558,7 +573,7 @@ bool coop_on(const Listen& l) {
 
 // A companion seated now (in a campaign; a single-player one turns cooperative for it); false with
 // the line printed when it cannot be.
-bool seat_companion(Listen& l, sb::AimSkill skill) {
+bool seat_companion(Listen& l, sb::AimSkill skill, bool helper = false) {
   const bool turned = !coop_on(l);
   if (turned) {
     sv::campaign_set_coop(*l.campaign_host, true);
@@ -572,7 +587,7 @@ bool seat_companion(Listen& l, sb::AimSkill skill) {
     l.party->seed = l.opt.seed;
   }
   std::string error;
-  const int slot = party_add(*l.party, *l.campaign_host, l.map->spec, skill, error);
+  const int slot = party_add(*l.party, *l.campaign_host, l.map->spec, skill, error, helper);
   if (slot < 0) {
     if (turned) sv::campaign_set_coop(*l.campaign_host, false);
     l.prints.push_back("addbot: " + error);
@@ -589,7 +604,8 @@ bool seat_companion(Listen& l, sb::AimSkill skill) {
     l.companion_coop = true;
     l.prints.push_back("The game is cooperative while you have company.");
   }
-  l.prints.push_back(name + " (" + sb::aim_skill_name(skill) + ") joins the game");
+  l.prints.push_back(name + " (" + sb::aim_skill_name(skill) + (helper ? ", helper" : "") +
+                     ") joins the game");
   return true;
 }
 
@@ -1197,11 +1213,14 @@ bool listen_lobby(Listen& l, std::string_view line) {
     const size_t sp = line.find(' ');
     const std::string arg = sp == std::string_view::npos ? "" : std::string(line.substr(sp + 1));
     sb::AimSkill skill = l.opt.companion_skill;
-    if (!arg.empty() && !skill_named(arg, skill)) {
-      l.prints.push_back("addbot: unknown skill \"" + arg + "\" (use novice, average or expert)");
+    bool helper = false;
+    std::string bad;
+    if (!companion_words(arg, skill, helper, bad)) {
+      l.prints.push_back("addbot: unknown word \"" + bad +
+                         "\" (use novice, average or expert, and escort or helper)");
       return true;
     }
-    seat_companion(l, skill);
+    seat_companion(l, skill, helper);
     return true;
   }
   // A vote on the settings (engine/server/vote.hpp): the server's own words, with or without a
