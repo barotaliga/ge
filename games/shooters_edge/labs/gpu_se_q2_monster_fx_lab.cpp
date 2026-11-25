@@ -588,7 +588,12 @@ void run(gl::Lab& lab) {
         if (!all.empty()) all += ", ";
         all += c.name;
       }
-      lab.note("se-q2-monster-fx: no kind " + name + " (" + all + ")");
+      std::string why = "se-q2-monster-fx: no kind ";
+      why += name;
+      why += " (";
+      why += all;
+      why += ")";
+      lab.note(why);
       continue;
     }
     if (k->pack && !pack) {

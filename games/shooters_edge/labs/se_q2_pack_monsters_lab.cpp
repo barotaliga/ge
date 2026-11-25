@@ -263,7 +263,11 @@ void duels(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std
       x->attacked += attacked ? 1 : 0;
     }
     if (!hurt) {
-      std::string why = "se-q2-pack-monsters: " + name + ": " + kind + " never hurt him (";
+      std::string why = "se-q2-pack-monsters: ";
+      why += name;
+      why += ": ";
+      why += kind;
+      why += " never hurt him (";
       why += !saw        ? "never took him for its enemy"
              : !attacked ? "saw him, never attacked"
                          : "attacked, never landed";
