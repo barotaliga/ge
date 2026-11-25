@@ -22,6 +22,7 @@
 #include "core/num.hpp"
 #include "core/prng.hpp"
 #include "shooter/mover_motion.hpp"
+#include "shooter/turned.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
@@ -157,11 +158,7 @@ int index_of(const Q2Server& s, const Q2Entity& e);
 bool brush(const Q2Entity& e) { return !e.model.empty() && e.model[0] == '*'; }
 
 // A turning mover's box is the cube round the sphere its corners sweep.
-float reach(const Q2Entity& e) {
-  const auto far = [](float a, float b) { return std::max(a < 0 ? -a : a, b < 0 ? -b : b); };
-  const float x = far(e.mins.x, e.maxs.x), y = far(e.mins.y, e.maxs.y), z = far(e.mins.z, e.maxs.z);
-  return sh::root_of(x * x + y * y + z * z);
-}
+float reach(const Q2Entity& e) { return sh::turned_reach(e.mins, e.maxs); }
 sh::Vec3f abs_min(const Q2Entity& e) {
   if (!e.turns) return e.origin + e.mins;
   const float r = reach(e);
@@ -173,16 +170,10 @@ sh::Vec3f abs_max(const Q2Entity& e) {
   return e.origin + sh::Vec3f{r, r, r};
 }
 
-// A point `d` from a mover's origin, in the mover's own frame at `angles` (forward, left, up), and
-// back.
-sh::Vec3f to_local(sh::Vec3f d, sh::Vec3f angles) {
-  const sh::ViewAxes a = sh::angle_vectors(angles);
-  return {sh::dot(d, a.forward), -sh::dot(d, a.right), sh::dot(d, a.up)};
-}
-sh::Vec3f to_world(sh::Vec3f l, sh::Vec3f angles) {
-  const sh::ViewAxes a = sh::angle_vectors(angles);
-  return a.forward * l.x - a.right * l.y + a.up * l.z;
-}
+// A point `d` from a mover's origin, in the mover's own frame at `angles`, and back (the one
+// turned brush every game shares: shooter/turned.hpp).
+using sh::to_world;
+sh::Vec3f to_local(sh::Vec3f d, sh::Vec3f angles) { return sh::to_model(d, angles); }
 
 bool overlap(sh::Vec3f alo, sh::Vec3f ahi, sh::Vec3f blo, sh::Vec3f bhi) {
   return alo.x < bhi.x && ahi.x > blo.x && alo.y < bhi.y && ahi.y > blo.y && alo.z < bhi.z &&
@@ -259,7 +250,7 @@ void step_move(Q2Server& s, Q2Entity& e) {
 bool in_mover(const Q2Server& s, const Q2Entity& e, sh::Vec3f at, sh::Vec3f mins, sh::Vec3f maxs) {
   if (!brush(e) || e.modelindex <= 0) return true;  // a model's box is all it has
   sh::Vec3f p = at - e.origin;
-  if (e.angles.x != 0 || e.angles.y != 0 || e.angles.z != 0) p = to_local(p, e.angles);
+  if (sh::turned(e.angles)) p = to_local(p, e.angles);
   const float a[3] = {p.x, p.y, p.z};
   const float lo[3] = {mins.x, mins.y, mins.z}, hi[3] = {maxs.x, maxs.y, maxs.z};
   const ge::brush::Trace t =

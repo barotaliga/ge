@@ -62,6 +62,19 @@ TEST(plus_binds_run_both_edges_once) {
   CHECK(c.output().empty());
 }
 
+TEST(setting_a_scaled_synonym_says_what_it_set_in_ours) {
+  Console c;
+  c.cvars().add({.name = "host_framerate", .fallback = "0"});
+  c.cvars().add_scaled_synonym("fixedtime", "host_framerate", 1000);
+  c.execute("fixedtime 25");
+  CHECK_MSG(c.output().back() == "fixedtime 25 (host_framerate: 0.025)", c.output().back());
+  c.execute("fixedtime");
+  CHECK_MSG(c.output().back() ==
+                "\"fixedtime\" is \"25\" (host_framerate: 0.025); it takes a "
+                "number (host_framerate's times 1000)",
+            c.output().back());
+}
+
 TEST(setting_a_mapped_synonym_says_what_it_set_in_ours) {
   Console c;
   c.cvars().add({.name = "scr_draw2d", .fallback = "2", .kind = CvarKind::integer});

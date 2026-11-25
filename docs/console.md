@@ -44,7 +44,10 @@ game writes its own way: each of the game's values stands for one of ours (Quake
 1 is our `cl_nopred` 0). Setting it writes the mapped value and prints both, `cl_predict 0
 (cl_nopred: 1)`, so the player sees the setting it reached; querying it reads ours back in the
 game's words and lists the map; a value the map lacks is refused with the values it takes. A
-config's line sets it silently. the setting it is part of. A synonym is refused when its name is a cvar of its own, the target
+config's line sets it silently. `add_scaled_synonym(name, target, scale, cheat)` names a game's
+spelling in another unit (Quake II's `fixedtime` in milliseconds is `host_framerate` in seconds
+times 1000): it prints and reads the same way, and with `cheat` it is refused by that name while
+cheats are off, and what it reaches goes back to its default when they go off. the setting it is part of. A synonym is refused when its name is a cvar of its own, the target
 does not exist, or the name already stands for another setting. A server game lists its names
 in `ServerGame::names` (`docs/servers.md`).
 

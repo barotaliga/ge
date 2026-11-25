@@ -70,11 +70,12 @@ struct Q2ClientEnd;
 inline constexpr int kSqSentRing = 64;  // the moves kept by outgoing sequence
 
 // A brush model the prediction runs over: where the newest frame put it, how fast it goes and how
-// far it runs on before it stops (plugins/shooter/predict.hpp, `mover_motion`).
+// far it runs on before it stops (plugins/shooter/predict.hpp, `mover_motion`), and its turn.
 struct Q2Mover {
   uint32_t model = 0;
   ge::shooter::Vec3f at, velocity;
   float reach = 1e30f;
+  ge::shooter::Vec3f angles;  // its turn (shooter/turned.hpp): traced in its own frame
 };
 
 struct Q2Predict {

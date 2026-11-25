@@ -212,6 +212,30 @@ TEST(a_mapped_synonym_sets_and_reads_its_own_values) {
   CHECK(cv.mapped_value(*s, "1") == "2" && cv.mapped_value(*s, "7").empty());
 }
 
+TEST(a_scaled_synonym_is_the_setting_in_another_unit) {
+  Cvars cv(true);
+  double seconds = 0;
+  cv.bind({.name = "host_framerate", .fallback = "0", .min = 0, .max = 1}, &seconds);
+  CHECK(!cv.add_scaled_synonym("fixedtime", "host_framerate", 0));  // no scale: refused
+  CHECK(cv.add_scaled_synonym("fixedtime", "host_framerate", 1000, true));
+  CHECK(cv.find("fixedtime") == nullptr);  // not the setting under another name
+  const Synonym* s = cv.synonym("fixedtime");
+  CHECK(s != nullptr && s->mapped() && !s->whole());
+  if (s == nullptr) return;
+  // A cheat under its game's name alone: refused while sv_cheats is 0, ours untouched.
+  CHECK(cv.set("fixedtime", "50", Source::local) == SetResult::cheat && seconds == 0);
+  CHECK(cv.set("host_framerate", "0.02", Source::local) == SetResult::changed);
+  CHECK(cv.synonym_value(*s) == "20");  // ours read back in its unit
+  cv.set("sv_cheats", "1", Source::local);
+  CHECK(cv.set("fixedtime", "50", Source::local) == SetResult::changed && seconds == 0.05);
+  CHECK(cv.synonym_value(*s) == "50");
+  CHECK(cv.set("fixedtime", "fast", Source::local) == SetResult::unmapped && seconds == 0.05);
+  CHECK(cv.mapped_value(*s, "13") == "0.013" && cv.mapped_value(*s, "x").empty());
+  CHECK(Cvars::mapped_words(*s) == "a number (host_framerate's times 1000)");
+  cv.set("sv_cheats", "0", Source::local);  // cheats off: what it reaches back to its default
+  CHECK(seconds == 0);
+}
+
 TEST(meta_cvars_imply_restore_and_refuse_a_loop) {
   Cvars cv;
   double fov = 0;

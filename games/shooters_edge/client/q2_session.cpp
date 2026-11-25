@@ -126,15 +126,8 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .values = "1: as it should (the default); 0..1000: that many times as fast, only while "
                     "the server allows cheats"},
          &s.timescale);
-  v.bind({.name = "fixedtime",
-          .fallback = "0",
-          .flags = con::kCheat,
-          .help = "How far a game you host moves each frame, in milliseconds.",
-          .min = 0,
-          .max = 1000,
-          .values = "0: as far as the time that passed (the default); 1..1000: that many "
-                    "milliseconds a frame, only while the server allows cheats"},
-         &s.fixed_ms);
+  // fixedtime: every game's host_framerate in milliseconds, a cheat under this name (THE CLOCK).
+  v.add_scaled_synonym("fixedtime", "host_framerate", 1000, true);
   v.bind({.name = "cl_autopause",
           .fallback = "1",
           .flags = con::kArchive,
@@ -299,9 +292,7 @@ void q2_fps_warning(con::Console& c, Q2Session& s) {
 }
 
 double q2_game_dt(const Q2Session& s, double host_framerate, double wall) {
-  const double step = host_framerate > 0 ? host_framerate
-                      : s.fixed_ms > 0   ? s.fixed_ms / 1000
-                                         : wall;
+  const double step = host_framerate > 0 ? host_framerate : wall;
   return step * std::max(0.0, s.timescale);
 }
 
