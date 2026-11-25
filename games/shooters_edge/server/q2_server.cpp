@@ -1106,6 +1106,7 @@ void fill_rows(Q2Server& s) {
     }
     if (!p.alive && p.hunter_cam != -1) e.modelindex = 0;          // his view rides a hunter sphere
     if (s.opt.pack == Q2Pack::ground_zero) e.render_fx |= 0x8000;  // seen through IR goggles
+    if (p.disguised) e.render_fx |= 1 << 18;  // Ground Zero's disguise: its folder's skin
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
       for (const SqPower& pw : sq_powers())
         if ((pw.effects | pw.render) != 0 && sq_power_shown(p.*pw.until - s.level_time)) {

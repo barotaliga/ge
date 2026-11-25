@@ -767,7 +767,7 @@ sh::Vec3f muzzle_aim(Q2Server& s, int slot, sh::Vec3f from, sh::Vec3f forward) {
   const Q2Player& p = s.players[slot];
   const sh::Vec3f eye = unpack(p.move.origin) + sh::Vec3f{0, 0, p.view_height};
   const sh::Vec3f far = eye + forward * 8192.0f;
-  const Line l = shoot_line(s, eye, far, 1u << slot);
+  const Line l = shoot_line(s, eye, far, 1u << (unsigned(slot) & 31u));  // a slot is 0..31
   if (l.fraction >= 1) return forward;
   sh::Vec3f to = eye + (far - eye) * l.fraction - from;
   sh::normalize(to);
@@ -1932,11 +1932,14 @@ void fight_gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t) { gib(s,
 
 // A player's noise the monsters hear (his shot, its impact), outside deathmatch.
 void monster_noise(Q2Server& s, int slot) {
+  if (slot >= 0 && slot < sh::kMaxClients && s.players[slot].disguised)
+    s.players[slot].violator_until = s.level_time + 0.5;  // Ground Zero's disguise: his shot shows
   monster_noise(s, slot, unpack(s.players[slot].move.origin), false);
 }
 
 void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
   if (slot < 0 || slot >= sh::kMaxClients || deathmatch(s) || s.players[slot].notarget) return;
+  if (s.players[slot].disguised) return;  // Ground Zero's disguise: his noises go unheeded
   Q2Player& p = s.players[slot];
   (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
   (impact ? p.impact_at : p.noise_at) = at;
