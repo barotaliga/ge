@@ -78,6 +78,9 @@ struct Bsp {
   // radius in the first's w
   capsule_info: vec4f,
   capsules: array<vec4f, 8>,
+  // every moving caster's bounding sphere (xyz its middle, w its radius): a caster light's
+  // more.w names those in its reach as bits (-1: every one, no gate)
+  caster_spheres: array<vec4f, 16>,
   // the moving casters along the sun: their atlas's last row's first tile (info.z 1: drawn)
   sun_caster: Job,
   // the map's sky box: x on (1), yz half a texel in a face's own 0..1; w the reflections' strength
@@ -132,7 +135,8 @@ struct Light {
   // xyz: the way an aimed light points; w: its cone's edge's cosine (-2: lit all round)
   spot: vec4f,
   // x: its moving casters' cube's row in their atlas (-1: none); y: its source's radius, m (how
-  // soft its shadows are)
+  // soft its shadows are); z: 1 it throws a figure's shadow; w: with a casters' cube, the
+  // casters' spheres in its reach as bits (-1: every caster)
   more: vec4f,
 };
 
@@ -724,6 +728,37 @@ fn disc_spin(frag: vec2f) -> vec2f {
   return vec2f(cos(turn), sin(turn));
 }
 
+// Whether a moving caster could stand nearer the light than the point at distance `d` along
+// `n` (from the light) within `cone` (a tangent's length, the search's) of it: each caster
+// sphere's angular reach seen from the light against the angle to `n`, and its near side against
+// `d`. A sphere holds every triangle of its caster, so "no" is exact: the search finds nothing.
+fn caster_could_hide(n: vec3f, d: f32, cone: f32, l: Light) -> bool {
+  if (l.more.w < 0.0) {
+    return true;
+  }
+  let bits = u32(l.more.w);
+  let wide = atan(cone);
+  for (var c = 0u; c < 16u; c++) {
+    if ((bits & (1u << c)) == 0u) {
+      continue;
+    }
+    let s = bsp.caster_spheres[c];
+    let to = s.xyz - l.pos.xyz;
+    let dc = length(to);
+    if (dc <= s.w) {
+      return true;  // the light inside it
+    }
+    if (dc - s.w >= d) {
+      continue;  // all of it beyond the point
+    }
+    let off = acos(clamp(dot(n, to / dc), -1.0, 1.0));
+    if (off <= asin(s.w / dc) + wide) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // x: lit by the world alone, y: by the world and the moving casters.
 fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
   let d = length(q);
@@ -747,6 +782,9 @@ fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
   // The search: what could hide the light's disc lies within its size seen from blockers as near
   // the light as a fifth of the way (a direction's angle, the cube's own measure).
   let search = clamp(4.0 * size / max(d, 0.1), texel, 0.15);
+  if (!caster_could_hide(n, d, search + 2.0 * texel, l)) {
+    return vec2f(world);  // no caster's sphere in the search's cone: it would find none
+  }
   var blockers = 0.0;
   var found = 0.0;
   for (var i = 0u; i < kSearchTaps; i++) {

@@ -9,6 +9,7 @@
 #include "prof/zones.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <iterator>
@@ -872,11 +873,59 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     std::vector<size_t> figure;
     for (const size_t c : casters)
       if (d.frame_lights[c].more[2] > 0.5f) figure.push_back(c);
+    // Each caster's bounding sphere: its box's middle, grown over every triangle nearest it, so
+    // no triangle of the casters' cubes lies outside them (bsp.wgsl's caster_could_hide).
+    const size_t nbox = d.caster_boxes.size();
+    const bool gated = nbox > 0 && nbox <= size_t(kCasterSpheres);
+    std::array<std::array<double, 4>, kCasterSpheres> sphere{};
+    if (gated) {
+      for (size_t k = 0; k < nbox; ++k) {
+        const CasterBox& b = d.caster_boxes[k];
+        for (int a = 0; a < 3; ++a) sphere[k][a] = 0.5 * (double(b.lo[a]) + double(b.hi[a]));
+      }
+      const float* v = d.casters.data();
+      for (uint32_t t = 0; t < d.caster_count / 3; ++t, v += 9) {
+        double mid[3];
+        for (int a = 0; a < 3; ++a) mid[a] = (double(v[a]) + v[3 + a] + v[6 + a]) / 3;
+        size_t best = 0;
+        double best_d = 1e300;
+        for (size_t k = 0; k < nbox; ++k) {
+          double dd = 0;
+          for (int a = 0; a < 3; ++a) dd += (mid[a] - sphere[k][a]) * (mid[a] - sphere[k][a]);
+          if (dd < best_d) {
+            best_d = dd;
+            best = k;
+          }
+        }
+        for (int corner = 0; corner < 3; ++corner) {
+          double dd = 0;
+          for (int a = 0; a < 3; ++a) {
+            const double e = double(v[corner * 3 + a]) - sphere[best][a];
+            dd += e * e;
+          }
+          sphere[best][3] = std::max(sphere[best][3], dd);
+        }
+      }
+      for (size_t k = 0; k < nbox; ++k) {
+        sphere[k][3] = std::sqrt(sphere[k][3]) + 0.01;  // a centimetre over the floats' rounding
+        set4(d.staged.caster_spheres[k], sphere[k][0], sphere[k][1], sphere[k][2], sphere[k][3]);
+      }
+    }
     for (const size_t c : caster_lights(d.frame_lights, figure, d.caster_boxes, view.eye)) {
       if (d.caster_lights >= cast_by) break;
       GpuLight& g = d.frame_lights[c];
       const int n = d.caster_lights++;
       g.more[0] = float(n);
+      g.more[3] = -1;  // every caster: no gate
+      if (gated) {
+        uint32_t bits = 0;
+        for (size_t k = 0; k < nbox; ++k) {
+          double dd = 0;
+          for (int a = 0; a < 3; ++a) dd += (sphere[k][a] - g.pos[a]) * (sphere[k][a] - g.pos[a]);
+          if (std::sqrt(dd) - sphere[k][3] < double(g.pos[3])) bits |= 1u << k;
+        }
+        g.more[3] = float(bits);
+      }
       for (int f = 0; f < 6; ++f) {
         GpuJob j = d.frame_jobs[size_t(g.info[0]) + size_t(f)];  // the world cube's face
         set4(j.o, g.pos[0], g.pos[1], g.pos[2], g.pos[3]);

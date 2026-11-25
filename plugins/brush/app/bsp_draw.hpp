@@ -295,6 +295,9 @@ inline constexpr wgpu::TextureFormat kOrthoFormat = wgpu::TextureFormat::Depth24
 // round the eye). A frame's casters are kMaxCasterVerts vertices at most.
 inline constexpr uint32_t kCasterSize = 384;  // a caster cube's face, texels a side
 inline constexpr uint32_t kMaxCasterVerts = 3 * 24576;
+// The moving casters' bounding spheres the soft shadows' search is gated by (GpuBsp); a frame
+// with more casters searches everywhere.
+inline constexpr int kCasterSpheres = 16;
 inline constexpr double kSunCasterHalfM = 8;  // the sun's tile of them: half its width, m
 // THE CAPSULES (wgsl/capsules.wgsl): the kShadowCapsules casters nearest the eye as vertical
 // capsules (their boxes'), shadowing every light that has no caster cube of its own. Which lights
@@ -358,6 +361,10 @@ struct GpuBsp {
   // nearest the eye.
   float capsule_info[4];
   float capsules[kShadowCapsules * 2][4];
+  // Every moving caster's bounding sphere (xyz its middle, w its radius, world m: each of its
+  // triangles inside), kCasterSpheres at most; a caster light's `more[3]` names those in its
+  // reach as bits, and a point no sphere could hide skips the soft shadow's blocker search.
+  float caster_spheres[kCasterSpheres][4];
   // The moving casters under the sun: an orthographic map of them alone round the eye, a tile of
   // their atlas (info.z 1 when drawn this frame).
   GpuJob sun_caster;

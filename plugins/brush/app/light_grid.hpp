@@ -33,7 +33,8 @@ struct GpuLight {
   float spot[4];  // xyz the way an aimed light points, w its cone's edge's cosine (-2: no cone)
   // x: its moving casters' cube's row in their atlas (bsp_draw.hpp's caster cubes; -1: none), y:
   // its source's radius, m (how soft its shadows are), z: 1 when it throws a figure's shadow (a
-  // source the player can see; bsp_draw.hpp's Options::fill_shadows), w: 0
+  // source the player can see; bsp_draw.hpp's Options::fill_shadows), w: with a casters' cube,
+  // the casters' spheres in its reach as bits (GpuBsp::caster_spheres), -1 every one (no gate)
   float more[4];
 };
 
