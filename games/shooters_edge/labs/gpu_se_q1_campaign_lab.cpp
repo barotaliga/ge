@@ -40,6 +40,7 @@
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "pack_mod.hpp"
 #include "progs/file.hpp"
 #include "shooters_edge/bots/coop_episode.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
@@ -242,6 +243,12 @@ void run(gl::Lab& lab) {
       return;
     }
     packs.content = src.content();
+    if (const std::string& mod = lab.arg("mod"); !mod.empty()) {
+      if (!shooters_edge::labs::lay_mod(game, mod, packs.content, error)) {
+        lab.fail("se-q1-campaign: " + error, "next: pass --mod=hipnotic or --mod=rogue");
+        return;
+      }
+    }
     if (!ge::vfs::read_pak(packs.content, &packs.pak, &error)) {
       lab.fail("se-q1-campaign: the pack does not read: " + error, "next: check the --game path");
       return;
@@ -432,6 +439,9 @@ const gl::LabSpec kSpec{
          "a map's time limit (its last quarter for the way out alone): one not "
          "left by then is a failure, s"},
         {"each", "0", "1: every map of the episodes on its own, from a fresh start"},
+        {"mod", "",
+         "with --game: a mission pack's folder beside the game's (`hipnotic`, `rogue`), its packs "
+         "laid over the game's; name its maps in --episodes (`hip1m1,hip1m2`)"},
         {"skill", "1", "the campaign's skill (0..3)"},
         {"seed", "1", "the campaign's and the bot's seed"},
         {"god", "1", "0: the bot can die"},
