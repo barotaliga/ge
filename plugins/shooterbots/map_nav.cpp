@@ -787,6 +787,33 @@ bool teleporter_in_game(const ge::shooterbots::BotView& s, const ge::shooter::Ma
   return !any || (model && !box.ok);  // nothing to tell by: it counts
 }
 
+// Whether a wall in the game (a `func_wall` whose model an edict of `s` wears) stands flush across
+// the face of the teleporter in `box`: e3m4's player-only teleporter behind a wall that only
+// deathmatch takes away, which drew his route into the wall for the whole map.
+bool walled_off(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                const std::vector<sb::EntityBlock>& blocks, const ModelBox& box) {
+  constexpr float kFlush = 8;  // a wall this near its face covers it, units
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    if (!cn || std::strcmp(cn, "func_wall") != 0 || !model || model[0] != '*') continue;
+    bool worn = false;
+    for (int e = 1; e < s.sv.num_edicts && !worn; e++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      worn = !d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
+             s.models[static_cast<size_t>(d.modelindex)] == model;
+    }
+    const ModelBox w = worn ? model_box(spec, std::atoi(model + 1)) : ModelBox{};
+    if (!w.ok || w.mins.z > box.mins.z + 1 || w.maxs.z < box.maxs.z - 1) continue;
+    const bool across_x = w.mins.x <= box.mins.x + 1 && w.maxs.x >= box.maxs.x - 1 &&
+                          w.maxs.y >= box.mins.y - kFlush && w.mins.y <= box.maxs.y + kFlush;
+    const bool across_y = w.mins.y <= box.mins.y + 1 && w.maxs.y >= box.maxs.y - 1 &&
+                          w.maxs.x >= box.mins.x - kFlush && w.mins.x <= box.maxs.x + kFlush;
+    if (across_x || across_y) return true;
+  }
+  return false;
+}
+
 std::vector<sb::NavExtraLink> teleport_links(const ge::shooterbots::BotView& s, sb::NavGraph& g,
                                              const ge::shooter::MapSpec& spec,
                                              const std::vector<sb::EntityBlock>& blocks) {
@@ -802,7 +829,7 @@ std::vector<sb::NavExtraLink> teleport_links(const ge::shooterbots::BotView& s, 
       const char* model = sb::block_value(b, "model");
       if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
       box = model_box(spec, std::atoi(model + 1));
-      if (!box.ok) continue;
+      if (!box.ok || walled_off(s, spec, blocks, box)) continue;
     } else if (std::strcmp(cn, "misc_teleporter") == 0) {
       const char* org = sb::block_value(b, "origin");
       if (!org) continue;

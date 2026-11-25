@@ -80,7 +80,7 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
     e.clock = -1;  // the next one drawn starts over
     ge::render::FrameView v =
         demo_view(drawn, fov_y, time_s, e.view_kick == nullptr || *e.view_kick);
-    demo_view_behind(drawn, e.behind, world, v, e.side);
+    demo_view_behind(drawn, e.behind, world, v, e.side, e.up);
     demo_view_locked(drawn, e, v);
     return v;
   }
@@ -90,13 +90,14 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   if (cut) {
     const bool* gun_kick = e.gun_kick;
     const bool* view_kick = e.view_kick;
-    const float behind = e.behind, side = e.side;
+    const float behind = e.behind, side = e.side, up = e.up;
     const bool lock_pos = e.lock_pos;
     e = DemoEyes{};
     e.gun_kick = gun_kick;
     e.view_kick = view_kick;
     e.behind = behind;
     e.side = side;
+    e.up = up;
     e.lock_pos = lock_pos;
     e.kicks_seen = read.kicks_taken;
     e.levels = drawn.levels;
@@ -182,7 +183,7 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   ge::camera::to_frame_view(pose, view);
   view.fov_y = fov_y;
   view.time_s = time_s;
-  demo_view_behind(drawn, e.behind, world, view, e.side);
+  demo_view_behind(drawn, e.behind, world, view, e.side, e.up);
   demo_view_locked(drawn, e, view);
   return view;
 }
@@ -203,7 +204,7 @@ void demo_view_locked(const DemoState& s, DemoEyes& e, ge::render::FrameView& vi
 }
 
 void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* world,
-                      ge::render::FrameView& view, float side) {
+                      ge::render::FrameView& view, float side, float up) {
   if (!(units > 0) || s.intermission || s.format == DemoFormat::single || s.player < 0 ||
       static_cast<size_t>(s.player) >= s.players.size() ||
       !s.players[static_cast<size_t>(s.player)].present)
@@ -213,8 +214,18 @@ void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* wor
   const sh::Vec3f back{static_cast<float>(-std::cos(pitch) * std::cos(yaw)),
                        static_cast<float>(-std::cos(pitch) * std::sin(yaw)),
                        static_cast<float>(std::sin(pitch))};
-  const sh::Vec3f from = s.eye;
+  sh::Vec3f from = s.eye;
   float reach = units;
+  if (up > 0) {  // raised first, short of a ceiling
+    float lift = up;
+    if (world != nullptr && world->hulls[0].nodes != nullptr && world->hulls[0].planes != nullptr) {
+      const sh::HullTrace tr =
+          sh::trace_hull(world->hulls[0], from, from + sh::Vec3f{0, 0, up + kBehindWallGap});
+      if (tr.fraction < 1)
+        lift = std::max(0.0f, tr.fraction * (up + kBehindWallGap) - kBehindWallGap);
+    }
+    from.z += lift;
+  }
   if (world != nullptr) {
     const sh::Hull& hull = world->hulls[0];
     if (hull.nodes != nullptr && hull.planes != nullptr) {
@@ -227,7 +238,7 @@ void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* wor
   // left is its negative.
   const sh::Vec3f left{static_cast<float>(-std::sin(yaw)), static_cast<float>(std::cos(yaw)), 0};
   const ge::camera::Vec3 at = engine_point(from + back * reach + left * side);
-  const ge::camera::Vec3 eye = engine_point(from);
+  const ge::camera::Vec3 eye = engine_point(s.eye);
   // The rig's bob and roll ride along: the camera keeps its offset from the eye it was given.
   view.eye[0] += at.x - eye.x;
   view.eye[1] += at.y - eye.y;

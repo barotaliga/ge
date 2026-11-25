@@ -65,6 +65,7 @@ constexpr float kKeyCovered = 96;      // a locked door this near a key's height
 constexpr float kWaySeen = 192;        // a node this near where he has stood is explored, units
 
 constexpr uint8_t kLockedOut = 2;     // `locked_turns`: a bridge open only once all the way out
+constexpr uint8_t kLockedGone = 3;    // `locked_turns`: a wall open once it is no longer solid
 constexpr double kWayTour_s = 30;     // (`complete`) the tour worked out again this often, s
 constexpr int kWayTourMax = 96;       // and over the nearest this many stops at most
 constexpr float kWayStill = 96;       // (`complete`) no further than this, units, in

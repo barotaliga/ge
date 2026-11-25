@@ -166,7 +166,11 @@ void run(gl::Lab& lab) {
   cl::bind_remix(con.cvars(), &remix_rows);
   sm::GameMenu menu;
   menu.add_cvars(con);
-  cl::ClassicPictures pics = cl::load_classic_pictures(files, false, {}, &adapter);
+  // `--pictures=<cache>`: the pictures enhanced from that classic-enhance cache (ce_pictures 1),
+  // the console's letters among them.
+  const std::string pictures_cache = lab.arg("pictures");
+  cl::ClassicPictures pics =
+      cl::load_classic_pictures(files, !pictures_cache.empty(), pictures_cache, &adapter);
   menu.set_art(std::move(pics.menu));
   se::HudArt hud_art = std::move(pics.hud);
   hud_art.finish();
@@ -638,7 +642,10 @@ const gl::LabSpec kSpec{
      {"demo", "title",
       "the recording played behind the menu; title: the first the title plays (a mod's own "
       "quake.rc list first); none: the title's dark, on the CPU"},
-     {"frame", "400", "the recording's frame the pictures are taken on"}},
+     {"frame", "400", "the recording's frame the pictures are taken on"},
+     {"pictures", "",
+      "a classic-enhance cache folder: the menu's, the console's and the bar's pictures "
+      "enhanced from it (ce_pictures); empty: the pack's own"}},
     "--size=640,400 --frame=120",
     run,
 };

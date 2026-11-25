@@ -122,6 +122,7 @@ bool locked_moved(const WayThrough& w, const ge::shooterbots::BotView& s, size_t
   const uint8_t kind = k < w.locked_turns.size() ? w.locked_turns[k] : 0;
   if (d.free) return true;  // gone: a field turned off, a wall blown away
   if (kind == kLockedOut) return dist(d.origin, w.locked_at[k]) < 1;
+  if (kind == kLockedGone) return d.solid != sh::kSolidBsp;
   return dist(kind != 0 ? d.angles : d.origin, w.locked_at[k]) >= 1;
 }
 

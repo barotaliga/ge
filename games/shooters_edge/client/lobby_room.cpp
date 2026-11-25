@@ -8,83 +8,11 @@
 
 #include <cmath>
 
-#include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace sb = ge::shooterbots;
 
 namespace shooters_edge::client {
-
-namespace {
-
-constexpr double kBotHz = 1000.0 / bots::kPilotMsec;
-constexpr float kPlatRise = 96, kPlatSpeed = 64;  // the arena's plat in the baseline mod's text
-
-// The entity drawn with model `name` (an inline brush model "*n"), or -1.
-int entity_on(const sv::RulesCommon& s, const char* name) {
-  for (int e = 1; e < s.sv.num_edicts; e++) {
-    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-    if (d.free || d.modelindex <= 0 || d.modelindex >= static_cast<int>(s.models.size())) continue;
-    if (s.models[static_cast<size_t>(d.modelindex)] == name) return e;
-  }
-  return -1;
-}
-
-// The bots' graph for `map`, built when it is not already.
-bool ensure_graph(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, std::string& error) {
-  if (r.graph && r.graph_of == map.name) return true;
-  if (map.models.empty()) {
-    error = "the map " + map.name + " has no world for bots to walk on";
-    return false;
-  }
-  auto w = std::make_unique<sh::MoveWorld>();
-  sh::MoveWorld& world = *w;
-  sb::map_world(map.models[0], world);
-  std::vector<sb::NavMover> movers;
-  if (map.name == "arena" && map.models.size() > 2) {
-    const int door = entity_on(s, "*1"), plat = entity_on(s, "*2");
-    if (door > 0 && plat > 0) {
-      sb::NavMover d, p;
-      d.ent = door;
-      d.absmin = s.sv.edicts[static_cast<size_t>(door)].absmin;
-      d.absmax = s.sv.edicts[static_cast<size_t>(door)].absmax;
-      p.ent = plat;
-      p.absmin = s.sv.edicts[static_cast<size_t>(plat)].absmin;
-      p.absmax = s.sv.edicts[static_cast<size_t>(plat)].absmax;
-      p.model = &map.models[2];
-      p.travel = {0, 0, kPlatRise};
-      p.ride_s = 1 + kPlatRise / kPlatSpeed;
-      movers = {d, p};
-    }
-  }
-  auto g = std::make_unique<sb::NavGraph>();
-  sb::build_nav(world, movers, sh::MoveSettings{}, sb::NavSettings{}, *g);
-  if (g->nodes.empty()) {
-    error = "Bots can't play on " + map.name + ": there is no floor they can walk on.";
-    return false;
-  }
-  r.graph = std::move(g);
-  r.world = std::move(w);
-  r.graph_of = map.name;
-  return true;
-}
-
-uint32_t bot_seed(const Room& r, int slot) { return r.seed + 31u * static_cast<uint32_t>(slot); }
-
-void make_fighter(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) {
-  RoomBot& b = *r.bots[static_cast<size_t>(slot)];
-  b.fighter = bots::Fighter();
-  b.sequence = 0;
-  for (sh::MoveCmd& c : b.cmds) c = {};
-  b.fighter.features = ge::shooterbots::features_of(b.skill);
-  bots::fighter_init(b.fighter, *r.graph, s, slot, map.entities.c_str(), b.skill,
-                     ge::shooterbots::traits_of(b.skill, ge::shooterbots::Temper::balanced), kBotHz,
-                     bot_seed(r, slot), bots::first_arsenal());
-  b.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
-  b.fighter.bot.pilot.world = r.world.get();  // the hop looks ahead through the map
-}
-
-}  // namespace
 
 hud::LobbyView lobby_view(const Room& r, double now, int me) {
   hud::LobbyView v;
@@ -136,84 +64,48 @@ bool companion_words(const std::string& words, sb::AimSkill& skill, bool& helper
 int room_add_bot(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map, sb::AimSkill skill,
                  std::string& error) {
   const sv::RulesCommon& s = *rules;
-  int slot = -1;
-  for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients && i < s.sv.set.maxclients; i++)
-    if (!r.lobby.seats[static_cast<size_t>(i)].used && !s.clients[i].active &&
-        ((r.held >> i) & 1u) == 0) {
-      slot = i;
-      break;
-    }
-  if (slot < 0) {
-    error = "The server is full.";
-    return -1;
-  }
-  if (!ensure_graph(r, s, map, error)) return -1;
-  const std::string name = "bot" + std::to_string(++r.bots_named);
-  r.bots[static_cast<size_t>(slot)] = std::make_unique<RoomBot>();
-  r.bots[static_cast<size_t>(slot)]->skill = skill;
-  r.bots[static_cast<size_t>(slot)]->name = name;
-  rules.connect(slot, name, false, true);
+  uint32_t taken = 0;  // the lobby's seats (its own player's too)
+  for (int i = 0; i < sv::kLobbySeats && i < 32; i++)
+    if (r.lobby.seats[static_cast<size_t>(i)].used) taken |= 1u << i;
+  const int slot = bots::bot_seats_add(r.seats, rules, map, skill, taken, error);
+  if (slot < 0) return -1;
+  const std::string& name = r.seats.bots[static_cast<size_t>(slot)]->name;
   sv::lobby_join(r.lobby, slot, name + " (" + sb::aim_skill_name(skill) + ")", true, s.sv.time);
   sv::lobby_apply(rules, r.lobby, slot);
-  make_fighter(r, s, map, slot);
   return slot;
 }
 
 bool room_remove_bot(Room& r, const sv::RulesRunner& rules) {
   const sv::RulesCommon& s = *rules;
-  for (int i = sv::kLobbySeats - 1; i > 0; i--) {
-    if (!r.bots[static_cast<size_t>(i)]) continue;
-    rules.drop(i);
-    r.bots[static_cast<size_t>(i)].reset();
-    sv::lobby_leave(r.lobby, i, s.sv.time);
-    return true;
-  }
-  return false;
+  const int i = bots::bot_seats_last(r.seats);
+  if (i < 0) return false;
+  rules.drop(i);
+  bots::bot_seats_forget(r.seats, i);
+  sv::lobby_leave(r.lobby, i, s.sv.time);
+  return true;
 }
 
 void room_enter(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map) {
   const sv::RulesCommon& s = *rules;
-  bool any = false;
-  for (const auto& b : r.bots) any = any || b != nullptr;
+  std::vector<int> gone;
   std::string error;
-  if (any && !ensure_graph(r, s, map, error)) {  // a map no bot can walk: the bots leave
+  if (!bots::bot_seats_nav(r.seats, rules, map, gone, error)) {  // a map no bot can walk
     r.lobby.said.push_back("the bots leave: " + error);
-    for (int i = 1; i < sv::kLobbySeats; i++)
-      if (r.bots[static_cast<size_t>(i)]) {
-        r.bots[static_cast<size_t>(i)].reset();
-        sv::lobby_leave(r.lobby, i, s.sv.time);
-      }
+    for (const int i : gone) sv::lobby_leave(r.lobby, i, s.sv.time);
   }
-  for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients; i++)
-    if (r.bots[static_cast<size_t>(i)])
-      rules.connect(i,
-                    "bot" + r.lobby.seats[static_cast<size_t>(i)].name.substr(
-                                3, r.lobby.seats[static_cast<size_t>(i)].name.find(' ') - 3),
-                    false, true);
+  bots::bot_seats_connect(r.seats, rules);
   for (int i = 0; i < sv::kLobbySeats && i < sh::kMaxClients; i++)
     if (r.lobby.seats[static_cast<size_t>(i)].used && s.clients[i].active)
       sv::lobby_apply(rules, r.lobby, i);
-  for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients; i++)
-    if (r.bots[static_cast<size_t>(i)]) make_fighter(r, s, map, i);
+  bots::bot_seats_remake(r.seats, rules);
   if (r.lobby.phase != sv::LobbyPhase::match) {
     rules.console("fraglimit 0");
     rules.console("timelimit 0");
   }
 }
 
-void room_packets(Room& r, const sv::RulesCommon& s, int msec, std::vector<sh::Packet>& out) {
-  for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients; i++) {
-    if (!r.bots[static_cast<size_t>(i)] || !s.clients[i].active) continue;
-    RoomBot& b = *r.bots[static_cast<size_t>(i)];
-    b.cmds[0] = b.cmds[1];
-    b.cmds[1] = b.cmds[2];
-    b.cmds[2] = bots::fighter_command(b.fighter, s, i, msec);
-    sh::Packet p;
-    p.client = i;
-    p.sequence = ++b.sequence;
-    for (int k = 0; k < 3; k++) p.cmds[k] = b.cmds[k];
-    out.push_back(p);
-  }
+void room_packets(Room& r, const sv::RulesRunner& s, int msec, std::vector<sh::Packet>& out) {
+  bots::bot_seats_packets(r.seats, s, msec, out);
 }
 
 }  // namespace shooters_edge::client

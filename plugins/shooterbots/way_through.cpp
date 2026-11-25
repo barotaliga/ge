@@ -172,7 +172,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         any = true;  // a gate (a field, rubble, a waiting train): open once gone or moved
         out.push_back(gate);
       } else if ((std::strcmp(dc, "func_door") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) ||
-                 std::strcmp(dc, "func_door_secret") == 0 || std::strcmp(dc, "func_plat") == 0) {
+                 std::strcmp(dc, "func_door_secret") == 0 || std::strcmp(dc, "func_plat") == 0 ||
+                 std::strcmp(dc, "func_togglewall") == 0) {
         any = true;
         const int e = dm ? edict_of(s, dm) : -1;
         if (e >= 0) out.push_back(e);
@@ -273,6 +274,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   std::vector<int> gates;  // the shut doors barred by the links through their shut boxes
   // The links that pass through secret wall `e` (shut while it is barred).
   // One lying flat (e2m1's slab over the pool's shaft) is crossed through its floor.
+  constexpr float kOnSlab = 64;  // a ride's foot this far over a flat wall stands on it, units
   const auto add_crossings = [&](int e) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
     const sh::Vec3f size = d.absmax - d.absmin;
@@ -283,7 +285,14 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         const int32_t li = n.first_link + k;
         const sb::NavLink& l = g.links[static_cast<size_t>(li)];
         const sh::Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
-        if (flat ? way_through_floor(n.origin, to, d.absmin, d.absmax)
+        // A ride boarded on it: the plat's trigger lies under the slab (e3m1's plat *64 at the
+        // foot of its shaft, under slab t58), so it never rises while the slab is there.
+        // (Its box is a unit wider all round.)
+        const bool on = l.kind == sb::NavKind::ride && n.origin.z >= d.absmax.z - 4 &&
+                        n.origin.z - d.absmax.z <= kOnSlab && n.origin.x >= d.absmin.x &&
+                        n.origin.x <= d.absmax.x && n.origin.y >= d.absmin.y &&
+                        n.origin.y <= d.absmax.y;
+        if (flat ? on || way_through_floor(n.origin, to, d.absmin, d.absmax)
                  : crosses(n.origin, to, d.absmin, d.absmax))
           w.crossings.push_back({li, static_cast<int32_t>(a), e});
       }
@@ -430,6 +439,18 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         w.locked.push_back(e);
         w.locked_at.push_back(rest);
         w.locked_turns.push_back(0);
+        gates.push_back(e);
+      }
+      continue;
+    } else if (std::strcmp(cn, "func_togglewall") == 0 && name && brush) {
+      // A wall its name switches off (Scourge of Armagon's force fields: hip1m1's by the button
+      // that says "Force field deactivated"): shut to him while it is solid; the nav never saw it,
+      // so the links through its box are its crossings.
+      const int e = edict_of(s, model);
+      if (e >= 0) {
+        w.locked.push_back(e);
+        w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+        w.locked_turns.push_back(kLockedGone);
         gates.push_back(e);
       }
       continue;

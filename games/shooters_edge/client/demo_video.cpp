@@ -86,7 +86,7 @@ bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std:
 // the packs' own; `from` says which ("charset" with neither: `glyphs` left empty).
 void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& from) {
   if (!content_packs(files).empty()) {
-    const std::filesystem::path cache = ge::classicenhance::find_cache(content_packs(files));
+    const std::filesystem::path cache = content_cache(files);
     // The enhanced sheet (upscaled, still 16 x 16 cells) first, then the cache's original.
     if (!cache.empty() &&
         (caption_glyphs_from_png(cache / "pictures" / "enhanced" / "conchars.png", &glyphs) ||
