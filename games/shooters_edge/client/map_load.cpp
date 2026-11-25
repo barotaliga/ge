@@ -11,6 +11,7 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "core/num_text.hpp"
@@ -261,6 +262,32 @@ void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
   const ge::hud::Style style = shooters_edge::hud::hud_style();
   ge::hud::draw_spinner(dl, ge::hud::frame_for(w, h, style), style, now_s, load_caption(load),
                         now_s - load.since_s);
+}
+
+}  // namespace shooters_edge::client
+
+namespace shooters_edge::client {
+
+bool step_demo_world(MapLoad& l, const LoadWindow& at, bool wait, WorldDrawPtr& world) {
+  while (busy(l)) {
+    LoadStep step =
+        step_load(l, *at.device, at.width, at.height, at.format, *at.picture, at.weapons, wait);
+    if (step.failed != LoadFailed::none) {
+      ge::core::output::error("shooters_edge: the world draw did not load: " + step.error +
+                              "; see docs/rendering.md");
+      return false;
+    }
+    if (step.world) {
+      world = std::move(step.world);
+      l.what.clear();
+      return true;
+    }
+    if (!wait) break;  // a step a frame
+  }
+  // Nothing to draw until it comes (a new level): the loop shows no frame, so it waits a little
+  // instead of spinning a core the read's thread wants.
+  if (!world && busy(l)) std::this_thread::sleep_for(std::chrono::milliseconds(4));
+  return true;
 }
 
 }  // namespace shooters_edge::client
