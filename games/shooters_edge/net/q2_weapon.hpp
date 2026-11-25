@@ -161,8 +161,8 @@ struct Q2Weapon {
   // flash, 0.. a hand sound's row (kSqHandSound), 100 a shot heard by name.
   WeaponPlayed played;
   Q2Known known;  // the weapons and ammunition the window knows
-  float last_sound[server::kSqHandSounds] =
-      {};              // each hand sound's last play, the server frame it fell in
+  // Each hand sound's last play, the server frame it fell in.
+  float last_sound[server::kSqHandSounds] = {};
   double fuse_at = 0;  // the hand grenade's: level time its fuse ends, predicted (0 none)
   Q2ShotAudit audit;   // where the shots fell, predicted and the server's
 };
