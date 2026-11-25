@@ -77,7 +77,7 @@ SqGibSet sq_gib_set(std::string_view classname) {
     return SqGibSet::tank;
   if (classname == "monster_makron") return SqGibSet::makron;
   if (classname == "monster_supertank" || classname == "monster_boss2" ||
-      classname == "monster_jorg")
+      classname == "monster_jorg" || classname == "monster_carrier")
     return SqGibSet::wreck;
   return SqGibSet::flesh;
 }

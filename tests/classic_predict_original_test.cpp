@@ -175,7 +175,7 @@ TEST(a_mover_and_another_player_block_the_prediction_as_they_block_the_server) {
     std::vector<sh::MoveCmd> cmds;
     cmds.reserve(160);
     for (int i = 0; i < 80; i++) cmds.push_back(cmd(i, 90));
-    const Race r = race(h, l, cmds, 10, {{1, {0, 0, 0}}});
+    const Race r = race(h, l, cmds, 10, {{1, {0, 0, 0}, {}, 1e30f}});
     CHECK_MSG(r.server.y < 165, at(r.server));
     CHECK_MSG(r.error < 0.125f, "predicted " + at(r.predicted.origin) + " server " + at(r.server));
     // Without the mover the client runs through it.
