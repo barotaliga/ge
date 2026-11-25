@@ -231,7 +231,6 @@ inline int q2_model_fx_of(int code, uint32_t pick, const float at[3], const floa
     case 28:    // The Reckoning's plasma explosion: explosion1's
     case 7:     // a rocket's
     case 17:    // a rocket's in water
-    case 28:    // The Reckoning's plasma burst, drawn as a rocket's
     case 6:     // explosion2
     case 8:     // a grenade's
     case 18: {  // a grenade's in water
@@ -294,9 +293,9 @@ constexpr int q2_blast_code(std::string_view name) {
 // Which of cl_disable_explosions' and cl_disable_particles' kinds blast `code` is: a rocket's (in
 // the air or in water), a grenade's, or neither (0).
 constexpr uint8_t q2_blast_kind(int code) {
-  return code == 7 || code == 17 || code == 28 ? ge::classic::kQ2Rocket
-         : code == 8 || code == 18             ? ge::classic::kQ2Grenade
-                                               : 0;
+  return code == 7 || code == 17   ? ge::classic::kQ2Rocket
+         : code == 8 || code == 18 ? ge::classic::kQ2Grenade
+                                   : 0;
 }
 
 // A cable lives this long unless sent again.
