@@ -1,37 +1,24 @@
-// The way through's shot buttons (way_through.hpp): the node each is shot from, at its face and
-// on the map's own floor, and one he reaches when that node is not.
+// The way through's shot buttons on a bridge (way_through.hpp): a shot button whose node lies on
+// a bridge still in, shot from off it at its face.
 //
-// ge:summary The way through's shot buttons: shot at their face, from a node he reaches
-// ge:keywords way_face_shot_buttons way_reach_shot_buttons shot-button button-face bridge
-// ge:keywords func_button health r1m4
+// ge:summary A shot button whose node is on a bridge still in: shot at its face from off it
+// ge:keywords way_face_shot_buttons shot-button button-face bridge func_button health r1m4
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #pragma once
 
-#include <vector>
-
 #include "shooterbots/bot_view.hpp"
-#include "shooterbots/entities.hpp"
 #include "shooterbots/fighter.hpp"
 #include "shooterbots/map_nav.hpp"
-#include "shooterbots/nav.hpp"
-#include "shooterbots/way_through.hpp"
 
 namespace ge::shooterbots {
 
-// (`complete`) Each shot button's face (the side its press pushes away from: `face`, from its
-// angle), and a button shot from a node on a bridge still in (where nothing stands) shot from
-// the nearest node within kWayShotAcross at its face instead: no more than 60 degrees off
-// straight out, seeing it, off any mover and any such bridge. Other nodes are kept.
-void way_face_shot_buttons(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
-                           const std::vector<EntityBlock>& blocks);
-
-// (`complete`, after the plan's reach) A shot button whose node he does not reach is shot from the
-// nearest node at its face he does: r1m4's, high on the wall across the lava from the start, was
-// given a ledge behind it, out of reach till the bridge it slides out was there, and he stood at
-// the start with nothing to do; now he shoots it from the end of the corridor across the lava.
-// Looked for again each kWayRepick_s while unreached.
-void way_reach_shot_buttons(WayThrough& w, Fighter& f, const NavGraph& g,
-                            const ge::shooterbots::BotView& s, double t);
+// (`complete`) A shot button given a node on a bridge still in (where nothing stands until the
+// button runs it out) is shot instead from the nearest node within kWayShotAcross at its face
+// (the other side from its `push`; no more than 60 degrees off straight out), seeing it, off any
+// mover and any such bridge. r1m4's, across the lava from the start, slides out the bridge it was
+// given a node on: he stood at the start for the whole map. Any other node is kept (one he does
+// not reach is sought as the plan goes: `shotplace`, way_gates.hpp).
+void way_face_shot_buttons(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s);
 
 }  // namespace ge::shooterbots

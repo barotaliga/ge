@@ -1055,7 +1055,7 @@ bool targets_damage(Q2Server& s, int i, int attacker, int damage) {
   if (e.gone || damage <= 0) return false;
   switch (k) {
     case kExplosive:  // shootable unless only named (then a use blows it)
-      if (e.hidden || ((e.spawnflags & 1) == 0 && !e.targetname.empty())) return false;
+      if (e.hidden || ((e.spawnflags & (1 | kGzWoken)) == 0 && !e.targetname.empty())) return false;
       e.health -= damage;
       if (e.health <= 0) {  // its chunks fly away from who broke it
         const bool player = attacker >= 0 && attacker < sh::kMaxClients;
@@ -1118,7 +1118,7 @@ void targets_frame(Q2Server& s) {
           e.tick_at = 0;
           break;
         }
-        if (s.level_time - e.touched_at > 0.5 + 0.001) {
+        if (s.level_time - e.touched_at > 0.5 + 0.001 && !gz_silent(s, e)) {
           e.touched_at = s.level_time;
           sound_at(s, i, e.origin, kShakeSound, true);
         }

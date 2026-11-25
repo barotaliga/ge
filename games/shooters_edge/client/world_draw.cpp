@@ -109,9 +109,8 @@ struct WorldDraw {
   std::vector<float> casters;       // this frame's models as world triangles, for their shadows
   std::vector<ba::CasterBox> caster_boxes;  // and each one's box
   std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
-  double in_liquid_s = 0;  // s the eye has been in a liquid (0 in the air): r_waterwarp's clock
-  std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
-  std::vector<gr::BeamLook> beam_looks;    // a laser's own look, beside its shape
+  std::vector<gr::BeamShape> beam_shapes;   // kMaxBeamDraws, built each frame
+  std::vector<gr::BeamLook> beam_looks;     // a laser's own look, beside its shape
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
   std::vector<gr::Particle> lit_births;
@@ -770,9 +769,6 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   GE_ZONE("world");
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
-  // In a liquid the view breathes (r_waterwarp).
-  f.in_liquid_s = fx.screen.medium == effects::Medium::air ? 0 : f.in_liquid_s + dt;
-  view.fov_y = look::warped_fov(*f.picture, fx.screen.medium, view.fov_y, f.in_liquid_s);
   {
     std::string refused;
     f.stops = look::picture_stops(*f.picture, f.w, f.h, f.kept_stops, refused);
@@ -921,6 +917,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // where it was born, the blasts' and the flames' smoke the light where they are.
     f.lit_births.assign(fx.births.begin(), fx.births.end());
     f.lit_births.insert(f.lit_births.end(), f.burning.births.begin(), f.burning.births.end());
+    // r_particle_scale: the specks (not the smoke's puffs, which grow) as large as the player
+    // asks.
+    const auto speck = static_cast<float>(f.picture->particle_scale);
+    if (speck != 1)
+      for (gr::Particle& q : f.lit_births)
+        if (q.grow <= 0) q.size *= speck;
     // Quake II's gl_partscale: each speck sized by its depth in front of the eye.
     if (f.picture->q2fx.part_scale > 0) {
       const double forward[3] = {std::sin(view.heading) * std::cos(view.pitch),

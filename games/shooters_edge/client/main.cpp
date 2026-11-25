@@ -505,12 +505,14 @@ int run_main(int argc, char** argv) {
   // for vid_vsync_lag_fix), and after the present the gate told and, while the lag fix is on,
   // the frame's cost to its GPU's last work measured.
   const auto acquire_frame = [&] {
+    GE_ZONE("frame.acquire");
     const uint64_t before = ge::platform::now_ns();
     wgpu::TextureView view = surface.acquire(*device);
     ge::platform::acquired(pacing, before, ge::platform::now_ns());
     return view;
   };
   const auto present_frame = [&] {
+    GE_ZONE("frame.present");
     surface.present();
     gate.submitted(*device);
     if (ge::platform::late_start_on(pacing)) {
@@ -534,10 +536,8 @@ int run_main(int argc, char** argv) {
     cl::draw_title_backdrop(overlay, con_look, w, h, no_night);  // a classic game's own
     if (lobby) {
       const se::LobbyView lv = cl::listen_lobby_view(listen);
-      if (game_menu.art().loaded())
-        shooters_edge::menu::draw_lobby_page_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby_page(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         true);
     }
     game_menu.draw(overlay, w, h, t);
     con_view.frame(dt);
@@ -1108,6 +1108,7 @@ int run_main(int argc, char** argv) {
   if (!args.manual.empty())  // every command and setting registered: the manual's source
     return cl::write_manual(console, game_cvars, bindings, game_start, *adapter.game, args.manual);
   while ((args.frames == 0 || presented < args.frames) && !quit) {
+    ge::platform::profile_tick(console, pacing);  // `profile N`: before any zone opens
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
@@ -1127,6 +1128,7 @@ int run_main(int argc, char** argv) {
     // The frame's pacing BEFORE its input is read, so the input is as fresh as the waits allow:
     // the GPU's queue down to vid_framelatency, then the cap (a timedemo runs unpaced).
     if (vsync) {
+      GE_ZONE("frame.wait");  // the GPU's queue and the cap: time waited, not spent
       if (pacing.settings.vsync != vsync_applied || pacing.settings.latency != latency_applied)
         configure_surface();
       const double gpu_s = gate.wait(*device, pacing.settings.latency);
@@ -1154,6 +1156,7 @@ int run_main(int argc, char** argv) {
     const std::string map_before = next_map;
     const bool joined_before = remote.active;
     con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
+    con_keys.taken = cl::lobby_taken_keys(listen);  // the lobby's keys press no pack bind
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.typing() != text_on) {
       text_on = con_view.typing();
@@ -1161,7 +1164,7 @@ int run_main(int argc, char** argv) {
     }
     // The console's text selected with the mouse (Command-C copies it, ui/console_keys.hpp).
     ge::ui::select_with_pointer(
-        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, h,
+        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, w, h,
         input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
         (input.pointer_buttons & 1u) != 0 && con_view.open() && !game_menu.open(), selecting_text);
     // The main menu: Escape opens it and goes back out of it; while it is up it has the keys and
@@ -1731,6 +1734,7 @@ int run_main(int argc, char** argv) {
                       ? nullptr
                       : &hand;
       cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
+      ge::render::gpu_watch_frame(gpu_debug.watch, cl::world_stats(*world), wall, console);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);
@@ -1787,8 +1791,8 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
-                               [&](const std::string& line) { tell(line, t); });
+      printed = cl::game_lines_joined(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                                      [&](const std::string& line) { tell(line, t); });
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1855,8 +1859,8 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
-                             [&](const std::string& line) { tell(line, t); });
+    printed = cl::game_lines_joined(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                                    [&](const std::string& line) { tell(line, t); });
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];
@@ -1929,10 +1933,8 @@ int run_main(int argc, char** argv) {
       se::LobbyView lv = cl::listen_lobby_view(listen);
       // A classic game counts down in its own centre print (server/announce.hpp).
       lv.count = shooters_edge::server::words_of(listen.server->localinfo, "count_head").empty();
-      if (game_menu.art().loaded())
-        shooters_edge::menu::draw_lobby_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         false);
     }
     const bool scores_on =  // the score keys (TAB: +showscores), unless scr_draw2d hides them
         !con_keys.held && !was_open && cl::shows_scores(q2_screen);
@@ -1968,14 +1970,7 @@ int run_main(int argc, char** argv) {
     save_settings();
   }
   const double seconds = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-  char line[200];
-  std::snprintf(line, sizeof line,
-                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame, the longest %.0f ms) at "
-                "%dx%d, %u GPU errors",
-                presented, seconds,
-                presented ? seconds * 1e3 / static_cast<double>(presented) : 0.0, longest * 1e3, w,
-                h, device->errors.load());
-  out::status(line);
+  out::status(cl::run_line(presented, seconds, longest, w, h, device->errors.load()));
   return device->errors.load() == 0 && !device->lost.load() && bench_failed == 0 ? 0 : 1;
 }
 

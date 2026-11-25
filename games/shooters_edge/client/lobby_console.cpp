@@ -26,6 +26,16 @@ void add_lobby_commands(ge::console::Console& con, Listen& l, const LobbyElsewhe
                                              .hostname = l.opt.hostname});
 }
 
+std::vector<uint16_t> lobby_taken_keys(const Listen& l) {
+  std::vector<uint16_t> out;
+  if (!l.room || l.room->lobby.phase == sv::LobbyPhase::match) return out;
+  // Their HID usages (platform/window.hpp's Key): F1, F2, F4; F5, F6, ENTER.
+  for (const uint16_t k : {uint16_t{58}, uint16_t{59}, uint16_t{61}}) out.push_back(k);
+  if (on_lobby_screen(l))
+    for (const uint16_t k : {uint16_t{62}, uint16_t{63}, uint16_t{40}}) out.push_back(k);
+  return out;
+}
+
 void lobby_keys(Listen& l, const LobbyKeys& k, const LobbyElsewhere& elsewhere) {
   const auto word = [&](const char* line) {
     if ((!elsewhere || !elsewhere(line)) && l.room) listen_lobby(l, line);

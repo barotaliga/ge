@@ -196,7 +196,7 @@ struct LaserEnd {
 };
 // A laser's line from `start` to `end`: `damage` to every player and monster on it, the line
 // passing on through them, and to the mover or wall that stops it (an energy blow, `attacker` a
-// slot or -1).
+// slot or -1); under Ground Zero it passes on through a thing it hurt, too.
 LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
                      int skip_entity);
 // A point effect (`te_*`) at `at` for everyone.

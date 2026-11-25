@@ -90,12 +90,12 @@ struct WayStep {
   // it in turn (a trigger the button fires), left for good until a step with one as its target is
   // done.
   std::vector<std::string> gate;
-  bool repeats = false;  // a trigger_multiple: it fires each time he walks in
-  int32_t node = -1;     // where it is reached from
-  double repick_at = 0;  // (a shot button's) when a node he reaches is looked for again, s
-  int button = -1;       // a button's index in the fighter's spots
-  int key_bit = 0;       // a key's item bit (Quake's), or
-  int ent = -1;          // the key lying on the map (Quake II's: taken when it is gone)
+  bool repeats = false;       // a trigger_multiple: it fires each time he walks in
+  double shot_sought = -1e9;  // a shot button's place last sought among those he reaches, s
+  int32_t node = -1;          // where it is reached from
+  int button = -1;            // a button's index in the fighter's spots
+  int key_bit = 0;            // a key's item bit (Quake's), or
+  int ent = -1;               // the key lying on the map (Quake II's: taken when it is gone)
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;

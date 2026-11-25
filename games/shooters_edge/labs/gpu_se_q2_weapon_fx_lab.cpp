@@ -139,9 +139,11 @@ constexpr Shot kShots[] = {
 // Ground Zero's weapons (`--mod=rogue`): the shots its own rules fire (server/q2_gz.hpp).
 constexpr Shot kGroundZeroShots[] = {
     {"etf-rifle", "a stream of flechettes in flight down the line", 16, sv::SqWeapon::etf_rifle},
-    {"plasma-beam", "the beam's straight line from the gun to the wall", 16,
+    {"plasma-beam", "the beam's spinning segments from the gun to the wall, its rings sliding", 16,
      sv::SqWeapon::plasma_beam},
     {"disruptor", "the disruptor's bolt in flight", 10, sv::SqWeapon::disruptor},
+    {"disruptor-burst", "the bolt's dark burst on the wall: black specks, the room darkened", 14,
+     sv::SqWeapon::disruptor, true, false, false, 1},
     {"prox-launcher", "a prox mine arcing out of the launcher", 20, sv::SqWeapon::prox_launcher,
      false, false, false, 2, true},
     {"prox-mine-armed", "the mine stuck where it landed, opened and armed", 260,

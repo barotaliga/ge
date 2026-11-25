@@ -1893,7 +1893,28 @@ LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, in
       start = l.end;
       continue;
     }
-    if (l.fraction < 1 && !l.sky) map_damage(s, l.mover, attacker, damage);
+    const bool hurt = l.fraction < 1 && !l.sky && map_damage(s, l.mover, attacker, damage);
+    // Ground Zero's beam passes on through a thing it could hurt (a crate, a shot door).
+    if (hurt && l.mover >= 0 && s.opt.pack == Q2Pack::ground_zero) {
+      // On from where the line leaves its box (a brush mover is never skipped by the trace).
+      const Q2Entity& m = s.entities[size_t(l.mover)];
+      const sh::Vec3f lo = m.origin + m.mins, hi = m.origin + m.maxs;
+      float out = 1e9f;
+      for (int k = 0; k < 3; k++) {
+        const float d = k == 0 ? dir.x : k == 1 ? dir.y : dir.z;
+        const float at = k == 0 ? l.end.x : k == 1 ? l.end.y : l.end.z;
+        const float edge = d > 0 ? (k == 0   ? hi.x
+                                    : k == 1 ? hi.y
+                                             : hi.z)
+                                 : (k == 0   ? lo.x
+                                    : k == 1 ? lo.y
+                                             : lo.z);
+        if (d != 0) out = std::min(out, (edge - at) / d);
+      }
+      start = l.end + dir * (out + 0.125f);
+      if (sh::dot(end - start, dir) <= 0) return {end, {}};
+      continue;
+    }
     return {l.end, l.fraction < 1 ? l.normal : sh::Vec3f{}};
   }
   return {start, {}};

@@ -1,15 +1,13 @@
-// The way through's shot buttons (way_shots.hpp).
+// The way through's shot buttons on a bridge (way_shots.hpp).
 //
-// ge:summary The way through's shot buttons: shot at their face, from a node he reaches
-// ge:keywords way_face_shot_buttons way_reach_shot_buttons shot-button button-face
+// ge:summary A shot button whose node is on a bridge still in: shot at its face from off it
+// ge:keywords way_face_shot_buttons shot-button button-face bridge
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooterbots/way_shots.hpp"
 
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
 
 #include "shooter/trace.hpp"
 
@@ -26,17 +24,6 @@ constexpr double kWayRepick_s = 10;    // an unreached one's node looked for aga
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
-}
-
-// The edict the mod made of inline model `model`, or -1.
-int edict_of(const ge::shooterbots::BotView& s, const char* model) {
-  for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-    if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
-      continue;
-    if (s.models[static_cast<size_t>(d.modelindex)] == model) return e;
-  }
-  return -1;
 }
 
 // Whether `o` is at the face `face` of a button whose middle is `at`: out from it, no more than
@@ -57,8 +44,7 @@ bool sees(const ge::shooterbots::BotView& s, sh::Vec3f o, const ButtonSpot& bs) 
 
 }  // namespace
 
-void way_face_shot_buttons(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
-                           const std::vector<EntityBlock>& blocks) {
+void way_face_shot_buttons(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s) {
   const NavGraph& g = nav.graph;
   std::vector<uint8_t> on_bridge(g.nodes.size(), 0);
   for (const NavBridge& br : nav.bridges)
@@ -66,32 +52,13 @@ void way_face_shot_buttons(Fighter& f, const MapNav& nav, const ge::shooterbots:
       for (const int32_t n : br.nodes) on_bridge[static_cast<size_t>(n)] = 1;
   for (ButtonSpot& bs : f.button_spots) {
     if (!bs.shoot || bs.node < 0 || !bs.model.empty()) continue;
-    // Its face, from the angle its press moves it along (up, down, or level at a right angle;
-    // another angle keeps the node it has).
-    sh::Vec3f face{};
-    for (const EntityBlock& b : blocks) {
-      const char* cn = block_value(b, "classname");
-      const char* model = block_value(b, "model");
-      const char* an = block_value(b, "angle");
-      if (!cn || !model || std::strcmp(cn, "func_button") != 0 || edict_of(s, model) != bs.ent)
-        continue;
-      const int a = an ? std::atoi(an) : 0;
-      face = a == -1    ? sh::Vec3f{0, 0, -1}
-             : a == -2  ? sh::Vec3f{0, 0, 1}
-             : a == 0   ? sh::Vec3f{-1, 0, 0}
-             : a == 90  ? sh::Vec3f{0, -1, 0}
-             : a == 180 ? sh::Vec3f{1, 0, 0}
-             : a == 270 ? sh::Vec3f{0, 1, 0}
-                        : sh::Vec3f{};
-    }
-    bs.face = face;
+    // Its face: the other side from the way a press pushes it in (zero for one pressed up or
+    // down, whose node is then any that sees it).
+    const sh::Vec3f face = bs.push * -1.0f;
     const bool known = dot(face, face) != 0;
-    // A node behind it, or on a bridge still in, is looked for again in the plan among the
-    // nodes he reaches (way_reach_shot_buttons); any other is kept.
-    const sh::Vec3f was = g.nodes[static_cast<size_t>(bs.node)].origin;
-    const bool bridged = on_bridge[static_cast<size_t>(bs.node)] != 0;
-    bs.refind = bridged || (known && dot(was - bs.at, face) <= 0);
-    if (!bridged) continue;
+    // A node off any bridge still in is kept (one he does not reach is sought among those he
+    // does as the plan goes: way_shot_sides, `shotplace`).
+    if (on_bridge[static_cast<size_t>(bs.node)] == 0) continue;
     int32_t best = -1;
     float best_d = kWayShotAcross;
     for (size_t n = 0; n < g.nodes.size(); n++) {
@@ -103,32 +70,6 @@ void way_face_shot_buttons(Fighter& f, const MapNav& nav, const ge::shooterbots:
       best_d = dd;
     }
     if (best >= 0) bs.node = best;
-  }
-}
-
-void way_reach_shot_buttons(WayThrough& w, Fighter& f, const NavGraph& g,
-                            const ge::shooterbots::BotView& s, double t) {
-  for (WayStep& st : w.steps) {
-    if (st.kind != WayKind::button || st.done || st.node < 0 || w.search.reached(st.node) ||
-        t < st.repick_at)
-      continue;
-    ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
-    // (One at its face from the start is a way to it the plan has yet to open: e2m2's pair,
-    // given another node, cost 11 of its kills.)
-    if (!bs.shoot || !bs.refind || dot(bs.face, bs.face) == 0) continue;
-    st.repick_at = t + kWayRepick_s;
-    int32_t best = -1;
-    float best_d = kWayShotAcross;
-    for (size_t n = 0; n < g.nodes.size(); n++) {
-      const sh::Vec3f o = g.nodes[n].origin;
-      const float dd = dist(o, bs.at);
-      if (dd >= best_d || g.nodes[n].mover >= 0 || !at_face(o, bs.at, bs.face) ||
-          !w.search.reached(static_cast<int32_t>(n)) || !sees(s, o, bs))
-        continue;
-      best = static_cast<int32_t>(n);
-      best_d = dd;
-    }
-    if (best >= 0) st.node = bs.node = best;
   }
 }
 
