@@ -89,6 +89,8 @@ struct CommandFlags {
 struct HostAsk {
   std::string map, name, password;
   int port = 0, maxclients = 0, bots = -1;  // 0 / -1: the game's own default
+  bool open_port = false;  // ask the home router to forward the port (sv_open_port; dedicated)
+  std::string gateway;     // the router to ask (sv_gateway; "": the default route's)
 };
 
 // THE GAME'S HALF. Every pointer may be null: the commands that need it then say the game lacks

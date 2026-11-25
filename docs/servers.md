@@ -754,7 +754,29 @@ from where it stopped (a `Range` request, three tries), holds every fetch togeth
 The console's download bar follows the fetch (`web_progress`).
 
 The `se-fastdl` lab times both ways on a real map: `make lab LAB=se-fastdl
-ARGS=--map=<path>/aerowalk.bsp`.
+ARGS=--map=<path>/aerowalk.bsp`, or a Quake II map with `--game=q2`. Quake II's channel sends one
+piece of a packet's room for each `nextdl` the client answers, so a map comes at about 13 kB a
+second whichever protocol the client speaks; HTTPS is what makes it fast there.
+
+## The port opened on the home router
+
+A dedicated server run at home sits behind the home router, which drops what the internet sends to
+it unless someone forwards the game port by hand. `sv_open_port 1` asks the router to do it
+(`engine/server/router.hpp` over `engine/net/portmap.hpp`): PCP first, then NAT-PMP, then UPnP,
+from a socket of its own beside the game's. The forward is the game's UDP port, the same port
+outside, asked for an hour at a time and renewed at half its life; a lease the router drops is
+asked for again. When the server stops, the router is asked to take the forward down.
+
+| Setting | Default | What |
+| --- | --- | --- |
+| `sv_open_port` | 0 (off) | 1: ask the home router to forward the game's UDP port |
+| `sv_gateway` | none | the router's address (port 5351 when left out); none: the machine's default route (Linux), or UPnP's search |
+
+The console says once what came of it: "The router forwards UDP 27500 to this server (pcp):
+players reach it at 203.0.113.7:27500.", or, when no router answered, the reason and what to do
+(open the port in the router's settings by hand, or set `sv_gateway`). The HTTPS file port
+(`sv_http_port`) is TCP, which these protocols' UDP forward does not cover: forward it by hand.
+`tests/server_router_test.cpp` runs it against the simulated router (`engine/net/sim_router.hpp`).
 
 ## Open for extension
 
