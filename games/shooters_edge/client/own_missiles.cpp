@@ -46,6 +46,8 @@ const char* model_of(OwnMissileKind k) {
       return "models/objects/rocket/tris.md2";
     case OwnMissileKind::q2_bfg:
       return "sprites/s_bfg1.sp2";
+    case OwnMissileKind::q2_hand_grenade:
+      return "models/objects/grenade2/tris.md2";
   }
   return nullptr;
 }
@@ -53,12 +55,14 @@ const char* model_of(OwnMissileKind k) {
 // Thrown and falling: the grenades.
 bool falls(OwnMissileKind k) {
   return k == OwnMissileKind::grenade || k == OwnMissileKind::prox ||
-         k == OwnMissileKind::multi_grenade || k == OwnMissileKind::q2_grenade;
+         k == OwnMissileKind::multi_grenade || k == OwnMissileKind::q2_grenade ||
+         k == OwnMissileKind::q2_hand_grenade;
 }
 
 bool q2(OwnMissileKind k) {
   return k == OwnMissileKind::q2_bolt || k == OwnMissileKind::q2_grenade ||
-         k == OwnMissileKind::q2_rocket || k == OwnMissileKind::q2_bfg;
+         k == OwnMissileKind::q2_rocket || k == OwnMissileKind::q2_bfg ||
+         k == OwnMissileKind::q2_hand_grenade;
 }
 
 // What a missile's step meets: the level's clip hull (Quake's) or its brushes (Quake II's).
@@ -149,7 +153,8 @@ bool fly(OwnMissile& o, const World& world, float gravity, double t) {
     }
     const float into = sh::dot(o.velocity, tr.normal);
     o.velocity = o.velocity - tr.normal * (into * kGrenadeBounce);
-    if (o.kind == OwnMissileKind::q2_grenade) {  // off the wall a little; at rest on a floor
+    if (o.kind == OwnMissileKind::q2_grenade ||
+        o.kind == OwnMissileKind::q2_hand_grenade) {  // off the wall a little; at rest on a floor
       o.origin = o.origin + tr.normal * 0.1f;
       if (tr.normal.z > 0.7f && sh::length(o.velocity) < kQ2RestSpeedU) {
         o.velocity = {0, 0, 0};
@@ -168,6 +173,9 @@ void q2_launch(const OwnShot& shot, const sh::ViewAxes& v, OwnMissile& o) {
   o.origin = shot.origin + sh::Vec3f{0, 0, shot.view_height - kQ2EyeDropU} + v.forward * ahead +
              v.right * (kQ2MissileSideU * static_cast<float>(shot.side));
   switch (shot.kind) {
+    case OwnMissileKind::q2_hand_grenade:
+      o.velocity = v.forward * shot.speed + v.up * kGrenadeUpU;
+      break;
     case OwnMissileKind::q2_grenade:
       o.velocity = v.forward * kGrenadeAheadU + v.up * kGrenadeUpU;
       break;
@@ -181,7 +189,7 @@ void q2_launch(const OwnShot& shot, const sh::ViewAxes& v, OwnMissile& o) {
       o.velocity = v.forward * kQ2BoltSpeedU;
       break;
   }
-  if (shot.kind != OwnMissileKind::q2_grenade) o.angles = flight_angles(o.velocity);
+  if (!falls(shot.kind)) o.angles = flight_angles(o.velocity);
 }
 
 }  // namespace
@@ -322,7 +330,7 @@ bool kind_of_model(std::string_view name, OwnMissileKind& k) {
         OwnMissileKind::grenade, OwnMissileKind::laser, OwnMissileKind::prox,
         OwnMissileKind::lava_nail, OwnMissileKind::multi_grenade, OwnMissileKind::multi_rocket,
         OwnMissileKind::plasma, OwnMissileKind::q2_bolt, OwnMissileKind::q2_grenade,
-        OwnMissileKind::q2_rocket, OwnMissileKind::q2_bfg})
+        OwnMissileKind::q2_rocket, OwnMissileKind::q2_bfg, OwnMissileKind::q2_hand_grenade})
     if (name == model_of(c)) {
       k = c;
       return true;
