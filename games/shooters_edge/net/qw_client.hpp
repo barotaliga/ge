@@ -55,6 +55,7 @@
 #include "classic/content/web_downloads.hpp"
 #include "hud/net_graph.hpp"
 #include "net/transport.hpp"
+#include "net/tunnel.hpp"
 #include "net/voice_codec.hpp"
 #include "server/sheet.hpp"
 #include "shooter/predict.hpp"
@@ -182,6 +183,8 @@ struct ClientConfig {
   std::string voice_to;
   ge::classic::content::WebConfig web;  // `cl_http_*`: downloads from a web address
   int seed = 1;
+  // Join through the server's node when it offers the native bit (cl_native; net/qw_ext.hpp).
+  bool native = false;
   uint16_t qport = 1;
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
@@ -252,7 +255,11 @@ struct ClientDownload {
 
 struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a client
   ClientConfig cfg;
-  gn::Transport* transport = nullptr;
+  gn::Transport* transport = nullptr;  // the game's: `outer`, or the native tunnel's inner side
+  gn::Transport* outer = nullptr;      // the socket it was started on
+  // NATIVE (`ClientConfig::native`): the tunnel started when the server offered the native bit;
+  // a connect it could not make goes on plainly through the same inner side.
+  std::unique_ptr<gn::Tunnel> tunnel;
   gn::Address server;
   std::string refused;  // the server's reason when refused
   // A server that sent it elsewhere (a stuffed `connect <address>`, the server's `sv_redirect`):

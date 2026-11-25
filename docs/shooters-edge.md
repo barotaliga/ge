@@ -599,7 +599,16 @@ so the high-lag teleport is not asked for while it is on; a server that does not
 (a teleporter waiting to be switched on, a mod's own rule) is believed two commands later, the
 turn taken back and that teleporter left out while he stands in it, and a server's turn to the
 same facing is the guess's own. `make lab LAB=se-teleport` and `make lab LAB=se-q2-teleport
-ARGS="--game=<base> --map=city1"` measure it. Your own eye rides the same clock as the models: drawn one server frame behind, between
+ARGS="--game=<base> --map=city1"` measure it. A push trigger (a jump pad, a wind tunnel) is
+foreseen the same way (`cl_predict_push`). DOORS, PLATS AND TRAINS RUN ON in the prediction
+(`cl_predict_movers`, on by default; `shooter/predict.hpp`'s `MoverTrack`, `advance_movers`): each
+goes on at the speed its last two frames show, stops where it was seen standing (or where it was
+built), carries the player who stands on it and shoves him where it moves into him, so the lift
+under him and the door he runs through are where the server will have them when it runs his move;
+the window draws them there too. Quake II's server moves them once a 100 ms frame, so they step
+there a frame at a time. `make lab LAB=se-control ARGS="--basedir=<base> --game=<folder>
+--map=dm2 --event=plat"` (or `door`, `push`, `water`, `train`; a Quake II install's folder for its
+maps) counts the yanks both ways. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder
@@ -1518,6 +1527,14 @@ deltas with interest (M17f), prediction of the local player and of projectiles, 
 compensation by rewind, voice (M17h), the session layer's lobby and chat (M17d), and NAT
 traversal (M17e). Gameplay is identical under both: the server's frame and QC do not know
 which protocol a client speaks, and one server serves both kinds of client at once.
+
+**The native link (M18x, slice 1).** The classic stream is carried inside the engine's node
+(`engine/net/tunnel.hpp`): the node's handshake and channel wrap the same datagrams, and the
+datagrams that are not the node's are handed to the classic endpoint as they came, so one port
+serves both kinds of client. Our window asks `getchallenge native`; a server with `sv_native 1`
+(the default) adds the `native` word to its challenge, the window connects its node and asks again
+through it, and a server without one is joined classically (`cl_native 0` always does). Snapshots,
+secure joins, NAT traversal and the replicated moves come in the later slices (`docs/goals/M18x.md`).
 
 **Held by labs on the simulated network**: a compatible client and our server, our client and
 a compatible server, under every condition preset; and, in `se-interop`, our client against an

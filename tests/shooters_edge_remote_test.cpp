@@ -15,12 +15,16 @@
 // showpackets, showdrop and cl_solid_players are bound to the window. `record` begun late keeps the
 // level from its server data, so the file plays from the signon; a match records itself from the
 // status leaving standby to 4 s into the intermission, and one cut short waits for match_save;
-// the match's console log beside it.
+// the match's console log beside it. A map change on the server joined is followed: the window
+// signs on again, and its prediction starts over on the new level, meeting the server from its
+// first move. On a server with sv_native the window joins through the server's node, a classic
+// player beside it on the same port; one without it is joined classically.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
 // ge:keywords prediction cl_nopred latency predict_other cl_predict_players cl_nolerp lerp
-// ge:keywords item-back items_back
+// ge:keywords item-back items_back map-change changing qw_change
+// ge:keywords native-protocol tunnel cl_native sv_native
 // ge:keywords named-effects ge-ext pointparticles trailparticles voice cl_voip push-to-talk
 // ge:skill net shooter testing
 #include <algorithm>
@@ -1099,4 +1103,179 @@ TEST(a_map_the_window_lacks_is_fetched_before_it_asks_to_spawn) {
   CHECK_MSG(rig.join(), "the window never played on the server");
   CHECK(rig.remote.end.downloaded.count("maps/arena.bsp") == 1);
   CHECK(!said_has(rig.said, "another version"));
+}
+
+// A file fetched out of one of the server's archives: the server tells its archive first (svc 123,
+// the client's alone) and the window's reader, which draws the stream, never sees it, so the join
+// goes on to the map instead of dropping at sign-on on a message it does not know.
+TEST(a_file_fetched_out_of_the_server_s_archive_never_drops_the_join) {
+  Rig rig;
+  rig.serve = [](cn::ServerConfig& sc) {
+    sc.map_check = true;
+    sc.read_file = [](const std::string& path, std::vector<uint8_t>* out) {
+      if (path != "maps/arena.bsp") return false;
+      *out = map_version(1);
+      return true;
+    };
+    sc.file_origin = [](const std::string&, ge::vfs::ArchiveOrigin* o) {
+      *o = {"pak1.pak", "id1", 3, 1, 4096, 12, 4000};
+      return true;
+    };
+  };
+  std::vector<std::string> fetched;
+  bool told_origin = false;
+  rig.join_with = [&](cn::ClientConfig& cc) {
+    cc.read_file = [&](const std::string&, const std::string& path) {
+      for (const std::string& f : fetched)
+        if (f == path) return map_version(1);
+      return std::vector<uint8_t>{};
+    };
+    cc.keep_file = [&](const std::string&, const std::string& path, const std::vector<uint8_t>&,
+                       const ge::vfs::ArchiveOrigin* origin) {
+      fetched.push_back(path);
+      told_origin = told_origin || (origin != nullptr && origin->archive == "pak1.pak");
+    };
+  };
+  CHECK(rig.start());
+  CHECK_MSG(rig.join(), "the window never played on the server");
+  CHECK(rig.remote.end.downloaded.count("maps/arena.bsp") == 1);
+  CHECK(told_origin);
+  CHECK(!said_has(rig.said, "not one this reader knows"));
+}
+
+// The server changes map while the window plays: it is told the map is changing, signs on again
+// and draws the new level, and its prediction and the correction it smooths start over on that
+// level, nothing predicted through the old one: walking there, each prediction
+// lands where the server later puts the player, and the first one is not eased in from the old
+// level's place.
+TEST(a_map_change_on_the_server_joined_starts_the_window_s_prediction_over) {
+  Rig rig;
+  rig.latency_ms = 50;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  const std::vector<sh::BrushModel> models = sv::arena_models();
+  cn::remote_world(rig.remote, &models);
+  rig.remote.view = {0, 30, 0};
+  for (int f = 0; f < 77; f++) {  // a second's run on the first level
+    rig.remote.hands.forward = 400;
+    rig.frame();
+  }
+  CHECK(rig.remote.predicted);
+  const int levels_before = rig.remote.levels;
+
+  // The next map, made as a server makes it, and the endpoint moved onto it.
+  std::string error;
+  sv::QcServerOptions so;
+  so.loop.max_edicts = 1024;
+  std::unique_ptr<sv::QcServer> next = sv::make_qc_server(rig.progs, so, error);
+  CHECK_MSG(next != nullptr, error);
+  if (next == nullptr) return;
+  sv::MapSpec map;
+  map.name = "arena";
+  map.models = models;
+  map.entities = sv::kArenaEntities;
+  CHECK_MSG(sv::load_map(*next, map, error), error);
+  const sv::RulesRunner next_rules = sv::qc_runner_over(*next);
+  CHECK_MSG(cn::qw_change(rig.server, next_rules, error), error);
+
+  // Until the window has the new level, no frame of it is predicted through the old one.
+  bool level = false, predicted_between = false;
+  for (int f = 0; f < 800 && !(level && rig.remote.end.stage == cn::ClientStage::active); f++) {
+    if (rig.frame() == cn::RemoteStep::new_level) {
+      level = true;
+      cn::remote_world(rig.remote, &models);  // as the window hands the level it loaded
+    } else if (!level && rig.remote.predicted) {
+      predicted_between = rig.remote.demo.state.levels != rig.remote.levels;
+    }
+  }
+  CHECK_MSG(level, "the window never drew the server's next level");
+  CHECK(rig.remote.end.stage == cn::ClientStage::active);
+  CHECK(rig.remote.levels > levels_before);
+  CHECK_MSG(!predicted_between, "a frame of the new level was predicted through the old one");
+
+  // On the new level: the eye starts at the server's place and each prediction meets the server.
+  const int slot = rig.remote.end.playernum;
+  std::vector<sh::Vec3f> predicted(1 << 16);
+  std::vector<bool> kept(1 << 16, false);
+  int compared = 0;
+  float worst = 0, first_gap = -1;
+  for (int f = 0; f < 2 * 77; f++) {
+    rig.remote.hands.forward = 400;
+    rig.remote.hands.side = f % 77 < 30 ? 200 : 0;
+    rig.frame();
+    if (!rig.remote.predicted) continue;
+    const cn::QwClientEnd& c = rig.remote.end;
+    if (first_gap < 0) first_gap = sh::length(rig.remote.demo.state.eye - rig.remote.prediction);
+    const uint32_t newest = c.ch.outgoing_sequence - 1;
+    predicted[newest & 0xffff] = rig.remote.prediction;
+    kept[newest & 0xffff] = true;
+    const uint32_t acked = c.ch.incoming_acknowledged;
+    if (kept[acked & 0xffff]) {
+      worst = std::fmax(worst, sh::length(predicted[acked & 0xffff] - c.players[slot].origin));
+      compared++;
+    }
+  }
+  CHECK_MSG(compared > 60, "predictions compared on the new level: " + std::to_string(compared));
+  CHECK_MSG(worst < 1, "a prediction on the new level missed by " + std::to_string(worst));
+  // The eye is the prediction raised to the view's height: no correction carried over the change.
+  CHECK_MSG(first_gap >= 0 && first_gap < 40, "the first drawn eye on the new level was " +
+                                                  std::to_string(first_gap) +
+                                                  " units off the prediction");
+}
+
+// THE NATIVE LINK (M18x): on a server with sv_native the window joins through the server's node
+// and a classic player beside it joins as before, both on the server's one port; the window's
+// moves are predicted where the server puts it as on the classic road, and only its datagrams
+// crossed the network sealed in the node's packets.
+TEST(the_window_joins_through_the_node_beside_a_classic_player_on_one_port) {
+  Rig rig;
+  rig.latency_ms = 50;
+  rig.with_other = true;
+  rig.serve = [](cn::ServerConfig& sc) { sc.native = true; };
+  rig.join_with = [](cn::ClientConfig& cc) { cc.native = true; };
+  CHECK(rig.start());
+  CHECK_MSG(rig.join(), "the window never played through the node");
+  CHECK(rig.remote.end.tunnel != nullptr && gn::tunnel_joined(*rig.remote.end.tunnel));
+  CHECK(rig.server.tunnel != nullptr);
+  CHECK(gn::tunnel_carried(*rig.server.tunnel, gn::sim_address(1, cn::kPortClient)));
+  CHECK(!gn::tunnel_carried(*rig.server.tunnel, gn::sim_address(2, cn::kPortClient)));
+  const std::vector<sh::BrushModel> models = sv::arena_models();
+  cn::remote_world(rig.remote, &models);
+  const int slot = rig.remote.end.playernum;
+  std::vector<sh::Vec3f> predicted(1 << 16);
+  std::vector<bool> kept(1 << 16, false);
+  int compared = 0;
+  float worst = 0;
+  rig.remote.view = {0, 30, 0};
+  for (int f = 0; f < 2 * 77; f++) {
+    rig.remote.hands.forward = 400;
+    rig.remote.hands.side = f % 77 < 30 ? 200 : 0;
+    rig.frame();
+    if (!rig.remote.predicted) continue;
+    const cn::QwClientEnd& c = rig.remote.end;
+    const uint32_t newest = c.ch.outgoing_sequence - 1;
+    predicted[newest & 0xffff] = rig.remote.prediction;
+    kept[newest & 0xffff] = true;
+    const uint32_t acked = c.ch.incoming_acknowledged;
+    if (kept[acked & 0xffff]) {
+      worst = std::fmax(worst, sh::length(predicted[acked & 0xffff] - c.players[slot].origin));
+      compared++;
+    }
+  }
+  CHECK_MSG(compared > 60, "predictions compared through the node: " + std::to_string(compared));
+  CHECK_MSG(worst < 1, "a prediction through the node missed by " + std::to_string(worst));
+  CHECK_MSG(rig.other.stage == cn::ClientStage::active, "the classic player never played");
+  const gn::TunnelStats& ts = rig.server.tunnel->stats;
+  CHECK(ts.carried_in > 100 && ts.carried_out > 100);
+  CHECK(ts.plain_in > 100);  // the classic player's
+  CHECK(rig.remote.end.tunnel->stats.plain_out == 0);
+}
+
+// A window that asks for the node on a server without it joins the classic way, at once.
+TEST(the_window_joins_classically_where_the_server_offers_no_node) {
+  Rig rig;
+  rig.join_with = [](cn::ClientConfig& cc) { cc.native = true; };
+  CHECK(rig.start());
+  CHECK(rig.join());
+  CHECK(rig.remote.end.tunnel == nullptr);
 }

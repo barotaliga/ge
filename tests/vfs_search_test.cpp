@@ -182,6 +182,13 @@ TEST(a_layout_with_archives_over_loose_ranks_as_its_game_does) {
   CHECK(std::string(one.begin(), one.end()) == "pak2");
   CHECK(!vfs::read_from_pack((g / "pak2.pak").string(), "a.txt", &one, &error));
   CHECK(!vfs::read_from_pack((g / "a.txt").string(), "a.txt", &one, &error));
+  // Whether the folder holds a file, nothing mounted: a pack's directory, a zip, a loose file.
+  CHECK(vfs::read_from_pack((g / "pak2.pak").string(), "b.txt", nullptr, &error));
+  CHECK(vfs::game_has_file(root.string(), "g", "B.TXT", layout));
+  CHECK(vfs::game_has_file(root.string(), "g", "d.txt", layout));
+  CHECK(vfs::game_has_file(root.string(), "g", "E.txt", layout));
+  CHECK(!vfs::game_has_file(root.string(), "g", "f.txt", layout));
+  CHECK(!vfs::game_has_file(root.string(), "none", "a.txt", layout));
   fs::remove_all(root);
 }
 

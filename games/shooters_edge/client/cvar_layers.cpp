@@ -578,6 +578,14 @@ void add_first(con::Console& c, const GameBindings& b) {
                  .kind = con::CvarKind::boolean,
                  .values = "1: they do, on servers that offer it (the default); 0: they go the old "
                            "way for a moment, from the next connect"});
+  c.cvars().add({.name = "cl_native",
+                 .fallback = "1",
+                 .flags = con::kArchive,
+                 .help = "Whether you join our own servers through the engine's secure link, "
+                         "the game the same either way.",
+                 .kind = con::CvarKind::boolean,
+                 .values = "1: through the link where a server offers it (the default); 0: the "
+                           "classic way, from the next connect"});
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",

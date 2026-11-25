@@ -85,8 +85,18 @@ inline constexpr double kBillowsBy = 0.12;
 // `normal` (unit, out of it) the surface it went off against, or null in the open air: the ball
 // then stands a third of its radius off it, a dome rather than a ball half in the wall, and throws
 // into the half space it faces.
+// THE KINDS (`BlastOf`): a game's other blasts are this one's kin, so every one reads as the same
+// world's: `big` the same ball at kBigBlast of its size; `huge` a white-hot ball at kHugeBlast that
+// lights a whole hall (`huge_look`: hotter, brighter, its smoke paler dust); `dark` a ball that
+// swallows light (`dark_look`: barely burning, a sooty cloud that is gone in a second) and pulls
+// black specks in to its heart rather than throwing embers out; `bare` the ball alone, nothing
+// thrown.
+enum class BlastOf : uint8_t { common, big, huge, dark, bare };
+inline constexpr double kBigBlast = 1.8, kHugeBlast = 3.2;
+const gr::BlastLook& huge_look();
+const gr::BlastLook& dark_look();
 void blast(const double at[3], const double* normal, uint32_t seed, double now_s,
-           std::vector<gr::Blast>* blasts, Particles* births);
+           std::vector<gr::Blast>* blasts, Particles* births, BlastOf of = BlastOf::common);
 // The light of the main fireball `b` at `now_s`: false once its glow is gone.
 bool blast_light(const gr::Blast& b, double now_s, Light* out);
 
@@ -225,7 +235,8 @@ int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 //   and a pale vapour that rises where the slug burnt the air (`ion_trail`);
 // - the BOLTS (blaster, hyperblaster) in the modern look: a streak of two plasma strands wound
 //   round each other riding each bolt (`plasma_look`), shedding sparks (`plasma_sheds`);
-// - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`); the BFG's burst: a green
+// - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`; Ground Zero's green bolt's
+//   in green); the BFG's burst: a green
 //   ball of specks (`bfg_burst`) under the engine's blast.
 inline constexpr float kBoltRgb[3] = {1.0f, 0.75f, 0.25f};
 inline constexpr float kBfgRgb[3] = {0.35f, 1.0f, 0.35f};
@@ -266,7 +277,18 @@ void ion_trail(const double from[3], const double to[3], uint32_t seed, Particle
 const gr::BeamLook& plasma_look();
 // A few sparks shed off a bolt's stretch `from`..`to` (m) this frame.
 void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Particles* out);
-void blaster_hit(const double at[3], uint32_t seed, Particles* out);
+void blaster_hit(const double at[3], uint32_t seed, Particles* out, bool green = false);
 void bfg_burst(const double at[3], uint32_t seed, Particles* out);
+// A hit's sparks in a colour of their own (the energy guns' and the beams' hits that are not a
+// bullet's): `count` specks shining `rgb` (linear) thrown off the face out of `normal` (unit; a
+// zero normal, every way) at up to `speed` m/s, falling by `fall` of gravity, each living about
+// `life_s`.
+struct TintedHit {
+  float rgb[3] = {1, 1, 1};
+  int count = 24;
+  double speed = 4, fall = 0.6, life_s = 0.35, size_m = 0.03;
+};
+void tinted_hit(const double at[3], const double normal[3], const TintedHit& h, uint32_t seed,
+                Particles* out);
 
 }  // namespace shooters_edge::effects

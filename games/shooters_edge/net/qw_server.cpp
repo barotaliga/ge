@@ -19,6 +19,7 @@
 #include "classic/content/web_downloads.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
+#include "prof/zones.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
@@ -65,7 +66,7 @@ int32_t new_challenge(QwServer& s, const gn::Address& from) {
   });
 }
 
-void reply_challenge(QwServer& s, const gn::Address& from) {
+void reply_challenge(QwServer& s, const gn::Address& from, bool ask_native) {
   const int32_t value = new_challenge(s, from);
   uint8_t buf[128];
   gn::Writer w = gn::make_writer(buf, sizeof buf);
@@ -77,6 +78,12 @@ void reply_challenge(QwServer& s, const gn::Address& from) {
       gn::write_u32(w, family_magic(f));
       gn::write_u32(w, s.cfg.offered[f]);
     }
+  // Our client asked whether this server has the native link, and it is not on it yet: the
+  // link's own word says so (a classic client never asks, so never sees the family here).
+  if (ask_native && s.tunnel && !gn::tunnel_carried(*s.tunnel, from)) {
+    gn::write_u32(w, kMagicNative);
+    gn::write_u32(w, kGeNative);
+  }
   send_oob(s, from, buf, w.size);
 }
 
@@ -416,8 +423,8 @@ void handle_oob(QwServer& s, const gn::Address& from, const uint8_t* data, size_
   } else if (cmd == "status") {  // sv_status 0 or past sv_statusrate: no answer
     if (s.cfg.status.show > 0 && gs::limit_take(s.status_tries, s.now, s.cfg.status.rate))
       send_oob_print(s, from, status_text(s, std::atoi(pg::word(w, 1))));
-  } else if (cmd == "getchallenge") {
-    reply_challenge(s, from);
+  } else if (cmd == "getchallenge") {  // `getchallenge native`: our client asks for the link
+    reply_challenge(s, from, pg::word(w, 1) == std::string("native"));
   } else if (cmd == "connect") {
     handle_connect(s, from, text);
   } else if (cmd == "rcon") {
@@ -476,6 +483,10 @@ void read_move(QwServer& s, int slot, const ClcMsg& m, const uint8_t* payload, b
   }
   if (s.buttons != nullptr && !c.spectator)
     for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
+  if (s.impulse != nullptr && !c.spectator)
+    for (int i = 0; i < 3; i++)
+      if (p.cmds[i].impulse != 0)
+        p.cmds[i].impulse = s.impulse(s.move_ctx, slot, p.cmds[i].impulse, i == 2);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
   // His moves made before he saw the server's turn of him go where he now faces.
   c.moves_turned +=
@@ -882,6 +893,14 @@ bool qw_start(QwServer& s, const sv::RulesRunner& rules, gn::Transport& t, const
   s.transport = &t;
   s.rng = ge::core::make_rng(cfg.seed);
   if (cfg.voice) s.cfg.offered[ExtFamily::x2] |= kX2Voice;
+  if (cfg.native) {  // our clients through the node, the rest plainly, on the one socket
+    s.tunnel = std::make_unique<gn::Tunnel>();
+    if (!gn::tunnel_host(*s.tunnel, t, native_config(cfg.seed))) {
+      error = "the server's socket could not take the native protocol's node";
+      return false;
+    }
+    s.transport = &s.tunnel->inner;
+  }
   if (!bind_map(s, rules, error)) return false;
   s.packets.reserve(static_cast<size_t>(sh::kMaxClients) * 4);
   return true;
@@ -1169,7 +1188,8 @@ void tell_frags(QwServer& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     QwClient& c = s.clients[i];
     if (!c.rules_active) continue;
-    const int frags = static_cast<int>(s.game->world.clients[i].numbers.frags);
+    const int frags = c.pick_number != 0 ? c.pick_number
+                                         : static_cast<int>(s.game->world.clients[i].numbers.frags);
     if (frags == c.frags_told) continue;
     c.frags_told = frags;
     SvcMsg m;
@@ -1205,12 +1225,37 @@ void answer_zombie(QwServer& s, const gn::Address& from, uint16_t qport, const u
 
 }  // namespace
 
+namespace {
+
+// The frame's parts' timing zones (prof/zones.hpp), named once.
+uint32_t zone_receive() {
+  static const uint32_t id = ge::prof::zone_id("net.receive");
+  return id;
+}
+uint32_t zone_events() {
+  static const uint32_t id = ge::prof::zone_id("net.events");
+  return id;
+}
+
+void frame_body(QwServer& s, int64_t now_us);
+
+}  // namespace
+
 void qw_frame(QwServer& s, int64_t now_us) {
+  if (s.tunnel) gn::tunnel_update(*s.tunnel, now_us);
+  frame_body(s, now_us);
+  if (s.tunnel) gn::tunnel_flush(*s.tunnel, now_us);
+}
+
+namespace {
+void frame_body(QwServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
   std::erase_if(s.zombies, [&s](const QwServer::Zombie& z) { return s.now > z.until; });
   if (s.started < 0) s.started = s.now;
   s.frames++;
   s.packets.clear();
+  ge::prof::ZoneParts part;
+  part.begin(zone_receive());  // the datagrams read
   gn::transport_pump(*s.transport, now_us);
   uint8_t buf[gn::kMaxDatagram];
   gn::Address from;
@@ -1268,8 +1313,10 @@ void qw_frame(QwServer& s, int64_t now_us) {
         s.game->sv.clients[static_cast<size_t>(p.client)].active)
       s.packets.push_back(p);
   s.local_moves.clear();
+  part.end();
 
   s.rules->frame(s.packets.data(), static_cast<int>(s.packets.size()));
+  part.begin(zone_events());  // what the frame did, told: frags, events, recordings, drops
   if (s.local_tap != nullptr) s.local_tap(s.local_ctx, *s.game);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the rules' turns, each for his next datagram
     sv::RulesCommon::Turn& t = s.game->turns[i];
@@ -1342,7 +1389,9 @@ void qw_frame(QwServer& s, int64_t now_us) {
       }
     }
   }
+  part.end();
   send_frames(s);
 }
+}  // namespace
 
 }  // namespace shooters_edge::net

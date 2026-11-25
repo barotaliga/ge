@@ -404,3 +404,52 @@ TEST(a_lerped_light_style_moves_in_a_straight_line_between_letters) {
   CHECK(std::fabs(ba::style_level_lerped("az", 0.1) - z) < 1e-9);
   CHECK(ba::style_level_lerped("", 1.3) == 1.0);
 }
+
+// The sky and the liquids are left to the pack by what the map says they are, not by their names:
+// a 38 map's warped floor and sky ceiling (named under their folder, so no name starts with `*` or
+// "sky") are never asked for, every other texture is.
+TEST(a_38_map_s_liquid_and_sky_are_never_replaced) {
+  ge::brush::Fixture f = ge::brush::sample_fixture();
+  f.rooms[1].floor = "*water1";
+  f.rooms[1].ceiling = "sky1";
+  std::vector<uint8_t> map;
+  std::string error;
+  CHECK_MSG(ge::brush::write_bsp(f, ge::brush::Family::v38, &map, &error), error);
+  ge::brush::Map read;
+  CHECK_MSG(ge::brush::read_bsp(map, &read, &error), error);
+  std::vector<uint8_t> flat(size_t{16} * 16, 100);
+  std::vector<ge::brush::MapPicture> pics(read.textures.size());
+  for (size_t i = 0; i < pics.size(); ++i) {
+    pics[i].name = read.textures[i].name;
+    pics[i].width = pics[i].height = 16;
+    for (const uint8_t*& l : pics[i].level) l = flat.data();
+  }
+  ba::Pack pack;
+  pack.bytes = map;
+  pack.files.push_back({"maps/kinds.bsp", 0, uint32_t(map.size())});
+  std::vector<std::string> asked;
+  ba::TextureSource source;
+  source.pictures = &pics;
+  source.user = &asked;
+  source.replace = [](void* user, std::string_view name, uint32_t, uint32_t,
+                      std::span<const uint8_t>, std::span<const uint8_t>, std::vector<uint8_t>*) {
+    static_cast<std::vector<std::string>*>(user)->emplace_back(name);
+    return false;
+  };
+  ba::Scene s;
+  CHECK_MSG(ba::load_scene(pack, "maps/kinds.bsp", grey_palette(), &s, &error, source), error);
+  bool water = false, sky = false, metal = false;
+  for (const std::string& n : asked) {
+    water = water || n.find("water1") != std::string::npos;
+    sky = sky || n.find("sky1") != std::string::npos;
+    metal = metal || n == "fixture/metal";
+  }
+  CHECK(!water && !sky && metal);
+  bool read_water = false, read_sky = false;  // the map does mark them
+  for (const ge::brush::Texture& t : read.textures) {
+    read_water = read_water || (t.name.find("water1") != std::string::npos &&
+                                t.liquid != ge::brush::Liquid::none);
+    read_sky = read_sky || (t.name.find("sky1") != std::string::npos && t.sky);
+  }
+  CHECK(read_water && read_sky);
+}

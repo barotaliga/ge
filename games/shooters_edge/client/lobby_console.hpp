@@ -33,8 +33,10 @@
 // ge:test tests/shooters_edge_lobby_test.cpp
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "console/console.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -55,5 +57,9 @@ struct LobbyKeys {
 // F1, F2 and F4 go to `elsewhere` first, as the commands do; the lobby screen's keys are the
 // listen server's alone.
 void lobby_keys(Listen& l, const LobbyKeys& keys, const LobbyElsewhere& elsewhere = {});
+// The keys (HID usages) a running lobby reads itself, so they press no bind of the pack's (Quake
+// II's F4 opens the controls): F1, F2 and F4 while it runs, F5, F6 and ENTER on its screen too;
+// none in the match.
+std::vector<uint16_t> lobby_taken_keys(const Listen& l);
 
 }  // namespace shooters_edge::client

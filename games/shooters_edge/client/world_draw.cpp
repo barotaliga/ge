@@ -109,9 +109,8 @@ struct WorldDraw {
   std::vector<float> casters;       // this frame's models as world triangles, for their shadows
   std::vector<ba::CasterBox> caster_boxes;  // and each one's box
   std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
-  double in_liquid_s = 0;  // s the eye has been in a liquid (0 in the air): r_waterwarp's clock
-  std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
-  std::vector<gr::BeamLook> beam_looks;    // a laser's own look, beside its shape
+  std::vector<gr::BeamShape> beam_shapes;   // kMaxBeamDraws, built each frame
+  std::vector<gr::BeamLook> beam_looks;     // a laser's own look, beside its shape
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
   std::vector<gr::Particle> lit_births;
@@ -600,11 +599,13 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
   } else if (!f.has_map) {
     f.built = kBuildSteps;  // no map: nothing more to make
   } else if (step == 2) {
+    GE_ZONE("load.bsp");
     ba::create_bsp(d, f.pipelines, f.bsp, f.scene, f.layout);
     gr::create_far_land(d, f.pipelines, f.far, f.layout);
     if (read.far_kind != nullptr)
       gr::set_far_land(d, f.far, *read.far_kind, read.far_site, read.far_mesh);
   } else if (step == 3) {
+    GE_ZONE("load.models");
     create_models(d, f.pipelines, f.models, f.layout, std::move(read.models));
   } else {
     // The live switches and weather (read every frame), not the snapshot the world was made in.
@@ -649,9 +650,11 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
 bool world_compiled(ge::gpu::Device& d, WorldDraw& f) {
   if (!f.build_error.empty()) return true;  // finish_world says it
   if (f.built < kBuildSteps) {
+    GE_ZONE("load.build_step");  // one step of the world's GPU half a frame
     build_step(d, f);
     return false;
   }
+  GE_ZONE("load.pipelines");  // asking whether the pipelines compiled
   return f.pipelines.ready(d);
 }
 
@@ -770,9 +773,6 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   GE_ZONE("world");
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
-  // In a liquid the view breathes (r_waterwarp).
-  f.in_liquid_s = fx.screen.medium == effects::Medium::air ? 0 : f.in_liquid_s + dt;
-  view.fov_y = look::warped_fov(*f.picture, fx.screen.medium, view.fov_y, f.in_liquid_s);
   {
     std::string refused;
     f.stops = look::picture_stops(*f.picture, f.w, f.h, f.kept_stops, refused);
@@ -921,6 +921,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // where it was born, the blasts' and the flames' smoke the light where they are.
     f.lit_births.assign(fx.births.begin(), fx.births.end());
     f.lit_births.insert(f.lit_births.end(), f.burning.births.begin(), f.burning.births.end());
+    // r_particle_scale: the specks (not the smoke's puffs, which grow) as large as the player
+    // asks.
+    const auto speck = static_cast<float>(f.picture->particle_scale);
+    if (speck != 1)
+      for (gr::Particle& q : f.lit_births)
+        if (q.grow <= 0) q.size *= speck;
     // Quake II's gl_partscale: each speck sized by its depth in front of the eye.
     if (f.picture->q2fx.part_scale > 0) {
       const double forward[3] = {std::sin(view.heading) * std::cos(view.pitch),

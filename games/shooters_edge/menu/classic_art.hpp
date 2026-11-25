@@ -52,6 +52,10 @@ struct ClassicArt {
   // The menus' size the game sets (Quake II's `ui_scale`): 0 by the window, the largest whole
   // number of screen px a classic px that fits; 1..10 that many (a fraction too).
   float scale = 0;
+  // The lobby's and the scoreboard's sizes (`lobby_scale`, `scores_scale`): 0 by the window (the
+  // lobby a quarter smaller than the menu, the scores as large as fits), else that many screen px
+  // a classic px.
+  float lobby_scale = 0, scores_scale = 0;
   // FNV-1a (64-bit) over the palette indices of the pictures words are cut from, as the pack has
   // them (`mainmenu` then `sp_menu`; Quake II's five main plates, its adapter): which pictures
   // these are, so a word cut from their letters (classic_view.cpp) is cut only from the pictures it

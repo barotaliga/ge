@@ -68,9 +68,17 @@ void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, dou
 // level (`msg_trigger`, while `tp_msgtriggers` is on) and Quake II's (a chat line not).
 bool game_line(QwIgnore& g, std::string_view text, int level, double now_s);
 // `lines` from `from` on through `game_line`, each kept one `show`n; their levels by index in
-// `levels` (2, high, past its end). Answers where the next look starts (`lines.size()`).
+// `levels` (2, high, past its end). Pieces of one level are joined up to each newline (a program
+// prints a name, then the rest), so a shown line is whole. Answers where the next look starts
+// (`lines.size()`).
 size_t game_lines(QwIgnore& g, const std::vector<std::string>& lines,
                   const std::vector<int>& levels, size_t from, double now_s,
                   const std::function<void(const std::string&)>& show);
+// `game_lines` with the pieces of one line joined: a line may come in several prints (a backpack's
+// "You get ", "25 shells", ", ", "5 rockets", the newline), so each whole line is `show`n once its
+// newline comes, and what is left without one at the end is shown as it stands.
+size_t game_lines_joined(QwIgnore& g, const std::vector<std::string>& lines,
+                         const std::vector<int>& levels, size_t from, double now_s,
+                         const std::function<void(const std::string&)>& show);
 
 }  // namespace shooters_edge::client

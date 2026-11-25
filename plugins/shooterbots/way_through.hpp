@@ -86,11 +86,12 @@ struct WayStep {
   // it in turn (a trigger the button fires), left for good until a step with one as its target is
   // done.
   std::vector<std::string> gate;
-  bool repeats = false;  // a trigger_multiple: it fires each time he walks in
-  int32_t node = -1;     // where it is reached from
-  int button = -1;       // a button's index in the fighter's spots
-  int key_bit = 0;       // a key's item bit (Quake's), or
-  int ent = -1;          // the key lying on the map (Quake II's: taken when it is gone)
+  bool repeats = false;       // a trigger_multiple: it fires each time he walks in
+  double shot_sought = -1e9;  // a shot button's place last sought among those he reaches, s
+  int32_t node = -1;          // where it is reached from
+  int button = -1;            // a button's index in the fighter's spots
+  int key_bit = 0;            // a key's item bit (Quake's), or
+  int ent = -1;               // the key lying on the map (Quake II's: taken when it is gone)
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;
@@ -159,6 +160,13 @@ struct WayThrough {
   // The drops through a floor door (MapNav::hatches) shut now (it rests over its hole): their
   // links, and at the last plan.
   std::vector<int32_t> hatch_shut, hatch_shut_was;
+  // The links into an exit's box from outside it (way_exits.hpp): each with its from node and its
+  // exit's step, shut to his routes while another step is his; and his step at the last rebuild.
+  struct ExitLink {
+    int32_t link = 0, from = 0, step = -1;
+  };
+  std::vector<ExitLink> exit_links;
+  int exit_step_was = -2;
   std::vector<int> walls;  // the secret walls among `locked`
   // A floor door that starts open and closes when fired (e3m2's over the key's pillar, shut as the
   // pillar sinks): its edict, where it spawned, and (found the first time it stands closed) the

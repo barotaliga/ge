@@ -273,11 +273,12 @@ void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> head
                    std::span<const std::pair<size_t, size_t>> messages) {
   std::vector<uint8_t> kept(header.begin(), header.end());
   for (const auto& [from, to] : messages) {
-    // The settings sheet is the client's alone (QwClientEnd::sheet): no window or file reads it.
-    if (payload[from] == svc::ge_sheet ||
+    // The settings sheet and a download's archive are the client's alone (QwClientEnd::sheet,
+    // the download it is fetching): no window or file reads them, and the window's reader refuses
+    // a message it does not know, dropping the join.
+    if (payload[from] == svc::ge_sheet || payload[from] == svc::ge_origin ||
         ((payload[from] == svc::ge_point || payload[from] == svc::ge_trail ||
-          payload[from] == svc::ge_aim || payload[from] == svc::ge_origin ||
-          payload[from] == svc::ge_back) &&
+          payload[from] == svc::ge_aim || payload[from] == svc::ge_back) &&
          !r.live)) {
       r.stripped++;
       continue;

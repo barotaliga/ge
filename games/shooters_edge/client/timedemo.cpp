@@ -534,6 +534,16 @@ std::string local_date_now() {
   return buf;
 }
 
+std::string run_line(long frames, double seconds, double longest_s, int w, int h, unsigned errors) {
+  char line[200];
+  std::snprintf(line, sizeof line,
+                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame, the longest %.0f ms) at "
+                "%dx%d, %u GPU errors",
+                frames, seconds, frames ? seconds * 1e3 / static_cast<double>(frames) : 0.0,
+                longest_s * 1e3, w, h, errors);
+  return line;
+}
+
 hud::Status demo_status(const DemoState& s, double t) {
   hud::Status h;
   h.t = t;
@@ -578,7 +588,9 @@ bool bench_end_report(ge::console::Console& c, const Timedemo& bench, const std:
                       const std::function<void(const std::string&)>& say) {
   // A run stopped before a frame was timed has no report, only its reason; playback times none.
   if (bench.paced) {
-    c.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
+    // Stopped by the player (another map, demo or server asked for): they know, nothing is said.
+    if (!by_player)
+      c.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
     return !by_player && !why.empty();
   }
   if (why.empty() || !bench.frame_s.empty()) {

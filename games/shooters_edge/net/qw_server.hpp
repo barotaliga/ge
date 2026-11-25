@@ -64,6 +64,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -72,6 +73,7 @@
 #include "core/prng.hpp"
 #include "net/status.hpp"
 #include "net/transport.hpp"
+#include "net/tunnel.hpp"
 #include "server/bans.hpp"
 #include "server/cmdfilter.hpp"
 #include "server/guards.hpp"
@@ -225,7 +227,11 @@ struct ServerConfig {
   bool antilag_projectiles = false;  // sv_antilag_projectiles: with 2, missiles in flight too
   int antilag_max_ms = 0;            // sv_antilag_max: no further back than this; 0 the history
   bool voice = false;                // offer the voice bit and relay voice
-  bool voice_echo = false;           // sv_voipecho: a speaker is sent his own voice back
+  // sv_native: the socket runs the engine's node (net/tunnel.hpp), and the challenge answers our
+  // client's `getchallenge native` with the ge family's native bit; our clients then join through
+  // the node, everyone else as before on the same port.
+  bool native = false;
+  bool voice_echo = false;                    // sv_voipecho: a speaker is sent his own voice back
   VoiceRoute voice_route = VoiceRoute::team;  // the target a connection starts with
   int earshot =
       1000;  // sv_earshot: how near `say_near` and the near voice reach, map units (0 off)
@@ -325,6 +331,7 @@ struct QwClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fields b
   bool carried = false;
   float parms[16] = {};
   int frags_told = 0;    // the frags every client was last sent
+  int pick_number = 0;   // captain mode's number, shown as his frags while he waits (0: frags)
   gs::FloodGuard flood;  // its chat lines' times and its silence
   // Its voice (qw_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),
   // whether it hears voice at all (`unmuteall`, `muteall`) and the talkers it ignores, a bit each.
@@ -386,6 +393,9 @@ struct QwServer {
   const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
+  // NATIVE (`ServerConfig::native`): the tunnel the server's socket runs, `transport` its inner
+  // side; our clients join through its node, the rest plainly, on the one port.
+  std::unique_ptr<gn::Tunnel> tunnel;
   QwClient clients[sh::kMaxClients];
   ge::classic::ChallengeBook challenges;  // classic/protocol/challenges.hpp
   ge::core::Rng rng{1};
@@ -420,12 +430,23 @@ struct QwServer {
   std::vector<MultiviewRecorder*> streams;  // the relays' live streams (qw_qtv.hpp)
   // A client's string command the game sees before the rules (a lobby's words): true takes it.
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
+  // One the rules did not know (their answer `bad`) the game may still take (the stats words, which
+  // a mod with its own leaves to it): true takes it.
+  bool (*game_command_after)(void* ctx, int slot, const std::string& line) = nullptr;
   // Whether a client joining now may play (a match locked to its own players): else he joins as
   // a spectator, told `why`. Null: everyone may.
   bool (*may_play)(void* ctx, const std::string& name, std::string& why) = nullptr;
   // A client's move's buttons as the game lets them through (fire and jump held before a match);
   // null: all of them.
   uint8_t (*buttons)(void* ctx, int slot, uint8_t buttons) = nullptr;
+  // A client's move's impulse as the game lets it through (0: the game took it, as captain mode's
+  // pick); `fresh` for the newest move, false for the two older ones a packet repeats. Null: all.
+  uint8_t (*impulse)(void* ctx, int slot, uint8_t impulse, bool fresh) = nullptr;
+  // A client's `setinfo` before it is taken: false refuses it (the game told him why and put his
+  // own key back). Null: every key.
+  bool (*info_rule)(void* ctx, int slot, const std::string& key,
+                    const std::string& value) = nullptr;
+  void* move_ctx = nullptr;  // `impulse`'s and `info_rule`'s
   void* game_ctx = nullptr;
   std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
   // A listen server's own player, a local seat: the rules' frame handed to the game before the

@@ -11,11 +11,13 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "core/num_text.hpp"
 #include "core/output.hpp"
 #include "hud/spinner.hpp"
+#include "prof/zones.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 
@@ -153,6 +155,7 @@ LoadStep step_load(MapLoad& l, ge::gpu::Device& device, uint32_t width, uint32_t
       l.what.clear();
       return out;
     }
+    GE_ZONE("load.begin_world");  // the world's GPU half started: its uploads
     l.compiling =
         begin_world(device, std::move(r.read), width, height, format, picture, weapons, out.error);
     if (!l.compiling) {
@@ -162,6 +165,7 @@ LoadStep step_load(MapLoad& l, ge::gpu::Device& device, uint32_t width, uint32_t
     }
   }
   if (l.compiling && (wait || world_compiled(device, *l.compiling))) {
+    GE_ZONE("load.finish_world");
     if (!finish_world(device, *l.compiling, width, height, out.error)) {
       out.failed = LoadFailed::world;
       l.compiling.reset();
@@ -203,6 +207,7 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
         con.print(step.said.substr(at_line, end - at_line));
         at_line = end + 1;
       }
+      GE_ZONE("load.start_map");  // the server on the new map (its bots' navigation too)
       if (!start_map(listen, *at.content, std::move(step.map), error)) {
         out::error("shooters_edge: the map change failed: " + error +
                    "; see docs/shooters-edge.md § Playing it");
@@ -219,6 +224,7 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
     }
     // Warmed up offscreen until every cube near the player's eyes is in (a measured run shows it at
     // once: its first frame draws them all, as a map's first frame does).
+    GE_ZONE("load.warm");
     if (l.warming && (measured || warm_world(*at.device, *l.warming, at.view(), kWarmCubes) ||
                       ++l.warmed >= kMostWarmFrames)) {
       fresh = fresh || !current;
@@ -256,6 +262,32 @@ void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
   const ge::hud::Style style = shooters_edge::hud::hud_style();
   ge::hud::draw_spinner(dl, ge::hud::frame_for(w, h, style), style, now_s, load_caption(load),
                         now_s - load.since_s);
+}
+
+}  // namespace shooters_edge::client
+
+namespace shooters_edge::client {
+
+bool step_demo_world(MapLoad& l, const LoadWindow& at, bool wait, WorldDrawPtr& world) {
+  while (busy(l)) {
+    LoadStep step =
+        step_load(l, *at.device, at.width, at.height, at.format, *at.picture, at.weapons, wait);
+    if (step.failed != LoadFailed::none) {
+      ge::core::output::error("shooters_edge: the world draw did not load: " + step.error +
+                              "; see docs/rendering.md");
+      return false;
+    }
+    if (step.world) {
+      world = std::move(step.world);
+      l.what.clear();
+      return true;
+    }
+    if (!wait) break;  // a step a frame
+  }
+  // Nothing to draw until it comes (a new level): the loop shows no frame, so it waits a little
+  // instead of spinning a core the read's thread wants.
+  if (!world && busy(l)) std::this_thread::sleep_for(std::chrono::milliseconds(4));
+  return true;
 }
 
 }  // namespace shooters_edge::client

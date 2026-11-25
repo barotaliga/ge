@@ -500,20 +500,20 @@ void item_weapon(A& q) {
   if (on(band(flags, 1))) {
     mdl = q.s(big ? s_b_shell1 : s_b_shell0);
     kind = q.s(s_shells);
-    q.set_f(me, q.L.f.ammo_shells, big ? 40 : 20);
+    q.set_f(me, q.L.f.ammo_shells, big ? 40.0f : 20.0f);
   }
   if (on(band(flags, 4))) {
     mdl = q.s(big ? s_b_nail1 : s_b_nail0);
     kind = q.s(s_spikes);
     q.set_f(me, q.L.f.ammo_shells, 0);
-    q.set_f(me, q.L.f.ammo_nails, big ? 40 : 20);
+    q.set_f(me, q.L.f.ammo_nails, big ? 40.0f : 20.0f);
   }
   if (on(band(flags, 2))) {
     mdl = q.s(big ? s_b_rock1 : s_b_rock0);
     kind = q.s(s_rockets);
     q.set_f(me, q.L.f.ammo_shells, 0);
     q.set_f(me, q.L.f.ammo_nails, 0);
-    q.set_f(me, q.L.f.ammo_rockets, big ? 10 : 5);
+    q.set_f(me, q.L.f.ammo_rockets, big ? 10.0f : 5.0f);
   }
   q.set_i(me, q.L.f.netname, kind);  // its name when taken
   q.set_i(me, q.L.f.touch, q.fn(fn_ammo_touch));
