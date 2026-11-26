@@ -1021,6 +1021,14 @@ shadow the lights in two tiers:
   point's, so they cross a cube's seams with no special case (a tap is clamped half a texel inside
   its face's tile). A light's source radius (`GpuLight::more.y`) sets how soft: a plain light's
   4 cm is sharp, a flame's a quarter of its height (a wall torch 0.14 m, a large flame 0.26 m).
+- **Only the work a caster can touch.** Each face of a casters' cube draws only the casters whose
+  box reaches its quarter of the ways within the light's reach (`box_in_face`; a face no caster
+  reaches is left clear), and each light carries its casters as at most 4 cones of ways from it
+  (`caster_cones`: each box's bounding sphere, the narrowest pairs merged past four, widened by
+  the search's reach) and the nearest any comes to it. A pixel whose way from the light lies in no
+  cone, or that is nearer the light than any caster, skips the blocker search: it would find
+  nothing, so no pixel changes. On the software adapter the casters' cubes cost half as much and
+  the map's pass 12 % less on dm3's demo.
 - **Only a light whose source shows throws a figure's shadow.** A classic map lights a room with
   many overlapping fill lights: entities hanging alone in the air, where the mapper wanted light
   bounced round the room. A shadow from one is a shadow cast by nothing the player can see, so a
