@@ -232,7 +232,7 @@ row names a difference.
 | ent.item_health_mega | item_health_mega | 100 health past max, drains back after 5 s, respawn 20 s after the drain | done | q2_items.hpp, q2_server.cpp |
 | ent.info_player_start | info_player_start | single-player start, named starts for level changes | done | `games/shooters_edge/server/q2_server.cpp`, `games/shooters_edge/server/q2_campaign.cpp` (`campaign_unnamed_starts`) |
 | ent.info_player_deathmatch | info_player_deathmatch | deathmatch spawn: a solid pad with the dmspot model; removed outside deathmatch; random spot avoids the "two nearest" | done | q2_map.cpp pads; q2_server.cpp the pair quirk and the spawn telefrag |
-| ent.info_player_coop | info_player_coop | co-op spawn by slot order; renamed on 18 maps; three added on security | done | q2_campaign.cpp (R6 landed) |
+| ent.info_player_coop | info_player_coop | co-op spawn by slot order; renamed on 18 maps; three added on security | done | q2_campaign.cpp (R6 landed). Our design: a start with fewer than three co-op spots within reach gets spots made beside it (cool1 entered from power2 has none, and the second player's arrival killed the first); `shooters_edge_q2_campaign_test` |
 | ent.info_player_intermission | info_player_intermission | intermission camera spot (one of the first four, random); fact1's camera moved | done | q2_fight.cpp fov 90 |
 | ent.func_plat | func_plat | platform with its trigger field; co-op waits coop_elevator_delay | done | q2_map.cpp |
 | ent.func_button | func_button | pressed by touch, use or damage; fires targets | done | q2_map.cpp |

@@ -338,7 +338,7 @@ TEST(in_coop_the_security_level_gets_three_spots_from_the_jail) {
 }
 
 // A co-op player past the first with no spot of the level's name takes the n-th co-op spot within
-// 550 units of the start, and stands on the start only when there is none.
+// 550 units of the start; past those, a spot made beside the start (behind it first).
 TEST(in_coop_a_player_with_no_named_spot_takes_one_near_the_start) {
   auto g = coop_game("hall", {coop_spot("-500 0 24", "x"), coop_spot("-400 0 24", "x"),
                               coop_spot("400 0 24", "x")});
@@ -347,7 +347,37 @@ TEST(in_coop_a_player_with_no_named_spot_takes_one_near_the_start) {
   CHECK(x(0) == -600);
   CHECK(x(1) == -500);
   CHECK(x(2) == -400);
-  CHECK(x(3) == -600);  // the third spot is past 550: the start
+  CHECK(x(3) == -664);  // the third spot is past 550: one made behind the start
+}
+
+// A start the co-op players would share gets spots beside it: two players entering a level by
+// it stand apart and both live (no arrival kills the other).
+TEST(in_coop_two_players_entering_by_a_start_with_no_spots_both_live) {
+  auto g = coop_game("hall", {});
+  g->r.connect(0, "Ana", false, false);
+  g->r.connect(1, "Bo", false, false);
+  run(*g, kSecond);
+  const sv::Q2Player& a = g->s().players[0];
+  const sv::Q2Player& b = g->s().players[1];
+  CHECK(a.alive && b.alive);
+  CHECK(float(a.move.origin[0]) / 8 == -600);
+  CHECK(float(b.move.origin[0]) / 8 == -664);  // behind the start, which faces east
+  int made = 0;
+  for (const sv::Q2Entity& e : g->s().entities)
+    if (e.classname == "info_player_coop" && e.targetname == "beside ") made++;
+  CHECK(made == 3);
+}
+
+// Outside co-op no spot is made.
+TEST(outside_coop_no_spots_are_made_beside_a_start) {
+  auto g = std::make_unique<Game>();
+  g->r = sv::q2_runner(sv::make_q2_server({}));
+  g->r.console("deathmatch 0");
+  g->map.name = "hall";
+  g->map.brushes = hall({});
+  std::string error;
+  CHECK_MSG(g->r.start(g->map, error), error);
+  CHECK(g->find("info_player_coop") < 0);
 }
 
 // The network server seats a player again after a level change by connecting him to the slot the

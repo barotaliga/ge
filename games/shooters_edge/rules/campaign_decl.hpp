@@ -246,8 +246,9 @@ namespace shooters_edge::server::rules::campaign {
   X(monster_boss, "monster_boss")                     \
   X(lightning_use, "lightning_use")                   \
   X(event_lightning, "event_lightning")               \
-  X(oldone_end, "oldone_end")                         \
-  X(oldone_burst, "oldone_burst")                     \
+  X(oldone_flash, "oldone_flash")                     \
+  X(oldone_wake, "oldone_wake")                       \
+  X(oldone_thrash, "oldone_thrash")                   \
   X(oldone_die, "oldone_die")                         \
   X(oldone_sway, "oldone_sway")                       \
   X(monster_oldone, "monster_oldone")                 \

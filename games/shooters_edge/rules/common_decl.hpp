@@ -65,7 +65,10 @@ namespace pg = ge::progs;
   X(arsenal_missile8, kTypeString) \
   X(quake, kTypeFloat)             \
   X(rj, kTypeFloat)                \
-  X(corpse, kTypeEntity)
+  X(corpse, kTypeEntity)           \
+  X(q2_arms, kTypeFloat)           \
+  X(q2_blow, kTypeFloat)           \
+  X(q2_kick, kTypeFloat)
 
 // THE FIELDS after the form's, in the QC's order (the server finds `maxspeed`, `gravity` and
 // `attack_finished` by name; a map's "light" key fills `light_lev`).
@@ -131,7 +134,14 @@ namespace pg = ge::progs;
   X(t_length, kTypeFloat)              \
   X(t_width, kTypeFloat)               \
   X(dest1, kTypeVector)                \
-  X(dest2, kTypeVector)
+  X(dest2, kTypeVector)                \
+  X(q2_arm, kTypeFloat)                \
+  X(q2_state, kTypeFloat)              \
+  X(q2_frame, kTypeFloat)              \
+  X(q2_held, kTypeFloat)               \
+  X(q2_next, kTypeFloat)               \
+  X(q2_click, kTypeFloat)              \
+  X(q2_sound, kTypeFloat)
 
 // THE STRINGS the rules store or pass, both variants'.
 #define SE_RULES_STRINGS(X)                                                                        \
@@ -666,6 +676,14 @@ namespace pg = ge::progs;
   X(the_thing_at_the,                                                                              \
     "The thing at the bottom of the world is gone, torn apart from the inside.\n\nThe four runes " \
     "go quiet. The way home is open.")                                                             \
+  X(misc_teleporttrain_class, "misc_teleporttrain")                                                \
+  X(style_pulse, "abcdefghijklmlkjihgfedcb")                                                       \
+  X(style_b, "b")                                                                                  \
+  X(style_c, "c")                                                                                  \
+  X(style_e, "e")                                                                                  \
+  X(style_g, "g")                                                                                  \
+  X(style_i, "i")                                                                                  \
+  X(style_k, "k")                                                                                  \
   X(boss2_pop2_wav, "boss2/pop2.wav")                                                              \
   X(boss2_death_wav, "boss2/death.wav")                                                            \
   X(oldone_mdl, "progs/oldone.mdl")                                                                \
@@ -838,6 +856,11 @@ namespace pg = ge::progs;
   X(power_touch, "power_touch")                                     \
   X(dropped_power_touch, "dropped_power_touch")                     \
   X(spike_touch, "spike_touch")                                     \
+  X(q2_bolt_touch, "q2_bolt_touch")                                 \
+  X(q2_rocket_touch, "q2_rocket_touch")                             \
+  X(q2_grenade_touch, "q2_grenade_touch")                           \
+  X(q2_grenade_blast, "q2_grenade_blast")                           \
+  X(q2_sound_later, "q2_sound_later")                               \
   X(blast, "blast")                                                 \
   X(rocket_touch, "rocket_touch")                                   \
   X(grenade_touch, "grenade_touch")                                 \

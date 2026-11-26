@@ -318,30 +318,31 @@ struct Q2Use {
   bool stream, blast;
   WeaponCurve curve;
   float worth, arms;
+  int aim_slot;  // the aim trait it is held by (BotWeapon::aim_slot)
 };
 constexpr Q2Use kQ2Uses[] = {
-    {0, 1000, 0, 20, 1000, false, false, WeaponCurve::spiker, 0, 1},        // blaster
-    {1, 0, 0, 24, 1200, false, false, WeaponCurve::scatter, 30, 1.1f},      // shotgun
-    {2, 0, 0, 32, 350, false, false, WeaponCurve::double_, 45, 1.3f},       // super shotgun
-    {3, 0, 0, 20, 1500, true, false, WeaponCurve::hitscan, 40, 1.2f},       // machinegun
-    {4, 0, 0, 24, 1500, true, false, WeaponCurve::heavy, 70, 1.5f},         // chaingun
-    {5, 600, -20, 40, 500, false, true, WeaponCurve::lob, 40, 1.5f},        // grenade launcher
-    {6, 650, -20, 96, 1200, false, true, WeaponCurve::rocket, 30, 2},       // rocket launcher
-    {7, 1000, 0, 24, 1000, true, false, WeaponCurve::beam, 70, 1.6f},       // hyperblaster
-    {8, 0, 0, 12, 4000, false, false, WeaponCurve::rail, 90, 2},            // railgun
-    {9, 400, -20, 128, 1500, false, true, WeaponCurve::big_blast, 100, 2},  // BFG
+    {0, 1000, 0, 20, 1000, false, false, WeaponCurve::spiker, 0, 1, 0},        // blaster
+    {1, 0, 0, 24, 1200, false, false, WeaponCurve::scatter, 30, 1.1f, 0},      // shotgun
+    {2, 0, 0, 32, 350, false, false, WeaponCurve::double_, 45, 1.3f, 0},       // super shotgun
+    {3, 0, 0, 20, 1500, true, false, WeaponCurve::hitscan, 40, 1.2f, 1},       // machinegun
+    {4, 0, 0, 24, 1500, true, false, WeaponCurve::heavy, 70, 1.5f, 1},         // chaingun
+    {5, 600, -20, 40, 500, false, true, WeaponCurve::lob, 40, 1.5f, 2},        // grenade launcher
+    {6, 650, -20, 96, 1200, false, true, WeaponCurve::rocket, 30, 2, 3},       // rocket launcher
+    {7, 1000, 0, 24, 1000, true, false, WeaponCurve::beam, 70, 1.6f, 4},       // hyperblaster
+    {8, 0, 0, 12, 4000, false, false, WeaponCurve::rail, 90, 2, 0},            // railgun
+    {9, 400, -20, 128, 1500, false, true, WeaponCurve::big_blast, 100, 2, 3},  // BFG
     // The Reckoning's: the ion ripper's bolt (500 a second, it bounces: best in rooms), the
     // phalanx's two balls (725 a second, each a blast).
-    {11, 500, 0, 32, 700, false, false, WeaponCurve::spiker, 50, 1.4f},    // ion ripper
-    {12, 725, -20, 80, 1200, false, true, WeaponCurve::rocket, 60, 1.8f},  // phalanx
+    {11, 500, 0, 32, 700, false, false, WeaponCurve::spiker, 50, 1.4f, 1},    // ion ripper
+    {12, 725, -20, 80, 1200, false, true, WeaponCurve::rocket, 60, 1.8f, 3},  // phalanx
     // Ground Zero's: the chainfist at arm's length, the ETF rifle's stream of flechettes (1150 a
     // second), the prox launcher's mines lobbed, the plasma beam's heat beam (it hits at once),
     // the disruptor's tracker that homes on its target. The tesla is thrown, not aimed.
-    {14, 0, 0, 32, 64, true, false, WeaponCurve::blade, 10, 1},            // chainfist
-    {15, 1150, 0, 20, 1000, true, false, WeaponCurve::spiker, 45, 1.2f},   // ETF rifle
-    {16, 600, -20, 64, 500, false, true, WeaponCurve::lob, 35, 1.5f},      // prox launcher
-    {17, 0, 0, 24, 1000, true, false, WeaponCurve::beam, 65, 1.6f},        // plasma beam
-    {18, 1000, 0, 48, 1500, false, false, WeaponCurve::spiker, 60, 1.6f},  // disruptor
+    {14, 0, 0, 32, 64, true, false, WeaponCurve::blade, 10, 1, 0},            // chainfist
+    {15, 1150, 0, 20, 1000, true, false, WeaponCurve::spiker, 45, 1.2f, 1},   // ETF rifle
+    {16, 600, -20, 64, 500, false, true, WeaponCurve::lob, 35, 1.5f, 2},      // prox launcher
+    {17, 0, 0, 24, 1000, true, false, WeaponCurve::beam, 65, 1.6f, 4},        // plasma beam
+    {18, 1000, 0, 48, 1500, false, false, WeaponCurve::spiker, 60, 1.6f, 1},  // disruptor
 };
 
 Q2Arsenal make_q2(server::Q2Pack pack) {
@@ -356,6 +357,7 @@ Q2Arsenal make_q2(server::Q2Pack pack) {
                               r.ammo == server::SqAmmo::none ? -1 : q2_ammo(r.ammo),
                               static_cast<float>(r.per_shot), u.speed, u.aim_dz, u.width, u.range,
                               refire, u.stream, u.blast, u.curve, u.worth, u.arms));
+    out.weapons.back().aim_slot = u.aim_slot;
   }
   out.rows = q2_rows(pack);  // its tables are pointed at them where it rests (q2_arsenal)
   BotArsenal& a = out.arsenal;

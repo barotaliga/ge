@@ -9,6 +9,7 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
+#include "classic/q2_arms.hpp"
 #include "shooters_edge/rules/variant.hpp"
 
 namespace shooters_edge::server::rules::SE_RULES_NS {
@@ -43,6 +44,7 @@ void score_death(A& q, int32_t targ, int32_t attacker) {
       q.set_f(attacker, q.L.f.frags, q.f(attacker, q.L.f.frags) + 1);
     }
     note_frag(q, attacker, targ);
+    if (q2_obituary(q, targ, attacker)) return;  // a Quake II weapon's own words
     if (!q.is(told, "")) {
       say_all(q, kPrintMedium, {told});
       return;
@@ -68,6 +70,15 @@ void blow_push(A& q, int32_t targ, int32_t inflictor, float damage) {
   Vec3 dir = q.v(targ, q.L.f.origin) -
              (q.v(inflictor, q.L.f.absmin) + q.v(inflictor, q.L.f.absmax)) * 0.5f;
   dir = q.normalize(dir);
+  if (on(q.g(g_q2_blow))) {  // Quake II's weapon (common_q2_arms.cpp): its own knockback
+    const float kick = q.g(g_q2_kick) < 0 ? damage : q.g(g_q2_kick);
+    const int32_t owner = q.i(inflictor, q.L.f.owner);
+    const bool own = (inflictor == targ) | (owner == targ);
+    const float push =
+        ge::classic::q2_push(static_cast<int>(kick), ge::classic::kQ2PlayerMass, own);
+    q.set_v(targ, q.L.f.velocity, q.v(targ, q.L.f.velocity) + dir * push);
+    return;
+  }
   q.set_v(targ, q.L.f.velocity, q.v(targ, q.L.f.velocity) + dir * damage * 8);
 }
 
@@ -94,7 +105,7 @@ bool quake_damage(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float
   q.set_f(targ, q.L.f.dmg_save, q.f(targ, q.L.f.dmg_save) + saved);
   q.set_i(targ, q.L.f.dmg_inflictor, inflictor);
   blow_push(q, targ, inflictor, amount);
-  if ((attacker == targ) & (q.g(g_rj) > 1) & (inflictor != q.world()) &
+  if ((attacker == targ) & (q.g(g_rj) > 1) & (inflictor != q.world()) & !on(q.g(g_q2_blow)) &
       (q.f(targ, q.L.f.movetype) == kMovetypeWalk)) {
     const Vec3 dir =
         q.normalize(q.v(targ, q.L.f.origin) -

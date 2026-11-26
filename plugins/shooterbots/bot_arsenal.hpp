@@ -70,6 +70,9 @@ struct BotWeapon {
   WeaponCurve curve = WeaponCurve::scatter;
   float worth = 30;  // picked up when not carried
   float arms = 1;    // how armed it makes its holder feel, loaded (temper.hpp)
+  // The aim trait it is held by (0 the close guns, 1 the spikers, 2 the lob, 3 the launcher, 4 the
+  // beam: the fighter's `aim_slot`); -1 by its number, as Quake's eight are (1..3, 4..5, 6, 7, 8).
+  int aim_slot = -1;
 };
 
 struct BotArsenal;

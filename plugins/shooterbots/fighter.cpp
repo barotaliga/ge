@@ -9,6 +9,7 @@
 #include "prof/zones.hpp"
 #include "shooterbots/floor_trap.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -1402,10 +1403,11 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
 
   const BotWeapon* held = weapon_row(*f.arsenal, st.weapon);
   // Another kind of weapon taken up is held as its aim trait holds it.
-  const int slot_of_aim = !held               ? f.aim_slot
-                          : held->number <= 3 ? 0
-                          : held->number <= 5 ? 1
-                                              : held->number - 4;
+  const int slot_of_aim = !held                 ? f.aim_slot
+                          : held->aim_slot >= 0 ? held->aim_slot
+                          : held->number <= 3   ? 0
+                          : held->number <= 5   ? 1
+                                                : std::min(held->number - 4, 4);
   if (slot_of_aim != f.aim_slot && f.skill != sb::AimSkill::perfect) {
     f.aim_slot = slot_of_aim;
     sb::bot_aim(f.bot, sb::aim_profile(f.traits.v[static_cast<size_t>(slot_of_aim)],
