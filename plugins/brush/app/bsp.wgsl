@@ -660,19 +660,30 @@ const kSearchTaps = 8u;
 const kFilterTaps = 12u;
 
 // The face and uv a direction `q` (from the light) reads.
+// The axes picked by comparisons rather than by an index into the vector, which a GPU may keep in
+// memory rather than in registers: the same face and the same uv to the bit.
 fn cube_uv(q: vec3f) -> vec3f {
   let a = abs(q);
-  var i = 0;
+  // The face's axis (m along it, s its sign) and the two after it in turn (x after z).
+  var m = a.x;
+  var s = q.x;
+  var uv = q.yz;
+  var f = 0.0;
   if (a.y > a.x && a.y >= a.z) {
-    i = 1;
+    m = a.y;
+    s = q.y;
+    uv = q.zx;
+    f = 2.0;
   } else if (a.z > a.x && a.z > a.y) {
-    i = 2;
+    m = a.z;
+    s = q.z;
+    uv = q.xy;
+    f = 4.0;
   }
-  let m = a[i];
-  let f = 2 * i + select(0, 1, q[i] < 0.0);
-  let u = q[(i + 1) % 3] / m;
-  let v = q[(i + 2) % 3] / m;
-  return vec3f(0.5 + 0.5 * u, 0.5 - 0.5 * v, f32(f));
+  f += select(0.0, 1.0, s < 0.0);
+  let u = uv.x / m;
+  let v = uv.y / m;
+  return vec3f(0.5 + 0.5 * u, 0.5 - 0.5 * v, f);
 }
 
 // Where face c.z of the casters' cube on row `row` holds c.xy in their atlas: kept half a texel
