@@ -514,7 +514,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
-  if (c.has_command("snd_restart"))  // its spelling of the sound restart (client/menu_sound.cpp)
+  c.add_command_own("toggle", "flip");  // `toggle a b c` flips each name (Quake II's cycles `a`)
+  if (c.has_command("snd_restart"))     // its spelling of the sound restart (client/menu_sound.cpp)
     c.add_command_synonym("s_restart", "snd_restart");
   c.cvars().add_synonym("chase_right", "cam_side");  // the chase camera's step to the left,
   c.cvars().add_synonym("chase_back", "cam_dist");   // its distance behind, above and its switch

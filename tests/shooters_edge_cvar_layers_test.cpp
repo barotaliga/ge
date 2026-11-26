@@ -606,6 +606,8 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   CHECK(v.find("hud_sbar") != nullptr && v.find("hud_sbar")->value == "1");
   CHECK(v.find("hud_swap") != nullptr && v.find("hud_swap")->value == "1");
   CHECK(w.console.has_command("togglechat"));
+  w.console.execute("cl_sbar 0; cl_hudswap 0; toggle cl_sbar cl_hudswap");  // Quake flips each
+  CHECK(v.find("hud_sbar")->value == "1" && v.find("hud_swap")->value == "1");
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
   if (q2 == nullptr) return;
