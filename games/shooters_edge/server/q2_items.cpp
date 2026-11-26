@@ -8,9 +8,13 @@
 
 #include <algorithm>
 
+#include "classic/q1_body.hpp"
+#include "classic/q2_body.hpp"
 #include "shooters_edge/server/q2_quake_arms.hpp"
 
 namespace shooters_edge::server {
+
+namespace gc = ge::classic;
 
 namespace {
 
@@ -25,30 +29,17 @@ bool add_ammo(SqBody& b, SqAmmo kind, int amount) {
 }
 
 bool take_armour(const SqItem& it, SqBody& b) {
-  if (it.amount == 0) {  // a shard: 2 onto the worn armour, or 2 jacket
-    if (b.armour == SqArmour::none) b.armour = SqArmour::jacket;
-    b.armour_count += 2;
+  const int worn = static_cast<int>(b.armour);
+  if (b.quake && it.amount != 0) {  // Quake's armour (classic remix): the better one replaces
+    if (!gc::q1_takes_armour(worn, b.armour_count, it.amount)) return false;
+    b.armour = static_cast<SqArmour>(it.amount);
+    b.armour_count = gc::kQ1Armours[it.amount].value;
     return true;
   }
-  const auto tier = static_cast<SqArmour>(it.amount);
-  const SqArmourRow& fresh = kSqArmours[it.amount];
-  if (b.armour == SqArmour::none) {
-    b.armour = tier;
-    b.armour_count = fresh.base;
-    return true;
-  }
-  const SqArmourRow& worn = kSqArmours[static_cast<int>(b.armour)];
-  if (fresh.normal > worn.normal) {  // the new one is better: the old converted onto it
-    const int carried = static_cast<int>(float(b.armour_count) * (worn.normal / fresh.normal));
-    b.armour = tier;
-    b.armour_count = std::min(fresh.base + carried, fresh.maximum);
-    return true;
-  }
-  // The worn one is as good or better: the new converted onto it.
-  const int added = static_cast<int>(float(fresh.base) * (fresh.normal / worn.normal));
-  const int now = std::min(b.armour_count + added, worn.maximum);
-  if (now <= b.armour_count) return false;
-  b.armour_count = now;
+  const gc::Q2Armour now = gc::q2_take_armour(worn, b.armour_count, it.amount);
+  if (!now.taken) return false;
+  b.armour = static_cast<SqArmour>(now.tier);
+  b.armour_count = now.count;
   return true;
 }
 
@@ -63,11 +54,23 @@ bool take_health(const SqItem& it, int item, SqBody& b, bool deathmatch, double 
     b.max_health += 2;
     return true;
   }
-  const bool past = it.amount == 2 || it.amount == 100;  // the small one and the mega
+  const bool mega = it.amount == gc::kQ2HealthMega;
+  if (b.quake) {  // Quake's boxes (classic remix): the small ones 15, the large 25, the mega to 250
+    const int limit = mega ? gc::kQ1MegaLimit : b.max_health;
+    if (b.health >= limit) return false;
+    const int points = mega                              ? gc::kQ1HealthMega
+                       : it.amount == gc::kQ2HealthLarge ? gc::kQ1HealthPlain
+                                                         : gc::kQ1HealthSmall;
+    b.health = std::min(b.health + points, limit);
+    if (mega) b.mega_until_drain = now + gc::kQ1MegaDrainAfter;
+    b.counts[item]++;
+    return true;
+  }
+  const bool past = it.amount == gc::kQ2HealthStim || mega;  // the small one and the mega
   if (!past && b.health >= b.max_health) return false;
   b.health += it.amount;
   if (!past) b.health = std::min(b.health, b.max_health);
-  if (it.amount == 100) b.mega_until_drain = now + 5;
+  if (mega) b.mega_until_drain = now + gc::kQ2MegaDrainAfter;
   b.counts[item]++;
   return true;
 }
