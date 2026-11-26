@@ -76,6 +76,10 @@ struct EpisodeOptions {
   std::string root = ".";                   // the repository's root (the campaign's sources)
   const ge::progs::Progs* progs = nullptr;  // a program of the caller's (none: our campaign)
   bool plan = false;                        // keep the leader's changes of plan
+  // A file every frame's line is written to (empty: none): the map, the frame, the digest so far
+  // and the leader's place, view and health as exact hex floats, so two machines' runs can be
+  // diffed to the first frame they part on.
+  std::string frames;
   bool wide_models = false;        // a game's own content: its movers sized as the window does
   bool registered = false;         // the content is the full game
   bool single = false;             // single player (coop 0), the leader alone
