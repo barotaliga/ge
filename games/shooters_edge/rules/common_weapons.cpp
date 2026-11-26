@@ -61,8 +61,19 @@ void arsenal_keep(A& q, float slot) {
   int32_t row = q.cvar_string(arsenal_key(q, slot));
   if (q.is(row, "")) row = weapon_own_row(q, slot);
   row = q.strzone(row);
-  q.tokenize(row);
+  const float words = q.tokenize(row);
   const int32_t view = q.strzone(q.argv(10));
+  // Another game's weapon (classic remix) carries its ammunition to that game's own limit, kept
+  // in the world's own ammunition fields, which nothing else uses (0: Quake's own limit).
+  if (words > 17) {
+    const int32_t kind = q.argv(1);
+    const float most = number_of(q, q.argv(17));
+    const int32_t w = q.world();
+    if (q.is(kind, "shells")) q.set_f(w, q.L.f.ammo_shells, most);
+    if (q.is(kind, "nails")) q.set_f(w, q.L.f.ammo_nails, most);
+    if (q.is(kind, "rockets")) q.set_f(w, q.L.f.ammo_rockets, most);
+    if (q.is(kind, "cells")) q.set_f(w, q.L.f.ammo_cells, most);
+  }
   const int32_t missile = q.strzone(q.argv(12));
   for (int k = 1; k <= 8; k++) {
     if (slot != static_cast<float>(k)) continue;

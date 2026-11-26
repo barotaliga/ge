@@ -12,6 +12,7 @@
 //   is worn.
 // - **Health** (`kQ2Health*`): the stimpack 2 and the mega health 100 past the limit, the medium
 //   10 and the large 25 up to it; the mega's surplus drains from 5 s after it is taken.
+// - **Ammunition** (`kQ2Ammo*`, `kQ2Most*`): what a box gives and how much is carried.
 //
 // ge:summary Quake II's armour and health as any rules take them: counts, shares, the take rule
 // ge:keywords q2 armour armor health jacket combat-armour body-armour shard salvage mega-health
@@ -76,6 +77,10 @@ inline constexpr int kQ2HealthStim = 2, kQ2HealthMedium = 10, kQ2HealthLarge = 2
 // Ammunition: what a box gives (shells, bullets, rockets, slugs; cells 50 and grenades 5 too).
 inline constexpr int kQ2AmmoShells = 10, kQ2AmmoBullets = 50, kQ2AmmoRockets = 5, kQ2AmmoSlugs = 10;
 inline constexpr int kQ2AmmoCells = 50, kQ2AmmoGrenades = 5;
+
+// The carry limits.
+inline constexpr int kQ2MostShells = 100, kQ2MostBullets = 200, kQ2MostRockets = 50,
+                     kQ2MostGrenades = 50, kQ2MostCells = 200, kQ2MostSlugs = 50;
 
 inline constexpr float kQ2MegaDrainAfter = 5;  // s, then a point a second down to the limit
 

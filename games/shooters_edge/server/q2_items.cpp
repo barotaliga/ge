@@ -153,12 +153,12 @@ SqBody sq_new_body(Q2Pack pack) {
     b.max_ammo[at(SqAmmo::tesla)] = 50;
     b.max_ammo[at(SqAmmo::rounds)] = 100;
   }
-  b.max_ammo[at(SqAmmo::bullets)] = 200;
-  b.max_ammo[at(SqAmmo::shells)] = 100;
-  b.max_ammo[at(SqAmmo::rockets)] = 50;
-  b.max_ammo[at(SqAmmo::grenades)] = 50;
-  b.max_ammo[at(SqAmmo::cells)] = 200;
-  b.max_ammo[at(SqAmmo::slugs)] = 50;
+  b.max_ammo[at(SqAmmo::bullets)] = gc::kQ2MostBullets;
+  b.max_ammo[at(SqAmmo::shells)] = gc::kQ2MostShells;
+  b.max_ammo[at(SqAmmo::rockets)] = gc::kQ2MostRockets;
+  b.max_ammo[at(SqAmmo::grenades)] = gc::kQ2MostGrenades;
+  b.max_ammo[at(SqAmmo::cells)] = gc::kQ2MostCells;
+  b.max_ammo[at(SqAmmo::slugs)] = gc::kQ2MostSlugs;
   return b;
 }
 

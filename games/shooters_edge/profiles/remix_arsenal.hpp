@@ -52,6 +52,13 @@ constexpr WeaponRow q2_worn(int32_t slot, ge::classic::Q2ArmId id, Ammo ammo, st
   const bool held = a.held != ge::classic::Q2Held::once;
   const float period =
       held ? 0.1f : static_cast<float>(a.frames.last_fire - a.frames.last_activate + 1) / 10.0f;
+  // Quake II's own carry limit of the ammunition the slot's stands for (nails the bullets, cells
+  // the slugs).
+  const int32_t most = ammo == Ammo::shells    ? ge::classic::kQ2MostShells
+                       : ammo == Ammo::nails   ? ge::classic::kQ2MostBullets
+                       : ammo == Ammo::rockets ? ge::classic::kQ2MostRockets
+                       : ammo == Ammo::cells   ? ge::classic::kQ2MostSlugs
+                                               : 0;
   return {slot,       static_cast<Fire>(static_cast<int>(kFireQ2First) + static_cast<int>(id)),
           ammo,       a.per_shot,
           period,     0,
@@ -60,7 +67,8 @@ constexpr WeaponRow q2_worn(int32_t slot, ge::classic::Q2ArmId id, Ammo ammo, st
           0,          view,
           fire_sound, missile,
           land_sound, blast_sound,
-          pickup,     pickup_ammo};
+          pickup,     pickup_ammo,
+          most};
 }
 
 // Quake's eight slots as Quake II's weapons, whole: the axe's slot the blaster, the nailguns the

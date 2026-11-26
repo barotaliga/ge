@@ -396,7 +396,8 @@ the skill's lessons before the first edit.
 - The items are the same: armour, health and ammunition are taken by their own game's rules, from
   numbers each game's rules read in one place (`plugins/classic/q1_body.hpp`, `q2_body.hpp`). A
   rule that differs (Quake II's armour adding onto the worn one, Quake's replacing it) travels as
-  one more word in the row the played rules already read (the armour's most, a box's amount).
+  one more word in the row the played rules already read (the armour's most, a box's amount, a
+  weapon's carry limit for its ammunition).
 - Each part of a match is one `cr_` switch naming whose part it is, chosen apart from the others:
   items never change the sounds (`cr_sounds` does), and the HUD follows the weapons in use.
 - The `cr_` switches are the SERVER's (`kServer | kServerInfo`), only `cr_menu` the player's (the

@@ -87,6 +87,9 @@ struct WeaponRow {
   std::string_view blast_sound;
   std::string_view pickup = "-";  // the model it lies on a map as ("-": it never lies there)
   int32_t pickup_ammo = 0;        // the ammunition that comes with it
+  // Another game's weapon (classic remix): how much of its ammunition is carried by that game's
+  // own rules (0: the played rules' own limit).
+  int32_t ammo_most = 0;
 };
 
 struct ArmourRow {
@@ -191,6 +194,7 @@ inline std::string weapon_text(const WeaponRow& w) {
     if (!t.empty()) t += ' ';
     t += f;
   }
+  if (w.ammo_most > 0) t += ' ' + number_text(float(w.ammo_most));
   return t;
 }
 
