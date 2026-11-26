@@ -9,7 +9,8 @@
 // on his skin, entry and (a nail's) exit, soak his clothes and run down them, drops falling from
 // them; at `--walk` s he walks off out of the pool, leaving bloody prints a stride apart.
 // Pictures at `--moments` (s from the first hit), from the side, from close over the pool and
-// from in front of him (his wounds).
+// from in front of him (his wounds); `--time=N` prices each moment's frame on the GPU (N frames
+// timed from the side and over the pool: the span and each pass), the same scene every run.
 // The spot is found by the map's own spawns (`--spot` picks another of them), so no coordinates
 // are needed; PRIVATE pictures only (the game's own maps and models).
 //
@@ -19,7 +20,7 @@
 // ge:summary Lab: a fight's blood on a real map over time: spatter, drips, pools, drying
 // ge:keywords lab se-blood blood pool drip dry darken reflection ce_blood ce_blood_time
 // ge:keywords ce_blood_reflect blood-pool blood-drip time-lapse wound exit-wound boot-print
-// ge:keywords blood-on-body by-weapon
+// ge:keywords blood-on-body by-weapon blood-cost decal-cost gpu-span
 // ge:skill render shooter labs
 // ge:test tests/detail_decals_test.cpp
 #include <algorithm>
@@ -47,6 +48,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -388,6 +390,7 @@ void run(gl::Lab& lab) {
       {"game", lab.arg("classic")},
       {"fight", fixed(fight_s, 0) + " s"},
       {"weapon", weapon}};
+  const int frames_timed = std::clamp(static_cast<int>(lab.arg_num("time")), 0, 2000);
   size_t next = 0;
   while (next < moments.size()) {
     t += kDt;
@@ -453,6 +456,36 @@ void run(gl::Lab& lab) {
                 inputs},
                grab(), gl::Det::measured);
     }
+    // THE COST (`--time=N`): N frames of this moment from the side and from over the pool, the
+    // GPU's span and each pass's median, so a change to the blood's drawing is priced on a scene
+    // that holds still (a played fight's blood differs run to run).
+    if (frames_timed > 0) {
+      for (int cam = 0; cam < 2; cam++) {
+        const Eye& e = cam == 0 ? spot.side : spot.close;
+        cl::PassTimes p;
+        // Each frame waited for, so its timestamps are read back (one frame late) before the next.
+        const auto drawn = [&] {
+          draw(e);
+          ge::gpu::wait(*device, device->queue.OnSubmittedWorkDone(
+                                     wgpu::CallbackMode::WaitAnyOnly,
+                                     [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
+        };
+        for (int k = 0; k < 4; k++) drawn();  // warm, and the other eye's frames read out
+        for (int k = 0; k < frames_timed; k++) {
+          drawn();
+          cl::record_span(*world, p);
+        }
+        const std::string id = std::string(cam == 0 ? "side" : "pool") + "@" + fixed(at, 0);
+        if (p.span_ms.empty()) {
+          lab.note("cost: this GPU has no timestamp queries: nothing timed");
+          break;
+        }
+        lab.metric("cost." + id + ".span", cl::median_of(p.span_ms), "ms", gl::Det::measured);
+        for (const auto& [pass, ms] : p.pass_ms)
+          lab.metric("cost." + id + "." + pass, cl::median_of(ms), "ms", gl::Det::measured);
+        lab.note("cost " + id + ": " + cl::span_report(p));
+      }
+    }
     for (int k = 0; k < gd::kDecalKinds; k++) {
       const gd::DecalKindSpec& spec = gd::decal_spec(static_cast<gd::DecalKind>(k));
       if (spec.name.find("blood") == std::string_view::npos) continue;
@@ -493,6 +526,9 @@ const gl::LabSpec kSpec{
         {"walk", "17", "with --game: s at which he walks off out of the pool (0: he stays)"},
         {"width", "960", "with --game: the frame's width, px"},
         {"height", "540", "with --game: the frame's height, px"},
+        {"time", "0",
+         "with --game: N frames timed at each moment from the side and over the "
+         "pool: the GPU's span and each pass's median (cost.<eye>@<s>.<pass>)"},
     },
     "",
     run,
