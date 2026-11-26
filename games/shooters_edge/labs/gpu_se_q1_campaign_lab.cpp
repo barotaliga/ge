@@ -367,7 +367,18 @@ void run(gl::Lab& lab) {
       o.single = !party_runs;
       o.partners.assign(static_cast<size_t>(size) - 1, sb::AimSkill::expert);
       o.beside = beside;
+      // Each leg and each map's result said as it happens (stderr, flushed): a run that dies
+      // part way still names the map it died on and what the maps before it scored.
+      std::fprintf(stderr, "se-q1-campaign: playing from %s (party of %d)\n", leg.first.c_str(),
+                   size);
+      std::fflush(stderr);
       fb::EpisodeReport r = fb::run_coop_episode(o);
+      for (const fb::EpisodeMap& m : r.maps)
+        std::fprintf(
+            stderr, "se-q1-campaign: %s done: out %s, kills %d/%d, secrets %d/%d, %.0f s, %s\n",
+            m.name.c_str(), m.finished ? "yes" : "no", m.killed_monsters, m.total_monsters,
+            m.found_secrets, m.total_secrets, m.exit_s >= 0 ? m.exit_s : m.seconds, m.end.c_str());
+      std::fflush(stderr);
       if (!r.ok) {
         lab.fail("se-q1-campaign: " + leg.first + ": " + r.error,
                  "next: read the error; `labs se-q1-campaign` alone runs the hall");

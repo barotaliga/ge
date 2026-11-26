@@ -160,9 +160,9 @@ void add_crosshair_cvars(gc::Cvars& cvars, CrosshairSettings& s) {
               .fallback = size,
               .flags = gc::kArchive,
               .help = "How big the crosshair is.",
-              .min = 0.25,
-              .max = 4,
-              .values = "0.25..4: times its own size"},
+              .min = 0.1,
+              .max = 9,
+              .values = "0.1..9: times its own size"},
              &s.size);
   cvars.bind({.name = "crosshairalpha",
               .fallback = alpha,
@@ -199,7 +199,7 @@ ui::Color crosshair_health(int health) {
 
 Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own, float own_density,
                           std::span<const uint8_t> palette, bool* shown, int health) {
-  const double size = std::clamp(s.size, 0.25, 4.0);
+  const double size = std::clamp(s.size, 0.1, 9.0);
   Picture p;
   if (s.image != s.picture_of) {
     s.picture_of = s.image;

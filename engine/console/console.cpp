@@ -305,9 +305,10 @@ void Console::dispatch(Entry& e) {
     first[0].erase(0, 1);
     name.erase(0, 1);
   }
-  // A game's own spelling of one of our commands (`add_command_synonym`): ours runs.
+  // A game's own spelling of one of our commands (`add_command_synonym`): ours runs; a game's own
+  // meaning of one of our names (`add_command_own`) runs in place of ours.
   if (const auto syn = command_synonyms_.find(name);
-      syn != command_synonyms_.end() && commands_.count(name) == 0)
+      syn != command_synonyms_.end() && (syn->second.own || commands_.count(name) == 0))
     name = syn->second.target;
   const auto cmd = commands_.find(name);
   const bool expand_it = cmd == commands_.end() || (cmd->second.flags & kNoExpand) == 0;
@@ -531,6 +532,10 @@ bool Console::known_name(const std::string& name) const {
 
 void Console::add_command_synonym(std::string_view name, std::string_view target) {
   command_synonyms_[lower(name)] = {lower(target), cvars_.layer()};
+}
+
+void Console::add_command_own(std::string_view name, std::string_view target) {
+  command_synonyms_[lower(name)] = {lower(target), cvars_.layer(), true};
 }
 
 std::vector<std::pair<std::string, std::string>> Console::command_synonyms() const {

@@ -155,6 +155,35 @@ TEST(q2_arsenal_reads_a_players_numbers_and_the_maps_items) {
   CHECK(!bt::has_launcher(st) && bt::launcher_rounds(st) == 0);
 }
 
+TEST(ground_zeros_arsenal_aims_its_guns_and_counts_its_ammunition) {
+  // Ground Zero's deathmatch: its five aimed guns join the base ten, its flechettes, prox mines
+  // and disruptor rounds are ammunitions by their place in the rules, and double damage is sought
+  // as the quad is. The tesla, thrown and never aimed, is not a row; nor are The Reckoning's guns.
+  const bt::BotArsenal& a = bt::q2_arsenal(sv::Q2Pack::ground_zero);
+  CHECK(a.weapons.size() == 15 && a.ammo_count == 12);
+  CHECK(bt::weapon_row(a, 1 << 11) == nullptr);  // the ion ripper
+  CHECK(bt::weapon_row(a, 1 << 19) == nullptr);  // the tesla
+  const bt::BotWeapon* etf = bt::weapon_row(a, 1 << 15);
+  const bt::BotWeapon* dis = bt::weapon_row(a, 1 << 18);
+  const bt::BotWeapon* prox = bt::weapon_row(a, 1 << 16);
+  CHECK(etf != nullptr && dis != nullptr && prox != nullptr);
+  if (etf == nullptr || dis == nullptr || prox == nullptr) return;
+  CHECK(etf->number == 16 && etf->ammo == 8 && dis->number == 19 && dis->ammo == 11);
+  CHECK(prox->ammo == 9 && prox->blast);
+  bt::ItemSpot spot;
+  CHECK(bt::item_of("ammo_flechettes", 0, spot, a) && a.item_ammo(spot.kind) == etf->ammo);
+  CHECK(bt::item_of("ammo_disruptor", 0, spot, a) && a.item_ammo(spot.kind) == dis->ammo);
+  CHECK(bt::item_of("ammo_prox", 0, spot, a) && a.item_ammo(spot.kind) == prox->ammo);
+  CHECK(bt::item_of("weapon_etf_rifle", 0, spot, a) && spot.weapon == etf->bit);
+  CHECK(bt::item_of("item_double", 0, spot, a) && spot.kind == bt::ItemKind::quad);
+  CHECK(!bt::item_of("ammo_tesla", 0, spot, a));
+  CHECK(a.ammo_max[8] == 200 && a.ammo_max[9] == 50 && a.ammo_max[11] == 100);
+  // The Reckoning's own stay as they were: its mag slugs the phalanx's.
+  const bt::BotArsenal& x = bt::q2_arsenal(sv::Q2Pack::reckoning);
+  CHECK(x.weapons.size() == 12 && x.ammo_count == 8);
+  CHECK(bt::item_of("ammo_magslug", 0, spot, x) && x.item_ammo(spot.kind) == 6);
+}
+
 TEST(every_arsenals_weapon_numbers_fit_a_table_by_number) {
   // A fighter counts the commands holding each weapon by its number (fighter.hpp's
   // `weapon_commands`): Quake II's ten run to 10, past Quake's eight.
