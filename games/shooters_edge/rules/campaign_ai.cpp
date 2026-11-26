@@ -214,7 +214,18 @@ void found_target(A& q) {
   q.set_f(me, f_attack_finished, q.time() + 1);
   q.set_f(me, f_attack_state, kAsStraight);
   if (!q.is(q.i(me, q.L.f.noise), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
+  // Its run starts now, unless this sighting came from inside another one: an enemy the run drops
+  // at once (a player at the intermission, alive but past harm) sends it back to stand, and the
+  // stand sights him again. That run waits for the monster's next think instead.
+  thread_local int sighting = 0;
+  if (sighting > 0) {
+    q.set_i(me, q.L.f.think, q.i(me, f_th_run));
+    q.set_f(me, q.L.f.nextthink, q.time() + 0.1f);
+    return;
+  }
+  sighting++;
   run_field(q, me, f_th_run);
+  sighting--;
 }
 
 // Once a frame: one candidate, the client the server offers or a monster that has just spotted

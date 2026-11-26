@@ -25,6 +25,10 @@
 // person would and the others are helpers beside him (a hosted game's `addbot helper`): a second
 // table says how near they kept to him and how much of the map they took off his hands.
 //
+// THE FRAMES (`--frames=<file>`): every frame's line written to a file (the map, the frame, the
+// run's digest so far, the leader's place, view and health in exact hex floats), so the runs of
+// two machines, or two commits, diffed (`diff a b | head`) name the first frame they part on.
+//
 // The table, a map a row: got out or not, the time to the exit (the intermission's start), the
 // level's own count of monsters killed and secrets found (the program's globals), the deaths, the
 // things given up. Pictures, a map each: its floor from above, his track, the exits and where
@@ -33,6 +37,7 @@
 // ge:summary Lab: Quake's campaign played at 100% by a bot: kills, secrets and time to the exit
 // ge:keywords lab se-q1-campaign campaign single-player 100-percent complete kills secrets
 // ge:keywords exit-time episodes secret-level god play-through party co-op partners
+// ge:keywords frames frame-digests cross-platform divergence first-diverging-frame
 // ge:keywords mission-pack mod rogue hipnotic census class-names
 // ge:skill shooter bots labs
 // ge:test tests/shooters_edge_companion_test.cpp
@@ -316,6 +321,7 @@ void run(gl::Lab& lab) {
   o.skill = static_cast<int>(lab.arg_num("skill"));
   o.map_seconds = lab.arg_num("map-seconds");
   o.plan = lab.arg("plan") == "1";
+  o.frames = lab.arg("frames");
   o.skills.clear();
   o.single = true;
   o.complete = lab.arg("complete") != "0";
@@ -604,6 +610,9 @@ const gl::LabSpec kSpec{
         {"tour", "1", "0: the nearest stop each time rather than the tour's order (tour.hpp)"},
         {"root", ".", "the repository's root"},
         {"mod", "", "a mission pack's folder beside id1 (`rogue`, `hipnotic`), laid over the game"},
+        {"frames", "",
+         "a file every frame's line goes to (map, frame, digest, the leader's place, view and "
+         "health in hex floats): two machines' files diffed find the first frame they part on"},
         {"census", "", "1: the classes at work (on with --mod; 0: off)"},
         {"classes", "", "the census's class names to show, a comma list (none: every one)"},
         {"plan", "0", "1: each map's changes of plan as a table"},

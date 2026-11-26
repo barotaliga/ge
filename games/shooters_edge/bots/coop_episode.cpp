@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <memory>
@@ -274,6 +275,15 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       pg::find_global(*progs, "total_secrets"), pg::find_global(*progs, "found_secrets")};
 
   uint64_t h = 1469598103934665603ull;
+  // Every frame's line (EpisodeOptions::frames), closed when the episode returns.
+  std::unique_ptr<std::FILE, int (*)(std::FILE*)> frames_file(
+      opt.frames.empty() ? nullptr : std::fopen(opt.frames.c_str(), "w"), &std::fclose);
+  std::FILE* frames_out = frames_file.get();
+  if (!opt.frames.empty() && frames_out == nullptr) {
+    r.error = "run_coop_episode: cannot write the frames file " + opt.frames +
+              "; next: pass --frames=<a path in a folder that exists>";
+    return r;
+  }
   std::vector<Recent> recent(static_cast<size_t>(mates) + 1);
   std::vector<sh::Packet> packets(static_cast<size_t>(mates) + 1);
   for (int mi = 0; mi < opt.maps; mi++) {
@@ -400,6 +410,21 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         em.last_fault = qa->q.last_fault;
       }
       h = fold_frame(h, after, mates + 1);
+      if (frames_out != nullptr) {
+        const sv::WorldEntity& f = after.world.entities[1];
+        const sh::MoveCmd& lc = recent[0].cmds[2];  // the leader's command this frame
+        std::fprintf(
+            frames_out,
+            "%s %d %016llx %a %a %a %a %a %a %d v %a %a %a fl %d cmd %d %a %a %d %d %d %d\n",
+            c.map.name.c_str(), frame, static_cast<unsigned long long>(h),
+            static_cast<double>(f.origin.x), static_cast<double>(f.origin.y),
+            static_cast<double>(f.origin.z), static_cast<double>(f.view_angles.x),
+            static_cast<double>(f.view_angles.y), static_cast<double>(f.health),
+            after.sv.num_edicts, static_cast<double>(f.velocity.x),
+            static_cast<double>(f.velocity.y), static_cast<double>(f.velocity.z), f.flags, lc.msec,
+            static_cast<double>(lc.angles.x), static_cast<double>(lc.angles.y), lc.forward, lc.side,
+            lc.up, lc.buttons);
+      }
       if (opt.census && frame % 6 == 0) census_look(census, em, c.server, false);
       const sv::WorldEntity& L = after.world.entities[1];
       const bool leader_live = L.health > 0;

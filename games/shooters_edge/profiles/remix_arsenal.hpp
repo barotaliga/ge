@@ -1,8 +1,9 @@
-// CLASSIC REMIX'S ARSENALS: a game's rules dressed in another game's things (`cr_items`,
-// docs/goals/M18u.md). The played game's rules keep their own numbers (a weapon's damage, its
-// rate, an armour's share) and their own class names on the map, so the map plays as it always
-// has; what a player sees and hears is the other game's: each weapon's view model and pickup, its
-// missile, its fire, bounce and blast sounds, and each armour's model and pickup sound.
+// CLASSIC REMIX'S ARSENALS: a game's rules with another game's things (`cr_items`,
+// docs/goals/M18u.md). A weapon swapped in is the other game's weapon whole: Quake II's weapons in
+// Quake's rules fire by Quake II's own hand and shots (`q2_worn`, classic/q2_arms.hpp: frames,
+// refire, damage, spreads, missiles, blasts, hits, sounds), on the ammunition of Quake's that
+// stands for theirs. The map keeps its class names, so its items stand where they always have; each
+// weapon's view model and pickup, and each armour's model and pickup sound, are the other game's.
 //
 // - **By role** (`kRemixArsenals`): the weapon in a slot takes the other game's weapon of the
 //   same place, as the item table does (profiles/remix.hpp: the nail weapons the bullet ones, the
@@ -27,6 +28,7 @@
 #include <span>
 #include <string_view>
 
+#include "classic/q2_arms.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/profiles/arsenal.hpp"
 
@@ -36,30 +38,55 @@ namespace shooters_edge::profiles {
 // 15 units over the floor (profiles/remix.hpp's `kItemFeet`).
 inline constexpr int32_t kQ2Lift = 15;
 
-// Quake's eight weapons, their numbers its own, as Quake II's: the axe's slot the
-// blaster, the nailguns the machinegun and chaingun, the lightning gun the railgun.
+// A slot of the classic rules holding Quake II's weapon `id` whole: the rules fire it by Quake II's
+// own hand and shots (classic/q2_arms.hpp: its frames, refire, damage, spreads, missiles, blasts,
+// hits and sounds), spending `ammo` (Quake's kind that stands for Quake II's) a shot as Quake II
+// does. The row's refire is the weapon's period for a reader (the hand keeps its own time); its
+// pellets, damage, spread, reach, life and splash are the hand's, so the row leaves them 0.
+constexpr WeaponRow q2_worn(int32_t slot, ge::classic::Q2ArmId id, Ammo ammo, std::string_view view,
+                            std::string_view fire_sound, std::string_view missile,
+                            std::string_view land_sound, std::string_view blast_sound,
+                            std::string_view pickup, int32_t pickup_ammo) {
+  const ge::classic::Q2Arm& a = ge::classic::q2_arm(id);
+  const bool held = a.held != ge::classic::Q2Held::once;
+  const float period =
+      held ? 0.1f : static_cast<float>(a.frames.last_fire - a.frames.last_activate + 1) / 10.0f;
+  return {slot,       static_cast<Fire>(static_cast<int>(kFireQ2First) + static_cast<int>(id)),
+          ammo,       a.per_shot,
+          period,     0,
+          0,          0,
+          0,          0,
+          0,          view,
+          fire_sound, missile,
+          land_sound, blast_sound,
+          pickup,     pickup_ammo};
+}
+
+// Quake's eight slots as Quake II's weapons, whole: the axe's slot the blaster, the nailguns the
+// machinegun and chaingun (on nails, standing for bullets), the lightning gun the railgun (on
+// cells, standing for slugs).
 inline constexpr WeaponRow kQ1AsQ2Weapons[] = {
-    {1, Fire::melee, Ammo::none, 0, 0.5f, 1, 20, 0, 64, 0, 0, "models/weapons/v_blast/tris.md2",
-     "weapons/blastf1a.wav", "-", "-", "-", "-", 0},
-    {2, Fire::pellets, Ammo::shells, 1, 0.5f, 6, 4, 0.04f, 2048, 0, 0,
-     "models/weapons/v_shotg/tris.md2", "weapons/shotgf1b.wav", "-", "-", "-", "-", 0},
-    {3, Fire::pellets, Ammo::shells, 2, 0.7f, 14, 4, 0.07f, 2048, 0, 0,
-     "models/weapons/v_shotg2/tris.md2", "weapons/sshotf1b.wav", "-", "-", "-",
-     "models/weapons/g_shotg2/tris.md2", 5},
-    {4, Fire::spike, Ammo::nails, 1, 0.1f, 1, 9, 0, 1000, 6, 0, "models/weapons/v_machn/tris.md2",
-     "weapons/machgf1b.wav", "models/objects/laser/tris.md2", "-", "-",
-     "models/weapons/g_machn/tris.md2", 30},
-    {5, Fire::spike, Ammo::nails, 2, 0.1f, 1, 18, 0, 1000, 6, 0, "models/weapons/v_chain/tris.md2",
-     "weapons/machgf2b.wav", "models/objects/laser/tris.md2", "-", "-",
-     "models/weapons/g_chain/tris.md2", 30},
-    {6, Fire::grenade, Ammo::rockets, 1, 0.6f, 1, 0, 0, 600, 2.5f, 120,
-     "models/weapons/v_launch/tris.md2", "weapons/grenlf1a.wav", "models/objects/grenade/tris.md2",
-     "weapons/grenlb1b.wav", "weapons/grenlx1a.wav", "models/weapons/g_launch/tris.md2", 5},
-    {7, Fire::rocket, Ammo::rockets, 1, 0.8f, 1, 100, 0, 1000, 5, 120,
-     "models/weapons/v_rocket/tris.md2", "weapons/rocklf1a.wav", "models/objects/rocket/tris.md2",
-     "-", "weapons/rocklx1a.wav", "models/weapons/g_rocket/tris.md2", 5},
-    {8, Fire::beam, Ammo::cells, 1, 0.1f, 1, 30, 0, 600, 0, 35, "models/weapons/v_rail/tris.md2",
-     "weapons/railgf1a.wav", "-", "-", "-", "models/weapons/g_rail/tris.md2", 15},
+    q2_worn(1, ge::classic::Q2ArmId::blaster, Ammo::none, "models/weapons/v_blast/tris.md2",
+            "weapons/blastf1a.wav", "models/objects/laser/tris.md2", "-", "-", "-", 0),
+    q2_worn(2, ge::classic::Q2ArmId::shotgun, Ammo::shells, "models/weapons/v_shotg/tris.md2",
+            "weapons/shotgf1b.wav", "-", "-", "-", "-", 0),
+    q2_worn(3, ge::classic::Q2ArmId::super_shotgun, Ammo::shells,
+            "models/weapons/v_shotg2/tris.md2", "weapons/sshotf1b.wav", "-", "-", "-",
+            "models/weapons/g_shotg2/tris.md2", 5),
+    q2_worn(4, ge::classic::Q2ArmId::machinegun, Ammo::nails, "models/weapons/v_machn/tris.md2",
+            "weapons/machgf1b.wav", "-", "-", "-", "models/weapons/g_machn/tris.md2", 30),
+    q2_worn(5, ge::classic::Q2ArmId::chaingun, Ammo::nails, "models/weapons/v_chain/tris.md2",
+            "weapons/machgf1b.wav", "-", "-", "-", "models/weapons/g_chain/tris.md2", 30),
+    q2_worn(6, ge::classic::Q2ArmId::grenade_launcher, Ammo::rockets,
+            "models/weapons/v_launch/tris.md2", "weapons/grenlf1a.wav",
+            "models/objects/grenade/tris.md2", ge::classic::kQ2GrenadeBounce,
+            ge::classic::kQ2GrenadeBoom, "models/weapons/g_launch/tris.md2", 5),
+    q2_worn(7, ge::classic::Q2ArmId::rocket_launcher, Ammo::rockets,
+            "models/weapons/v_rocket/tris.md2", "weapons/rocklf1a.wav",
+            "models/objects/rocket/tris.md2", "-", ge::classic::kQ2RocketBoom,
+            "models/weapons/g_rocket/tris.md2", 5),
+    q2_worn(8, ge::classic::Q2ArmId::railgun, Ammo::cells, "models/weapons/v_rail/tris.md2",
+            "weapons/railgf1a.wav", "-", "-", "-", "models/weapons/g_rail/tris.md2", 15),
 };
 // Its three armours as Quake II's jacket, combat and body armour.
 inline constexpr ArmourRow kQ1AsQ2Armour[] = {

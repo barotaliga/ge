@@ -191,6 +191,49 @@ bool load_held_set(const GameAdapter& game, const SearchPath& files,
   return false;
 }
 
+namespace {
+
+// Quake II's weapons fired whole by our rules (classic remix's `cr_items q2`): the rules step
+// Quake II's hand and keep its frame in `weaponframe`, so the view model (every frame kept,
+// qw_adapter.cpp) is drawn on that frame; the frames carry the firing, the hand adds no kick.
+view::HandFrame step_q2_arms_held(const Listen& l, const PlayerState& p, const ViewState& v,
+                                  HeldState& s, const view::ViewSettings& settings,
+                                  std::span<const ge::viewmodel::HeldModel> models, double t,
+                                  double dt) {
+  const int w = static_cast<int>(status_of(l, t).weapon);
+  const int frame = static_cast<int>(field_named(l, p.entity, "weaponframe"));
+  view::HandInput in;
+  in.weapon = static_cast<view::Weapon>(settings.gun_model >= 0 ? settings.gun_model : w);
+  in.q2 = true;
+  in.dead = p.dead;
+  in.place.look_yaw = v.pose.yaw;
+  in.place.look_pitch = v.pose.pitch;
+  const double vx = p.velocity.x, vy = p.velocity.y;
+  in.place.ground_speed = std::sqrt(vx * vx + vy * vy) * ge::brush::kUnitM;
+  in.place.grounded = p.on_ground;
+  if (p.on_ground && in.place.ground_speed > kWalking) s.stride_s += dt;
+  in.place.stride_s = s.stride_s;
+  in.place.bob_m = v.eyes.bob;
+  view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
+  const auto held = static_cast<size_t>(f.weapon);
+  if (held < models.size() && static_cast<int>(held) == w) {
+    const int count = static_cast<int>(models[held].frames.size());
+    const int wf = frame >= 0 && frame < count ? frame : 0;
+    if (s.recorded_weapon != w) s.recorded = FrameTrack{};
+    int from = -1;
+    float g = 1;
+    track_frame(s.recorded, wf, t, from, g, kFrameSpan);
+    f.frame_b = wf;
+    f.frame_a = settings.lerp && from >= 0 ? from : wf;
+    f.frame_t = settings.lerp && from >= 0 ? g : 0;
+  }
+  s.recorded_weapon = w;
+  gun_look(settings, models, f);
+  return f;
+}
+
+}  // namespace
+
 view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           const view::ViewSettings& settings,
                           std::span<const ge::viewmodel::HeldModel> models, double t, double dt) {
@@ -201,6 +244,7 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
     return step_q2_held(*sq, p, v, s, settings, models, t, dt);
   if (const server::NativeQ2* ns = l.rules ? server::native_q2_of(*l.rules) : nullptr)
     return step_native_held(*ns, p, v, s, settings, models, t, dt);
+  if (listen_q2_arms(l)) return step_q2_arms_held(l, p, v, s, settings, models, t, dt);
   const auto game = static_cast<view::Weapon>(status_of(l, t).weapon);
   in.weapon = s.show >= 0 ? static_cast<view::Weapon>(s.show) : game;
   in.dead = p.dead;  // the weapon sinks out of view (view/hand.hpp)

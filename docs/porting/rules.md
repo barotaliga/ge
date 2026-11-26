@@ -17,6 +17,7 @@ companions, and saves.
 | Progs plugin | `plugins/progs/qvm.hpp` | The compiled-module VM: a mod shipped as a module, run sandboxed |
 | Progs plugin | `plugins/progs/native.hpp`, `qc_compile.hpp`, `tool.hpp` | A native program (a progs whose functions are C++); the QC compiler for tests and fixtures; `ge qc` |
 | Classic plugin | `plugins/classic/item_tables.hpp`, `item_roles.hpp`, `coop.hpp` | The item tables' shapes; items as shared roles (remix lays one game's as another's); the co-op settings both games share |
+| Classic plugin | `plugins/classic/q2_arms.hpp` | Quake II's weapons as data and steps: the hand, the frames, damage, spreads, knockback, samples, effect names, obituary words; stepped by Quake II's rules and by the classic rules under remix |
 | Shell | `games/shooters_edge/server/rules_runner.hpp` | THE RUNNER: `RunnerCalls`, a table a program form fills, and `RulesCommon` every runner keeps; C++ mods laid over any runner |
 | Shell | `games/shooters_edge/server/qc_server.hpp`, `catalogue.hpp`, `builtins.hpp`, `rules_world.hpp` | The QC runner: the full builtin catalogue, `checkextension`, the rules' world filled |
 | Shell | `games/shooters_edge/server/qvm_server.hpp` | The compiled-module runner |
@@ -57,6 +58,7 @@ companions, and saves.
 | Co-op with companions who follow, defend and press buttons | ours, over both campaigns | `shooterbots/companion.hpp` |
 | Saves of the whole running game, bit for bit | ours | `engine/save` |
 | Quake II's monsters in Quake's campaign and back | ours | `rules/campaign_q2.hpp`, header-only rosters |
+| Quake II's weapons whole in Quake's rules | ours | `plugins/classic/q2_arms.hpp`, `rules/common_q2_arms.cpp` |
 | C++ mods stacking on any game's rules | ours | `engine/mod`, the seam |
 | Mod extensions checked by name | Quake's later engines | `plugins/progs/extensions.hpp` |
 
@@ -123,7 +125,7 @@ its own QC program, so the two share no code.
 
 `se-baseline`, `se-quake-dm`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-coop-sweep`, `se-dive`, `se-q2-fight`, `se-q2-coop`,
 `se-q2-save`, `se-q2-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`,
-`tests/shooters_edge_quake_rules_test.cpp`.
+`tests/shooters_edge_quake_rules_test.cpp`, `tests/shooters_edge_remix_q2_arms_test.cpp`.
 
 ## Lessons
 
@@ -132,5 +134,8 @@ its own QC program, so the two share no code.
   silently zero.
 - The window asks the rules' world or a runner's trait, never which runner it is.
 - A monster swapped whole is the other game's numbers as data in the played rules' own shape.
+- A weapon swapped whole steps the other game's hand at that game's rate (Quake II's ten steps a
+  second, on a clock that adds its step rather than restarting it), so its period holds on any
+  server frame rate; a row's refire only describes it.
 - A game's own rules on shared rules go behind one switch the game's profile writes, read once a
   frame; every branch tests it, so the shared rules' digests stay put without it.

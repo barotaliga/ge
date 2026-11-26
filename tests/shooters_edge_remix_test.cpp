@@ -450,12 +450,13 @@ TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
 // `cr_sounds`: each multiplayer sound is heard as the chosen game's by its row, a sound that
 // game does not make is silent, and a name no row knows is heard as it is.
 TEST(cr_sounds_pairs_each_games_multiplayer_sounds) {
-  CHECK(pf::heard_as("weapons/rocklf1a.wav", "q1") == "weapons/sgun1.wav");
-  CHECK(pf::heard_as("weapons/ROCKLF1A.WAV", "q1") == "weapons/sgun1.wav");  // any case
-  CHECK(pf::heard_as("weapons/sgun1.wav", "q2") == "weapons/rocklf1a.wav");
-  CHECK(pf::heard_as("weapons/sgun1.wav", "q1") == "weapons/sgun1.wav");  // its own
-  CHECK(pf::heard_as("weapons/machgf4b.wav", "q1") == "weapons/rocket1i.wav");
-  CHECK(pf::heard_as("weapons/rocket1i.wav", "q2") == "weapons/machgf1b.wav");  // the first
+  // A weapon's own sounds stay its own: the weapon that fired them is its game's whole.
+  CHECK(pf::heard_as("weapons/rocklf1a.wav", "q1") == "weapons/rocklf1a.wav");
+  CHECK(pf::heard_as("weapons/sgun1.wav", "q2") == "weapons/sgun1.wav");
+  CHECK(pf::heard_as("weapons/machgf4b.wav", "q1") == "weapons/machgf4b.wav");
+  CHECK(pf::heard_as("misc/w_pkup.wav", "q1") == "weapons/pkup.wav");
+  CHECK(pf::heard_as("MISC/W_PKUP.WAV", "q1") == "weapons/pkup.wav");  // any case
+  CHECK(pf::heard_as("weapons/pkup.wav", "q2") == "misc/w_pkup.wav");
   CHECK(pf::heard_as("player/step3.wav", "q1").empty());  // no footsteps in Quake
   CHECK(pf::heard_as("player/male/jump1.wav", "q1") == "player/plyrjmp8.wav");
   CHECK(pf::heard_as("misc/talk.wav", "q1") == "misc/talk.wav");              // both games' name
@@ -466,28 +467,38 @@ TEST(cr_sounds_pairs_each_games_multiplayer_sounds) {
   }
 }
 
-// `cr_items` alone never changes a sound: every sound the worn things name is heard as the played
-// game's own while `cr_sounds` is empty, and as the worn game's once it names that game.
+// `cr_items` alone never changes a sound but a weapon's own: the worn weapons are Quake II's whole,
+// so their shots, bounces and blasts are Quake II's under any `cr_sounds`; every other sound the
+// worn things name is heard as the played game's own while `cr_sounds` is empty, and as the worn
+// game's once it names that game.
 TEST(cr_items_alone_keeps_the_played_games_sounds) {
   const pf::RemixArsenal* worn = pf::remix_arsenal("q1", "q2");
   CHECK(worn != nullptr);
-  std::vector<std::string_view> named;
   for (const pf::WeaponRow& w : worn->arsenal.weapons)
-    named.insert(named.end(), {w.fire_sound, w.land_sound, w.blast_sound});
+    for (const std::string_view n : {w.fire_sound, w.land_sound, w.blast_sound}) {
+      if (n.empty() || n == "-") continue;
+      CHECK_MSG(pf::heard_as(n, "q1") == n && pf::heard_as(n, "q2") == n, std::string(n));
+    }
+  std::vector<std::string_view> named;
   for (const pf::ArmourRow& a : worn->arsenal.armour) named.push_back(a.sound);
   for (const pf::ItemLook& l : worn->arsenal.looks) named.push_back(l.sound);
   named.push_back(worn->arsenal.pickup_sound);
   for (const std::string_view n : named) {
     if (n.empty() || n == "-") continue;
     const std::string_view heard = pf::heard_as(n, "q1");
-    CHECK(!heard.empty() && heard != n);  // Quake's own shot
-    CHECK(pf::heard_as(n, "q2") == n);    // cr_sounds q2: Quake II's as worn
+    CHECK_MSG(!heard.empty() && heard != n, std::string(n));  // Quake's own
+    CHECK(pf::heard_as(n, "q2") == n);                        // cr_sounds q2: Quake II's as worn
   }
+  const auto weapons_own = [](std::string_view n) {
+    for (const pf::SoundMatch& m : pf::kSoundMatches)
+      if (m.weapon && m.classic == n) return true;
+    return false;
+  };
   const pf::RemixLooks* looks = pf::remix_looks("q2", "q1");
   CHECK(looks != nullptr);
   for (const pf::Look& l : looks->looks) {
-    if (!l.to.ends_with(".wav")) continue;
-    CHECK(pf::heard_as(l.to, "q2") != l.to);  // Quake II's own again
+    if (!l.to.ends_with(".wav") || weapons_own(l.to)) continue;
+    CHECK_MSG(pf::heard_as(l.to, "q2") != l.to, std::string(l.to));  // Quake II's own again
   }
 
   ge::console::Cvars cvars;
@@ -681,9 +692,10 @@ TEST(q2_map_plays_on_the_classic_rules_with_the_classic_items) {
 }
 
 // Quake's rules wearing Quake II's things (M18u4, `cr_items q2`): only with the remix
-// on and another game named; the rules keep every number and the map its class names, while the
-// server's weapon and armour rows name Quake II's models and sounds, so the beam weapon lies on
-// the floor as Quake II's railgun and the hand holds Quake II's view models.
+// on and another game named; the map keeps its class names and the armour Quake's numbers, while
+// the server's weapon rows are Quake II's weapons whole (M18u13b) and the armour rows name Quake
+// II's models and sounds, so the beam weapon lies on the floor as Quake II's railgun and the hand
+// holds Quake II's view models.
 TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   ge::console::Cvars cvars;
   cl::RemixSettings s;
@@ -698,15 +710,16 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   if (worn == nullptr) return;
   cvars.set("cr_items", "q1", ge::console::Source::local);
   CHECK(cl::worn_arsenal(s, state, "q1") == nullptr);  // the game's own
-  // The numbers are Quake's; every name is Quake II's.
+  // The weapons are Quake II's whole; every name is Quake II's.
   CHECK(worn->arsenal.weapons.size() == std::size(pf::kQ1Weapons));
   CHECK(worn->held.size() == worn->arsenal.weapons.size());
   for (size_t i = 0; i < worn->arsenal.weapons.size(); i++) {
     const pf::WeaponRow& w = worn->arsenal.weapons[i];
     const pf::WeaponRow& c = pf::kQ1Weapons[i];
-    CHECK(w.slot == c.slot && w.fire == c.fire && w.ammo == c.ammo && w.cost == c.cost);
-    CHECK(w.refire == c.refire && w.damage == c.damage && w.reach == c.reach);
-    CHECK(w.splash == c.splash && w.pickup_ammo == c.pickup_ammo);
+    // Quake II's weapon whole in Quake's slot, on the ammunition of Quake's that stands for its
+    // own (shooters_edge_remix_q2_arms_test.cpp fires them).
+    CHECK(w.slot == c.slot && pf::fire_is_q2(w.fire) && w.ammo == c.ammo);
+    CHECK(w.pickup_ammo == c.pickup_ammo);
     CHECK(worn->held[i] == w.view);
     for (const std::string_view n : {w.view, w.fire_sound, w.missile, w.pickup})
       CHECK_MSG(n == "-" || !n.starts_with("progs/"), std::string(n));
