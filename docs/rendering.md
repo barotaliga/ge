@@ -308,6 +308,13 @@ input read, the game stepped by the STEADY time, the frame drawn and presented, 
 | `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits (the cap's, the GPU's queue's, and the swap chain's for a free image: a frame that waits there is held by the display, one that waits on the GPU is held by its own cost), the display's refresh, the cap, the present mode |
 | `profile [frames]` | 600 | The next frames timed part by part (`prof/frames.hpp` over the timing zones): the frame's median, p99 and worst; each part's own time (mean, median, p99, worst, share) and heap allocations a frame; the time in no part; and the five slowest frames with the parts that made each slow. `profile stop` reports at once. Beside `gpustats` (the GPU's passes), it says whether a slow frame is the CPU's and which part, on the player's own machine |
 
+**A pass's real GPU time on the Mac.** Metal's tiled GPU runs one pass's vertices beside the
+last one's pixels, so `gpustats`' per-pass timestamps overlap and add up to more than the frame's
+span. A pass's own time is read from Instruments' Metal System Trace (`xcrun xctrace record
+--template 'Metal System Trace' --attach <the process> --time-limit 10s`) with `GE_GPU_LABELS=1`
+in the game's environment, which hands our pass labels down to Metal so each encoder carries its
+pass's name (issue #1521's run).
+
 **Why these defaults** (the `pacing` lab, 120 Hz, a light and a heavy load): the old loop (vsync,
 Metal's three images, nothing else) held every frame ~25 ms from input to picture. Two images and
 two frames in flight take that to ~16.6 ms with no missed refresh until the CPU or the GPU alone
