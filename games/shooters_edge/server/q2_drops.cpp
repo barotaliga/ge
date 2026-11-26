@@ -128,7 +128,7 @@ bool fight_drop(Q2Server& s, int slot, int item) {
     case SqKind::weapon: {
       if (fight_anyflag(s, 4)) return false;  // weapons stay: nothing said
       if (p.body.counts[item] <= 0) return false;
-      const int w = sq_weapon_of_item(item);
+      const int w = sq_weapon_of_item(item, s.quake_arms);
       if ((w == p.hand.weapon || w == p.hand.pending) && p.body.counts[item] == 1) {
         fight_print(s, slot, "Can't drop current weapon\n");
         return false;

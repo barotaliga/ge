@@ -275,7 +275,10 @@ struct SqBody {
   SqArmour armour = SqArmour::none;  // the one worn
   int armour_count = 0;              // its points
   bool blaster = true;               // the starting weapon, always held
-  double mega_until_drain = 0;       // level time a mega's count-down starts; 0 none
+  // Quake's weapons worn (classic remix, q2_quake_arms.hpp): Quake's eight are held in place of
+  // these rules' own, the axe and the shotgun always, and the items give Quake's.
+  bool quake = false;
+  double mega_until_drain = 0;  // level time a mega's count-down starts; 0 none
   int selected = 7;  // the selected item as the game's list numbers it (q2_bar.hpp); -1 none
   int cubes = 0;     // in coop, the bits of the power cubes taken (bit n: the level's cube n)
 };

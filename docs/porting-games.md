@@ -387,6 +387,12 @@ the skill's lessons before the first edit.
   first (`q2_arms.hpp`), make its own rules step it from there, then have the played rules step
   the same code; the swapped rows name only the slot, the ammunition that stands for its own and
   the files. A weapon's own sounds are never swapped by `cr_sounds`.
+- The other way round is the same rule: Quake II's rules wearing Quake's weapons fire Quake's eight
+  as rows of their own (`server/q2_quake_arms.hpp`), each number from the one place Quake's own
+  rules read it (`profiles::kQ1Weapons`, `plugins/classic/q1_arms.hpp`), never Quake II's weapons
+  renamed. The played game keeps its rules (armour, knockback, the items' timing); the items on
+  the floor give the worn game's weapon of their role and its own amounts. Hits and blasts are
+  sent by the worn game's look names (`q1_*`), which the window draws as that game's own effects.
 - Each part of a match is one `cr_` switch naming whose part it is, chosen apart from the others:
   items never change the sounds (`cr_sounds` does), and the HUD follows the weapons in use.
 - The `cr_` switches are the SERVER's (`kServer | kServerInfo`), only `cr_menu` the player's (the
