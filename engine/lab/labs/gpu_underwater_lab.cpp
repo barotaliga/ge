@@ -5,8 +5,8 @@
 // visibility); the four presets (eyes open, a mask, murky, the classic tint and warp); the surface
 // from below, looking straight up from 5 m down, where Snell's window is measured off the picture
 // (more than 3 degrees from 48.6 fails); the caustics on the bed and the light shafts, each off
-// beside on under a breeze (each must raise the picture's contrast); and a dive from 1 m over the
-// surface to 3 m under it. It
+// beside on under a breeze (each must raise the picture's contrast); the pass's cost with each of
+// its dear parts off (`cost.<part>`); and a dive from 1 m over the surface to 3 m under it. It
 // fails on a GPU error or a pipeline made after the load. Without an adapter it notes that, with no
 // pictures.
 //
@@ -325,6 +325,56 @@ void run(gl::Lab& lab) {
          "leans), the same breeze: the light the waves focus scattered toward the eye, off and on.",
          "bright shafts fanning down from the surface toward the sun's side and the darker "
          "water between them; an even veil with them off");
+
+  // THE COST: the view under water's own passes ("water.shafts" and "water.under") timed from the
+  // shafts' eye with each of its dear parts off in turn, the median of a few frames each; on a
+  // tiled GPU the pass's stamps may hold some of its neighbours' work, so what each part takes off
+  // is the reading, not the pass's whole.
+  {
+    set_look("tropical-shallows", 6);
+    const gr::FrameView v = view_at(kMid, kLevel - 4, kEyeZ, 2.4, 0.55, 0.6, 2.4, 2.0);
+    const auto under_ms = [&]() {
+      std::vector<double> ms;
+      for (int k = 0; k < 9; ++k) {
+        draw(*device, s, v);
+        s.rec.wait(*device);
+        if (k < 2) continue;
+        double sum = 0;
+        for (int i = 0; i < s.rec.stats.count; ++i) {
+          const gr::PassStat& p = s.rec.stats.passes[size_t(i)];
+          if (p.name == "water.under" || (p.name == "water.shafts" && p.draws > 0)) sum += p.gpu_ms;
+        }
+        ms.push_back(sum);
+      }
+      std::sort(ms.begin(), ms.end());
+      return ms.empty() || std::isnan(ms[ms.size() / 2]) ? std::nan("") : ms[ms.size() / 2];
+    };
+    struct Part {
+      const char* id;
+      void (*off)(gr::UnderwaterLook&);
+    };
+    static const Part kParts[] = {
+        {"all", [](gr::UnderwaterLook&) {}},
+        {"no-shafts", [](gr::UnderwaterLook& l) { l.shafts = 0; }},
+        {"no-caustics", [](gr::UnderwaterLook& l) { l.caustics = 0; }},
+        {"no-motes", [](gr::UnderwaterLook& l) { l.motes = 0; }},
+        {"no-blur", [](gr::UnderwaterLook& l) { l.blur = 0; }},
+    };
+    std::string line = "water.under from the shafts' eye (ms, median):";
+    for (const Part& part : kParts) {
+      gr::underwater_look("eyes-open", s.under.look);
+      part.off(s.under.look);
+      const double ms = under_ms();
+      if (std::isnan(ms)) {
+        line = "water.under: this GPU has no timestamp queries: nothing timed";
+        break;
+      }
+      lab.metric(std::string("cost.") + part.id, ms, "ms", Det::measured);
+      line.append(" ").append(part.id).append(" ").append(fixed(ms, 2));
+    }
+    gr::underwater_look("eyes-open", s.under.look);
+    lab.note(line);
+  }
 
   // THE DIVE: from 1 m over the surface to 3 m under it.
   {

@@ -199,6 +199,19 @@ TEST(every_arsenals_weapon_numbers_fit_a_table_by_number) {
   CHECK(std::size(st.weapon_commands) == static_cast<size_t>(bt::kMostWeaponNumber + 1));
 }
 
+TEST(every_q2_weapon_is_aimed_by_one_of_the_five_aim_traits) {
+  // A weapon is held by an aim trait (shooterbots/traits.hpp: aim_sg .. aim_lg); one past them
+  // would be aimed by the bot's reaction or timing. The railgun is hitscan, the BFG a launcher.
+  for (const sv::Q2Pack p : {sv::Q2Pack::base, sv::Q2Pack::reckoning, sv::Q2Pack::ground_zero})
+    for (const bt::BotWeapon& w : bt::q2_arsenal(p).weapons)
+      CHECK_MSG(w.aim_slot >= 0 && w.aim_slot <= 4,
+                std::string(w.name) + " is aimed by slot " + std::to_string(w.aim_slot));
+  const bt::BotArsenal& a = bt::q2_arsenal();
+  const bt::BotWeapon* rail = bt::weapon_row(a, 1 << 8);
+  const bt::BotWeapon* bfg = bt::weapon_row(a, 1 << 9);
+  CHECK(rail != nullptr && bfg != nullptr && rail->aim_slot == 0 && bfg->aim_slot == 3);
+}
+
 TEST(the_pools_trace_stops_at_a_mover_where_the_rules_put_it) {
   sv::RulesRunner r = sv::q2_runner(sv::make_q2_server({}));
   r.console("deathmatch 1");

@@ -13,12 +13,17 @@
 #include <utility>
 
 #include "brush/map.hpp"
+#include "brush/trace.hpp"
+#include "core/num.hpp"
+#include "shooter/brush_contents.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
+
+namespace num = ge::core::num;
 
 namespace {
 
@@ -172,6 +177,81 @@ bool q2_same_name(std::string_view a, std::string_view b) {
   return true;
 }
 
+namespace {
+
+// Spots a start needs for the co-op players past the first (the protocol carries four).
+constexpr int kCoopSpotsWanted = 3;
+
+// A player's box stood at `at` (its origin 10 above the spot, as a placing puts it) fits there, is
+// reached from `from` in a straight line, and stands over a floor within 64 units.
+bool spot_fits(Q2Server& s, sh::Vec3f from, sh::Vec3f at) {
+  const float lo[3] = {-16, -16, -24}, hi[3] = {16, 16, 32};
+  const float a[3] = {from.x, from.y, from.z + 10}, b[3] = {at.x, at.y, at.z + 10};
+  const ge::brush::Trace way = s.tracer->trace(a, b, lo, hi, sh::kSqMaskDeadSolid);
+  if (way.start_solid || way.all_solid || way.fraction < 1) return false;
+  const float down[3] = {at.x, at.y, at.z + 10 - 64};
+  const ge::brush::Trace fall = s.tracer->trace(b, down, lo, hi, sh::kSqMaskDeadSolid);
+  if (fall.start_solid || fall.fraction >= 1) return false;  // over a drop
+  const float feet[3] = {at.x, at.y, at.z - 14};
+  return (s.tracer->contents(feet) & (sh::kSqLava | sh::kSqSlime)) == 0;
+}
+
+// Not on another start or spot: two boxes placed there would meet.
+bool spot_taken(const Q2Server& s, sh::Vec3f at) {
+  for (const Q2Entity& e : s.entities) {
+    if (e.gone || (e.classname != "info_player_start" && e.classname != "info_player_coop"))
+      continue;
+    const sh::Vec3f d = e.origin - at;
+    if (d.x > -40 && d.x < 40 && d.y > -40 && d.y < 40 && d.z > -64 && d.z < 64) return true;
+  }
+  return false;
+}
+
+// A start the co-op players past the first would share (too few co-op spots of its name and too
+// few within reach): spots are made beside it until three are within reach, behind and to the sides
+// first, each a clear straight walk from the start, so no player lands on another and kills him by
+// his arrival.
+void spots_beside_starts(Q2Server& s) {
+  if (s.tracer == nullptr) return;
+  // The eight ways, a step of 45 degrees from the start's facing: behind first, then the sides.
+  constexpr float kD = 0.70710678f;
+  constexpr float kWays[8][2] = {{1, 0},  {kD, kD},   {0, 1},  {-kD, kD},
+                                 {-1, 0}, {-kD, -kD}, {0, -1}, {kD, -kD}};
+  constexpr int kOrder[8] = {4, 2, 6, 3, 5, 1, 7, 0};
+  const size_t count = s.entities.size();
+  for (size_t i = 0; i < count; i++) {
+    const Q2Entity start = s.entities[i];
+    if (start.gone || start.classname != "info_player_start") continue;
+    int named = 0, close = 0;
+    for (const Q2Entity& e : s.entities) {
+      if (e.gone || e.classname != "info_player_coop") continue;
+      if (q2_same_name(e.targetname, start.targetname)) named++;
+      if (near(e.origin, start.origin)) close++;
+    }
+    if (std::max(named, close) >= kCoopSpotsWanted) continue;
+    // Made spots come last and carry a name no level names, so the fallback (the n-th co-op spot
+    // within reach) finds them after the map's own.
+    int wanted = kCoopSpotsWanted - close;
+    const int facing = (num::to_int32(num::round(double(start.angles.y) / 45)) % 8 + 8) % 8;
+    for (const float reach : {64.0f, 128.0f})
+      for (const int k : kOrder) {
+        if (wanted <= 0) break;
+        const float* w = kWays[(k + facing) % 8];
+        const sh::Vec3f at = start.origin + sh::Vec3f{w[0] * reach, w[1] * reach, 0};
+        if (spot_taken(s, at) || !spot_fits(s, start.origin, at)) continue;
+        Q2Entity e;
+        e.classname = "info_player_coop";
+        e.targetname = "beside " + start.targetname;
+        e.origin = at;
+        e.angles = {0, start.angles.y, 0};
+        s.entities.push_back(std::move(e));
+        wanted--;
+      }
+  }
+}
+
+}  // namespace
+
 void campaign_coop_spots(Q2Server& s) {
   if (!coop(s)) return;
   // On these maps each co-op spot takes the name of the first named start (in map order) within
@@ -196,6 +276,7 @@ void campaign_coop_spots(Q2Server& s) {
       e.angles = {0, 90, 0};
       s.entities.push_back(std::move(e));
     }
+  spots_beside_starts(s);
 }
 
 void campaign_unnamed_starts(Q2Server& s) {

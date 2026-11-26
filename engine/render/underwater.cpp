@@ -76,17 +76,42 @@ void create_underwater(gpu::Device& device, gpu::PipelineSet& pipelines, Underwa
   fragment.targets = &colour;
   wgpu::RenderPipelineDescriptor desc{};
   desc.label = "water.under";
-  desc.layout = make_pipeline_layout(device, "water.under", {frame, under.layout});
+  under.shafts_layout =
+      make_layout(device, "water.shafts", {Slot::texture}, wgpu::ShaderStage::Fragment);
+  desc.layout =
+      make_pipeline_layout(device, "water.under", {frame, under.layout, under.shafts_layout});
   desc.vertex.module = module;
   desc.vertex.entryPoint = "vs_main";
   desc.fragment = &fragment;
   under.p_under = pipelines.add_render(device, desc);
+  // The shafts' own pass: written whole into their target, no blend.
+  wgpu::ColorTargetState shafts{};
+  shafts.format = wgpu::TextureFormat::RGBA16Float;
+  wgpu::FragmentState shafts_fragment{};
+  shafts_fragment.module = module;
+  shafts_fragment.entryPoint = "fs_shafts";
+  shafts_fragment.targetCount = 1;
+  shafts_fragment.targets = &shafts;
+  wgpu::RenderPipelineDescriptor shafts_desc{};
+  shafts_desc.label = "water.shafts";
+  shafts_desc.layout = make_pipeline_layout(device, "water.shafts", {frame, under.layout});
+  shafts_desc.vertex.module = module;
+  shafts_desc.vertex.entryPoint = "vs_main";
+  shafts_desc.fragment = &shafts_fragment;
+  under.p_shafts = pipelines.add_render(device, shafts_desc);
 }
 
-void bind_underwater(gpu::Device& /*device*/, Underwater& under, const Water& water) {
+void bind_underwater(gpu::Device& device, Underwater& under, const Water& water) {
   // Made in prepare_underwater, for the body the eye is in.
   under.water = &water;
   under.group_body = -1;
+  if (water.width == 0 || water.height == 0) return;
+  under.shafts =
+      make_texture(device, "water.shafts", (water.width + 1) / 2, (water.height + 1) / 2, 1,
+                   wgpu::TextureFormat::RGBA16Float,
+                   wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
+  under.shafts_view = under.shafts.CreateView();
+  under.shafts_group = make_group(device, "water.shafts", under.shafts_layout, {under.shafts_view});
 }
 
 double level_over(const float tops[][4], const float* levels, int count, double x, double z) {
@@ -166,7 +191,11 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
   u.motes[3] = 0;
   u.lit[0] = static_cast<float>(l.ambient);
   u.lit[1] = static_cast<float>(l.caustics);
-  u.lit[2] = static_cast<float>(l.shafts);
+  // The shafts only where the look has them, the water's quality lets the sun under it and the
+  // body takes the sun (the shader's own test, made here to skip their pass).
+  under.shafts_on = l.shafts > 0 && water.quality.sunlight && slot.staged.sun[0] > 0 &&
+                    under.shafts_view != nullptr;
+  u.lit[2] = static_cast<float>(under.shafts_on ? l.shafts : 0.0);
   u.lit[3] = static_cast<float>(tops);
   device.queue.WriteBuffer(under.uniform, 0, &u, sizeof u);
 }
@@ -174,8 +203,27 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
 void encode_underwater(const Underwater& under, const gpu::PipelineSet& pipelines,
                        FrameRecorder& rec, wgpu::CommandEncoder& encoder,
                        const FrameTargets& targets, const wgpu::BindGroup& frame) {
+  if (!under.active || !under.shafts_on) {
+    // The table's rows run empty, so every later pass keeps its timing row.
+    rec.compute(encoder, "water.shafts").End();
+  } else {
+    wgpu::RenderPassColorAttachment shafts{};
+    shafts.view = under.shafts_view;
+    shafts.loadOp = wgpu::LoadOp::Clear;
+    shafts.storeOp = wgpu::StoreOp::Store;
+    shafts.clearValue = {0, 0, 0, 0};
+    wgpu::RenderPassDescriptor desc{};
+    desc.colorAttachmentCount = 1;
+    desc.colorAttachments = &shafts;
+    wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "water.shafts");
+    pass.SetPipeline(pipelines.render(under.p_shafts));
+    pass.SetBindGroup(0, frame);
+    pass.SetBindGroup(1, under.group);
+    pass.Draw(3);
+    ++rec.current().draws;
+    pass.End();
+  }
   if (!under.active) {
-    // The table's row runs empty, so every later pass keeps its timing row.
     rec.compute(encoder, "water.under").End();
     return;
   }
@@ -190,6 +238,7 @@ void encode_underwater(const Underwater& under, const gpu::PipelineSet& pipeline
   pass.SetPipeline(pipelines.render(under.p_under));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, under.group);
+  pass.SetBindGroup(2, under.shafts_group);
   pass.Draw(3);
   ++rec.current().draws;
   pass.End();
