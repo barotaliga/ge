@@ -326,10 +326,10 @@ void run(gl::Lab& lab) {
          "bright shafts fanning down from the surface toward the sun's side and the darker "
          "water between them; an even veil with them off");
 
-  // THE COST: the view under water's own pass ("water.under") timed from the shafts' eye with
-  // each of its dear parts off in turn, the median of a few frames each; on a tiled GPU the
-  // pass's stamps may hold some of its neighbours' work, so what each part takes off is the
-  // reading, not the pass's whole.
+  // THE COST: the view under water's own passes ("water.shafts" and "water.under") timed from the
+  // shafts' eye with each of its dear parts off in turn, the median of a few frames each; on a
+  // tiled GPU the pass's stamps may hold some of its neighbours' work, so what each part takes off
+  // is the reading, not the pass's whole.
   {
     set_look("tropical-shallows", 6);
     const gr::FrameView v = view_at(kMid, kLevel - 4, kEyeZ, 2.4, 0.55, 0.6, 2.4, 2.0);
@@ -337,10 +337,14 @@ void run(gl::Lab& lab) {
       std::vector<double> ms;
       for (int k = 0; k < 9; ++k) {
         draw(*device, s, v);
+        s.rec.wait(*device);
         if (k < 2) continue;
-        for (int i = 0; i < s.rec.stats.count; ++i)
-          if (s.rec.stats.passes[size_t(i)].name == "water.under")
-            ms.push_back(s.rec.stats.passes[size_t(i)].gpu_ms);
+        double sum = 0;
+        for (int i = 0; i < s.rec.stats.count; ++i) {
+          const gr::PassStat& p = s.rec.stats.passes[size_t(i)];
+          if (p.name == "water.under" || (p.name == "water.shafts" && p.draws > 0)) sum += p.gpu_ms;
+        }
+        ms.push_back(sum);
       }
       std::sort(ms.begin(), ms.end());
       return ms.empty() || std::isnan(ms[ms.size() / 2]) ? std::nan("") : ms[ms.size() / 2];

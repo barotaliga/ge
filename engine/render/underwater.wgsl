@@ -33,6 +33,8 @@ struct Under {
 // The body the eye is in, its waves: the caustics and the shafts read the real surface.
 @group(1) @binding(5) var<uniform> body: WaterBody;
 @group(1) @binding(6) var<storage, read> waves: array<Wave>;
+// The shafts marched at a quarter of the pixels ("water.shafts", `fs_shafts`), read by `fs_main`.
+@group(2) @binding(0) var shafts_tex: texture_2d<f32>;
 
 #include "render/wgsl/water_body.wgsl"
 
@@ -322,6 +324,40 @@ fn room_light() -> vec3f {
   return sum / 20.0;
 }
 
+// THE SHAFTS' PASS: half the frame's width and half its height, each pixel the shafts along the
+// ray `fs_main` sends through it (the mask's magnification and the wobble), out to the scene or
+// the surface first met; `fs_main` reads them filtered. The step's footprint stays the frame's
+// pixel's, so the net is as soft as when every pixel marched it.
+@fragment
+fn fs_shafts(in: VertexOut) -> @location(0) vec4f {
+  let t = frame.time.x;
+  let uv0 = in.position.xy * 2.0 * frame.size.zw;
+  let fwd = normalize(view_ray(frame, vec2f(0.5, 0.5)));
+  let edge = view_ray(frame, vec2f(0.5, 0.0));
+  let tan_half = length(edge / dot(edge, fwd) - fwd);
+  var uv = (uv0 - 0.5) / under.look.x + 0.5;
+  let w = 6.2831853 * under.look.z * t;
+  uv += under.look.y * vec2f(sin(uv.y * 23.0 + w), cos(uv.x * 17.0 + 1.3 * w));
+  uv = clamp(uv, vec2f(0.0), vec2f(1.0));
+  let ray = normalize(view_ray(frame, uv));
+  let dist = scene_distance(uv);
+  var path = dist;
+  if (under.look.w > 0.5) {
+    let at = clamp(vec2i(uv * frame.size.xy), vec2i(0), vec2i(frame.size.xy) - vec2i(1));
+    let b = textureLoad(below, at, 0);
+    if (b.a > 0.0 && b.a < dist) {
+      path = b.a;
+    } else if (b.a <= 0.0 && under.surface.w < 0.5 && ray.y > 1e-4 &&
+               max(under.info.y, 0.0) / ray.y < dist) {
+      path = max(under.info.y, 0.0) / ray.y;
+    }
+  }
+  if (body.sun.x <= 0.0 || frame.sun.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  return vec4f(light_shafts(ray, path, in.position.xy, t, 2.0 * tan_half / frame.size.y), 1.0);
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let t = frame.time.x;
@@ -428,7 +464,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   var colour = seen * tr + veil * (1.0 - tr);
   if (under.lit.z > 0.0 && body.sun.x > 0.0 && frame.sun.y > 0.0) {
     // The water between the shafts darker, never by more than a third.
-    colour = max(colour + under.lit.z * light_shafts(ray, path, in.position.xy, t, 2.0 * tan_half / frame.size.y), 0.67 * colour);
+    let shafts = textureSampleLevel(shafts_tex, linear_clamp, uv0, 0.0).rgb;
+    colour = max(colour + under.lit.z * shafts, 0.67 * colour);
   }
   // The specks, lit by the light in the water, each fogged over its own distance.
   if (under.motes.x > 0.0) {

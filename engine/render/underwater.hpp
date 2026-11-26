@@ -57,6 +57,7 @@
 // ge:keywords encode_underwater underwater_look waterline meniscus split half-submerged motes
 // ge:keywords suspended-matter specks particles caustics pool water-below underside light-shafts
 // ge:keywords god-rays shafts caustic_at henyey-greenstein level_over flooded-passage tunnel
+// ge:keywords water-shafts quarter-resolution
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -136,19 +137,29 @@ struct Underwater {
   const Water* water = nullptr;
   UnderGpu staged{};
   bool active = false;  // this frame's: the eye is under a body
+  // THE SHAFTS at a quarter of the pixels ("water.shafts", half the width and half the height of
+  // the frame, before "water.under"), read back filtered: the shafts are soft streaks, and marched
+  // at every pixel they were most of the pass.
+  wgpu::BindGroupLayout shafts_layout;
+  uint32_t p_shafts = 0;
+  wgpu::Texture shafts;
+  wgpu::TextureView shafts_view;
+  wgpu::BindGroup shafts_group;
+  bool shafts_on = false;  // this frame's: the look has shafts and the sun reaches the water
 };
 
 void create_underwater(gpu::Device& device, gpu::PipelineSet& pipelines, Underwater& under,
                        const wgpu::BindGroupLayout& frame);
-// Bound to the water's copies and its surface from below (again whenever create_water_targets
-// made new ones).
+// Bound to the water's copies and its surface from below, and the shafts' target made at half the
+// water's size (again whenever create_water_targets made new ones).
 void bind_underwater(gpu::Device& device, Underwater& under, const Water& water);
 // After prepare_water: the body the eye is under (or at the waterline of), its optics and the
 // look, uploaded. `line`, when given for that body, is the surface at the eye.
 void prepare_underwater(gpu::Device& device, Underwater& under, const Water& water,
                         const FrameView& view, uint32_t render_height,
                         const Waterline* line = nullptr);
-// "water.under": an empty row when the eye is in the air.
+// "water.shafts", then "water.under": empty rows when the eye is in the air (the shafts' too when
+// the look or the sun gives none).
 void encode_underwater(const Underwater& under, const gpu::PipelineSet& pipelines,
                        FrameRecorder& rec, wgpu::CommandEncoder& encoder,
                        const FrameTargets& targets, const wgpu::BindGroup& frame);
