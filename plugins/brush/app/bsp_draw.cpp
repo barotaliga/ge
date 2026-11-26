@@ -805,10 +805,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   d.fresh_slots.clear();
   d.shadows_waiting = 0;
-  // The first frame after the map is made draws every cube: it is the load's, not play's (unless
+  // The map's first frame that shadows draws every cube: it is the load's, not play's (unless
   // the caller warms the map up over frames of its own: `first_all` off).
-  const size_t budget = d.shadow_frame == 1 && o.first_all ? size_t(d.cube_slots)
-                                                           : size_t(std::max(o.fresh_cubes, 0));
+  const bool any_held = std::any_of(d.slot_held.begin(), d.slot_held.begin() + d.cube_slots,
+                                    [](bool held) { return held; });
+  const size_t budget = fresh_cube_budget(o, any_held, d.cube_slots);
   for (const size_t c : homeless) {
     if (d.fresh_slots.size() >= budget) {
       ++d.shadows_waiting;  // info[0] stays -1: lit, unshadowed, this frame
