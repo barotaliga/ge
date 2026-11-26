@@ -94,6 +94,7 @@ struct HullTrace {
   Plane plane;              // the plane hit, facing the start's side
   int ent = -1;             // which solid of a move's list (the mover fills it; -1 none)
   int backups = 0;          // the impact's 0.1 steps back out of solid (feeds no rule)
+  int32_t brush_bits = 0;   // a version 38 map's hit brush's contents bits (0 a hull's)
 };
 
 // Sweeps the segment p1 -> p2 (in the hull's own space) through the hull: the networked walk, and

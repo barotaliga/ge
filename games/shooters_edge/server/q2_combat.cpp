@@ -380,6 +380,9 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
     case kSqByLaser:
       world = "saw the light";
       break;
+    case kSqByGotta:
+      world = "that's gotta hurt";
+      break;
     case kSqByHurt:
       world = "was in the wrong place";
       break;

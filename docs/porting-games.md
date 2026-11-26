@@ -376,6 +376,12 @@ the skill's lessons before the first edit.
 - A move told another game's numbers feels like that game only with all of them (the landing
   pause too); the stair double jump lives in the air's slide, not the jump.
 - The classic rules run on Quake II's maps by tracing its models as brush solids.
+- A map's own movement features come with it, whichever move runs on it: Quake's move climbs
+  Quake II's ladders by the rule Quake II's move runs (`plugins/shooter/ladder.hpp`), read off
+  the brush the trace hits, so a map without them moves exactly as before. A trace of brushes stops
+  1/32 short of a plane, so a move's slide over them must push off a plane met twice (Quake II's
+  slide does; Quake's does on brushes only), or a player sticks on a sloped face. A remix part is the
+  other game's real logic (what it does, its numbers, effects and sounds), never a reskin.
 - Each part of a match is one `cr_` switch naming whose part it is, chosen apart from the others:
   items never change the sounds (`cr_sounds` does), the HUD follows the weapons in use, and the
   figures and sounds are swapped on the client, so they hold over any server or mod.

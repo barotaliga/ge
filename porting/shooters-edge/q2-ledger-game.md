@@ -478,7 +478,7 @@ full stop is part of the text only where shown.
 | con.connected | `<name> connected` | a client connects | done | q2_server.cpp sq_connect when maxclients is above 1 |
 | con.fixed-triggered | `fixed TRIGGERED flag on <class> at <pos>` | g_fix_triggered | done | q2_lines.cpp `(0 0 0)` |
 | con.trigger-key | `no key item for trigger_key at <pos>`, `item <i> not found for trigger_key at <pos>`, `<class> at <pos> has no target` | done | q2_lines.cpp |
-| con.say-echo | `Name: text` on the dedicated console | chat echoed to the server | done | q2_commands.cpp (verify it reaches the dedicated console) |
+| con.say-echo | `Name: text` on the dedicated console | chat echoed to the server | done | `games/shooters_edge/server/q2_commands.cpp` `say`: each chat line is pushed to the server's console |
 
 ## Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats
 

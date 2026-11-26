@@ -16,6 +16,8 @@
 //     (never while rising faster than 180); the water level from the world's point hull at the
 //     feet + 1, the middle and the eyes; then snapped to the ground trace's end.
 //  7. the water jump check at water level 2; 8. the water jump's clock; 9. the jump;
+//  9b. on a version 38 map, a ladder one unit ahead (shooter/ladder.hpp: the rule Quake II's move
+//      shares; on its rungs the walk climbs and the swim is held to them; a hull map never climbs);
 //  10. friction; 11. the water, fly or walk/air move; 12. categorise again; 13. the landing fix.
 // The easy jump is not a rule of the move: it is the client's aid (speedjump_assist.hpp), which
 // sends the commands a strafer would; the move runs them like any other.
@@ -30,6 +32,7 @@
 // ge:keywords strafe-jump bunny-hop jump ktjump waterjump swim fly spectator noclip dead
 // ge:keywords stopspeed maxspeed gravity categorize unstick nudge ground slidefix airstep pground
 // ge:keywords bunnyspeedcap move-type player_move run_command move_settings move_state move_cmd
+// ge:keywords ladder climb
 // ge:skill shooter move
 // ge:test tests/shooter_pmove_test.cpp tests/shooter_recording_test.cpp
 #pragma once
@@ -155,6 +158,7 @@ constexpr int kBlockedOther = 4;  // anything else
 struct MoveResult {
   int blocked = 0;  // the walk/air, water or fly move's slide result; 0 when it did not slide
   TouchList touches;
+  bool ladder = false;  // the command held a ladder's rungs (shooter/ladder.hpp)
 };
 
 // How deep a player standing at `origin` is in water, as the move works it out: 0 dry, 1 the feet

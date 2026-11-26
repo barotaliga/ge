@@ -291,9 +291,9 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | xat.switch | the pack's rules behind one switch its profile sets, Quake II's own rules, goldens and digests unchanged without it | done |  | server/q2_pack.hpp (the switch); the pack's rows in q2_items.hpp, q2_combat.hpp, q2_powers.cpp, q2_reckoning*.cpp, behind `Q2ServerOptions::pack`; base lists unchanged (tests/shooters_edge_q2_pack_test.cpp) |
-| xat.brain_beta | the brain's beta form: its tentacles pull, its eyes fire lasers (no classname of its own) | missing | 1 | which brains are the beta: reader question |
+| xat.brain_beta | the brain's beta form: its tentacles pull, its eyes fire lasers (no classname of its own) | done |  | server/q2_monster_kinds.hpp (under the pack every `monster_brain` is the beta: the tentacles' pull within 512, the eyes' two lasers), q2_monster_shots.cpp; tests/shooters_edge_q2_reckoning_monsters_test.cpp |
 | xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | done |  | server/q2_bar.cpp (`kReckoning`, its 47 items); tests/shooters_edge_q2_reckoning_test.cpp |
-| xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
+| xat.obits | the new weapons' and monsters' obituaries, word for word | done |  | server/q2_combat.cpp (the weapons' words; a monster's laser "saw the light", the beta gladiator's and the gekk's spit "that's gotta hurt"); tests/shooters_edge_q2_reckoning_test.cpp (the weapons) and tests/shooters_edge_q2_reckoning_monsters_test.cpp (the monsters) |
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
 | xat.campaign | the four units in order, the help computer's lines, the end | verify |  | NEW GAME in the pack's folder starts on `xswamp` (server/q2_pack.cpp `q2_pack_start_map`, client/game_folder.cpp); the maps' own level strings chain the six units through the base campaign (`xu1`..`xu4` between, `xout` and the victory picture at the end), help lines are the maps' `target_help`; `se-q2-unit --mod=xatrix` plays a unit by script; a full run on the release build settles it |
 | xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | done | 2 | NEW GAME takes the level default.cfg names (`*logo.cin+xin.cin+xswamp`: client/game_folder.hpp `new_game_level`); the unit ends' movies come from the maps' level strings (server/q2_campaign.hpp); all eight decoded to their end, frames and sound |
@@ -331,14 +331,14 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| xat.ent.monster_boss5 | `monster_boss5` | the super tank beta: the super tank with energy armour | 2 / 4 | missing | 1 | not in our rules; LIFT: the base super tank |
-| xat.ent.monster_chick_heat | `monster_chick_heat` | the iron maiden beta: heat-seeking rockets | 1 / 14 | missing | 1 | not in our rules; LIFT: the base iron maiden with a seeking rocket |
-| xat.ent.monster_fixbot | `monster_fixbot` | the repair bot: welds broken things, and can wake the dead | 2 / 11 | missing | 1 | not in our rules |
-| xat.ent.monster_gekk | `monster_gekk` | the gekk: an amphibian that leaps, claws, spits and swims | 4 / 119 | missing | 1 | not in our rules |
-| xat.ent.monster_gladb | `monster_gladb` | the gladiator beta: fires phalanx rounds, wears energy armour | 3 / 23 | missing | 1 | not in our rules; LIFT: the base gladiator |
-| xat.ent.monster_soldier_hypergun | `monster_soldier_hypergun` | the hyperblaster guard: a soldier with blue hyperblaster bolts | 13 / 107 | missing | 1 | not in our rules; same LIFT |
-| xat.ent.monster_soldier_lasergun | `monster_soldier_lasergun` | the laser guard: a soldier with a tracking laser | 12 / 111 | missing | 1 | not in our rules; same LIFT |
-| xat.ent.monster_soldier_ripper | `monster_soldier_ripper` | the ripper guard: a soldier with an ion ripper | 13 / 147 | missing | 1 | not in our rules; LIFT: the base soldier's code with another gun |
+| xat.ent.monster_boss5 | `monster_boss5` | the super tank beta: the super tank with energy armour | 2 / 4 | done |  | server/q2_monster_kinds.hpp (the super tank's row and a power shield of 400; the pack's super tank's flag 8 the same), q2_monster_shots.cpp (`shield_take`) |
+| xat.ent.monster_chick_heat | `monster_chick_heat` | the iron maiden beta: heat-seeking rockets | 1 / 14 | done |  | server/q2_monster_kinds.hpp (the iron maiden's row, skin 3, heat-seeking rockets) |
+| xat.ent.monster_fixbot | `monster_fixbot` | the repair bot: welds broken things, and can wake the dead | 2 / 11 | done |  | server/q2_reckoning_monsters.cpp (roam, weld, take off and land by spawn flags), q2_monster_medic.cpp (the corpse raised by its blue beam); the se-reckoning-monsters lab |
+| xat.ent.monster_gekk | `monster_gekk` | the gekk: an amphibian that leaps, claws, spits and swims | 4 / 119 | done |  | server/q2_reckoning_monsters.cpp (in and out of water, the chant, its heal), q2_monster_kinds.hpp (claws, leap, spit); its gibs are the base game's flesh set (the pack's own gib models would move the model numbers of base maps) |
+| xat.ent.monster_gladb | `monster_gladb` | the gladiator beta: fires phalanx rounds, wears energy armour | 3 / 23 | done |  | server/q2_monster_kinds.hpp (the gladiator's row: phalanx rounds, a power shield of 400) |
+| xat.ent.monster_soldier_hypergun | `monster_soldier_hypergun` | the hyperblaster guard: a soldier with blue hyperblaster bolts | 13 / 107 | done |  | server/q2_monster_kinds.hpp (`like` the soldier: its frames, pains, deaths and ducks) |
+| xat.ent.monster_soldier_lasergun | `monster_soldier_lasergun` | the laser guard: a soldier with a tracking laser | 12 / 111 | done |  | server/q2_monster_kinds.hpp, q2_monster_shots.cpp (the beam drawn, q2_monster_rows.cpp) |
+| xat.ent.monster_soldier_ripper | `monster_soldier_ripper` | the ripper guard: a soldier with an ion ripper | 13 / 147 | done |  | server/q2_monster_kinds.hpp (`like` the light soldier, ion ripper discs) |
 
 #### Map things
 

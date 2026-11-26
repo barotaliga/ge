@@ -46,7 +46,9 @@
 // ge:skill brush render
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -131,10 +133,11 @@ struct Options {
   // on the M3 Max at 1440p: the shadows' lookups are not what the mirror costs).
   int view_shadows = 1;
   // The cubes drawn a frame at most for lights new to the shadowed few (each one the map drawn six
-  // times); the rest wait their turn unshadowed. 0 draws none new. The map's first frame draws
-  // every cube whatever this says (it is the load's), unless `first_all` is off: a window that
-  // warms a new map's world up offscreen over a few frames before it shows it (shadows_waiting
-  // says when every cube is in).
+  // times); the rest wait their turn unshadowed. 0 draws none new. The map's first frame that
+  // shadows (no cube drawn yet: its first, or the first after frames that cast none, a classic
+  // look's) draws every cube whatever this says (it is the load's), unless `first_all` is off: a
+  // window that warms a new map's world up offscreen over a few frames before it shows it
+  // (shadows_waiting says when every cube is in). `fresh_cube_budget` decides.
   int fresh_cubes = 2;
   bool first_all = true;
   int most = 160;           // the lights a frame draws at most (the nearest)
@@ -383,6 +386,15 @@ struct GpuBsp {
   // (Options::dlight_falloff).
   float paint[4];
 };
+
+// The cubes a frame may draw for lights new to a slot: every slot when no cube is drawn yet (the
+// map's first frame that shadows anything, the load's) and `first_all` is on, else
+// `fresh_cubes`. A map's first frames under a look that casts no shadow (the classic) leave its
+// first shadowed frame the load's still, so it never shows lights unshadowed for frames.
+inline size_t fresh_cube_budget(const Options& o, bool any_cube_held, int cube_slots) {
+  return !any_cube_held && o.first_all ? size_t(std::max(cube_slots, 0))
+                                       : size_t(std::max(o.fresh_cubes, 0));
+}
 
 struct BspDraw {
   const Scene* scene = nullptr;
