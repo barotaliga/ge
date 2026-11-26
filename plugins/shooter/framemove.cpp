@@ -8,8 +8,6 @@
 #include "shooter/framemove.hpp"
 
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
 
 #include "shooter/physics.hpp"
 #include "shooter/trace.hpp"
@@ -211,20 +209,8 @@ int walk_move(Server& sv, int e, const FrameMoveSettings& set, double dt) {
     if ((clip & 2) != 0) wall_friction(ent(sv, e), wall);
   }
   const auto down = static_cast<float>(-kStepHeight + oldvel.z * dt);
-  const Vec3f up_org = ent(sv, e).origin;
   const HullTrace tr = push_entity(sv, e, {0, 0, down});
   Edict& after = ent(sv, e);
-  if (std::getenv("GE_PROBE_STEP") != nullptr)  // PROBE (B25), not for merge
-    std::fprintf(stderr,
-                 "STEP t=%a old %a %a %a nostep %a %a %a up %a %a %a down %a tr f=%a end %a %a %a "
-                 "n %a %a %a d %a ss=%d as=%d ent=%d after %a\n",
-                 sv.time, double(oldorg.x), double(oldorg.y), double(oldorg.z),
-                 double(nostep_org.x), double(nostep_org.y), double(nostep_org.z),
-                 double(up_org.x), double(up_org.y), double(up_org.z), double(down),
-                 double(tr.fraction), double(tr.endpos.x), double(tr.endpos.y),
-                 double(tr.endpos.z), double(tr.plane.normal.x), double(tr.plane.normal.y),
-                 double(tr.plane.normal.z), double(tr.plane.dist), int(tr.startsolid),
-                 int(tr.allsolid), tr.ent, double(after.origin.z));
   if (tr.plane.normal.z > kFloorZ) {
     if (tr.ent >= 0 && ent(sv, tr.ent).solid == kSolidBsp) {
       after.flags |= kFlagOnGround;
