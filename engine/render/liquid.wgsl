@@ -24,8 +24,8 @@
 // through a layer kShimmerHeight deep; the surface looked up where its bent ray lands, and what
 // is seen across the lake drawn again through the bent rays by `fs_air`, a box over the body,
 // which lays any gas over it too), and the crust broken where something fell in (`broken_at`). FROM BELOW (`fs_under`, one
-// triangle over the screen for the body the eye is under): the slime's fog, its surface's window
-// and mirror and its scum's shadow; the lava's melt all round.
+// triangle over the screen for the body the eye is under): the slime's fog, its surface from below (no
+// window: only water has one) and its scum's shadow; the lava's melt all round.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/liquid_body.wgsl"
 #include "render/wgsl/liquid_wade.wgsl"

@@ -43,7 +43,7 @@
 //   running out in the first second; carried by the flow.
 // - WADED THROUGH (render/liquid_wade.hpp): a furrow, a bow and rings, by `LiquidLook::wade`.
 // - SEEN FROM BELOW (`Liquids::eye_under`, docs/liquids.md § From below): a slime a fog of its
-//   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view
+//   colour under a surface with no window up out of it (only water has one), a lava its melt all round; `under_reach` a least view
 //   (a lava with one a thick light-red glowing goo the eye sees a few metres into).
 // Not yet: a flow region's surface; the waterline split for an eye at the level.
 //
