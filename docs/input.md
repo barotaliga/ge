@@ -123,7 +123,8 @@ alt-tab back), with no second click in the window, and gives it back only for wh
 of the frame's facts (focused, console, menu, watching) that answers take, let go or nothing, and
 the backend acts on it. A lost focus always lets it go. While it is held, a menu that stays up
 reads the keys only, since a held pointer is frozen where it was. Shooter's Edge keeps the bits
-in `in_mouse_release` (default 5: the console and the play bar; 2 adds the menu).
+in `in_mouse_release` (default 7: the console, a menu and the play bar; 5 keeps it through a menu,
+which the keys then drive).
 
 ## Wheels, pedals, shifters and flight controls
 

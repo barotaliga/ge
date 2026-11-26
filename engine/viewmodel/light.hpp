@@ -30,6 +30,7 @@
 // ge:keywords viewmodel view-model lighting light probe ambient direct lightmap light-grid
 // ge:keywords point-light torch flame muzzle-flash dynamic-light inverse-square range window
 // ge:keywords min-light floor wrap-lambert blinn gloss shade_held light_held held-lighting
+// ge:keywords tone_held roll-off knee most washed-out white-gun glare
 // ge:skill render
 // ge:test tests/viewmodel_light_test.cpp
 #pragma once
@@ -72,6 +73,11 @@ struct Lighting {
   float floor = 0.06f;  // the least light, share of white
   float gloss = 0.35f;  // the highlight's strength
   int shininess = 24;   // the highlight's tightness (an integer power)
+  // THE ROLL-OFF (`tone_held`): a point lit past `knee` (share of white) eases toward `most`, so a
+  // lamp beside the gun brightens it without washing its colours out to white. `most` at or under
+  // `knee` (the default 0): no roll-off, the light as it adds up.
+  float knee = 0;
+  float most = 0;
 };
 
 // The world's light at the player into the view's frame, the strongest lights at `at_view` (the
@@ -88,9 +94,16 @@ void mirror_lighting(Lighting& l);
 void mirror_world_point(const camera::Pose& view, double p[3]);
 void mirror_world_dir(const camera::Pose& view, double d[3]);
 
+// THE ROLL-OFF of a point's light (`Lighting::knee`, `most`): when its brightest channel is past
+// the knee, every channel of `diffuse` and `specular` is scaled by that channel's eased value over
+// its own, `knee + e / (1 + e / (most - knee))` with `e` the excess, so the colour keeps its hue
+// and the light never passes `most`. Nothing when `most <= knee`. viewmodel.wgsl's `tone` is the
+// same.
+void tone_held(const Lighting& l, float diffuse[3], float specular[3]);
+
 // How much light reaches a point of the gun at `p` (view, m) with unit normal `n` (view): the
 // diffuse factor to multiply the surface's colour by into `diffuse`, and the highlight to add on
-// top into `specular` (linear rgb each).
+// top into `specular` (linear rgb each), rolled off by `tone_held`.
 void shade_held(const Lighting& l, const float p[3], const float n[3], float diffuse[3],
                 float specular[3]);
 
