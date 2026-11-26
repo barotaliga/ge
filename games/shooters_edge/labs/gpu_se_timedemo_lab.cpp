@@ -173,6 +173,7 @@ struct Rig {
   ge::gpu::Target* out = nullptr;
   uint32_t w = 0, h = 0;
   int64_t total = 0;
+  int stride = 1;  // draw every stride-th of the demo's frames (the price's runs; the rest stepped)
 };
 
 bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bool shots,
@@ -297,54 +298,60 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
         for (size_t k = had; blast_at < 0 && k < demo_fx.explosions.size(); k++)
           if (in_front(bench.demo.state, demo_fx.explosions[k])) blast_at = p.frames + kBlastLag;
       }
-      cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
-      // A picture's frame waits for its read back, which a window never does: not timed.
-      if (shot < 3 && p.frames == picks[shot]) bench.skip = std::max(bench.skip, 1);
-      if (bench.skip == 0) {
-        const size_t had_spans = bench.passes.span_ms.size();
-        cl::record_span(*world, bench.passes);
-        if (p.zones)
-          p.frame_span.push_back(
-              bench.passes.span_ms.size() > had_spans ? bench.passes.span_ms.back() : std::nan(""));
-      }
-      if (shots && p.frames == blast_at) {
-        settle();
-        const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
-        lab.shot({"blast",
-                  "A BLAST IN A PLAYED DEMO",
-                  "The first explosion the demo sends in front of the recorded eye, " +
-                      std::to_string(kBlastLag) +
-                      " frames into its burst: the temporary entity the recording carries, drawn "
-                      "by the effects a game played here draws.",
-                  "the fireball and its light on the walls and floor where the rocket ended; "
-                  "the rocket's trail before it",
-                  {{"demo", bench.name}, {"frame", std::to_string(p.frames)}}},
-                 gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-                 gl::Det::measured);
-        p.blast_frame = p.frames;
-      }
-      if (shot < 3 && p.frames == picks[shot]) {
-        settle();
-        const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
-        lab.shot(
-            {ids[shot],
-             "DEMO FRAME " + std::to_string(p.frames) + " OF " + std::to_string(total),
-             "The benchmark's frame " + std::to_string(p.frames) + " of " + bench.name + " on " +
-                 bench.demo.state.map +
-                 ", drawn by the window's world frame and "
-                 "HUD from the demo's eye.",
-             "the map from the recorded eye, the other players where the demo has them, the HUD's "
-             "stats from the demo",
-             {{"demo", bench.name}, {"size", lab.arg("size")}}},
-            gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-            gl::Det::measured);
-        shot++;
-      } else {
-        const wgpu::Future done = device->queue.OnSubmittedWorkDone(
-            wgpu::CallbackMode::WaitAnyOnly, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
-        GE_ZONE("gpu.wait");
-        settle();
-        in_flight = done;
+      // A frame between the stride's is stepped, never drawn nor timed.
+      const bool drawn = shots || rig.stride <= 1 || p.frames % rig.stride == 0;
+      if (!drawn) bench.skip = std::max(bench.skip, 1);
+      if (drawn) {
+        cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
+        // A picture's frame waits for its read back, which a window never does: not timed.
+        if (shot < 3 && p.frames == picks[shot]) bench.skip = std::max(bench.skip, 1);
+        if (bench.skip == 0) {
+          const size_t had_spans = bench.passes.span_ms.size();
+          cl::record_span(*world, bench.passes);
+          if (p.zones)
+            p.frame_span.push_back(bench.passes.span_ms.size() > had_spans
+                                       ? bench.passes.span_ms.back()
+                                       : std::nan(""));
+        }
+        if (shots && p.frames == blast_at) {
+          settle();
+          const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
+          lab.shot({"blast",
+                    "A BLAST IN A PLAYED DEMO",
+                    "The first explosion the demo sends in front of the recorded eye, " +
+                        std::to_string(kBlastLag) +
+                        " frames into its burst: the temporary entity the recording carries, drawn "
+                        "by the effects a game played here draws.",
+                    "the fireball and its light on the walls and floor where the rocket ended; "
+                    "the rocket's trail before it",
+                    {{"demo", bench.name}, {"frame", std::to_string(p.frames)}}},
+                   gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                   gl::Det::measured);
+          p.blast_frame = p.frames;
+        }
+        if (shot < 3 && p.frames == picks[shot]) {
+          settle();
+          const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
+          lab.shot({ids[shot],
+                    "DEMO FRAME " + std::to_string(p.frames) + " OF " + std::to_string(total),
+                    "The benchmark's frame " + std::to_string(p.frames) + " of " + bench.name +
+                        " on " + bench.demo.state.map +
+                        ", drawn by the window's world frame and "
+                        "HUD from the demo's eye.",
+                    "the map from the recorded eye, the other players where the demo has them, the "
+                    "HUD's "
+                    "stats from the demo",
+                    {{"demo", bench.name}, {"size", lab.arg("size")}}},
+                   gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                   gl::Det::measured);
+          shot++;
+        } else {
+          const wgpu::Future done = device->queue.OnSubmittedWorkDone(
+              wgpu::CallbackMode::WaitAnyOnly, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+          GE_ZONE("gpu.wait");
+          settle();
+          in_flight = done;
+        }
       }
     } else if (!device && shot < 3 && p.frames == picks[shot]) {
       ls::placeholders(lab, {ids[shot++]});
@@ -589,9 +596,15 @@ void run(gl::Lab& lab) {
 
   // THE PRICE: the demo again with each drawn switch off in turn, each between two all-on runs.
   if (price && device) {
-    std::vector<cl::PriceRun> bases{price_run("", base)}, off;
-    std::vector<std::vector<double>> frames_of;               // each switched-off run's frames, ms
-    std::vector<double> base_ms = ms_of(base.bench.frame_s);  // every all-on run's frames, ms
+    rig.stride = std::max(1, static_cast<int>(lab.arg_num("price-stride")));
+    // With a stride the first all-on run is played again at it, so every run beside a price
+    // draws the same frames.
+    Played first;
+    if (rig.stride > 1 && !play(rig, picture, false, false, first)) return;
+    const Played& start = rig.stride > 1 ? first : base;
+    std::vector<cl::PriceRun> bases{price_run("", start)}, off;
+    std::vector<std::vector<double>> frames_of;                // each switched-off run's frames, ms
+    std::vector<double> base_ms = ms_of(start.bench.frame_s);  // every all-on run's frames, ms
     const auto row = [&](const std::string& label, const shooters_edge::look::Picture& pic,
                          bool no_hud) {
       Played p;
@@ -729,6 +742,9 @@ const gl::LabSpec kSpec{
       "1: price the quality ladder instead (app/ladder.hpp): each of shadows, water and skies "
       "lowered alone to off, low and medium, then r_quality low, medium and high and every row "
       "off, each between two all-on runs"},
+     {"price-stride", "1",
+      "with a price: draw only every Nth of the demo's frames in the priced runs (the rest "
+      "stepped), so a long demo's whole set of switches fits in a sitting"},
      {"price-cvars", "",
       "label=cvars|label=cvars: price these sets of the picture's cvars instead (as the console "
       "takes them: \"water low=ce_water_quality low|no mirror shadows=...\"), each between two "
