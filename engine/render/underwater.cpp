@@ -157,6 +157,12 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
       if (s.under && &s != &slot) add_top(s);
     }
   }
+  // Tops all at one level (a pool its bridges and pillars cut in two) are one surface: every
+  // weighing of them gives that level, and the shafts march it by the one-top path, which reads
+  // each wave once for eight steps instead of once a step.
+  bool one_level = true;
+  for (int i = 1; i < tops; ++i) one_level = one_level && u.top_level[i] == u.top_level[0];
+  if (one_level) tops = std::min(tops, 1);
   for (int i = tops; i < kUnderTops; ++i) u.top_level[i] = 0;
   const bool given = line && line->body == body;
   const double surface =

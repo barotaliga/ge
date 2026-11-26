@@ -332,7 +332,7 @@ void run(gl::Lab& lab) {
   // is the reading, not the pass's whole.
   {
     set_look("tropical-shallows", 6);
-    const gr::FrameView v = view_at(kMid, kLevel - 4, kEyeZ, 2.4, 0.55, 0.6, 2.4, 2.0);
+    gr::FrameView v = view_at(kMid, kLevel - 4, kEyeZ, 2.4, 0.55, 0.6, 2.4, 2.0);
     const auto under_ms = [&]() {
       std::vector<double> ms;
       for (int k = 0; k < 9; ++k) {
@@ -374,6 +374,20 @@ void run(gl::Lab& lab) {
     }
     gr::underwater_look("eyes-open", s.under.look);
     lab.note(line);
+    // The shafts again from 4 m down looking a little down across the bed, the way a swimmer
+    // mostly looks: their steps go deeper, so the blur smooths more of the waves away.
+    v = view_at(kMid, kLevel - 4, kEyeZ, 2.4, -0.2, 0.6, 2.4, 2.0);
+    const double across = under_ms();
+    gr::underwater_look("eyes-open", s.under.look);
+    s.under.look.shafts = 0;
+    const double across_bare = under_ms();
+    gr::underwater_look("eyes-open", s.under.look);
+    if (!std::isnan(across) && !std::isnan(across_bare)) {
+      lab.metric("cost.across.all", across, "ms", Det::measured);
+      lab.metric("cost.across.no-shafts", across_bare, "ms", Det::measured);
+      lab.note("water.under looking across (ms, median): all " + fixed(across, 2) + " no-shafts " +
+               fixed(across_bare, 2));
+    }
   }
 
   // THE DIVE: from 1 m over the surface to 3 m under it.
