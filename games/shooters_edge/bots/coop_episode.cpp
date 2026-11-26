@@ -127,7 +127,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
         sb::traits_of(skill, sb::Temper::balanced), kHz,
         opt.seed + 31u * static_cast<uint32_t>(k) + static_cast<uint32_t>(c.history.size()),
-        first_arsenal());
+        opt.arsenal != nullptr ? *opt.arsenal : first_arsenal());
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;
@@ -417,7 +417,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         std::fprintf(
             frames_out,
             "%s %d %016llx %a %a %a %a %a %a %d v %a %a %a fl %d cmd %d %a %a %d %d %d %d fight %s "
-            "finger %s weapon %d target %d at %.0f pilot %s %zu/%zu | %s\n",
+            "finger %s weapon %d target %d at %.0f pilot %s %zu/%zu reach %d %d swim %d goal %d | "
+            "%s\n",
             c.map.name.c_str(), frame, static_cast<unsigned long long>(h),
             static_cast<double>(f.origin.x), static_cast<double>(f.origin.y),
             static_cast<double>(f.origin.z), static_cast<double>(f.view_angles.x),
@@ -431,7 +432,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
                 : "-",
             m.players[0].held_number, m.players[0].bot.target,
             static_cast<double>(m.players[0].bot.aim_dist), sb::pilot_mode_name(lp.mode), lp.k,
-            lp.route.size(), lp.because != nullptr ? lp.because : "");
+            lp.route.size(), m.players[0].reach_from, m.players[0].reach_n,
+            m.players[0].swimming ? 1 : 0, m.players[0].goal_node,
+            lp.because != nullptr ? lp.because : "");
       }
       if (opt.census && frame % 6 == 0) census_look(census, em, c.server, false);
       const sv::WorldEntity& L = after.world.entities[1];

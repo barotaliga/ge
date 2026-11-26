@@ -117,7 +117,8 @@ PackFightReport run_pack_fight(const PackFightOptions& opt) {
     Fighter& f = fighters[static_cast<size_t>(k)];
     f.features = sb::features_of(p.skill);
     fighter_init(f, nav.graph, s0, k, c.map.entities.c_str(), p.skill, p.traits, kHz,
-                 opt.seed + 31u * static_cast<uint32_t>(k), first_arsenal());
+                 opt.seed + 31u * static_cast<uint32_t>(k),
+                 opt.arsenal != nullptr ? *opt.arsenal : first_arsenal());
     f.bot.yaw = s0.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;
@@ -129,6 +130,7 @@ PackFightReport run_pack_fight(const PackFightOptions& opt) {
   std::vector<Recent> recent(static_cast<size_t>(n));
   std::vector<sh::Packet> packets(static_cast<size_t>(n));
   std::vector<bool> alive(static_cast<size_t>(n), true);
+  std::vector<int32_t> held(static_cast<size_t>(n), 0);  // each one's gun the frame before
   // Every item the map spawned (a weapon_ or item_ class, the pack's own too), by the server's
   // entities: taken when its model goes, put down to the bot nearest it within 96 units.
   struct Item {
@@ -186,8 +188,14 @@ PackFightReport run_pack_fight(const PackFightOptions& opt) {
       p.path.push_back(d.origin);
       const bool live = d.health > 0;
       p.mode.push_back(live ? static_cast<uint8_t>(fighters[static_cast<size_t>(k)].mode) : 255);
-      p.frags_at.push_back(now.world.clients[static_cast<size_t>(k)].numbers.frags);
-      if (alive[static_cast<size_t>(k)] && !live) r.deaths.push_back({frame, k, d.origin});
+      const float frags = now.world.clients[static_cast<size_t>(k)].numbers.frags;
+      const bool fell = !p.frags_at.empty() && frags < p.frags_at.back();
+      p.frags_at.push_back(frags);
+      if (alive[static_cast<size_t>(k)] && !live)
+        r.deaths.push_back({frame, k, d.origin, held[static_cast<size_t>(k)], fell});
+      if (live)
+        held[static_cast<size_t>(k)] =
+            static_cast<int32_t>(now.world.clients[static_cast<size_t>(k)].numbers.weapon);
       alive[static_cast<size_t>(k)] = live;
     }
     for (Item& it : items) {  // the server's pickups

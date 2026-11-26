@@ -66,6 +66,8 @@ struct FightDeath {
   int frame = 0;
   int victim = 0;  // the slot
   sh::Vec3f at;
+  int32_t weapon = 0;  // the weapon bit the victim held the frame before (0 unknown)
+  bool own = false;    // its frags fell with it: killed by itself or the world
 };
 
 // An item as the fighters know it (the map's text matched to the server's entity), for a picture.

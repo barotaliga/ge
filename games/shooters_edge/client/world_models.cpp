@@ -1216,6 +1216,8 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
         box.lo[a] = std::min(box.lo[a], out[i + size_t(a)]);
         box.hi[a] = std::max(box.hi[a], out[i + size_t(a)]);
       }
+    box.first = uint32_t(first / 3);
+    box.count = uint32_t((out.size() - first) / 3);
     if (out.size() > first) boxes.push_back(box);
   };
   for (const Placed& p : placed) cast(p);

@@ -75,7 +75,10 @@ struct EpisodeOptions {
   uint32_t seed = 1;
   std::string root = ".";                   // the repository's root (the campaign's sources)
   const ge::progs::Progs* progs = nullptr;  // a program of the caller's (none: our campaign)
-  bool plan = false;                        // keep the leader's changes of plan
+  // The weapons and items the bots know (arsenals.hpp; none: Quake's own): a mission pack's
+  // (`arsenal_for_mod`) when its program runs.
+  const sb::BotArsenal* arsenal = nullptr;
+  bool plan = false;  // keep the leader's changes of plan
   // A file every frame's line is written to (empty: none): the map, the frame, the digest so far,
   // the leader's place, view and health, his velocity, his flags and his command (msec, angles,
   // the three axes, the buttons), floats in exact hex, so two machines' runs can be diffed to the

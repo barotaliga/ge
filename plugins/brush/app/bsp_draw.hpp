@@ -385,6 +385,9 @@ struct GpuBsp {
   // the lightmaps' saturation (Options::lightmap_saturation), w the dynamic lights' edge
   // (Options::dlight_falloff).
   float paint[4];
+  // The casters seen from each light with their cube (casters.hpp's caster_cones), kCasterCones a
+  // row of the atlas: the soft shadow searches only along a way inside one of them.
+  float caster_cones[kCasterLights * kCasterCones][4];
 };
 
 // The cubes a frame may draw for lights new to a slot: every slot when no cube is drawn yet (the
@@ -422,7 +425,11 @@ struct BspDraw {
   wgpu::Buffer caster_vertices;
   wgpu::Texture caster_cubes;  // the atlas: a light a row, a face a column
   wgpu::TextureView caster_target, caster_cubes_view;
-  int caster_lights = 0;    // this frame's lights with a caster cube (prepare_bsp)
+  int caster_lights = 0;  // this frame's lights with a caster cube (prepare_bsp)
+  // Each caster cube face's draws (prepare_bsp): its runs of the casters' vertices as first and
+  // count in `caster_runs`, from caster_face_first[light * 6 + face] to the next one's.
+  std::vector<uint32_t> caster_runs;
+  uint32_t caster_face_first[kCasterLights * 6 + 1] = {};
   bool sun_caster = false;  // this frame's casters drawn along the sun (prepare_bsp)
   uint32_t p_caster = 0;
   wgpu::TextureView ortho_layers[kOrthos];
