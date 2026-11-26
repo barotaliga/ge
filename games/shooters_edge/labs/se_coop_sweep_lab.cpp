@@ -154,7 +154,9 @@ std::vector<std::pair<sh::Vec3f, std::string>> exits(sv::QcServer& s) {
 
 // The program's own damage (T_Damage) on `victim` from the world, `amount` of it.
 void hurt(sv::QcServer& s, int victim, float amount) {
-  const int fn = pg::find_function(*s.q.vm.progs, "T_Damage");
+  // The pack's program names its blow T_Damage; our campaign's rules name it damage.
+  int fn = pg::find_function(*s.q.vm.progs, "T_Damage");
+  if (fn <= 0) fn = pg::find_function(*s.q.vm.progs, "damage");
   if (fn <= 0) return;
   shooters_edge::sim::enter_qc(s.q, s.sv);
   pg::Vm& vm = s.q.vm;

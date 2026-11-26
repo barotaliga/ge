@@ -11,10 +11,11 @@
 //
 // A MISSION PACK (`--mod=rogue`, `--mod=hipnotic`): the mod folder's packs beside the game's
 // `id1` are laid over its packs, the mod's program and maps winning, as the game mounts them, and
-// the maps are named in `--episodes` (`r1m1,r1m2`). THE CENSUS (`--census=1`, on with `--mod`): a
-// table of every class name the maps placed or the run made, how many stood, were made, moved,
-// went and had their model taken (an item picked up) (coop_episode.hpp `census`), so a pack's
-// monsters, items, movers and traps are seen at work;
+// `--episodes` names the pack's own episodes (Scourge of Armagon's three and `hipend`,
+// Dissolution of Eternity's two: `campaign_of`) or its maps (`r1m1,r1m2`). THE CENSUS
+// (`--census=1`, on with `--mod`): a table of every class name the maps placed or the run made, how
+// many stood, were made, moved, went and had their model taken (an item picked up)
+// (coop_episode.hpp `census`), so a pack's monsters, items, movers and traps are seen at work;
 // `--classes` keeps the rows of those names alone.
 //
 // THE PARTY (`--party=1,2,3`): each map played again by a party of that many bots in co-op
@@ -24,6 +25,10 @@
 // person would and the others are helpers beside him (a hosted game's `addbot helper`): a second
 // table says how near they kept to him and how much of the map they took off his hands.
 //
+// THE FRAMES (`--frames=<file>`): every frame's line written to a file (the map, the frame, the
+// run's digest so far, the leader's place, view and health in exact hex floats), so the runs of
+// two machines, or two commits, diffed (`diff a b | head`) name the first frame they part on.
+//
 // The table, a map a row: got out or not, the time to the exit (the intermission's start), the
 // level's own count of monsters killed and secrets found (the program's globals), the deaths, the
 // things given up. Pictures, a map each: its floor from above, his track, the exits and where
@@ -32,6 +37,7 @@
 // ge:summary Lab: Quake's campaign played at 100% by a bot: kills, secrets and time to the exit
 // ge:keywords lab se-q1-campaign campaign single-player 100-percent complete kills secrets
 // ge:keywords exit-time episodes secret-level god play-through party co-op partners
+// ge:keywords frames frame-digests cross-platform divergence first-diverging-frame
 // ge:keywords mission-pack mod rogue hipnotic census class-names
 // ge:skill shooter bots labs
 // ge:test tests/shooters_edge_companion_test.cpp
@@ -104,33 +110,69 @@ struct Leg {
   int maps = 8;
 };
 
-// The legs of `--episodes` (a comma list of 1..4 and `end`): an episode's normal way, then its
-// secret level on its own; with `each`, every map of the episode on its own (one map that fails
-// no longer ends the rest of its episode's run).
-bool legs_of(const std::string& list, bool each, std::vector<Leg>& out, std::string& bad) {
-  static const char* const kSecret[4] = {"e1m8", "e2m7", "e3m7", "e4m8"};
-  static const int kMaps[4] = {8, 7, 7, 8};  // each episode's maps, its secret level among them
+// A campaign's episodes: each one's maps in their order, its secret level among them (reached by
+// a secret exit and left back into the episode; none for an episode without one), and the end.
+struct Episode {
+  std::vector<std::string> maps;
+  std::string secret;
+};
+struct Campaign {
+  std::vector<Episode> episodes;
+  std::string end;           // the last level on its own (empty: none)
+  std::string episodes_arg;  // what `--episodes` plays when left at its default
+};
+
+std::vector<std::string> numbered(const std::string& stem, int n) {
+  std::vector<std::string> out;
+  for (int m = 1; m <= n; m++) out.push_back(stem + std::to_string(m));
+  return out;
+}
+
+// The campaign a mod folder plays: Quake's four episodes, or a mission pack's own (their maps and
+// secret levels read off each map's changelevel triggers): Scourge of Armagon's three, each with a
+// secret level, and `hipend`; Dissolution of Eternity's two, with none and no end map apart.
+const Campaign& campaign_of(const std::string& mod) {
+  static const Campaign quake = {{{numbered("e1m", 8), "e1m8"},
+                                  {numbered("e2m", 7), "e2m7"},
+                                  {numbered("e3m", 7), "e3m7"},
+                                  {numbered("e4m", 8), "e4m8"}},
+                                 "end",
+                                 "1,2,3,4,end"};
+  static const Campaign scourge = {{{numbered("hip1m", 5), "hip1m5"},
+                                    {numbered("hip2m", 6), "hip2m6"},
+                                    {{"hip3m1", "hip3m2", "hip3m3", "hip3m4", "hipdm1"}, "hipdm1"}},
+                                   "hipend",
+                                   "1,2,3,end"};
+  static const Campaign dissolution = {
+      {{numbered("r1m", 7), ""}, {numbered("r2m", 8), ""}}, "", "1,2"};
+  if (mod == "hipnotic") return scourge;
+  if (mod == "rogue") return dissolution;
+  return quake;
+}
+
+// The legs of `--episodes` (a comma list of the campaign's episode numbers and `end`): an
+// episode's normal way, then its secret level on its own; with `each`, every map of the episode
+// on its own (one map that fails no longer ends the rest of its episode's run).
+bool legs_of(const Campaign& c, const std::string& list, bool each, std::vector<Leg>& out,
+             std::string& bad) {
   std::stringstream in(list);
   std::string w;
   while (std::getline(in, w, ',')) {
-    if (w == "end") {
-      out.push_back({"end", {}, 1});
-    } else if (w.size() == 1 && w[0] >= '1' && w[0] <= '4') {
-      const int k = w[0] - '1';
+    const int k = w.size() == 1 && w[0] >= '1' && w[0] <= '9' ? w[0] - '1' : -1;
+    if (w == "end" && !c.end.empty()) {
+      out.push_back({c.end, {}, 1});
+    } else if (k >= 0 && k < static_cast<int>(c.episodes.size())) {
+      const Episode& e = c.episodes[static_cast<size_t>(k)];
+      std::vector<std::string> avoid;
+      if (!e.secret.empty()) avoid.push_back(e.secret);
       if (each) {
-        for (int m = 1; m <= kMaps[k]; m++) {
-          const std::string name = "e" + w + "m" + std::to_string(m);
-          if (name == kSecret[k]) {
-            out.push_back({name, {}, 1});
-          } else {
-            out.push_back({name, {kSecret[k]}, 1});
-          }
-        }
+        for (const std::string& name : e.maps)
+          out.push_back({name, name == e.secret ? std::vector<std::string>{} : avoid, 1});
         continue;
       }
-      out.push_back({"e" + w + "m1", {kSecret[k]}, 8});
-      out.push_back({kSecret[k], {}, 1});
-    } else if (!w.empty()) {
+      out.push_back({e.maps.front(), avoid, static_cast<int>(e.maps.size() - avoid.size())});
+      if (!e.secret.empty()) out.push_back({e.secret, {}, 1});
+    } else if (!w.empty() && k < 0 && w != "end") {
       out.push_back({w, {}, 1});  // one map by its name
     } else {
       bad = w;
@@ -279,6 +321,7 @@ void run(gl::Lab& lab) {
   o.skill = static_cast<int>(lab.arg_num("skill"));
   o.map_seconds = lab.arg_num("map-seconds");
   o.plan = lab.arg("plan") == "1";
+  o.frames = lab.arg("frames");
   o.skills.clear();
   o.single = true;
   o.complete = lab.arg("complete") != "0";
@@ -289,6 +332,7 @@ void run(gl::Lab& lab) {
   PackMaps packs;
   const std::string& game = lab.arg("game");
   std::vector<Leg> legs;
+  std::string episodes = lab.arg("episodes");  // a mission pack's own by default (below)
   if (game.empty()) {
     o.load = &fb::coop_hall_exit_map;
     legs.push_back({"hall", {}, 1});
@@ -328,13 +372,17 @@ void run(gl::Lab& lab) {
     }
     o.progs = &packs.progs;
     std::string bad;
-    if (!legs_of(lab.arg("episodes"), lab.arg("each") == "1", legs, bad)) {
-      lab.fail("se-q1-campaign: no episode " + bad, "next: --episodes=1,2,3,4,end or map names");
+    // A mission pack's own episodes unless others are asked for: its maps, not Quake's.
+    const Campaign& campaign = campaign_of(mod);
+    if (lab.arg("episodes") == campaign_of("").episodes_arg) episodes = campaign.episodes_arg;
+    if (!legs_of(campaign, episodes, lab.arg("each") == "1", legs, bad)) {
+      lab.fail("se-q1-campaign: no episode " + bad + " in this campaign",
+               "next: --episodes=" + campaign.episodes_arg + " or map names");
       return;
     }
   }
   const In in = {{"game", game.empty() ? "(the coop hall)" : "the player's own"},
-                 {"episodes", lab.arg("episodes")},
+                 {"episodes", episodes},
                  {"skill", lab.arg("skill")},
                  {"seed", lab.arg("seed")},
                  {"god", o.god ? "on" : "off"},
@@ -549,7 +597,8 @@ const gl::LabSpec kSpec{
         {"game", "", "the player's own release zip, pack or folder (none: the coop hall once)"},
         {"episodes", "1,2,3,4,end",
          "with --game: episodes (1..4, each with its secret level), "
-         "`end`, or single maps by name"},
+         "`end`, or single maps by name; with --mod, left as it is, the pack's own (1,2,3,end "
+         "for hipnotic, 1,2 for rogue)"},
         {"map-seconds", "900",
          "a map's time limit (its last quarter for the way out alone): one not "
          "left by then is a failure, s"},
@@ -561,6 +610,9 @@ const gl::LabSpec kSpec{
         {"tour", "1", "0: the nearest stop each time rather than the tour's order (tour.hpp)"},
         {"root", ".", "the repository's root"},
         {"mod", "", "a mission pack's folder beside id1 (`rogue`, `hipnotic`), laid over the game"},
+        {"frames", "",
+         "a file every frame's line goes to (map, frame, digest, the leader's place, view and "
+         "health in hex floats): two machines' files diffed find the first frame they part on"},
         {"census", "", "1: the classes at work (on with --mod; 0: off)"},
         {"classes", "", "the census's class names to show, a comma list (none: every one)"},
         {"plan", "0", "1: each map's changes of plan as a table"},
