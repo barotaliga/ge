@@ -76,9 +76,10 @@ struct EpisodeOptions {
   std::string root = ".";                   // the repository's root (the campaign's sources)
   const ge::progs::Progs* progs = nullptr;  // a program of the caller's (none: our campaign)
   bool plan = false;                        // keep the leader's changes of plan
-  // A file every frame's line is written to (empty: none): the map, the frame, the digest so far
-  // and the leader's place, view and health as exact hex floats, so two machines' runs can be
-  // diffed to the first frame they part on.
+  // A file every frame's line is written to (empty: none): the map, the frame, the digest so far,
+  // the leader's place, view and health, his velocity, his flags and his command (msec, angles,
+  // the three axes, the buttons), floats in exact hex, so two machines' runs can be diffed to the
+  // first frame they part on and the field that parts first.
   std::string frames;
   bool wide_models = false;        // a game's own content: its movers sized as the window does
   bool registered = false;         // the content is the full game
