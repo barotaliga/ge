@@ -59,6 +59,7 @@
 #include "brush/app/casters.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/light_grid.hpp"
+#include "brush/app/light_pick.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
@@ -450,15 +451,19 @@ struct BspDraw {
   // THE SHADOW MAPS KEPT: the world they see does not move, so a light's cube is drawn when the
   // light takes a slot (or moves) and kept while it holds it, and an orthographic map when its
   // camera changes. A slot's key is its light's place and reach as the GPU sees them.
-  std::array<std::array<float, 4>, kMaxShadowed> slot_key{};
-  std::array<bool, kMaxShadowed> slot_held{};      // a slot's cube holds its key's light
-  std::array<uint64_t, kMaxShadowed> slot_used{};  // the shadow_frame a light last read it
+  CubeSlots slots;  // light_pick.hpp: each slot's light, when it was last read
   // The cubes this device holds: kMaxShadowed, or fewer where its texture array is shorter
   // (a browser's default limit is 256 layers: 42 cubes).
   int cube_slots = kMaxShadowed;
-  uint64_t shadow_frame = 0;     // prepare_bsp's count
   int shadows_waiting = 0;       // this frame's casters over the budget, unshadowed (prepare_bsp)
   std::vector<int> fresh_slots;  // this frame's slots to draw (prepare_bsp)
+  // This frame's lights chosen (light_pick.hpp), kept to reuse their room; `reach` the clusters
+  // each of the map's lights touches (made once).
+  std::vector<LightOffer> offers;
+  LightChoice choice;
+  std::vector<std::array<float, 4>> caster_keys;
+  CubeDeal deal;
+  LightReach reach;
   std::array<GpuJob, kOrthos> ortho_drawn{};  // what each orthographic map holds
   std::array<bool, kOrthos> ortho_held{};
   std::array<bool, kOrthos> ortho_fresh{};  // this frame's to draw
