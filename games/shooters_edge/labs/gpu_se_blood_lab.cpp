@@ -482,7 +482,8 @@ void run(gl::Lab& lab) {
         }
         lab.metric("cost." + id + ".span", cl::median_of(p.span_ms), "ms", gl::Det::measured);
         for (const auto& [pass, ms] : p.pass_ms)
-          lab.metric("cost." + id + "." + pass, cl::median_of(ms), "ms", gl::Det::measured);
+          lab.metric(std::string("cost.").append(id).append(".").append(pass), cl::median_of(ms),
+                     "ms", gl::Det::measured);
         lab.note("cost " + id + ": " + cl::span_report(p));
       }
     }
