@@ -1060,8 +1060,13 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].rushes_strong = ts.rushes_strong;
     r.teams[t].rush_strength_flips = ts.rush_strength_flips;
   }
-  if (tn.plan_made && !seats.empty()) {
-    r.plan = bt::plan_text(tn.plan, seats[0].fighter.items);
+  // The plan read over the items its indices name: the first seat whose list is the plan's (a
+  // seat set up while an item was away holds a shorter one).
+  const auto planned = std::find_if(seats.begin(), seats.end(), [&](const auto& seat) {
+    return plan_fits(tn, seat.fighter.items);
+  });
+  if (tn.plan_made && planned != seats.end()) {
+    r.plan = bt::plan_text(tn.plan, planned->fighter.items);
     r.goals = bt::goals_text(tn.goals);
     r.plan_areas = static_cast<int32_t>(tn.plan.areas.size());
     r.plan_base = tn.plan.base;

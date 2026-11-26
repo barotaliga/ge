@@ -59,11 +59,18 @@ struct TeamNav {
   std::vector<bt::Goal>
       goals;  // and every goal the map offers (shooterbots/goals.hpp), made with it
   bool plan_made = false;
+  // The items the plan's indices name (each one's label, in order): a fighter set up later sees
+  // the entities of that moment (an item taken and not yet back is not among them), so its list
+  // can differ; one whose list does not match plays without the plan rather than read past it.
+  std::vector<std::string> plan_items;
   // The ways to every item from everywhere (shooterbots/nav_field.hpp), the map's buttons as
   // errands, set up with the first fighter and built as fighters ask (`fields`).
   sb::NavFields fields;
   bool fields_made = false;
 };
+
+// Whether a fighter's items are the ones the team plan's indices name (`TeamNav::plan_items`).
+bool plan_fits(const TeamNav& tn, const std::vector<bt::ItemSpot>& items);
 
 // Fighter `f` set up on player slot `slot` from what `seen` holds (our server's world, or a
 // client's: qw_mirror.hpp): its items off the map's `entities`, its yaw, the map's place
