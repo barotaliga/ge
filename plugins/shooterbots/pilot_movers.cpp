@@ -17,6 +17,7 @@
 #include <algorithm>
 
 #include "shooter/world.hpp"
+#include "shooterbots/pilot_step_parts.hpp"
 
 namespace ge::shooterbots::pilot_parts {
 
@@ -223,14 +224,18 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
   if (hollow && na.mover == l.mover && nb.mover == l.mover && now->absmin.x == rest->absmin.x &&
       now->absmin.y == rest->absmin.y && now->absmin.z == rest->absmin.z)
     return false;
-  Vec3f lo = na.origin, hi = na.origin;
-  for (int i = 0; i < 3; i++) {
-    if (nb.origin[i] < lo[i]) lo[i] = nb.origin[i];
-    if (nb.origin[i] > hi[i]) hi[i] = nb.origin[i];
-  }
   // A door sunk to within a step of the floor (one that opens downward) is walked over.
-  return boxes_meet(lo + kPlayerMins + Vec3f{0, 0, kStepOver}, hi + kPlayerMaxs, now->absmin,
-                    now->absmax);
+  return leaf_in_way(na.origin, nb.origin, flies(l.kind), now->absmin, now->absmax);
+}
+
+bool leaf_in_way(Vec3f a, Vec3f b, bool leap, Vec3f lo, Vec3f hi) {
+  Vec3f wlo = a, whi = a;
+  for (int i = 0; i < 3; i++) {
+    if (b[i] < wlo[i]) wlo[i] = b[i];
+    if (b[i] > whi[i]) whi[i] = b[i];
+  }
+  if (leap) wlo.z = a.z;  // the take-off's height: a jumper rises from it
+  return boxes_meet(wlo + kPlayerMins + Vec3f{0, 0, kStepOver}, whi + kPlayerMaxs, lo, hi);
 }
 
 // Whether the player is UNDER ridden mover `m`, away from its rest: his feet within a step of its
