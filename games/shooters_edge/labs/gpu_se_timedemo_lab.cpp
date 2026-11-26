@@ -380,6 +380,7 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
 void slow_frames(gl::Lab& lab, const Played& p, const std::vector<double>& frame_s, double p50_ms) {
   if (p.frame_zones.size() != frame_s.size() || frame_s.empty()) return;
   std::vector<std::pair<uint32_t, double>> zone_p50;
+  zone_p50.reserve(p.zone_ms.size());
   for (const auto& [zone, ms] : p.zone_ms) zone_p50.emplace_back(zone, cl::median_of(ms));
   std::vector<size_t> slow;
   for (size_t i = 0; i < frame_s.size(); i++)
