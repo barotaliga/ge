@@ -388,8 +388,18 @@ the skill's lessons before the first edit.
   the same code; the swapped rows name only the slot, the ammunition that stands for its own and
   the files. A weapon's own sounds are never swapped by `cr_sounds`.
 - Each part of a match is one `cr_` switch naming whose part it is, chosen apart from the others:
-  items never change the sounds (`cr_sounds` does), the HUD follows the weapons in use, and the
-  figures and sounds are swapped on the client, so they hold over any server or mod.
+  items never change the sounds (`cr_sounds` does), and the HUD follows the weapons in use.
+- The `cr_` switches are the SERVER's (`kServer | kServerInfo`), only `cr_menu` the player's (the
+  menu is drawn before any server). The host tells its remix in the server info (`cr_enabled 1`
+  and each part naming another game: `client/remix.hpp`'s `remix_info_lines`); our client joining,
+  or playing a demo, reads it back (`remix_told`) and opens the same remix, its map, figures and
+  sounds read from it, whatever the player's own switches say. Another client sees the server's
+  game as it is sent.
+- A sound part is every sound the players make, both ways: a name both games ship
+  (`player/gasp1.wav`, `items/damage.wav`, `misc/talk.wav`) is the chosen game's own copy, read
+  under the played game's that hides it (`vfs::find_below`), and what one game makes on the server
+  and the other does not (Quake II's footsteps) is made by the played rules from the shared logic
+  (`plugins/classic/q2_view.hpp`'s `step_q2_stride`) when the server's `cr_sounds` names that game.
 - A pairing between games is a table of roles in `profiles/` (`remix_sounds.hpp`,
   `remix_monsters.hpp`): a row per part both play, by role first and then by strength. A
   many-to-one pairing lists the extra rows after the first, and going back takes the first. A part

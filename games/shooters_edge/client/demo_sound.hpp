@@ -92,8 +92,11 @@ class DemoSounds {
   // for a test, the cache folder to read them from (empty: the packs' own, found once).
   void enhance_from(const bool* on, std::filesystem::path cache = {});
   // Every sound heard as game `game`'s (classic remix's `cr_sounds`: profiles/remix_sounds.hpp's
-  // `heard_as`; "" each as it is named), the sound list read again at once.
-  void hear_as(std::string_view game);
+  // `heard_as`; "" each as it is named), the sound list read again at once. `theirs`: how many of
+  // the search path's first sources are that game's own (classic remix's other game, mounted under
+  // the played game's), so a name both games ship is read as that game's copy, not the played
+  // game's over it (`items/damage.wav`, `player/gasp1.wav`); 0 when it is the played game.
+  void hear_as(std::string_view game, size_t theirs = 0);
   // Quake II's sound switches (null: Quake's, all on): `cl_footsteps` 0 starts no footstep
   // (`player/step*`), 1 a step by the surface under it (classic/q2_footsteps.hpp: the level's
   // `.mat` materials and step sets, read with the level), 2 the default set's; `s_ambient` 0 no
@@ -165,6 +168,7 @@ class DemoSounds {
   std::filesystem::path cache_;   // the packs' cache folder ("" none)
   bool cache_known_ = false;      // looked for (or given)
   std::string heard_;             // the game every sound is heard as ("" each its own)
+  size_t theirs_ = 0;             // the heard game's own sources, first on the path (hear_as)
 };
 
 // SOUNDS STOPPED BUT NOT YET SILENT: a stopped voice fades for a while on the render thread,

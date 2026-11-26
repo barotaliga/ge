@@ -1,8 +1,7 @@
-// LAB `se-remix-menu`: CLASSIC REMIX'S `cr_menu` AND `cr_charset`. The played game's main menu
-// and its options page drawn on the CPU's 2D layer four ways: its own; with `cr_menu` naming the
-// other game (that game's pictures, the played game's letters); with `cr_charset` naming it (the
-// played game's pictures, that game's letters); and with both. The pictures are read as the window
-// reads them (client/remix_pictures.hpp's `remixed_pictures`) from the player's own packs.
+// LAB `se-remix-menu`: CLASSIC REMIX'S `cr_menu`. The played game's main menu and its options page
+// drawn on the CPU's 2D layer two ways: its own, and with `cr_menu` naming the other game (that
+// game's pictures and its letters, the console's and the counts' too). The pictures are read as the
+// window reads them (client/remix_pictures.hpp's `remixed_pictures`) from the player's own packs.
 //
 // `--game=<install>/<base folder>` names the played game's folder and `--remix=<install>` the
 // other full game's install (`--remix-game`, Quake II by default). Without them (the smoke run)
@@ -10,8 +9,8 @@
 //
 // The digest is each variant's picture sizes, densities and whether a glyph sheet changed.
 //
-// ge:summary Lab: the menu drawn with another game's pictures (cr_menu) and letters (cr_charset)
-// ge:keywords lab se-remix-menu remix cr_menu cr_charset menu glyph-sheet conchars pictures
+// ge:summary Lab: the menu drawn with another game's pictures and letters (cr_menu)
+// ge:keywords lab se-remix-menu remix cr_menu letters menu glyph-sheet conchars pictures
 // ge:skill ui labs
 #include <array>
 #include <string>
@@ -103,19 +102,17 @@ void run(ge::lab::Lab& lab) {
   struct Variant {
     const char* id;
     const char* title;
-    bool menu, charset;
+    bool menu;
   };
-  constexpr std::array<Variant, 4> kVariants{
-      {{"own", "ITS OWN MENU", false, false},
-       {"menu", "CR_MENU: THE OTHER GAME'S MENU", true, false},
-       {"charset", "CR_CHARSET: THE OTHER GAME'S LETTERS", false, true},
-       {"both", "BOTH SWAPPED", true, true}}};
+  constexpr std::array<Variant, 2> kVariants{
+      {{"own", "ITS OWN MENU", false},
+       {"menu", "CR_MENU: THE OTHER GAME'S MENU AND LETTERS", true}}};
   const ui::Image* own_glyphs = nullptr;
   cl::ClassicPictures first;
   for (const Variant& v : kVariants) {
     if (!remix.state.on && v.id != std::string_view("own")) continue;
     remix.menu = v.menu ? std::string_view(other) : played;
-    remix.charset = v.charset ? std::string_view(other) : played;
+    remix.charset = remix.menu;  // the menu's game writes its letters too
     cl::ClassicPictures pics = cl::remixed_pictures(files, remix, false, game);
     const std::string id = v.id;
     lab.metric(id + ".density", pics.menu.density, "x");
@@ -131,10 +128,9 @@ void run(ge::lab::Lab& lab) {
       lab.shot({name,
                 std::string(v.title) + (page == "main" ? ", MAIN" : ", OPTIONS"),
                 "The played game's (" + std::string(played) + ") menu page '" + std::string(page) +
-                    "' with cr_menu " + (v.menu ? other : "own") + " and cr_charset " +
-                    (v.charset ? other : "own") + ".",
-                "the plaque, the titles and the cursor follow cr_menu; the rows' letters on the "
-                "options page follow cr_charset",
+                    "' with cr_menu " + (v.menu ? other : "own") + ".",
+                "the plaque, the titles, the cursor and the rows' letters on the options page all "
+                "follow cr_menu",
                 {{"variant", id}, {"page", std::string(page)}}},
                picture_of(drawn(pics.menu, page, kW, kH)));
     }
@@ -145,10 +141,9 @@ const ge::lab::LabSpec kSpec{
     "se-remix-menu",
     ge::lab::LabKind::picture,
     "game:shooters_edge",
-    "games/shooters_edge/client/remix_pictures (cr_menu, cr_charset)",
+    "games/shooters_edge/client/remix_pictures (cr_menu)",
     "ui",
-    "Does cr_menu draw the other game's menu pictures and cr_charset write in its letters, each "
-    "apart from the other?",
+    "Does cr_menu draw the other game's menu pictures and write the menu in its letters?",
     {{"game", "", "the played game's folder (<install>/<base folder>); empty: the fixture menu"},
      {"remix", "", "with --game: the other full game's install, classic remix on"},
      {"remix-game", "q2", "the other game's id"}},

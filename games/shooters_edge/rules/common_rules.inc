@@ -61,6 +61,7 @@ bool q2_arsenal(A& q);
 bool q2_weapon_frame(A& q);
 void q2_weapon_precache(A& q);
 bool q2_obituary(A& q, int32_t targ, int32_t attacker);
+void q2_footsteps(A& q);
 // common_items
 void backpack_drop(A& q);
 // A dead player's power (`kItQuad` or `kItInvisibility`) left where they died with the time it had

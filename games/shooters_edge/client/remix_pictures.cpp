@@ -1,7 +1,7 @@
 // Classic remix's menu and letters (remix_pictures.hpp).
 //
-// ge:summary Classic remix's cr_menu and cr_charset: another game's menu pictures and letters
-// ge:keywords remix cr_menu cr_charset glyph-sheet take_glyphs remixed_pictures
+// ge:summary Classic remix's cr_menu: another game's menu pictures and its letters
+// ge:keywords remix cr_menu letters glyph-sheet take_glyphs remixed_pictures
 // ge:skill ui classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
 #include "shooters_edge/client/remix_pictures.hpp"
@@ -49,7 +49,7 @@ ClassicPictures remixed_pictures(const SearchPath& files, const RemixFiles& remi
   ClassicPictures own = load_classic_pictures(files, enhance, {}, &played);
   ClassicPictures other;
   const bool menu = other_pictures(remix, remix.menu, enhance, other);
-  // The letters' sheet: the menu's game's, read once for both, or cr_charset's own read.
+  // The letters' sheet: the menu's game's, read once for both, or the letters' own game's.
   ge::ui::Image sheet;
   float sheet_density = 1;
   if (menu && remix.charset == remix.menu) {
@@ -60,7 +60,7 @@ ClassicPictures remixed_pictures(const SearchPath& files, const RemixFiles& remi
     sheet_density = letters.menu.density;
   }
   if (menu && other.menu.menu_ready()) {
-    // The other game's menu, written in the played game's letters unless cr_charset names another.
+    // The other game's menu, written in the played game's letters unless the letters name another.
     take_glyphs(other.menu.glyphs, other.menu.density, own.menu.glyphs, own.menu.density);
     own.menu = std::move(other.menu);
   }
