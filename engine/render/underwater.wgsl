@@ -250,33 +250,25 @@ fn shafts_under_one_top(ray: vec3f, down: vec3f, jitter: f32, step: f32, t: f32,
   let total = waves_drawn();
   let detail0 = u32(body.info.z);
   let detail1 = u32(body.info.z + body.info.w);
-  // The eight steps of a part as two lanes of four (a: its first four, b: the rest), each step a
-  // component: no array indexed by the step, which a GPU may keep in memory rather than registers.
-  let lane = vec4f(0.0, 1.0, 2.0, 3.0);
   var sum = vec3f(0.0);
   for (var part = 0; part < 2; part++) {
+    var blur: array<f32, 8>;
+    var gust: array<f32, 8>;
+    var h: array<vec3f, 8>;
     let k0 = f32(part * 8);
-    let ja = k0 + lane;
-    let jb = (k0 + 4.0) + lane;
-    let along_a = (ja + jitter) * step;
-    let along_b = (jb + jitter) * step;
-    let depth_a = level - (frame.eye.y + ray.y * along_a);
-    let depth_b = level - (frame.eye.y + ray.y * along_b);
-    let blur_a = max(4.0 * (0.007 * (max(depth_a, vec4f(0.0)) / -dy) + 0.003), along_a * px_angle);
-    let blur_b = max(4.0 * (0.007 * (max(depth_b, vec4f(0.0)) / -dy) + 0.003), along_b * px_angle);
-    let gust_a = vec4f(gust_at(first + per_step * ja.x, t), gust_at(first + per_step * ja.y, t),
-                       gust_at(first + per_step * ja.z, t), gust_at(first + per_step * ja.w, t));
-    let gust_b = vec4f(gust_at(first + per_step * jb.x, t), gust_at(first + per_step * jb.y, t),
-                       gust_at(first + per_step * jb.z, t), gust_at(first + per_step * jb.w, t));
+    for (var j = 0; j < 8; j++) {
+      let along = (k0 + f32(j) + jitter) * step;
+      let depth = level - (frame.eye.y + ray.y * along);
+      let along_down = max(depth, 0.0) / -dy;
+      blur[j] = max(4.0 * (0.007 * along_down + 0.003), along * px_angle);
+      gust[j] = gust_at(first + per_step * (k0 + f32(j)), t);
+      h[j] = vec3f(0.0);
+    }
     // The least blur of the eight: a wave it smooths away is smoothed away at all of them.
-    let least4 = min(blur_a, blur_b);
-    let least = min(min(least4.x, least4.y), min(least4.z, least4.w));
-    var hx_a = vec4f(0.0);
-    var hy_a = vec4f(0.0);
-    var hz_a = vec4f(0.0);
-    var hx_b = vec4f(0.0);
-    var hy_b = vec4f(0.0);
-    var hz_b = vec4f(0.0);
+    var least = blur[0];
+    for (var j = 1; j < 8; j++) {
+      least = min(least, blur[j]);
+    }
     let at = first + per_step * k0;
     for (var i = 0u; i < total; i++) {
       let w = waves[i];
@@ -290,63 +282,32 @@ fn shafts_under_one_top(ray: vec3f, down: vec3f, jitter: f32, step: f32, t: f32,
       let shape = vec3f(w.dir.x * w.dir.x, w.dir.x * w.dir.y, w.dir.y * w.dir.y);
       let phi = dot(w.dir.xy, at) - w.dir.w * t + w.more.x;
       let turn = dot(w.dir.xy, per_step);
+      var sp = sin(phi);
+      var cp = cos(phi);
       let st = sin(turn);
       let ct = cos(turn);
-      // The phase's sine at each step, turned on from the first's.
-      let s0 = sin(phi);
-      let c0 = cos(phi);
-      let s1 = s0 * ct + c0 * st;
-      let c1 = c0 * ct - s0 * st;
-      let s2 = s1 * ct + c1 * st;
-      let c2 = c1 * ct - s1 * st;
-      let s3 = s2 * ct + c2 * st;
-      let c3 = c2 * ct - s2 * st;
-      let s4 = s3 * ct + c3 * st;
-      let c4 = c3 * ct - s3 * st;
-      let s5 = s4 * ct + c4 * st;
-      let c5 = c4 * ct - s4 * st;
-      let s6 = s5 * ct + c5 * st;
-      let c6 = c5 * ct - s5 * st;
-      let s7 = s6 * ct + c6 * st;
-      let sp_a = vec4f(s0, s1, s2, s3);
-      let sp_b = vec4f(s4, s5, s6, s7);
-      let len4 = vec4f(length_);
-      let keep_a = smoothstep(2.0 * blur_a, 4.0 * blur_a, len4);
-      let keep_b = smoothstep(2.0 * blur_b, 4.0 * blur_b, len4);
-      let amp_a = a0 * select(vec4f(1.0), gust_a, detail);
-      let amp_b = a0 * select(vec4f(1.0), gust_b, detail);
-      let g_a = keep_a * amp_a * (2.0 * k * amp_a * (1.0 - 2.0 * sp_a * sp_a) - sp_a);
-      let g_b = keep_b * amp_b * (2.0 * k * amp_b * (1.0 - 2.0 * sp_b * sp_b) - sp_b);
-      hx_a += g_a * shape.x;
-      hy_a += g_a * shape.y;
-      hz_a += g_a * shape.z;
-      hx_b += g_b * shape.x;
-      hy_b += g_b * shape.y;
-      hz_b += g_b * shape.z;
+      for (var j = 0; j < 8; j++) {
+        let keep = smoothstep(2.0 * blur[j], 4.0 * blur[j], length_);
+        let a = a0 * select(1.0, gust[j], detail);
+        h[j] += keep * a * (2.0 * k * a * (1.0 - 2.0 * sp * sp) - sp) * shape;
+        let next = sp * ct + cp * st;
+        cp = cp * ct - sp * st;
+        sp = next;
+      }
     }
-    sum = shaft_step(sum, along_a.x, depth_a.x, vec3f(hx_a.x, hy_a.x, hz_a.x), dy, down, step);
-    sum = shaft_step(sum, along_a.y, depth_a.y, vec3f(hx_a.y, hy_a.y, hz_a.y), dy, down, step);
-    sum = shaft_step(sum, along_a.z, depth_a.z, vec3f(hx_a.z, hy_a.z, hz_a.z), dy, down, step);
-    sum = shaft_step(sum, along_a.w, depth_a.w, vec3f(hx_a.w, hy_a.w, hz_a.w), dy, down, step);
-    sum = shaft_step(sum, along_b.x, depth_b.x, vec3f(hx_b.x, hy_b.x, hz_b.x), dy, down, step);
-    sum = shaft_step(sum, along_b.y, depth_b.y, vec3f(hx_b.y, hy_b.y, hz_b.y), dy, down, step);
-    sum = shaft_step(sum, along_b.z, depth_b.z, vec3f(hx_b.z, hy_b.z, hz_b.z), dy, down, step);
-    sum = shaft_step(sum, along_b.w, depth_b.w, vec3f(hx_b.w, hy_b.w, hz_b.w), dy, down, step);
+    for (var j = 0; j < 8; j++) {
+      let along = (k0 + f32(j) + jitter) * step;
+      let depth = level - (frame.eye.y + ray.y * along);
+      if (depth <= 0.0) {
+        continue;
+      }
+      let s = 0.25 * depth / -dy;
+      let det = (1.0 + s * h[j].x) * (1.0 + s * h[j].z) - s * s * h[j].y * h[j].y;
+      let focus = clamp(1.0 / max(abs(det), 0.2), 0.2, 5.0) - 1.0;
+      sum += focus * exp(-under.c.rgb * under.fog.x * (along + depth / max(-down.y, 0.2))) * step;
+    }
   }
   return sum;
-}
-
-// One shaft step's light added to `sum`: the net's focus where the curvature is `h`, dimmed
-// along its way to the eye; nothing above the surface.
-fn shaft_step(sum: vec3f, along: f32, depth: f32, h: vec3f, dy: f32, down: vec3f,
-              step: f32) -> vec3f {
-  if (depth <= 0.0) {
-    return sum;
-  }
-  let s = 0.25 * depth / -dy;
-  let det = (1.0 + s * h.x) * (1.0 + s * h.z) - s * s * h.y * h.y;
-  let focus = clamp(1.0 / max(abs(det), 0.2), 0.2, 5.0) - 1.0;
-  return sum + focus * exp(-under.c.rgb * under.fog.x * (along + depth / max(-down.y, 0.2))) * step;
 }
 
 // The room's light round the water, as a face of the room's albedo lit by it: the body's own
