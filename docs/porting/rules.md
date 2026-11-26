@@ -18,6 +18,8 @@ companions, and saves.
 | Progs plugin | `plugins/progs/native.hpp`, `qc_compile.hpp`, `tool.hpp` | A native program (a progs whose functions are C++); the QC compiler for tests and fixtures; `ge qc` |
 | Classic plugin | `plugins/classic/item_tables.hpp`, `item_roles.hpp`, `coop.hpp` | The item tables' shapes; items as shared roles (remix lays one game's as another's); the co-op settings both games share |
 | Classic plugin | `plugins/classic/q2_arms.hpp` | Quake II's weapons as data and steps: the hand, the frames, damage, spreads, knockback, samples, effect names, obituary words; stepped by Quake II's rules and by the classic rules under remix |
+| Classic plugin | `plugins/classic/q1_arms.hpp` | Quake's weapons' numbers that live in their shots (the axe's delay, pellets and spreads, spikes and barrels, the grenade's throw and fuse, the rocket's hit, the beam and the discharge), the view models' fire runs, the hits' look names; read by Quake's own rules and by Quake II's rules under remix |
+| Shell | `games/shooters_edge/server/q2_quake_arms.hpp` | Quake's eight weapons fired whole by Quake II's rules (`cr_items q1`): the kit, the items by role, the shots, the missiles, the view model's frame, the obituaries |
 | Shell | `games/shooters_edge/server/rules_runner.hpp` | THE RUNNER: `RunnerCalls`, a table a program form fills, and `RulesCommon` every runner keeps; C++ mods laid over any runner |
 | Shell | `games/shooters_edge/server/qc_server.hpp`, `catalogue.hpp`, `builtins.hpp`, `rules_world.hpp` | The QC runner: the full builtin catalogue, `checkextension`, the rules' world filled |
 | Shell | `games/shooters_edge/server/qvm_server.hpp` | The compiled-module runner |

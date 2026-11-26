@@ -8,6 +8,8 @@
 
 #include <algorithm>
 
+#include "shooters_edge/server/q2_quake_arms.hpp"
+
 namespace shooters_edge::server {
 
 namespace {
@@ -160,6 +162,15 @@ SqBody sq_new_body(Q2Pack pack) {
 bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now, int count) {
   if (item < 0 || item >= kSqItemCount) return false;
   const SqItem& it = kSqItems[item];
+  if (b.quake) {  // Quake's weapons worn: its weapon and its amounts (q2_quake_arms.hpp)
+    const SqQuakeTake t = sq_quake_take(item);
+    if (t.ammo != SqAmmo::none && it.kind == SqKind::weapon) {
+      add_ammo(b, t.ammo, t.amount);
+      b.counts[t.item]++;
+      return true;
+    }
+    if (t.ammo != SqAmmo::none) return add_ammo(b, t.ammo, count > 0 ? count : t.amount);
+  }
   switch (it.kind) {
     case SqKind::armour:
       return take_armour(it, b);

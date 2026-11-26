@@ -264,11 +264,19 @@ fn shafts_under_one_top(ray: vec3f, down: vec3f, jitter: f32, step: f32, t: f32,
       gust[j] = gust_at(first + per_step * (k0 + f32(j)), t);
       h[j] = vec3f(0.0);
     }
+    // The least blur of the eight: a wave it smooths away is smoothed away at all of them.
+    var least = blur[0];
+    for (var j = 1; j < 8; j++) {
+      least = min(least, blur[j]);
+    }
     let at = first + per_step * k0;
     for (var i = 0u; i < total; i++) {
       let w = waves[i];
       let k = w.more.y;
       let length_ = 6.2831853 / k;
+      if (length_ <= 2.0 * least) {
+        continue;
+      }
       let a0 = w.dir.z * body.info.y;
       let detail = i >= detail0 && i < detail1;
       let shape = vec3f(w.dir.x * w.dir.x, w.dir.x * w.dir.y, w.dir.y * w.dir.y);

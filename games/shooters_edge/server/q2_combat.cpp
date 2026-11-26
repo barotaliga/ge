@@ -9,6 +9,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
+#include "shooters_edge/server/q2_quake_arms.hpp"
 
 #include <algorithm>
 
@@ -69,18 +70,18 @@ SqStep grenade_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
 
 }  // namespace
 
-int sq_weapon_of_item(int item) {
+int sq_weapon_of_item(int item, bool quake) {
   if (item < 0 || item >= kSqItemCount) return -1;
   for (int w = 0; w < kSqWeaponCount; w++)
-    if (kSqWeapons[w].item != nullptr &&
+    if (kSqWeapons[w].quake == quake && kSqWeapons[w].item != nullptr &&
         std::string_view(kSqWeapons[w].item) == kSqItems[item].classname)
       return w;
   return -1;
 }
 
-int sq_weapon_named(std::string_view name) {
+int sq_weapon_named(std::string_view name, bool quake) {
   for (int w = 0; w < kSqWeaponCount; w++)
-    if (fold_equal(name, kSqWeapons[w].name)) return w;
+    if (kSqWeapons[w].quake == quake && fold_equal(name, kSqWeapons[w].name)) return w;
   return -1;
 }
 
@@ -92,7 +93,8 @@ int sq_item_named(std::string_view name) {
 
 bool sq_holds(const SqBody& body, int w) {
   if (w < 0 || w >= kSqWeaponCount) return false;
-  if (kSqWeapons[w].item == nullptr) return body.blaster;
+  if (kSqWeapons[w].quake != body.quake) return false;  // Quake's alone when worn, else never
+  if (kSqWeapons[w].item == nullptr) return body.quake || body.blaster;
   const int item = sq_item(kSqWeapons[w].item, kSqWeapons[w].pack);
   if (item >= 0 && kSqItems[item].kind == SqKind::ammo)  // the hand grenade: held while stocked
     return ammo_of(body, kSqItems[item].ammo) > 0;
@@ -106,6 +108,14 @@ bool sq_can_fire(const SqBody& body, int w) {
 }
 
 int sq_best_weapon(const SqBody& body) {
+  if (body.quake) {  // Quake's choice: the lightning gun down to the axe, the launchers never
+    constexpr SqWeapon kOrder[] = {SqWeapon::q1_lightning, SqWeapon::q1_super_nailgun,
+                                   SqWeapon::q1_super_shotgun, SqWeapon::q1_nailgun,
+                                   SqWeapon::q1_shotgun};
+    for (SqWeapon w : kOrder)
+      if (sq_can_fire(body, int(w))) return int(w);
+    return int(SqWeapon::q1_axe);
+  }
   if (body.max_ammo[static_cast<int>(SqAmmo::flechettes)] > 0) return gz_best_weapon(body);
   constexpr SqWeapon kOrder[] = {SqWeapon::railgun,    SqWeapon::hyperblaster,  SqWeapon::chaingun,
                                  SqWeapon::machinegun, SqWeapon::super_shotgun, SqWeapon::shotgun};
@@ -351,7 +361,9 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
     else if (blast &&
              (weapon == int(SqWeapon::grenade_launcher) || weapon == int(SqWeapon::hand_grenade)))
       words = "tripped on " + pronoun(gender, false) + " own grenade";
-    else if (blast && weapon == int(SqWeapon::rocket_launcher))
+    else if (blast && (weapon == int(SqWeapon::rocket_launcher) ||
+                       weapon == int(SqWeapon::q1_rocket_launcher) ||
+                       weapon == int(SqWeapon::q1_grenade_launcher)))
       words = "blew " + pronoun(gender, true) + " up";
     else if (weapon == int(SqWeapon::bfg) && (blast || how == kSqHowDirect))
       words = "should have used a smaller gun";
@@ -367,6 +379,10 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
       weapon != int(SqWeapon::bfg)) {  // the base game's (classic/q2_arms.hpp)
     const ge::classic::Q2ArmWords w =
         ge::classic::q2_arm_words(static_cast<ge::classic::Q2ArmId>(weapon), blast);
+    words = w.words, tail = w.tail;
+  }
+  if (sq_quake_weapon(weapon)) {  // Quake's (q2_quake_arms.hpp)
+    const SqQuakeWords w = sq_quake_words(weapon);
     words = w.words, tail = w.tail;
   }
   switch (weapon) {

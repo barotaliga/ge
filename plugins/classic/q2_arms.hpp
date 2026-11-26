@@ -62,8 +62,10 @@ struct Q2ArmFrames {
   int fire_from, fire_to;
 };
 
-// How a weapon's fire frames fire: once a frame, or one of the three held-fire runs.
-enum class Q2Held : uint8_t { once, machinegun, chaingun, hyperblaster };
+// How a weapon's fire frames fire: once a frame, or one of the three held-fire runs; `loop` is
+// another game's weapon fired by this hand (classic remix): a shot each step while attack is held
+// and stocked, the fire frames round in turn.
+enum class Q2Held : uint8_t { once, machinegun, chaingun, hyperblaster, loop };
 
 struct Q2Arm {
   const char* name;  // the name a player reads and `use` takes
@@ -150,6 +152,15 @@ constexpr int q2_fire_frame(const Q2ArmFrames& a, Q2Held held, int& frame, int& 
         return 0;
       }
       frame++;
+      return 1;
+    case Q2Held::loop:
+      if (!attack || have < 1) {
+        frame = idle;
+        held_shots = 0;
+        return 0;
+      }
+      frame = frame >= a.fire_to ? a.fire_from : frame + 1;
+      held_shots++;
       return 1;
     default:
       frame++;

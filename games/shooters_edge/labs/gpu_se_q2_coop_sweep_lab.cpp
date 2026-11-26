@@ -16,10 +16,12 @@
 // Without `--game` the maps are our own: two halls of brushes, each with an exit and a key, in a
 // pack, so CI needs no game data and the table is a digest. With `--game=<folder>` (the folder
 // holding Quake II's base folder) the maps are its packs', for PRIVATE pictures only.
+// `--mod=<folder>` (xatrix, rogue) sweeps a mission pack's campaign on the pack's rules, from its
+// own first map.
 //
 // ge:summary Lab: Quake II's campaign in co-op, every map: join, death, rejoin, keys, exit, carry
 // ge:keywords lab se-q2-coop-sweep q2 coop co-op playthrough sweep keys exit unit carried
-// ge:keywords companion addbot removebot respawn target-changelevel
+// ge:keywords companion addbot removebot respawn target-changelevel mission-pack xatrix func-button
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_listen_test.cpp
 #include <algorithm>
@@ -102,6 +104,10 @@ struct Exit {
   sh::Vec3f at;
   std::string level;
   float yaw = 0;  // a trigger with an angle is taken only facing that way
+  // A button that fires the changelevel (The Reckoning's xswamp ends its unit so): pressed by
+  // walking into it from each side in turn, `half` its box's half size.
+  bool button = false;
+  sh::Vec3f half;
 };
 
 struct MapFacts {
@@ -126,7 +132,8 @@ MapFacts facts_of(const br::Map& map) {
     const std::string kind = e.get("classname");
     if (kind.rfind("key_", 0) == 0 && e.get("targetname").empty())
       f.keys.emplace_back(kind, origin_of(e));
-    if (kind.rfind("trigger_", 0) != 0) continue;
+    const bool button = kind == "func_button";
+    if (kind.rfind("trigger_", 0) != 0 && !button) continue;
     const auto it = levels.find(e.get("target"));
     const std::string model = e.get("model");
     if (it == levels.end() || model.size() < 2 || model[0] != '*') continue;
@@ -135,7 +142,15 @@ MapFacts facts_of(const br::Map& map) {
     const br::Model& b = map.models[m];
     f.exits.push_back({{(b.mins[0] + b.maxs[0]) / 2, (b.mins[1] + b.maxs[1]) / 2, b.mins[2] + 24},
                        it->second,
-                       static_cast<float>(std::atof(e.get("angle").c_str()))});
+                       static_cast<float>(std::atof(e.get("angle").c_str())),
+                       false,
+                       {}});
+    if (button) {
+      Exit& x = f.exits.back();
+      x.button = true;
+      x.half = {(b.maxs[0] - b.mins[0]) / 2, (b.maxs[1] - b.mins[1]) / 2, 0};
+      x.at.z = b.mins[2] + 8;  // standing at the button's foot, a little in from its bottom
+    }
   }
   return f;
 }
@@ -144,8 +159,10 @@ struct Row {
   std::string map;
   bool both_in = false, died = false, back = false, left = false, rejoined = false;
   int keys = 0, keys_taken = 0;  // lying out; taken by both
+  int keys_gone = 0;             // the map's, taken away by the rules at the start
   std::string exit, next;        // the level string taken; the map entered
   bool carried = false;          // both in the next level, alive
+  bool ended = false;            // the exit was the campaign's end, its show played
   std::string problem;
   sh::Vec3f came_in[2];
 };
@@ -184,7 +201,7 @@ void frames(cl::Listen& l, int n) {
 
 // One map played in co-op from a new game: the steps of the row, then out by `exit`.
 Row sweep(const cl::SearchPath& files, const std::string& name, const MapFacts& facts,
-          const Exit* exit) {
+          const Exit* exit, bool pack, const std::string& enter) {
   Row r;
   r.map = name;
   std::string error;
@@ -195,6 +212,7 @@ Row sweep(const cl::SearchPath& files, const std::string& name, const MapFacts& 
   }
   cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0", "coop 1"};
+  if (pack) opt.files = &files;  // a mission pack's folder plays its rules (`q2_pack_of_folder`)
   cl::Listen l;
   if (!cl::listen_start(l, progs(), std::move(map), opt, error)) {
     r.problem = error;
@@ -206,6 +224,14 @@ Row sweep(const cl::SearchPath& files, const std::string& name, const MapFacts& 
     r.problem = "not on Quake II's rules";
     return r;
   }
+  if (pack && s->opt.pack == sv::Q2Pack::base) {
+    r.problem = "on the base game's rules, not the pack's (the folder " + files.folder + ")";
+    return r;
+  }
+  // The level string the campaign comes in by (`xship$xhangar2`): its spot's name, so the companion
+  // takes the co-op spots of that name as it would coming in from there (a map whose only start
+  // has no such spots near it would put it on the first player's head).
+  if (!enter.empty()) s->spawn_name = sv::level_string(enter).spawn;
   cl::listen_lobby(l, "addbot expert");
   frames(l, 20);
   r.both_in = alive(l, 0) && alive(l, 1);
@@ -225,10 +251,21 @@ Row sweep(const cl::SearchPath& files, const std::string& name, const MapFacts& 
   cl::listen_lobby(l, "addbot expert");
   frames(l, 20);
   r.rejoined = alive(l, 1);
-  // Every key lying out, taken by each in turn.
+  // Every key lying out, taken by each in turn. A key the rules took away at the start (one that
+  // starts inside a solid: xhangar2's red key in its door) is no one's to take, in co-op or alone:
+  // counted apart.
   for (const auto& [kind, at] : facts.keys) {
     const int item = sv::sq_item(kind);
     if (item < 0) continue;
+    bool lying = false;
+    for (const sv::Q2Entity& e : s->entities) {
+      const float dx = e.origin.x - at.x, dy = e.origin.y - at.y;
+      lying = lying || (!e.gone && e.classname == kind && dx * dx + dy * dy < 64 * 64);
+    }
+    if (!lying) {
+      r.keys_gone++;
+      continue;
+    }
     r.keys++;
     bool both = true;
     for (int slot = 0; slot < 2; slot++) {
@@ -243,15 +280,36 @@ Row sweep(const cl::SearchPath& files, const std::string& name, const MapFacts& 
   if (exit == nullptr) return r;
   r.exit = exit->level;
   // Into the exit; a new unit's intermission ends on a button after 5 s.
-  for (int i = 0; i < 1200 && l.pending_map.empty(); i++) {
+  for (int i = 0; i < 1200 && l.pending_map.empty() && !s->game_over; i++) {
+    sh::MoveCmd walk;
     if (s->intermission_at <= 0) {
       if (!alive(l, 0)) break;
-      put_at(*s, 0, exit->at);
-      l.view.y = exit->yaw;
+      if (exit->button) {
+        // A side a second: from 40 units off the box's face, walking into it.
+        const int side = (i / 40) % 4;
+        const float dx = side == 0 ? 1.f : side == 1 ? -1.f : 0.f;
+        const float dy = side == 2 ? 1.f : side == 3 ? -1.f : 0.f;
+        if (i % 40 == 0)
+          put_at(*s, 0,
+                 {exit->at.x + dx * (exit->half.x + 40), exit->at.y + dy * (exit->half.y + 40),
+                  exit->at.z + 16});
+        l.view.y = side == 0 ? 180.f : side == 1 ? 0.f : side == 2 ? 270.f : 90.f;
+        walk.forward = 400;
+      } else {
+        put_at(*s, 0, exit->at);
+        l.view.y = exit->yaw;
+      }
     }
     sh::MoveCmd press;
     press.buttons = (i / 8) % 2 == 0 ? sh::kButtonAttack : 0;
-    cl::listen_frame(l, s->intermission_at > 0 ? press : sh::MoveCmd{});
+    cl::listen_frame(l, s->intermission_at > 0 ? press : walk);
+  }
+  // An exit to no map is the campaign's end: the game is over, its show plays (The Reckoning's
+  // `xout.cin+victory.pcx`).
+  if (s->game_over && sv::level_string(exit->level).map.empty()) {
+    r.next = "the end (" + s->cinematic + ")";
+    r.ended = true;
+    return r;
   }
   if (l.pending_map.empty()) {
     r.problem = "the exit to " + exit->level + " was never taken" +
@@ -534,6 +592,7 @@ void run(gl::Lab& lab) {
   std::string error;
   cl::SearchPath files;
   const bool own = lab.arg("game").empty();
+  const std::string mod = lab.arg("mod");
   std::string first = lab.arg("first");
   if (own) {
     std::vector<uint8_t> a, b, pak;
@@ -545,12 +604,15 @@ void run(gl::Lab& lab) {
     }
     if (first.empty()) first = "hall";
   } else {
-    if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content)) {
+    if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod,
+                           files, error, content)) {
       lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
-                          "/pak0.pak>. Skill: shooter.");
+                          "/pak0.pak and the pack's folder>. Skill: shooter.");
       return;
     }
-    if (first.empty()) first = "base1";
+    const sv::Q2Pack pack = sv::q2_pack_of_folder(mod);
+    if (first.empty())
+      first = pack == sv::Q2Pack::base ? "base1" : std::string(sv::q2_pack_start_map(pack));
   }
   const auto most = static_cast<size_t>(lab.arg_num("maps"));
   // A game library hosted unchanged in place of our rules (never shipped: the player's own).
@@ -600,15 +662,18 @@ void run(gl::Lab& lab) {
     const MapFacts& f = facts[name];
     // The exit to a map not yet entered first, else the first: the sweep walks the campaign on.
     const Exit* exit = f.exits.empty() ? nullptr : &f.exits.front();
-    Row r = library.empty() ? sweep(files, name, f, exit)
+    Row r = library.empty() ? sweep(files, name, f, exit, !own && !mod.empty(), enters[name])
                             : sweep_native(library, files, name, enters[name], f, exit);
     const bool ok = r.problem.empty() && r.both_in && r.died && r.back && r.left && r.rejoined &&
-                    r.keys_taken == r.keys && (exit == nullptr || r.carried);
+                    r.keys_taken == r.keys && (exit == nullptr || r.carried || r.ended);
     failed += ok ? 0 : 1;
     t.rows.push_back({name, yes(r.both_in), yes(r.died && r.back), yes(r.left && r.rejoined),
-                      std::to_string(r.keys_taken) + "/" + std::to_string(r.keys),
+                      std::to_string(r.keys_taken) + "/" + std::to_string(r.keys) +
+                          (r.keys_gone > 0 ? " (" + std::to_string(r.keys_gone) + " gone)" : ""),
                       exit == nullptr ? "(none: the end)" : r.exit + " to " + r.next,
-                      exit == nullptr ? "-" : yes(r.carried)});
+                      exit == nullptr ? "-"
+                      : r.ended       ? "(the end)"
+                                      : yes(r.carried)});
     if (!r.problem.empty()) t.rows.back().back() += " (" + r.problem + ")";
     lab.note(name + ": " + (ok ? "played through" : "FAILED " + r.problem));
     rows.push_back(std::move(r));
@@ -657,7 +722,10 @@ const gl::LabSpec kSpec{
     "the return, a leave and a rejoin, every key taken by both, the exit taken and both carried "
     "into the next level?",
     {{"game", "", "the folder holding Quake II's base folder (none: two fixture halls)"},
-     {"first", "", "the map the sweep starts from (hall; base1 with --game)"},
+     {"first", "",
+      "the map the sweep starts from (hall; base1 with --game; a pack's first map with --mod)"},
+     {"mod", "",
+      "a mission pack's folder beside the base one (xatrix, rogue): its maps on its rules"},
      {"maps", "64", "the most maps swept"},
      {"library", "", "a game library to host in place of our rules (none: ours)"}},
     "",
