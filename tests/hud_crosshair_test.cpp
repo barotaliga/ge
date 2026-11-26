@@ -43,6 +43,18 @@ TEST(the_cvars_take_the_games_settings_as_their_defaults) {
   CHECK(s.mark == 4);
 }
 
+TEST(the_size_reaches_from_a_tenth_to_nine_times) {
+  con::Console c;
+  gh::CrosshairSettings s;
+  gh::add_crosshair_cvars(c.cvars(), s);
+  c.execute("crosshairsize 9");  // Quake II's ch_scale reaches nine times
+  CHECK(s.size == 9);
+  c.execute("crosshairsize 0.1");
+  CHECK(s.size == 0.1);
+  c.execute("crosshairsize 12");  // past the end: held to it
+  CHECK(s.size == 9);
+}
+
 TEST(only_the_built_marks_are_painted) {
   for (int32_t m = 2; m <= gh::kCrosshairMarks; ++m) CHECK(!gh::crosshair_mark(m).empty());
   CHECK(gh::crosshair_mark(0).empty() && gh::crosshair_mark(1).empty());
