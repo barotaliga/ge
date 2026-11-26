@@ -46,10 +46,12 @@ ge::render::FrameView looking_down_z() {
 TEST(the_drawn_set_keeps_every_light_in_view_and_leaves_out_those_behind_the_eye) {
   const gb::Map map;  // no tree, no visibility: the cone alone decides
   std::vector<ba::PointLight> lights;
+  lights.reserve(302);
   for (int i = 0; i < 300; ++i) lights.push_back(light_at(0, 0, 5.0 + i, 2));  // ahead, far
   lights.push_back(light_at(0, 0, -50, 2));                                    // behind
   lights.push_back(light_at(0, 0, -1, 2));  // behind, its reach round the eye
   std::vector<ba::LightOffer> offers;
+  offers.reserve(lights.size());
   for (const ba::PointLight& l : lights) offers.push_back({&l, false});
   ba::PickRules rules;
   ba::LightChoice choice;

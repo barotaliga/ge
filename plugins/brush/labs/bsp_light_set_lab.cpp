@@ -11,7 +11,8 @@
 // path in the map's units (default: from start to start of the map's player spawns); without a
 // pack it walks the sample fixture's halls. The chart draws the counts along the walk.
 //
-// ge:summary Lab: the frame's lights chosen along a walk: drawn, shadowed, leaking, waiting, popping
+// ge:summary Lab: the frame's lights chosen along a walk: drawn, shadowed, leaking, dark,
+// ge:summary popping
 // ge:keywords lab bsp-light-set light-pick light-pop light-swap choose_lights deal_cubes walk
 // ge:keywords shadowed-lights leak-through-walls stable-lights
 // ge:skill brush render labs
@@ -27,6 +28,7 @@
 #include "brush/app/light_pick.hpp"
 #include "brush/map.hpp"
 #include "brush/write.hpp"
+#include "core/libm/libm.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "render/view.hpp"
@@ -37,6 +39,7 @@ namespace gl = ge::lab;
 namespace ba = ge::brush::app;
 namespace gb = ge::brush;
 namespace r = ge::render;
+namespace libm = ge::core::libm;
 
 std::string fmt(double v, int digits) {
   char b[32];
@@ -145,12 +148,14 @@ void run(gl::Lab& lab) {
   std::vector<ba::PointLight> lava = ba::lava_lights(scene, 1150, 0.3);
   std::vector<ba::PointLight> portals = ba::portal_lights(scene);
   std::vector<ba::LightOffer> offers;
+  offers.reserve(scene.lights.size() + lava.size() + portals.size());
   for (const ba::PointLight& l : scene.lights) offers.push_back({&l, false});
   for (const ba::PointLight& l : lava) offers.push_back({&l, false});
   for (const ba::PointLight& l : portals) offers.push_back({&l, false});
   const ba::LightReach reach = ba::light_reach(map, scene.lights);
   // Every offer's clusters, for the lab's own question of which lights could show.
   std::vector<ba::PointLight> all;
+  all.reserve(offers.size());
   for (const ba::LightOffer& o2 : offers) all.push_back(*o2.light);
   const ba::LightReach reach_all = ba::light_reach(map, all);
   ba::PickRules rules;
@@ -200,9 +205,9 @@ void run(gl::Lab& lab) {
       const double k = double(i) / count;
       r::FrameView view;
       for (int c = 0; c < 3; ++c) view.eye[c] = a[c] + d[c] * k;
-      view.heading = std::atan2(d[0], d[2]);
+      view.heading = libm::atan2(d[0], d[2]);
       view.pitch = 0;
-      view.fov_y = 2 * std::atan(9.0 / 16.0);  // 90 degrees across a wide screen
+      view.fov_y = 2 * libm::atan(9.0 / 16.0);  // 90 degrees across a wide screen
       view.time_s = steps * kDt;
       ba::choose_lights(map, offers, &reach, view, rules, choice);
       std::vector<std::array<float, 4>> keys;
@@ -258,7 +263,7 @@ void run(gl::Lab& lab) {
       double ahead[3];
       r::look_dir(view.heading, view.pitch, ahead);
       const double cone =
-          std::atan(std::tan(view.fov_y / 2) * std::sqrt(1 + rules.widest * rules.widest));
+          libm::atan(libm::tan(view.fov_y / 2) * std::sqrt(1 + rules.widest * rules.widest));
       int could_n = 0, popped = 0;
       for (size_t q = 0; q < n; ++q) {
         double s[4];
@@ -268,7 +273,7 @@ void run(gl::Lab& lab) {
         bool in = dist <= s[3];
         if (!in) {
           const double along = (to[0] * ahead[0] + to[1] * ahead[1] + to[2] * ahead[2]) / dist;
-          in = std::acos(std::clamp(along, -1.0, 1.0)) - std::asin(s[3] / dist) <= cone;
+          in = libm::acos(std::clamp(along, -1.0, 1.0)) - libm::asin(s[3] / dist) <= cone;
         }
         bool vis = true;
         if (in && !reach_all.clusters[q].empty() && !seen.empty()) {
@@ -286,7 +291,7 @@ void run(gl::Lab& lab) {
         Spot sp{popped, {}, 0, walked};
         for (int c = 0; c < 3; ++c)
           sp.at[c] = route[seg][c] + (route[seg + 1][c] - route[seg][c]) * k;
-        sp.yaw = std::atan2(route[seg + 1][1] - route[seg][1], route[seg + 1][0] - route[seg][0]) *
+        sp.yaw = libm::atan2(route[seg + 1][1] - route[seg][1], route[seg + 1][0] - route[seg][0]) *
                  180 / 3.14159265358979;
         spots.push_back(sp);
       }

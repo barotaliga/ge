@@ -19,7 +19,7 @@
 //   the first `slots` by importance that finds none free has the least important holder past them
 //   fade out of its slot, then takes it: every change of the set is a fade, never a jump.
 //
-// ge:summary The BSP's frame lights chosen: the drawn set by view and visibility, the shadowed few by
+// ge:summary The BSP's frame lights chosen: the drawn set by view and visibility, the casters by
 // ge:summary importance, the cube slots dealt and the lights faded in and out with their cubes
 // ge:keywords bsp brush light-pick choose_lights deal_cubes light-pop light-swap stable-lights
 // ge:keywords shadow-slot shadow-pick shadow-pop pvs-lights light-importance light-fade

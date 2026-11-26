@@ -10,11 +10,13 @@
 #include <cmath>
 
 #include "brush/app/bsp_flames.hpp"
+#include "core/libm/libm.hpp"
 #include "render/view.hpp"
 
 namespace ge::brush::app {
 
 namespace r = ge::render;
+namespace libm = ge::core::libm;
 
 void light_sphere(const PointLight& l, bool bonfires, double out[4]) {
   out[0] = l.pos[0];
@@ -120,8 +122,8 @@ void choose_lights(const Map& map, std::span<const LightOffer> offers, const Lig
     }
     double ahead[3];
     r::look_dir(view.heading, view.pitch, ahead);
-    const double half_y = std::tan(view.fov_y / 2);
-    const double cone = std::atan(half_y * std::sqrt(1 + rules.widest * rules.widest));
+    const double half_y = libm::tan(view.fov_y / 2);
+    const double cone = libm::atan(half_y * std::sqrt(1 + rules.widest * rules.widest));
     std::vector<uint32_t> leaves(512);
     std::vector<int32_t> clusters;
     for (size_t i = 0; i < offers.size(); ++i) {
@@ -133,8 +135,8 @@ void choose_lights(const Map& map, std::span<const LightOffer> offers, const Lig
       // Its reach inside the cone round the look that holds the widest screen.
       if (dist > s[3]) {
         const double along = (to[0] * ahead[0] + to[1] * ahead[1] + to[2] * ahead[2]) / dist;
-        const double off = std::acos(std::clamp(along, -1.0, 1.0));
-        if (off - std::asin(s[3] / dist) > cone) continue;
+        const double off = libm::acos(std::clamp(along, -1.0, 1.0));
+        if (off - libm::asin(s[3] / dist) > cone) continue;
       }
       // And in a cluster the eye's set holds: the map's lights by their lists made once, the
       // rest (the pools', the teleporters', the moment's) by the leaves their reach's box meets.
