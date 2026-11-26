@@ -49,7 +49,7 @@ void assign_if_changed(T& to, const T& from) {
 }
 
 // A program's shot in flight by its class name: "rocket" and "missile" explode, "grenade" bounces
-// first, "spike" is a nail; anything else is no shot.
+// first, "spike" is a nail, "bolt" Quake II's blaster's; anything else is no shot.
 WorldShot shot_of(const QcServer& s, int e) {
   const char* cn = pg::vm_string(
       s.q.vm, static_cast<int32_t>(*pg::entity_field(s.q.vm, e, s.q.layout->f.classname)));
@@ -58,6 +58,7 @@ WorldShot shot_of(const QcServer& s, int e) {
   if (n == "rocket" || n == "missile") return WorldShot::rocket;
   if (n == "grenade") return WorldShot::grenade;
   if (n == "spike") return WorldShot::nail;
+  if (n == "bolt") return WorldShot::bolt;  // Quake II's blaster fired by our rules
   return WorldShot::none;
 }
 

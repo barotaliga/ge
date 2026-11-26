@@ -18,6 +18,7 @@
 // ge:keywords native rules-calls native-rules builtins makevectors setorigin spawn remove find
 // ge:keywords findradius bprint sprint sound writebyte multicast vector-math native-program
 // ge:keywords movetogoal walkmove checkclient changeyaw particle ambientsound single-player-form
+// ge:keywords pointparticles trailparticles particleeffectnum named-effect
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_native_rules_test.cpp
 #pragma once
@@ -252,6 +253,15 @@ struct Q {
   }
   int32_t strzone(int32_t s) { return run(118, s) ? result_i() : 0; }
   void calltimeofday() { run(231); }
+  // A named effect (the window draws it by its name): its number, at a point along a way `count`
+  // times, or laid as a trail from `from` to `to` for entity `e`.
+  float particleeffectnum(int32_t name) { return run(335, name) ? result_f() : 0.0f; }
+  void trailparticles(int32_t e, float effect, Vec3 from, Vec3 to) {
+    run(336, e, effect, from, to);
+  }
+  void pointparticles(float effect, Vec3 at, Vec3 dir, float count) {
+    run(337, effect, at, dir, count);
+  }
   // A loaded game's own words (GE_QC_WORDS): the template under `key` filled with four values.
   int32_t words(int32_t key, int32_t a, int32_t b, int32_t c, int32_t d) {
     return run(640, key, a, b, c, d) ? result_i() : 0;

@@ -69,6 +69,8 @@ void arsenal_keep(A& q, float slot) {
   }
 }
 
+}  // namespace
+
 float weapon_of_rank(float rank) {
   if (rank == 1) return kWBlade;
   if (rank == 2) return kWScatter;
@@ -81,6 +83,8 @@ float weapon_of_rank(float rank) {
   return 0;
 }
 
+namespace {
+
 // The slot (1..8) a weapon bit's strings are kept in; 8 for any other value, as the rows read.
 int kept_slot(float w) {
   const float r = weapon_rank(w);
@@ -91,7 +95,12 @@ int kept_slot(float w) {
 
 int32_t weapon_row(A& q, float w) { return q.ge(row_global(kept_slot(w))); }
 int32_t weapon_model(A& q, float w) { return q.ge(view_global(kept_slot(w))); }
+
+}  // namespace
+
 int32_t weapon_missile(A& q, float w) { return q.ge(missile_global(kept_slot(w))); }
+
+namespace {
 
 float weapon_cost(A& q, float w) { return weapon_number(q, w, 2); }
 float weapon_delay(A& q, float w) { return weapon_number(q, w, 3); }
@@ -111,6 +120,8 @@ float ammo_bit(A& q, float w) {
   return 0;
 }
 
+}  // namespace
+
 void ammo_spend(A& q, float w, float n) {
   if ((q.deathmatch() == 4) | midair_on(q)) return;  // never used up in deathmatch 4 or midair
   const int32_t kind = weapon_word(q, w, 1);
@@ -125,6 +136,8 @@ void ammo_spend(A& q, float w, float n) {
     q.set_f(me, q.L.f.ammo_cells, q.f(me, q.L.f.ammo_cells) - n);
   }
 }
+
+namespace {
 
 // Carried and loaded: both halves asked, as the bytecode's && asks them.
 bool carried_and_loaded(A& q, float w) {
@@ -660,6 +673,7 @@ void quake_weapon_frame(A& q) {
 // Fires the held weapon when attack is down and it is ready: its row says how.
 void weapon_frame(A& q) {
   const int32_t me = q.self();
+  if (q2_weapon_frame(q)) return;  // a Quake II weapon steps its own hand
   if (quake_rules(q)) {
     quake_weapon_frame(q);
     return;
@@ -719,6 +733,7 @@ void weapon_precache(A& q) {
       }
     }
   }
+  q2_weapon_precache(q);
 }
 
 }  // namespace shooters_edge::server::rules::SE_RULES_NS

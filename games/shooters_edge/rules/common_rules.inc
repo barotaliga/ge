@@ -53,6 +53,14 @@ void weapon_select_best(A& q);
 void weapon_impulse(A& q);
 void weapon_frame(A& q);
 void weapon_precache(A& q);
+float weapon_of_rank(float rank);
+int32_t weapon_missile(A& q, float w);
+void ammo_spend(A& q, float w, float n);
+// common_q2_arms: Quake II's weapons whole, when the arsenal's rows name them
+bool q2_arsenal(A& q);
+bool q2_weapon_frame(A& q);
+void q2_weapon_precache(A& q);
+bool q2_obituary(A& q, int32_t targ, int32_t attacker);
 // common_items
 void backpack_drop(A& q);
 // A dead player's power (`kItQuad` or `kItInvisibility`) left where they died with the time it had

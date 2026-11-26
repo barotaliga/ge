@@ -708,6 +708,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   for (int k = 0; k < 4; k++) out.air_tint[k] = l.cshift[k];
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
+  out.q2_arms = out.q2 || listen_q2_arms(l);
   const auto* rules = out.q2 && l.server != nullptr ? &l.server->world.clients[0].numbers : nullptr;
   for (int k = 0; k < 4; k++) {
     out.q2_blend[k] = rules != nullptr ? rules->blend[k] : 0;
@@ -1089,7 +1090,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           fx::glow_trail(from, to, rgb, m.bfg ? 0.12 : 0.035, m.bfg ? 0.05 : 0.04, s.seed++,
                          &out.births);
         }
-      } else if (l.q2 && m.streak && was != s.last.end()) {  // Quake II's blaster: orange specks
+      } else if (l.q2_arms && m.streak &&
+                 was != s.last.end()) {  // Quake II's blaster: orange specks
         double from[3];
         put(was->second, from);
         fx::q2_bolt_trail(from, to, s.seed++, s.palette, &out.births);
@@ -1102,7 +1104,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (was != s.last.end()) {
       double from[3];
       put(was->second, from);
-      if (!s.on.trails && l.q2) {  // Quake II's own: thinning smoke, a rocket's fire beside it
+      if (!s.on.trails && l.q2_arms) {  // Quake II's own: thinning smoke, a rocket's fire beside it
         auto [it, fresh] = s.q2_trails.try_emplace(m.entity, fx::kSqTrailStart);
         fx::q2_trail(from, to, fx::Q2Trail::smoke, it->second, s.seed++, s.palette, &out.births);
         if (!m.grenade) fx::q2_rocket_fire(from, to, s.seed++, s.palette, &out.births);
@@ -1205,7 +1207,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       const size_t first = s.blasts.size();
       const size_t thrown = out.births.size();
       fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births,
-                l.q2 ? q2_blast_of(code) : fx::BlastOf::common);
+                l.q2_arms ? q2_blast_of(code) : fx::BlastOf::common);
       if (no_specks) out.births.resize(thrown);
       // What it throws that falls meets what the frame draws (the pool collides); one flung out of
       // the view has the floor under the blast to come down on, and hops there.
@@ -1435,7 +1437,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
                         &out.births);
-          if (l.q2) q2_model_fx(s, e.code, e.at, e.way, t);  // its smoke and flash
+          if (l.q2_arms) q2_model_fx(s, e.code, e.at, e.way, t);  // its smoke and flash
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
@@ -1559,8 +1561,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           const int code = q2_pack_te_code(e.name);
           if (code != 0 && q2_enhance_pack_hit(s, code, p, off_face, t, out)) break;
         }
-        if (l.q2 && q2_pack_point(s, e, p, t, out)) break;   // Ground Zero's (world_fx_q2.cpp)
-        if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
+        if (l.q2 && q2_pack_point(s, e, p, t, out)) break;  // Ground Zero's (world_fx_q2.cpp)
+        if (e.name == "te_blaster" && l.q2_arms &&
+            !s.on.hits) {  // the classic: its specks, its flare
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
           q2_model_fx(s, 2, e.at, e.way, t);
