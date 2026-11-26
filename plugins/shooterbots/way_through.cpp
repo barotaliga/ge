@@ -1367,10 +1367,18 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // A key's lock is walked to with a key in hand: none taken yet, it opens nothing.
   bool key_held = false;
   for (const WayStep& st : w.steps) key_held = key_held || (st.kind == WayKind::key && st.done);
+  // (`complete`) A step taken last still open (past a drop with no way back) comes before the way
+  // back to a map he has played: xsewer2's way on is a drop into a flooded pit from the room he
+  // starts in, and he went back the way he came at 25 s with 51 of 53 monsters left.
+  bool last_open = false;
+  for (const WayStep& st : w.steps)
+    last_open = last_open ||
+                (w.complete && !way_exit(st) && !st.done && st.node >= 0 && t >= st.left_until &&
+                 reach(st.node) && ((!me_trapped && trapped_in(st.node)) || st.drains));
   for (int pass = 0; pass < (w.complete ? 4 : 3) && pick < 0; pass++) {
     // Nothing left but the steps taken last: a way back to a map he has played comes first, before
     // any place not yet seen (he knows the map: the steps are all he needs to find).
-    for (size_t k = 0; pass == 2 && k < w.steps.size(); k++) {
+    for (size_t k = 0; pass == 2 && !last_open && k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (!st.revisit || st.node < 0 || !reach(st.node) || t < st.left_until) continue;
       const double c = w.search.cost(st.node);
