@@ -12,7 +12,10 @@
 //
 // THE CPU (`cpu by zone`): every timed frame's timing zones (prof/zones.hpp: the demo's step, the
 // HUD, the world's prepares, its encode and submit, the wait for the frame before), each zone's
-// median a frame, as a note and as `cpu.<zone>` metrics.
+// median a frame, as a note and as `cpu.<zone>` metrics. THE SLOW FRAMES: every frame over twice
+// the median counted (`frame.slow-share`), and the dearest in a table with the GPU's span beside
+// each and the zones that ran past their own medians, so a hitch says whether the CPU or the GPU
+// held it, and where.
 //
 // What it shows: three frames of the run (its start, the middle, the end), the frame time and the
 // GPU span of every timed frame as lines with the median and the 99th percentile as rules, and
@@ -28,6 +31,7 @@
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
+// ge:keywords slow-frames hitch stall spike frame-tail
 // ge:keywords offscreen price switch-off-pricing cpu-zones frame-in-flight price-stops ladder
 // ge:skill shooter perf labs
 #include <algorithm>
@@ -155,6 +159,10 @@ struct Played {
   // zones in the order they first opened.
   bool zones = false;
   std::vector<std::pair<uint32_t, std::vector<double>>> zone_ms;
+  // With `zones`: every timed frame's zones (name, ms) and its GPU span (NaN: none read), in the
+  // order of the bench's frame times, so a slow frame can be told apart from the rest.
+  std::vector<std::vector<std::pair<uint32_t, double>>> frame_zones;
+  std::vector<double> frame_span;
 };
 
 struct Rig {
@@ -292,7 +300,13 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
       cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
       // A picture's frame waits for its read back, which a window never does: not timed.
       if (shot < 3 && p.frames == picks[shot]) bench.skip = std::max(bench.skip, 1);
-      if (bench.skip == 0) cl::record_span(*world, bench.passes);
+      if (bench.skip == 0) {
+        const size_t had_spans = bench.passes.span_ms.size();
+        cl::record_span(*world, bench.passes);
+        if (p.zones)
+          p.frame_span.push_back(
+              bench.passes.span_ms.size() > had_spans ? bench.passes.span_ms.back() : std::nan(""));
+      }
       if (shots && p.frames == blast_at) {
         settle();
         const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
@@ -339,6 +353,9 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
     if (p.zones) {
       if (bench.skip == 0) {
         ge::prof::totals(ge::prof::spans(), rows);
+        p.frame_zones.emplace_back();
+        for (const ge::prof::ZoneTotal& z : rows)
+          p.frame_zones.back().emplace_back(z.name, static_cast<double>(z.incl_ns) * 1e-6);
         for (const ge::prof::ZoneTotal& z : rows) {
           auto at = std::find_if(p.zone_ms.begin(), p.zone_ms.end(),
                                  [&](const auto& e) { return e.first == z.name; });
@@ -354,6 +371,56 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
   settle();
   if (p.zones) ge::prof::stop();
   return true;
+}
+
+// THE SLOW FRAMES: every timed frame over twice the median, counted, and the dearest of them with
+// the GPU's span beside it (read a frame late, so a GPU stall shows on the frame after) and the
+// zones that ran longest past their own medians: a frame slow on the CPU names its zone, one slow
+// on the GPU shows a long span with no zone past its usual.
+void slow_frames(gl::Lab& lab, const Played& p, const std::vector<double>& frame_s, double p50_ms) {
+  if (p.frame_zones.size() != frame_s.size() || frame_s.empty()) return;
+  std::vector<std::pair<uint32_t, double>> zone_p50;
+  for (const auto& [zone, ms] : p.zone_ms) zone_p50.emplace_back(zone, cl::median_of(ms));
+  std::vector<size_t> slow;
+  for (size_t i = 0; i < frame_s.size(); i++)
+    if (frame_s[i] * 1e3 > 2 * p50_ms) slow.push_back(i);
+  const double share = static_cast<double>(slow.size()) / static_cast<double>(frame_s.size());
+  lab.metric("frame.slow-share", share, "fraction", gl::Det::measured);
+  std::vector<double> spans;
+  for (const double v : p.frame_span)
+    if (!std::isnan(v)) spans.push_back(v);
+  std::sort(spans.begin(), spans.end());
+  if (!spans.empty()) {
+    lab.metric("gpu.span.p95", spans[spans.size() * 95 / 100], "ms", gl::Det::measured);
+    lab.metric("gpu.span.max", spans.back(), "ms", gl::Det::measured);
+  }
+  std::sort(slow.begin(), slow.end(), [&](size_t a, size_t b) { return frame_s[a] > frame_s[b]; });
+  gl::LabTable t{"the slow frames (over twice the median), the dearest first",
+                 {"frame", "ms", "GPU span (ms)", "zones past their median (ms over)"},
+                 {}};
+  for (size_t k = 0; k < slow.size() && k < 24; k++) {
+    const size_t i = slow[k];
+    std::vector<std::pair<double, uint32_t>> over;
+    for (const auto& [zone, ms] : p.frame_zones[i]) {
+      double usual = 0;
+      for (const auto& [z, m] : zone_p50)
+        if (z == zone) usual = m;
+      if (ms - usual > 0.5) over.emplace_back(ms - usual, zone);
+    }
+    std::sort(over.rbegin(), over.rend());
+    std::string zones;
+    for (size_t j = 0; j < over.size() && j < 4; j++)
+      zones.append(j ? ", " : "")
+          .append(ge::prof::zone_name(over[j].second))
+          .append(" +")
+          .append(fixed(over[j].first, 1));
+    const double span = i + 1 < p.frame_span.size() ? p.frame_span[i + 1] : std::nan("");
+    t.rows.push_back({std::to_string(i), fixed(frame_s[i] * 1e3, 1),
+                      std::isnan(span) ? "-" : fixed(span, 1), zones.empty() ? "-" : zones});
+  }
+  lab.note("slow frames: " + std::to_string(slow.size()) + " of " + std::to_string(frame_s.size()) +
+           " over twice the median (" + fixed(2 * p50_ms, 1) + " ms)");
+  lab.table(t, gl::Det::measured);
 }
 
 // A run's timed frames in ms.
@@ -473,6 +540,7 @@ void run(gl::Lab& lab) {
     }
     lab.note(line);
   }
+  slow_frames(lab, base, bench.frame_s, s.p50_ms);
   lab.metric("demo.frames", static_cast<double>(base.frames), "count");
   lab.metric("demo.levels", levels, "count");
   lab.metric("demo.explosions", static_cast<double>(base.explosions), "count");
