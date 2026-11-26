@@ -8,8 +8,10 @@
 
 #include <algorithm>
 
+#include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/parallel.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/world.hpp"
@@ -176,13 +178,25 @@ NavEscapeCounts nav_add_escapes(const MoveWorld& world, const MoveSettings& move
   std::stable_sort(cols.begin(), cols.end(),
                    [](const Col& a, const Col& b) { return a.burns && !b.burns; });
   const size_t first_escape = g.escapes.size();
+  // EACH COLUMN ON ITS OWN, side by side: the proofs it would run in order, up to the one that
+  // holds, with the budget (`max_proofs`) left out. Then taken in the columns' order, counting the
+  // budget as one thread would: the same escapes, the same counts, on any number of threads. A
+  // batch of columns at a time, so a map that spends the budget early proves little past it.
+  struct Proof {
+    bool held = false;
+    NavEscape e;
+  };
+  struct ColumnWork {
+    bool found = false;  // a takeoff under the surface
+    std::vector<Proof> proofs;
+  };
   struct Cand {
     float d;
     int32_t n;
   };
-  std::vector<Cand> cands;
-  for (const Col& col : cols) {
-    if (out.proofs >= set.max_proofs) break;
+  const auto column_work = [&](const Col& col, const MoveWorld& here, std::vector<Cand>& cands,
+                               ColumnWork& w) {
+    int64_t proofs = 0;
     // The surface up the column: the first point the eyes are out; the takeoff as far under it as
     // `kUnder` and the pit's floor let the box stand.
     const Vec3f seed = g.nodes[static_cast<size_t>(col.node)].origin;
@@ -190,25 +204,25 @@ NavEscapeCounts nav_add_escapes(const MoveWorld& world, const MoveSettings& move
     bool found = false;
     for (int step = 0; static_cast<float>(step) * kSurfaceStep <= kSurfaceMost; step++) {
       const Vec3f at{seed.x, seed.y, seed.z + static_cast<float>(step) * kSurfaceStep};
-      if (water_level(world, at) < 3) {
+      if (water_level(here, at) < 3) {
         out_z = at.z;
         found = true;
         break;
       }
     }
-    if (!found) continue;
+    if (!found) return;
     Vec3f from;
     found = false;
     for (int step = 0; static_cast<float>(step) * kSurfaceStep <= kUnder; step++) {
       const float under = kUnder - static_cast<float>(step) * kSurfaceStep;
       from = {seed.x, seed.y, out_z - kSurfaceStep - under};
-      if (water_level(world, from) == 3 && !player_trace(world, from, from).startsolid) {
+      if (water_level(here, from) == 3 && !player_trace(here, from, from).startsolid) {
         found = true;
         break;
       }
     }
-    if (!found) continue;
-    out.columns++;
+    if (!found) return;
+    w.found = true;
     const float surface = out_z + kEyes;
     cands.clear();
     for (size_t n = 0; n < nodes; n++) {
@@ -239,32 +253,33 @@ NavEscapeCounts nav_add_escapes(const MoveWorld& world, const MoveSettings& move
     bool held = false;
     int tried = 0;
     for (const Cand& cd : cands) {
-      if (held || tried >= set.targets || out.proofs >= set.max_proofs) break;
+      if (held || tried >= set.targets || proofs >= set.max_proofs) break;
       const Vec3f to = g.nodes[static_cast<size_t>(cd.n)].origin;
       const float toward = yaw_at(from, to);
       // A wall to back against under the ledge: the takeoff backed against it already (the
       // swimmer gets there under the surface and rises from there). None near: the takeoff is the
       // column itself, backing toward the ledge as he rises.
       const Vec3f dir = angle_vectors({0, toward, 0}).forward;
-      const HullTrace tr = player_trace(world, from, from + dir * set.wall_near);
+      const HullTrace tr = player_trace(here, from, from + dir * set.wall_near);
       if (tr.startsolid) continue;
       tried++;
       const Vec3f at_wall = tr.fraction < 1 ? tr.endpos - dir * kOffWall : from;
-      if (player_trace(world, at_wall, at_wall).startsolid || water_level(world, at_wall) < 3)
+      if (player_trace(here, at_wall, at_wall).startsolid || water_level(here, at_wall) < 3)
         continue;
       // The soonest shot first (the liquid burns): from under the surface, then eyes out, then
       // waist out, at each pitch.
       for (int q = 0; q < kLevels * kPitches && !held; q++) {
         const float pitch = set.pitches[q / kLevels];
-        if (out.proofs >= set.max_proofs) break;
+        if (proofs >= set.max_proofs) break;
         NavEscape e;
         e.from = at_wall;
         e.yaw = wrap(toward + 180);
         e.pitch = pitch;
         e.fire_level = static_cast<int8_t>(kLevels - q % kLevels);
         float dmg = 0;
-        out.proofs++;
-        const NavProof pr = prove_escape(world, move, e, g.set, set.rj, &dmg);
+        proofs++;
+        w.proofs.push_back({false, {}});
+        const NavProof pr = prove_escape(here, move, e, g.set, set.rj, &dmg);
         if (!pr.reached) continue;
         // Landed standing on a node that may be landed on (near it, not a node far off the search
         // found nearest).
@@ -277,9 +292,45 @@ NavEscapeCounts nav_add_escapes(const MoveWorld& world, const MoveSettings& move
         e.to = at;
         e.damage = dmg;
         e.time_s = pr.time_s;
-        g.escapes.push_back(e);
+        w.proofs.back() = {true, e};
         held = true;
-        out.held++;
+      }
+    }
+  };
+  const size_t workers = ge::core::default_workers();
+  const size_t batch = std::max<size_t>(1, workers * 4);
+  std::vector<ColumnWork> works;
+  bool spent = false;
+  for (size_t first = 0; first < cols.size() && !spent; first += batch) {
+    const size_t n = std::min(batch, cols.size() - first);
+    works.assign(n, {});
+    ge::core::parallel_bands(n, workers, [&](size_t lo, size_t hi) {
+      // A brush map's tracer keeps scratch of its own: each thread traces its own copy.
+      MoveWorld on = world;
+      std::vector<ge::brush::BrushTracer> own;
+      own.reserve(static_cast<size_t>(on.count));
+      for (int i = 0; i < on.count; i++)
+        if (on.solids[i].tracer != nullptr) {
+          own.push_back(*on.solids[i].tracer);
+          on.solids[i].tracer = &own.back();
+        }
+      std::vector<Cand> cands;
+      for (size_t k = lo; k < hi; k++) column_work(cols[first + k], on, cands, works[k]);
+    });
+    for (const ColumnWork& w : works) {
+      if (out.proofs >= set.max_proofs) {
+        spent = true;
+        break;
+      }
+      if (!w.found) continue;
+      out.columns++;
+      for (const Proof& pr : w.proofs) {
+        if (out.proofs >= set.max_proofs) break;
+        out.proofs++;
+        if (pr.held) {
+          g.escapes.push_back(pr.e);
+          out.held++;
+        }
       }
     }
   }
