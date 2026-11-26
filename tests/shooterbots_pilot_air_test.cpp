@@ -4,7 +4,7 @@
 // with the side key alone), the wish lay 135 off and braked: on e1m4 a jump over the slime fell
 // from 302 units/s to a stop in a tenth of a second and dropped into the pit.
 //
-// ge:summary Tests for the pilot's air strafe: the side key's wish within 90 of the velocity, no brake
+// ge:summary Tests for the air strafe: the side key's wish within 90 of the velocity, no brake
 // ge:keywords test pilot air air_strafe strafe side-key wish brake jump flight slime e1m4
 // ge:skill shooterbots testing
 #include <cmath>
