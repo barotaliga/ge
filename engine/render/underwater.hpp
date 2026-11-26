@@ -57,7 +57,6 @@
 // ge:keywords encode_underwater underwater_look waterline meniscus split half-submerged motes
 // ge:keywords suspended-matter specks particles caustics pool water-below underside light-shafts
 // ge:keywords god-rays shafts caustic_at henyey-greenstein level_over flooded-passage tunnel
-// ge:keywords water-shafts quarter-resolution
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
