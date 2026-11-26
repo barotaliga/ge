@@ -107,6 +107,9 @@ struct Bsp {
   // saturation (1 as baked); w the dynamic lights' edge (Options::dlight_falloff: 0 straight to
   // their reach, 1 to 1.28 m short of it, 2 cut off 1.6 m short)
   paint: vec4f,
+  // the casters seen from each light with their cube (casters.hpp's caster_cones), four a row of
+  // their atlas: an axis and the cosine of its half-angle widened by the search's reach (2: none)
+  caster_cones: array<vec4f, 32>,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -132,7 +135,8 @@ struct Light {
   // xyz: the way an aimed light points; w: its cone's edge's cosine (-2: lit all round)
   spot: vec4f,
   // x: its moving casters' cube's row in their atlas (-1: none); y: its source's radius, m (how
-  // soft its shadows are)
+  // soft its shadows are); z: 1 when it throws a figure's shadow; w: the nearest a caster comes to
+  // it, m (with a row)
   more: vec4f,
 };
 
@@ -724,6 +728,17 @@ fn disc_spin(frag: vec2f) -> vec2f {
   return vec2f(cos(turn), sin(turn));
 }
 
+// Whether the way `n` from the light of casters' row `row` lies inside one of its caster cones.
+fn in_caster_cone(n: vec3f, row: i32) -> bool {
+  let first = u32(row) * 4u;
+  var inside = false;
+  for (var k = 0u; k < 4u; k++) {
+    let c = bsp.caster_cones[first + k];
+    inside = inside || dot(n, c.xyz) >= c.w;
+  }
+  return inside;
+}
+
 // x: lit by the world alone, y: by the world and the moving casters.
 fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
   let d = length(q);
@@ -737,6 +752,11 @@ fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
   // Hard edges (bsp_draw.hpp's Options::soft_casters off): the casters' cube one 2 x 2 compare.
   if (bsp.capsule_info.y > 0.5) {
     return vec2f(world, world * caster_lit(n, ref_depth, row));
+  }
+  // No caster nearer the light than the point, or none along a way the search reaches: nothing to
+  // find (casters.hpp's caster_cones), the same answer as a search that finds none.
+  if (d <= l.more.w || !in_caster_cone(n, row)) {
+    return vec2f(world);
   }
   let size = max(l.more.y, 0.01);
   // A frame round the direction.
