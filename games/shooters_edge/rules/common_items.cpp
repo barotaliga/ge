@@ -22,9 +22,13 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
+#include "classic/q1_body.hpp"
+#include "classic/q2_body.hpp"
 #include "shooters_edge/rules/variant.hpp"
 
 namespace shooters_edge::server::rules::SE_RULES_NS {
+
+namespace gc = ge::classic;
 
 namespace {
 
@@ -187,13 +191,15 @@ void armour_start(A& q, float slot, float bit) {
       row = q.s(s_armour_row3);
     }
   }
-  q.tokenize(row);
+  const float words = q.tokenize(row);
   const int32_t mdl = q.strzone(q.argv(3));  // held by the item for as long as the map runs
   const int32_t snd = q.strzone(q.argv(4));
   const int32_t me = q.self();
   q.set_f(me, q.L.f.armortype, number_of(q, q.argv(0)));
   q.set_f(me, q.L.f.armorvalue, number_of(q, q.argv(1)));
   q.set_f(me, q.L.f.skin, number_of(q, q.argv(2)));
+  // Quake II's take rule (classic remix): the most it holds, kept where an item has no health.
+  q.set_f(me, q.L.f.max_health, words > 5 ? number_of(q, q.argv(5)) : 0);
   q.set_f(me, q.L.f.items, bit);
   q.set_i(me, q.L.f.touch, q.fn(fn_armour_touch));
   item_start(q, mdl, snd, {-16, -16, 0}, {16, 16, 56}, 20);
@@ -215,6 +221,12 @@ void ammo_start(A& q, int32_t mdl, int32_t big, int32_t setting) {
   q.set_f(me, q.L.f.ammo_nails, q.f(me, q.L.f.ammo_nails) * n);
   q.set_f(me, q.L.f.ammo_rockets, q.f(me, q.L.f.ammo_rockets) * n);
   q.set_f(me, q.L.f.ammo_cells, q.f(me, q.L.f.ammo_cells) * n);
+  // Another game's box (classic remix) holds that game's own amount.
+  if (const int32_t row = q.cvar_string(setting); !q.is(row, "") && q.tokenize(row) > 3) {
+    const float own = number_of(q, q.argv(3)) * n;
+    for (const int f : {q.L.f.ammo_shells, q.L.f.ammo_nails, q.L.f.ammo_rockets, q.L.f.ammo_cells})
+      if (q.f(me, f) > 0) q.set_f(me, f, own);
+  }
   q.set_i(me, q.L.f.touch, q.fn(fn_ammo_touch));
   dressed_start(q, setting, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
 }
@@ -377,7 +389,7 @@ void health_touch(A& q) {
   const int32_t me = q.self();
   const int32_t o = q.other();
   float limit = q.f(o, q.L.f.max_health);
-  if (on(band(q.f(me, q.L.f.spawnflags), 2))) limit = 250;
+  if (on(band(q.f(me, q.L.f.spawnflags), 2))) limit = gc::kQ1MegaLimit;
   if (q.f(o, q.L.f.health) >= limit) return;
   q.set_f(o, q.L.f.health, q.f(o, q.L.f.health) + q.f(me, q.L.f.health));
   if (q.f(o, q.L.f.health) > limit) q.set_f(o, q.L.f.health, limit);
@@ -385,7 +397,7 @@ void health_touch(A& q) {
   item_taken(q);
   if (on(band(q.f(q.self(), q.L.f.spawnflags), 2))) {
     q.set_i(q.self(), q.L.f.owner, q.other());
-    q.set_f(q.self(), q.L.f.nextthink, q.time() + 5);
+    q.set_f(q.self(), q.L.f.nextthink, q.time() + gc::kQ1MegaDrainAfter);
     q.set_i(q.self(), q.L.f.think, q.fn(fn_health_decay));
   }
 }
@@ -398,32 +410,48 @@ void item_health(A& q) {
     return;
   }
   q.set_i(me, q.L.f.touch, q.fn(fn_health_touch));
+  int32_t setting;
   if (on(band(flags, 1))) {
-    q.set_f(me, q.L.f.health, 15);
-    dressed_start(q, q.s(s_arsenal_health1), q.s(s_b_bh10), q.s(s_r_item1_wav), {0, 0, 0},
-                  {32, 32, 56}, 20);
+    setting = q.s(s_arsenal_health1);
+    q.set_f(me, q.L.f.health, gc::kQ1HealthSmall);
+    dressed_start(q, setting, q.s(s_b_bh10), q.s(s_r_item1_wav), {0, 0, 0}, {32, 32, 56}, 20);
   } else if (on(band(flags, 2))) {
-    q.set_f(me, q.L.f.health, 100);
-    dressed_start(q, q.s(s_arsenal_health3), q.s(s_b_bh100), q.s(s_r_item2_wav), {0, 0, 0},
-                  {32, 32, 56}, 20);
+    setting = q.s(s_arsenal_health3);
+    q.set_f(me, q.L.f.health, gc::kQ1HealthMega);
+    dressed_start(q, setting, q.s(s_b_bh100), q.s(s_r_item2_wav), {0, 0, 0}, {32, 32, 56}, 20);
   } else {
-    q.set_f(me, q.L.f.health, 25);
-    dressed_start(q, q.s(s_arsenal_health2), q.s(s_b_bh25), q.s(s_health1_wav), {0, 0, 0},
-                  {32, 32, 56}, 20);
+    setting = q.s(s_arsenal_health2);
+    q.set_f(me, q.L.f.health, gc::kQ1HealthPlain);
+    dressed_start(q, setting, q.s(s_b_bh25), q.s(s_health1_wav), {0, 0, 0}, {32, 32, 56}, 20);
   }
+  // Another game's box (classic remix) gives that game's own points.
+  if (const int32_t row = q.cvar_string(setting); !q.is(row, "") && q.tokenize(row) > 3)
+    q.set_f(me, q.L.f.health, number_of(q, q.argv(3)));
 }
 
 void armour_touch(A& q) {
   if (!can_heal(q)) return;
   const int32_t me = q.self();
   const int32_t o = q.other();
-  if (q.f(o, q.L.f.armortype) * q.f(o, q.L.f.armorvalue) >=
-      q.f(me, q.L.f.armortype) * q.f(me, q.L.f.armorvalue))
-    return;
-  q.set_f(o, q.L.f.armortype, q.f(me, q.L.f.armortype));
-  q.set_f(o, q.L.f.armorvalue, q.f(me, q.L.f.armorvalue));
   const float items = q.f(o, q.L.f.items);
-  q.set_f(o, q.L.f.items, items - band(items, kItArmorAll) + q.f(me, q.L.f.items));
+  if (q.f(me, q.L.f.max_health) > 0) {
+    // Quake II's armour (classic remix): its own rule, the new adding onto the worn up to its most.
+    const int worn = q.f(o, q.L.f.armorvalue) > 0 ? gc::q2_armour_tier(q.f(o, q.L.f.armortype)) : 0;
+    const gc::Q2Armour now = gc::q2_take_armour(worn, static_cast<int>(q.f(o, q.L.f.armorvalue)),
+                                                gc::q2_armour_tier(q.f(me, q.L.f.armortype)));
+    if (!now.taken) return;
+    constexpr float kBits[4] = {0, kItArmor1, kItArmor2, kItArmor3};
+    q.set_f(o, q.L.f.armortype, gc::kQ2Armours[now.tier].normal);
+    q.set_f(o, q.L.f.armorvalue, static_cast<float>(now.count));
+    q.set_f(o, q.L.f.items, items - band(items, kItArmorAll) + kBits[now.tier]);
+  } else {
+    if (q.f(o, q.L.f.armortype) * q.f(o, q.L.f.armorvalue) >=
+        q.f(me, q.L.f.armortype) * q.f(me, q.L.f.armorvalue))
+      return;
+    q.set_f(o, q.L.f.armortype, q.f(me, q.L.f.armortype));
+    q.set_f(o, q.L.f.armorvalue, q.f(me, q.L.f.armorvalue));
+    q.set_f(o, q.L.f.items, items - band(items, kItArmorAll) + q.f(me, q.L.f.items));
+  }
   if (q.is(name_of(q, q.i(me, q.L.f.classname), 0), "")) {
     say_to(q, o, kPrintLow, {q.s(s_you_got_armor)});
   } else {

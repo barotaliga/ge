@@ -36,6 +36,8 @@
 #include <string_view>
 #include <vector>
 
+#include "classic/q1_body.hpp"
+
 namespace shooters_edge::profiles {
 
 // How a weapon fires: the program's own code for each, the row's numbers in it; or one of Quake
@@ -94,6 +96,9 @@ struct ArmourRow {
   int32_t skin = 0;
   std::string_view model;
   std::string_view sound;
+  // Quake II's take rule (plugins/classic/q2_body.hpp): the most it holds, a picked-up one adding
+  // onto the worn one up to it; 0: Quake's, the better armour replacing the worn one outright.
+  int32_t most = 0;
 };
 
 // Another game's look for one of the rules' own items (classic remix): the server setting that
@@ -106,6 +111,8 @@ struct ItemLook {
   std::string_view model;
   std::string_view sound = "-";
   int32_t lift = 0;
+  int32_t amount = 0;  // a box's ammunition or a health item's points by that game's own rules (0:
+                       // the rules' own)
 };
 
 struct Arsenal {
@@ -136,9 +143,12 @@ inline constexpr WeaponRow kQ1Weapons[] = {
      "weapons/lhit.wav", "-", "-", "-", "progs/g_light.mdl", 15},
 };
 inline constexpr ArmourRow kQ1Armour[] = {
-    {1, 0.3f, 100, 0, "progs/armor.mdl", "items/armor1.wav"},
-    {2, 0.6f, 150, 1, "progs/armor.mdl", "items/armor1.wav"},
-    {3, 0.8f, 200, 2, "progs/armor.mdl", "items/armor1.wav"},
+    {1, ge::classic::kQ1Armours[1].share, ge::classic::kQ1Armours[1].value, 0, "progs/armor.mdl",
+     "items/armor1.wav"},
+    {2, ge::classic::kQ1Armours[2].share, ge::classic::kQ1Armours[2].value, 1, "progs/armor.mdl",
+     "items/armor1.wav"},
+    {3, ge::classic::kQ1Armours[3].share, ge::classic::kQ1Armours[3].value, 2, "progs/armor.mdl",
+     "items/armor1.wav"},
 };
 inline constexpr Arsenal kQ1Arsenal{kQ1Weapons, kQ1Armour};
 
@@ -187,7 +197,8 @@ inline std::string weapon_text(const WeaponRow& w) {
 // An armour row as the program reads it.
 inline std::string armour_text(const ArmourRow& a) {
   return number_text(a.absorb) + " " + number_text(float(a.amount)) + " " +
-         number_text(float(a.skin)) + " " + std::string(a.model) + " " + std::string(a.sound);
+         number_text(float(a.skin)) + " " + std::string(a.model) + " " + std::string(a.sound) +
+         (a.most > 0 ? " " + number_text(float(a.most)) : "");
 }
 
 // The server's console lines that give the program `arsenal`.
@@ -199,7 +210,8 @@ inline std::vector<std::string> arsenal_lines(const Arsenal& arsenal) {
     lines.push_back("set arsenal_armour" + std::to_string(a.slot) + " \"" + armour_text(a) + "\"");
   for (const ItemLook& l : arsenal.looks)
     lines.push_back("set " + std::string(l.setting) + " \"" + std::string(l.model) + " " +
-                    std::string(l.sound) + " " + std::to_string(l.lift) + "\"");
+                    std::string(l.sound) + " " + std::to_string(l.lift) +
+                    (l.amount > 0 ? " " + std::to_string(l.amount) : "") + "\"");
   if (!arsenal.pickup_sound.empty())
     lines.push_back("set arsenal_pickup \"" + std::string(arsenal.pickup_sound) + "\"");
   return lines;
