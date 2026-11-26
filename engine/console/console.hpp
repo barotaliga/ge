@@ -177,6 +177,11 @@ class Console {
   // `name` runs our command `target`: a game's own spelling of it, in the cvars' current layer
   // (cvar.hpp § LAYERS), so it goes with that layer (`drop_layer`).
   void add_command_synonym(std::string_view name, std::string_view target);
+  // ONE NAME, ONE MEANING for a command: while the cvars' current layer is loaded, `name` runs our
+  // command `target` even where `name` is a command of ours too (the game's own meaning of a
+  // shared word, ours set aside: Quake's `toggle a b c` flips each name, ours cycles `a`). It goes
+  // with its layer (`drop_layer`), and ours is back.
+  void add_command_own(std::string_view name, std::string_view target);
   // THE MANUAL (manual.hpp): what the program says about itself (its name, games and flags) for
   // `writemanual` and the generated reference manual.
   void set_manual(ManualInfo info) { manual_ = std::move(info); }
@@ -392,6 +397,7 @@ class Console {
   std::map<std::string, CommandGate> gates_;
   struct CommandSynonym {
     std::string target, layer;
+    bool own = false;  // runs in place of our command of the same name (`add_command_own`)
   };
   std::map<std::string, CommandSynonym> command_synonyms_;
   ManualInfo manual_;
