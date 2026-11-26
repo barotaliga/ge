@@ -212,6 +212,63 @@ TEST(every_q2_weapon_is_aimed_by_one_of_the_five_aim_traits) {
   CHECK(rail != nullptr && bfg != nullptr && rail->aim_slot == 0 && bfg->aim_slot == 3);
 }
 
+// Scourge of Armagon's arsenal: Quake's eight and the pack's three, the pack's guns past the table
+// by number (their impulses 225 and 226) each saying the aim it is held by; its items on a map.
+TEST(a_mission_packs_arsenal_knows_its_own_guns) {
+  const bt::BotArsenal& hip = bt::arsenal_for_mod("Hipnotic");
+  CHECK(&hip == &bt::hipnotic_arsenal());
+  CHECK(&bt::arsenal_for_mod("id1") == &bt::first_arsenal());
+  CHECK(hip.weapons.size() == 11);
+  for (size_t i = 0; i < bt::first_arsenal().weapons.size(); i++)
+    CHECK(hip.weapons[i].bit == bt::first_arsenal().weapons[i].bit);
+  const bt::BotWeapon* laser = bt::weapon_row(hip, 8388608);
+  const bt::BotWeapon* hammer = bt::weapon_row(hip, 128);
+  const bt::BotWeapon* prox = bt::weapon_row(hip, 65536);
+  CHECK(laser && laser->number == 225 && laser->aim_slot == 1 && laser->ammo == 3);
+  CHECK(hammer && hammer->number == 226 && hammer->aim_slot == 0 && hammer->ammo == -1);
+  CHECK(prox && prox->number == 6 && prox->aim_slot == 2 && prox->blast);
+  for (const bt::BotWeapon& w : hip.weapons)
+    CHECK_MSG(w.number <= bt::kMostWeaponNumber || (w.aim_slot >= 0 && w.aim_slot < 5),
+              std::string(w.name) + " has no aim slot");
+  const auto* row = bt::item_row(hip.tables->items, "weapon_laser_gun", 0);
+  CHECK(row && row->weapon == 8388608);
+  CHECK(bt::item_row(bt::first_arsenal().tables->items, "weapon_laser_gun", 0) == nullptr);
+  CHECK(hip.blast_pickup("progs/g_prox.mdl") &&
+        !bt::first_arsenal().blast_pickup("progs/g_prox.mdl"));
+  // Dissolution: the blade on 2048 (4096 is the lava spiker), the pack's five on their own
+  // ammunitions, read off the program's true stock rather than the status bar's four.
+  const bt::BotArsenal& rog = bt::arsenal_for_mod("rogue");
+  CHECK(&rog == &bt::rogue_arsenal());
+  CHECK(rog.ammo_count == 7 && rog.weapons.size() == 13);
+  CHECK(rog.weapons[0].bit == 2048);
+  const bt::BotWeapon* lava = bt::weapon_row(rog, 4096);
+  const bt::BotWeapon* plasma = bt::weapon_row(rog, 65536);
+  CHECK(lava && lava->number == 60 && lava->ammo == 4 && lava->aim_slot == 1);
+  CHECK(plasma && plasma->number == 64 && plasma->ammo == 6 && plasma->blast);
+  for (const bt::BotWeapon& w : rog.weapons)
+    CHECK_MSG(w.number <= bt::kMostWeaponNumber || (w.aim_slot >= 0 && w.aim_slot < 5),
+              std::string(w.name) + " has no aim slot");
+  ge::shooter::PlayerNumbers n;
+  n.items = 2048 + 2 + 4096;
+  n.weapon = 4096;
+  n.ammo[1] = 30;  // the status bar shows lava nails while the lava spiker is held
+  n.stock[1] = 80;
+  n.stock[4] = 30;
+  bt::Stats st;
+  st.arsenal = &rog;
+  rog.read(n, st);
+  CHECK(st.ammo[1] == 80 && st.ammo[4] == 30 && st.weapon == 4096);
+  CHECK(lava && bt::loaded(st, *lava));
+  // The lures measured and left out (arsenals.cpp): the proximity gun and the pack's ammunition
+  // boxes are never fetched, only taken in passing.
+  CHECK(bt::item_row(hip.tables->items, "weapon_proximity_gun", 0) == nullptr);
+  CHECK(bt::item_row(rog.tables->items, "item_lava_spikes", 0) == nullptr);
+  // The packs' own close fighters are kept off; the spike mine is a monster to both.
+  CHECK(hip.keep_off("progs/spikmine.mdl") > 0 && hip.monster("progs/spikmine.mdl") == 1);
+  CHECK(rog.keep_off("progs/sword.mdl") > 0 && rog.monster("progs/sword.mdl") == 1);
+  CHECK(bt::first_arsenal().monster("progs/spikmine.mdl") == 0);
+}
+
 TEST(the_pools_trace_stops_at_a_mover_where_the_rules_put_it) {
   sv::RulesRunner r = sv::q2_runner(sv::make_q2_server({}));
   r.console("deathmatch 1");

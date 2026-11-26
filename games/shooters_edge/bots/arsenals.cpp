@@ -1,7 +1,10 @@
-// Shooter's Edge's arsenals as its bots read them (arsenals.hpp): Quake's and Quake II's.
+// Shooter's Edge's arsenals as its bots read them (arsenals.hpp): Quake's, Scourge of Armagon's,
+// Dissolution of Eternity's and Quake II's.
 //
 // ge:summary Quake's and Quake II's arsenals as the bots read them
-// ge:keywords bot-arsenal first-arsenal q2-arsenal stats-reader arsenals
+// ge:keywords bot-arsenal first-arsenal q2-arsenal stats-reader arsenals hipnotic-arsenal
+// ge:keywords arsenal-for-mod laser-cannon mjolnir proximity-gun mission-pack rogue-arsenal
+// ge:keywords lava-nailgun multi-rockets plasma-gun
 // ge:skill bots shooter
 // ge:test tests/shooters_edge_q2_nav_test.cpp
 #include "shooters_edge/bots/arsenals.hpp"
@@ -9,6 +12,8 @@
 #include "shooters_edge/bots/talk.hpp"
 
 #include <array>
+#include <iterator>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -184,6 +189,181 @@ BotArsenal make_first() {
   a.fire_sounds = first_fire_sounds();
   a.maps = &quake_maps();
   a.talk = &team_words();
+  return a;
+}
+
+// SCOURGE OF ARMAGON (the `hipnotic` mission pack, porting/shooters-edge/q1-pack-weapons.md): the
+// base game's eight and the pack's three. The laser cannon (bit 2^23, impulse 225) streams bolts at
+// 1000 units/s, a cell a tenth of a second; Mjolnir (bit 128, impulse 226) is a blow at arm's
+// length that spends no ammunition; the proximity gun (bit 2^16) throws the grenade launcher's lob
+// on rockets, asked for by key 6 as the launcher is (the key toggles the two), and is carried but
+// never chosen to fight with. Each says its aim slot: its impulse lies past the base numbers.
+constexpr int32_t kWLaser = 8388608, kWHammer = 128, kWProximity = 65536;
+
+const std::array<BotWeapon, 11> kHipWeapons = [] {
+  std::array<BotWeapon, 11> w{};
+  for (size_t i = 0; i < 8; i++) w[i] = kFirstWeapons[i];
+  w[8] = row(kWLaser, 225, "laser cannon", 3, 1, 1000, 0, 16, 1500, 0.1f, true, false,
+             WeaponCurve::spiker, 60, 1.6f);
+  w[8].aim_slot = 1;
+  w[9] = row(kWHammer, 226, "mjolnir", -1, 0, 0, 0, 24, 72, 0.7f, false, false, WeaponCurve::blade,
+             40, 1.2f);
+  w[9].aim_slot = 0;
+  // Kept, not fought with: its bombs lie in wait for anyone who comes near, their thrower too,
+  // and it shares key 6 with the grenade launcher (the key toggles the two). Thrown in a fight it
+  // cost hipdm1's bots 20 frags in five minutes, most of them their own.
+  w[10] = row(kWProximity, 6, "proximity gun", 2, 1, 600, -20, 40, 500, 0.6f, false, true,
+              WeaponCurve::kept, 10, 1.2f);
+  w[10].aim_slot = 2;
+  return w;
+}();
+
+// The base game's item rows, then the pack's three guns.
+const std::vector<shooters_edge::profiles::ItemRow>& hip_items() {
+  static const std::vector<shooters_edge::profiles::ItemRow> rows = [] {
+    std::vector<shooters_edge::profiles::ItemRow> r(std::begin(shooters_edge::profiles::kQ1Items),
+                                                    std::end(shooters_edge::profiles::kQ1Items));
+    r.push_back({.class_name = "weapon_laser_gun",
+                 .kind = ItemKind::weapon,
+                 .respawn_s = 30,
+                 .weapon = kWLaser,
+                 .name = "laser cannon"});
+    r.push_back({.class_name = "weapon_mjolnir",
+                 .kind = ItemKind::weapon,
+                 .respawn_s = 30,
+                 .weapon = kWHammer,
+                 .name = "mjolnir"});
+    // No row for the proximity gun: a bot never fights with it, and as a weapon to fetch it
+    // drew the bots to it five to seven times a match on hipdm1, a fifth of their kills lost
+    // (se-pack-dm, six seeds); taken in passing it is still known by its bit.
+    return r;
+  }();
+  return rows;
+}
+
+const shooters_edge::profiles::ItemTables& hip_tables() {
+  static const shooters_edge::profiles::ItemTables t{hip_items(), shooters_edge::profiles::kQ1Words,
+                                                     shooters_edge::profiles::kQ1Sounds,
+                                                     shooters_edge::profiles::kQ1Names};
+  return t;
+}
+
+// The grenade and rocket launchers and the proximity gun as they lie on a map: a blast for the
+// monsters only a blast keeps down.
+bool hip_blast_pickup(std::string_view model) {
+  return first_blast_pickup(model) || model == "progs/g_prox.mdl";
+}
+
+// The packs' own monsters a player keeps his distance from, by the reach of what they do close
+// (rough reaches, read off how each fights, not measured): Scourge's scourge (its sting), gremlin
+// (its leap) and Armagon (its stomp), and the spike mine that floats at a player to burst;
+// Dissolution's phantom swordsman, mummy, eel (its shock) and dragon (its breath).
+struct Reach {
+  std::string_view model;
+  float keep;
+};
+constexpr Reach kPackReach[] = {
+    {"progs/scor.mdl", 192},     {"progs/grem.mdl", 224},   {"progs/armabody.mdl", 256},
+    {"progs/spikmine.mdl", 320}, {"progs/sword.mdl", 160},  {"progs/mummy.mdl", 160},
+    {"progs/eel2.mdl", 128},     {"progs/dragon.mdl", 256},
+};
+
+float pack_keep_off(std::string_view model) {
+  for (const Reach& r : kPackReach)
+    if (model == r.model) return r.keep;
+  return first_keep_off(model);
+}
+
+// Quake's monsters (the packs' own among them), and the two a pack fields that the shared list
+// does not name: Scourge's spike mine and Dissolution's phantom swordsman.
+int pack_monster(std::string_view model) {
+  if (model == "progs/spikmine.mdl" || model == "progs/sword.mdl") return 1;
+  return first_monster(model);
+}
+
+BotArsenal make_hipnotic() {
+  BotArsenal a = make_first();
+  a.keep_off = pack_keep_off;
+  a.monster = pack_monster;
+  a.weapons = kHipWeapons;
+  a.tables = &hip_tables();
+  a.blast_pickup = hip_blast_pickup;
+  return a;
+}
+
+// DISSOLUTION OF ETERNITY (the `rogue` mission pack, porting/shooters-edge/q1-pack-weapons.md): the
+// base game's eight with the blade moved to bit 2048 (its 4096 is the lava nailgun's here), and the
+// pack's five, each on an ammunition of its own: lava nails (4), multi rockets (5), plasma (6). The
+// status bar's four ammunitions switch meaning with the gun held, so the bots read the program's
+// true stock (`PlayerNumbers::stock`, filled by the server from the program's own fields). Each
+// pack gun has its own impulse (60..64) and says its aim slot.
+constexpr int32_t kRogueBlade = 2048, kWLava = 4096, kWSuperLava = 8192, kWMultiGrenades = 16384;
+constexpr int32_t kWMultiRockets = 32768, kWPlasma = 65536;
+
+const std::array<BotWeapon, 13> kRogueWeapons = [] {
+  std::array<BotWeapon, 13> w{};
+  for (size_t i = 0; i < 8; i++) w[i] = kFirstWeapons[i];
+  w[0].bit = kRogueBlade;
+  w[8] = row(kWLava, 60, "lava spiker", 4, 1, 1000, 0, 16, 1500, 0.1f, true, false,
+             WeaponCurve::spiker, 40, 1.4f);
+  w[8].aim_slot = 1;
+  w[9] = row(kWSuperLava, 61, "heavy lava spiker", 4, 2, 1000, 0, 20, 1500, 0.1f, true, false,
+             WeaponCurve::heavy, 70, 1.7f);
+  w[9].aim_slot = 1;
+  w[10] = row(kWMultiGrenades, 62, "multi grenades", 5, 1, 600, -20, 48, 500, 0.6f, false, true,
+              WeaponCurve::lob, 50, 1.7f);
+  w[10].aim_slot = 2;
+  // Four rockets in a fan: loosely aimed, as the launcher is, and wider.
+  w[11] = row(kWMultiRockets, 63, "multi rockets", 5, 1, 1000, -20, 128, 1200, 0.8f, false, true,
+              WeaponCurve::rocket, 50, 2.2f);
+  w[11].aim_slot = 3;
+  // A slow-starting bolt at 1250 units/s that bursts (70 units) and arcs to those near it.
+  w[12] = row(kWPlasma, 64, "plasma", 6, 1, 1250, 0, 48, 1200, 1.0f, false, true,
+              WeaponCurve::rocket, 70, 2);
+  w[12].aim_slot = 3;
+  return w;
+}();
+
+void rogue_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
+  st.items = static_cast<int32_t>(n.items);
+  st.weapon = static_cast<int32_t>(n.weapon);
+  for (int k = 0; k < 7; k++) st.ammo[k] = n.stock[k];
+}
+
+const std::vector<shooters_edge::profiles::ItemRow>& rogue_items() {
+  static const std::vector<shooters_edge::profiles::ItemRow> rows = [] {
+    std::vector<shooters_edge::profiles::ItemRow> r(std::begin(shooters_edge::profiles::kQ1Items),
+                                                    std::end(shooters_edge::profiles::kQ1Items));
+    for (shooters_edge::profiles::ItemRow& it : r)
+      if (it.weapon == kWBlade) it.weapon = kRogueBlade;
+    // No rows for the pack's three ammunitions (lava nails, multi rockets, plasma): the bot reads
+    // its stock of each and fights with the guns, but as boxes to fetch they drew the bots away
+    // from the fight, on ctf1 twenty to forty boxes a match and a third of the frags (se-pack-dm,
+    // four seeds; rating them with the base ammunition their key shares did not help). Taken in
+    // passing, they still feed the guns.
+    return r;
+  }();
+  return rows;
+}
+
+const shooters_edge::profiles::ItemTables& rogue_tables() {
+  static const shooters_edge::profiles::ItemTables t{
+      rogue_items(), shooters_edge::profiles::kQ1Words, shooters_edge::profiles::kQ1Sounds,
+      shooters_edge::profiles::kQ1Names};
+  return t;
+}
+
+BotArsenal make_rogue() {
+  BotArsenal a = make_first();
+  a.weapons = kRogueWeapons;
+  a.ammo_count = 7;
+  a.ammo_max[4] = 200;  // lava nails
+  a.ammo_max[5] = 100;  // multi rockets
+  a.ammo_max[6] = 100;  // plasma
+  a.tables = &rogue_tables();
+  a.read = rogue_read;
+  a.keep_off = pack_keep_off;
+  a.monster = pack_monster;
   return a;
 }
 
@@ -403,6 +583,24 @@ Q2Arsenal make_q2(server::Q2Pack pack) {
 const BotArsenal& first_arsenal() {
   static const BotArsenal a = make_first();
   return a;
+}
+
+const BotArsenal& hipnotic_arsenal() {
+  static const BotArsenal a = make_hipnotic();
+  return a;
+}
+
+const BotArsenal& rogue_arsenal() {
+  static const BotArsenal a = make_rogue();
+  return a;
+}
+
+const BotArsenal& arsenal_for_mod(std::string_view mod) {
+  std::string m(mod);
+  for (char& c : m) c = c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+  if (m == "hipnotic") return hipnotic_arsenal();
+  if (m == "rogue") return rogue_arsenal();
+  return first_arsenal();
 }
 
 const BotArsenal& q2_arsenal(server::Q2Pack pack) {

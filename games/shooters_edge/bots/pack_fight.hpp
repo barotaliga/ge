@@ -32,6 +32,7 @@ struct PackFightOptions {
   server::MapLoader load = nullptr;  // the maps by name (the packs')
   void* load_ctx = nullptr;
   const ge::progs::Progs* progs = nullptr;  // the packs' program
+  const sb::BotArsenal* arsenal = nullptr;  // what the fighters know (none: Quake's own)
   std::string map;
   bool registered = false;   // the content is the full game
   bool wide_models = false;  // a game's own content: its movers sized as the window does

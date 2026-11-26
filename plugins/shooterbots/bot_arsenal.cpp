@@ -56,6 +56,8 @@ double weapon_score(const BotWeapon& w, float d) {
       return d > 300 ? 95 : 60;
     case WeaponCurve::big_blast:
       return d > 400 ? 100 : 2;
+    case WeaponCurve::kept:  // below the blade's worst: never the choice
+      return 0;
   }
   return 0;
 }
