@@ -18,6 +18,7 @@
 #include "classicenhance/shells.hpp"
 #include "core/math.hpp"
 #include "shooters_edge/profiles/remix_sounds.hpp"
+#include "vfs/search.hpp"
 
 namespace shooters_edge::client {
 
@@ -55,9 +56,10 @@ void DemoSounds::enhance_from(const bool* on, std::filesystem::path cache) {
   }
 }
 
-void DemoSounds::hear_as(std::string_view game) {
-  if (game == heard_) return;
+void DemoSounds::hear_as(std::string_view game, size_t theirs) {
+  if (game == heard_ && theirs == theirs_) return;
   heard_ = std::string(game);
+  theirs_ = theirs;
   if (!names_.empty()) relist(false);
 }
 
@@ -73,7 +75,19 @@ const au::Pcm* DemoSounds::load(const std::string& named) {
   auto pcm = std::make_unique<au::Pcm>();
   std::string error;
   bool read = false;
-  if (enhanced) {
+  // Heard as the other game's (`theirs_`): its own copy of a name both games ship, which the
+  // played game's hides; a weapon's sound stays the one its weapon's game names.
+  if (theirs_ > 0 && !profiles::weapon_sound(name)) {
+    const std::string path = "sound/" + name;
+    const ge::vfs::FileRef* won = ge::vfs::find(files_.vfs, path);
+    if (won != nullptr && won->source >= theirs_)
+      if (const auto ref = ge::vfs::find_below(files_.vfs, path, theirs_)) {
+        std::vector<uint8_t> wav;
+        read = ge::vfs::read(files_.vfs, *ref, &wav, &error) &&
+               au::read_wav(wav, name, pcm.get(), &error);
+      }
+  }
+  if (enhanced && !read) {
     if (!cache_known_) {
       cache_ = content_cache(files_);
       cache_known_ = true;

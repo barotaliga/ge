@@ -418,6 +418,33 @@ const FileRef* find(const SearchPath& sp, std::string_view path) {
   return s.used ? &s.ref : nullptr;
 }
 
+std::optional<FileRef> find_below(const SearchPath& sp, std::string_view path, size_t sources) {
+  if (path.empty()) return std::nullopt;
+  std::string folded(path);
+  for (char& c : folded) c = fold(c);
+  for (size_t i = std::min(sources, sp.sources.size()); i-- > 0;) {
+    const Source& s = sp.sources[i];
+    const auto src = static_cast<uint32_t>(i);
+    switch (s.kind) {
+      case SourceKind::pack:
+        for (size_t k = 0; k < s.pak.entries.size(); ++k)
+          if (folded_equal(folded, s.pak.entries[k].path))
+            return FileRef{src, uint32_t(k), s.pak.entries[k].size};
+        break;
+      case SourceKind::zip:
+        for (size_t k = 0; k < s.zip.entries.size(); ++k)
+          if (folded_equal(folded, s.zip.entries[k].name))
+            return FileRef{src, uint32_t(k), s.zip.entries[k].size};
+        break;
+      case SourceKind::directory:
+        for (size_t k = 0; k < s.files.size(); ++k)
+          if (folded_equal(folded, s.files[k])) return FileRef{src, uint32_t(k), s.file_sizes[k]};
+        break;
+    }
+  }
+  return std::nullopt;
+}
+
 std::span<const uint8_t> view(const SearchPath& sp, const FileRef& file) {
   const Source& s = sp.sources[file.source];
   if (s.kind == SourceKind::pack) return pak_file(s.bytes, s.pak.entries[file.entry]);

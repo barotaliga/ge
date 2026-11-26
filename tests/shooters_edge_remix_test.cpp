@@ -523,23 +523,21 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   CHECK(!cl::remix_dress(r, s, "q1"));
 }
 
-// `cr_menu` and `cr_charset`: each names its own game, apart from the other and from the items; a
-// glyph sheet is taken into a set at a density it divides, never one it does not.
-TEST(cr_menu_and_cr_charset_name_the_menus_and_the_letters_games) {
+// `cr_menu`: the menu's pictures and its letters are one game's, apart from the items; a glyph
+// sheet is taken into a set at a density it divides, never one it does not.
+TEST(cr_menu_names_the_menu_s_and_the_letters_game) {
   ge::console::Cvars cvars;
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
+  CHECK(cvars.find("cr_charset") == nullptr);  // folded into cr_menu
   cl::RemixFiles r;
   r.played = "q1";
   r.state.on = true;
   cvars.set("cr_menu", "q2", ge::console::Source::local);
-  CHECK(cl::remix_dress(r, s, "q1") && r.menu == "q2" && r.charset == "q1");
+  CHECK(cl::remix_dress(r, s, "q1") && r.menu == "q2" && r.charset == "q2");
   CHECK(!r.wearing() && !r.from_files() && r.heard == "q1");  // nothing else swapped
-  cvars.set("cr_charset", "q2", ge::console::Source::local);
-  cvars.set("cr_menu", "", ge::console::Source::local);
-  CHECK(cl::remix_dress(r, s, "q1") && r.menu == "q1" && r.charset == "q2");
   CHECK(!cl::remix_dress(r, s, "q1"));
-  CHECK(cl::remix_parts(s)[6].empty() && cl::remix_parts(s)[7] == "q2");
+  CHECK(cl::remix_parts(s)[6] == "q2");
   r.state.on = false;
   CHECK(cl::remix_dress(r, s, "q1") && r.menu.empty() && r.charset.empty());
 

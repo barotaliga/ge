@@ -521,6 +521,7 @@ bool start_map(Listen& l, std::string& error) {
   h->lines = l.opt.item_names;
   h->worn = l.opt.arsenal;
   h->worn_over = l.opt.over_mod;
+  h->worn_info = l.opt.remix_info;
   // A mod's module sets its own weapons and physics: classic remix's lines for them
   // (`worn_lines`: cr_items, cr_physics) are left out, the mod's boundaries standing, but for
   // those `cr_over_mods` sets over them (`over_mod`, below).
@@ -531,6 +532,7 @@ bool start_map(Listen& l, std::string& error) {
   h->lines.insert(h->lines.end(), l.opt.console.begin(), l.opt.console.end());
   if (h->module != nullptr || !h->native_library.empty())  // `cr_over_mods`: over the mod's own
     h->lines.insert(h->lines.end(), l.opt.over_mod.begin(), l.opt.over_mod.end());
+  h->lines.insert(h->lines.end(), l.opt.remix_info.begin(), l.opt.remix_info.end());
   // A lobby is a match's: a single-player or coop game (`deathmatch 0`) starts with the map, its
   // monsters in it, whatever `sv_lobby` says.
   const bool lobby = l.opt.lobby && !wants_campaign(l.opt);
@@ -896,7 +898,7 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
   // moves (`cr_items` changed since it started): the match started afresh on the map.
   if (!l.match || l.host->lobby != (l.opt.lobby && !wants_campaign(l.opt)) ||
       l.host->worn != l.opt.arsenal || l.host->worn_over != l.opt.over_mod ||
-      l.host->files != l.opt.files) {
+      l.host->worn_info != l.opt.remix_info || l.host->files != l.opt.files) {
     l.map = std::move(map);
     return start_map(l, error);
   }

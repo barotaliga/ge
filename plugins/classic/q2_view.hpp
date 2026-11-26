@@ -39,6 +39,7 @@
 // ge:summary Quake II's view by the server: bob, run tilt, blow and fall kicks, the view offset
 // ge:keywords q2 view bob run_pitch run_roll bob_up bob_pitch bob_roll kick-angles view-offset
 // ge:keywords damage-kick fall-kick weapon-kick dead-view step_q2_view q2_view_blow
+// ge:keywords stride footstep step_q2_stride q2_footstep_heard g_footsteps
 // ge:skill classic shooter camera
 // ge:test tests/classic_q2_view_test.cpp
 #pragma once
@@ -96,5 +97,35 @@ void q2_view_hard_kick(Q2ViewState& st, float pitch, float roll);
 void q2_view_fall(Q2ViewState& st, float severity);
 // The frame's view, once a rules frame at its end; the frame's blows and shot are spent.
 Q2View step_q2_view(Q2ViewState& st, const Q2ViewSettings& set, const Q2ViewIn& in);
+
+// THE STRIDE alone (the bob's clock, above), one rules frame on at horizontal speed `speed`: true
+// when it turned over into the next stride (the clock's whole part, 4 times as fast ducked,
+// changed), the moment a footstep sounds. `step_q2_view` steps the same clock; another game's rules
+// that play Quake II's footsteps (classic remix's `cr_sounds q2`) step only this.
+// Inline: the rules packages built as mods step it without linking this plugin.
+inline bool step_q2_stride(float& bob_time, float& bob_step, float speed, bool on_ground,
+                           bool ducked) {
+  const float scale = ducked ? 4.0f : 1.0f;
+  const int stride = static_cast<int>(bob_time * scale);
+  if (speed < 5) {
+    bob_time = 0;
+    bob_step = 0;
+  } else if (on_ground) {
+    bob_step = speed > 210 ? 0.25f : speed > 100 ? 0.125f : 0.0625f;
+  }
+  bob_time += bob_step;
+  return static_cast<int>(bob_time * scale) != stride;
+}
+
+// The default footsteps, one picked at random a stride.
+inline constexpr const char* kQ2Footsteps[4] = {"player/step1.wav", "player/step2.wav",
+                                                "player/step3.wav", "player/step4.wav"};
+
+// Whether a stride's footstep sounds under the server's `g_footsteps` (`when`): 1 running faster
+// than 225 on the ground, 2 any pace on the ground, 3 and over always, 0 never.
+constexpr bool q2_footstep_heard(int when, bool on_ground, float speed) {
+  if (when < 1 || (when < 3 && !on_ground)) return false;
+  return when != 1 || speed > 225;
+}
 
 }  // namespace ge::classic

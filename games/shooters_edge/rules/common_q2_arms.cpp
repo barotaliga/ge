@@ -15,16 +15,20 @@
 // - **What they make**: Quake II's samples (each shot's, the pump and reload after it, the
 //   chaingun's spin, the click when empty), the hits' and blasts' effects by Quake II's names
 //   (puffs, sparks, blood, the rail's line, the blasts and their water kinds), and its obituaries.
+// - **The footsteps** (`cr_sounds q2`, which sets `g_footsteps`): each player's stride on Quake
+//   II's 0.1 s clock, a step at each stride it turns over, as `g_footsteps` says when.
 //
 // ge:summary The classic rules firing Quake II's weapons whole: its hand, shots, hits and sounds
 // ge:keywords remix cr_items q2-arms real-weapons hand-step railgun shotgun-period pellets
 // ge:keywords bullets chaingun hyperblaster bolt rocket grenade q2-knockback q2-obituary
+// ge:keywords q2_footsteps footsteps g_footsteps cr_sounds
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_remix_q2_arms_test.cpp
 #include <cstdint>
 #include <string_view>
 
 #include "classic/q2_arms.hpp"
+#include "classic/q2_view.hpp"
 #include "shooters_edge/rules/q2_arm_strings.hpp"
 #include "shooters_edge/rules/variant.hpp"
 #if defined(SE_RULES_CAMPAIGN)
@@ -419,11 +423,39 @@ bool q2_arsenal(A& q) {
 }
 
 void q2_weapon_precache(A& q) {
+  // Quake II's footsteps (classic remix's `cr_sounds q2` sets `g_footsteps`), read once.
+  q.set_g(g_q2_steps, q.cvar(q2s(q, idx("g_footsteps"))));
+  if (q.g(g_q2_steps) >= 1)
+    for (const char* s : gc::kQ2Footsteps) q.precache_sound(q2s(q, idx(s)));
   q.set_g(g_q2_arms, q2_arsenal(q) ? 1.0f : 0.0f);  // read once: the frames and deaths ask it
   if (!on(q.g(g_q2_arms))) return;
   for (int i = 0; i < kQ2ArmStringCount; i++) {
     const std::string_view s = kQ2ArmStrings[static_cast<size_t>(i)];
     if (s.ends_with(".wav")) q.precache_sound(q2s(q, i));
+  }
+}
+
+// Quake II's footsteps on the classic rules, under `g_footsteps` (classic remix's `cr_sounds q2`):
+// the stride's clock stepped on Quake II's 0.1 s frames (plugins/classic/q2_view.hpp), a step's
+// sound on the body at each stride it turns over, one of the four at random.
+void q2_footsteps(A& q) {
+  const float when = q.g(g_q2_steps);
+  if (when < 1) return;
+  const int32_t me = q.self();
+  if (q.f(me, f_q2_stride_next) > q.time() + 1) q.set_f(me, f_q2_stride_next, 0);  // a new map
+  const Vec3 v = q.v(me, q.L.f.velocity);
+  const float speed = q.vlen({v.x, v.y, 0});
+  const bool ground = band(q.f(me, q.L.f.flags), kFlOnground) != 0;
+  for (int n = 0; n < 4 && q.f(me, f_q2_stride_next) <= q.time(); n++) {
+    q.set_f(me, f_q2_stride_next,
+            q.f(me, f_q2_stride_next) <= 0 ? q.time() + kStep : q.f(me, f_q2_stride_next) + kStep);
+    float bob = q.f(me, f_q2_bob), step = q.f(me, f_q2_bob_step);
+    const bool turned = gc::step_q2_stride(bob, step, speed, ground, false);
+    q.set_f(me, f_q2_bob, bob);
+    q.set_f(me, f_q2_bob_step, step);
+    if (!turned || !gc::q2_footstep_heard(static_cast<int>(when), ground, speed)) continue;
+    const auto pick = static_cast<int>(q.random() * 4) & 3;
+    q.sound(me, kChanBody, q2s(q, idx(gc::kQ2Footsteps[pick])), 1, kAttnNorm);
   }
 }
 
