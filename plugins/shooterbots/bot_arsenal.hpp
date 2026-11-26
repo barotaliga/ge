@@ -146,6 +146,9 @@ const BotWeapon* weapon_row(const BotArsenal& a, int32_t bit);
 float ammo_of(const Stats& st, int ammo);
 // Carried and with a shot's ammunition.
 bool loaded(const Stats& st, const BotWeapon& w);
+// The farthest any weapon carried and loaded fires (`BotWeapon::range`; 0 none): a blade's alone
+// is a reach of 72 units (`outreach`).
+float loaded_reach(const Stats& st);
 // How good the weapon is at range `d` (higher better).
 double weapon_score(const BotWeapon& w, float d);
 // The launcher's ammunition in hand (0 when the game has no launcher).
