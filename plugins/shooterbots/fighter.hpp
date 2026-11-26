@@ -338,6 +338,7 @@ struct FighterStats {
   int64_t dives_given_up = 0;     // dives turned back (late, or short of air)
   double dive_wet_s = 0;          // time in the water on a dive
   int64_t outmatched = 0;         // commands spent turned from a fight it believed it loses
+  int64_t out_reach = 0;          // and of them, a blade's reach short of a foe kept in sight
   int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
   int64_t kept_off = 0;     // commands backing off a monster that bites (BotArsenal::keep_off)
   int64_t ledge_kept = 0;   // a fight's keys given up for the route's at a ledge (`ledge_guard`)
@@ -662,7 +663,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   Role role = Role::free;
   sb::Temper temper = sb::Temper::balanced;  // when it takes a fight (shooterbots/temper.hpp)
   sb::AimSkill skill = sb::AimSkill::expert;
-  bool outmatched = false;  // turned from the fight in sight: armour, a weapon or the team first
+  bool outmatched = false;   // turned from the fight in sight: armour, a weapon or the team first
+  double unreached_at = -1;  // (`outreach`) since when a foe in sight lay past a blade's reach
   bool item_first =
       false;  // (`itemfirst`) a key item of its own due: the fight's feet keep the route
   sb::Traits traits = sb::traits_of(sb::AimSkill::expert, sb::Temper::balanced);  // traits.hpp
