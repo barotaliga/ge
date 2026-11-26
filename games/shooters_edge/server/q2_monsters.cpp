@@ -301,6 +301,13 @@ void fall(Q2Server& s, Q2Monster& m) {
   q2_hold_speed(s, m.velocity);
   m.velocity.z -= static_cast<float>(s.cvars.find("sv_gravity")->number) * m.gravity * kStep;
   const ge::classic::Q2Trace t = sweep(s, m, e.origin, e.origin + m.velocity * kStep);
+  // Caught in solid (a monster a trigger brings in where its box overlaps a wall: two of xswamp's
+  // soldiers): it stays where it was put. Moved to the trace's end it sank through the floor, out
+  // of every shot's reach, and a player hunting it waited over it for good.
+  if (t.all_solid) {
+    m.velocity = {};
+    return;
+  }
   if (m.leaping && !m.struck && t.fraction < 1 && t.entity >= 1 && t.entity <= sh::kMaxClients &&
       sh::length(m.velocity) > 400) {  // the leap lands on someone
     const Attack& a = k.missile[0];
