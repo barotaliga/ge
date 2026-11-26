@@ -315,6 +315,22 @@ static bool air_short(const MoveSettings& move, const PilotSense& s, Vec3f B) {
   return across({}, s.velocity) * t < across(s.origin, B);
 }
 
+AirStrafe air_strafe(float vh, float err, float speed, float wish_cap) {
+  AirStrafe st;
+  st.side = err > 0 ? -1.f : 1.f;  // the right side turns the velocity clockwise
+  const float err_abs = err < 0 ? -err : err;
+  const float share = err_abs < kAirFull ? err_abs / kAirFull : 1.f;
+  float across = 90 * share;  // the wish's angle off the velocity, degrees
+  if (wish_cap > 0 && speed > 0) {
+    double c = static_cast<double>(wish_cap * (1 - share) / speed);
+    c = c < 0 ? 0 : c > 1 ? 1 : c;
+    across = static_cast<float>(core::libm::acos(c) * (180 / core::kPi));
+  }
+  // The side key's wish lies 90 off the view: the view `90 - across` behind it toward the turn.
+  st.yaw = wrap(vh + st.side * (90 - across));
+  return st;
+}
+
 MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   const float dt = static_cast<float>(msec) * 0.001f;
   const float t = static_cast<float>(p.stats.time_s);
@@ -1509,15 +1525,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
             because = "in the air: on the line, short of the target";
           }
         } else {
-          // Off the line: the side key toward the turn (the right side turns the velocity
-          // clockwise), pressed by how far off, the view led on the velocity by the turn the
-          // move gives (late hands get there as it has turned).
-          const float side = err > 0 ? -1.f : 1.f;
-          const float share = err_abs < kAirFull ? err_abs / kAirFull : 1.f;
-          float lead = -side * hop_turn_rate(speed, dt) * p.set.lead_s;
-          lead = lead > 45 ? 45 : lead < -45 ? -45 : lead;
-          w.yaw = unwrap(vh + lead, p.yaw);
-          w.side = side * share;
+          // Off the line: the side key toward the turn (`air_strafe`), the view where its wish
+          // lies, a few degrees behind the turn, never ahead of it (led into the turn by late
+          // hands' lead, the side key's wish lay past 90 off the velocity and braked: on e1m4 a
+          // jump over the slime fell from 302 units/s to a stop and dropped into it). The late
+          // hands' view does not change the wish: its keys are turned under it.
+          const AirStrafe st = air_strafe(vh, err, speed, g.move.air_wish_cap);
+          w.yaw = unwrap(st.yaw, p.yaw);
+          w.side = st.side;
           because = aim.x == B.x && aim.y == B.y ? "in the air: strafing onto the target"
                                                  : "in the air: strafing round the corner";
         }
