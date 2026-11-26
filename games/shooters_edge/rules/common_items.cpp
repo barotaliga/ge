@@ -154,12 +154,15 @@ bool pack_better(A& q, int32_t pickup, float had) {
 // game's model is drawn about its origin, where a brush model of ours starts at it: an item whose
 // box starts at its origin takes the box's middle as its origin and a box about it, so the trigger
 // stays where it was and the model stands in its middle; its origin is raised by the lift (that
-// game's models stand that far above the floor) and its box lowered as far.
-void dressed_start(A& q, int32_t setting, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi,
-                   float respawn) {
+// game's models stand that far above the floor) and its box lowered as far. The row's fourth word,
+// an amount by that game's own rules (a box's ammunition, a health's points), is answered (0 none).
+float dressed_start(A& q, int32_t setting, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi,
+                    float respawn) {
   const int32_t row = q.cvar_string(setting);
+  float amount = 0;
   if (!q.is(row, "")) {
     const float words = q.tokenize(row);
+    if (words > 3) amount = number_of(q, q.argv(3));
     mdl = q.strzone(q.argv(0));  // held by the item for as long as the map runs
     if (words > 1 && !q.is(q.argv(1), "-")) snd = q.strzone(q.argv(1));
     const float lift = words > 2 ? number_of(q, q.argv(2)) : 0;
@@ -171,6 +174,7 @@ void dressed_start(A& q, int32_t setting, int32_t mdl, int32_t snd, Vec3 lo, Vec
     hi = {hi.x - mid.x, hi.y - mid.y, hi.z - lift};
   }
   item_start(q, mdl, snd, lo, hi, respawn);
+  return amount;
 }
 
 void armour_start(A& q, float slot, float bit) {
@@ -221,14 +225,14 @@ void ammo_start(A& q, int32_t mdl, int32_t big, int32_t setting) {
   q.set_f(me, q.L.f.ammo_nails, q.f(me, q.L.f.ammo_nails) * n);
   q.set_f(me, q.L.f.ammo_rockets, q.f(me, q.L.f.ammo_rockets) * n);
   q.set_f(me, q.L.f.ammo_cells, q.f(me, q.L.f.ammo_cells) * n);
-  // Another game's box (classic remix) holds that game's own amount.
-  if (const int32_t row = q.cvar_string(setting); !q.is(row, "") && q.tokenize(row) > 3) {
-    const float own = number_of(q, q.argv(3)) * n;
-    for (const int f : {q.L.f.ammo_shells, q.L.f.ammo_nails, q.L.f.ammo_rockets, q.L.f.ammo_cells})
-      if (q.f(me, f) > 0) q.set_f(me, f, own);
-  }
   q.set_i(me, q.L.f.touch, q.fn(fn_ammo_touch));
-  dressed_start(q, setting, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
+  // Another game's box (classic remix) holds that game's own amount.
+  if (const float own =
+          dressed_start(q, setting, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
+      own > 0) {
+    for (const int f : {q.L.f.ammo_shells, q.L.f.ammo_nails, q.L.f.ammo_rockets, q.L.f.ammo_cells})
+      if (q.f(me, f) > 0) q.set_f(me, f, own * n);
+  }
 }
 
 // A weapon lying in slot `w`'s place: the arsenal's row gives its pickup model and ammunition;
@@ -410,23 +414,22 @@ void item_health(A& q) {
     return;
   }
   q.set_i(me, q.L.f.touch, q.fn(fn_health_touch));
-  int32_t setting;
+  // Another game's box (classic remix) gives that game's own points (dressed_start's answer).
+  float own;
   if (on(band(flags, 1))) {
-    setting = q.s(s_arsenal_health1);
     q.set_f(me, q.L.f.health, gc::kQ1HealthSmall);
-    dressed_start(q, setting, q.s(s_b_bh10), q.s(s_r_item1_wav), {0, 0, 0}, {32, 32, 56}, 20);
+    own = dressed_start(q, q.s(s_arsenal_health1), q.s(s_b_bh10), q.s(s_r_item1_wav), {0, 0, 0},
+                        {32, 32, 56}, 20);
   } else if (on(band(flags, 2))) {
-    setting = q.s(s_arsenal_health3);
     q.set_f(me, q.L.f.health, gc::kQ1HealthMega);
-    dressed_start(q, setting, q.s(s_b_bh100), q.s(s_r_item2_wav), {0, 0, 0}, {32, 32, 56}, 20);
+    own = dressed_start(q, q.s(s_arsenal_health3), q.s(s_b_bh100), q.s(s_r_item2_wav), {0, 0, 0},
+                        {32, 32, 56}, 20);
   } else {
-    setting = q.s(s_arsenal_health2);
     q.set_f(me, q.L.f.health, gc::kQ1HealthPlain);
-    dressed_start(q, setting, q.s(s_b_bh25), q.s(s_health1_wav), {0, 0, 0}, {32, 32, 56}, 20);
+    own = dressed_start(q, q.s(s_arsenal_health2), q.s(s_b_bh25), q.s(s_health1_wav), {0, 0, 0},
+                        {32, 32, 56}, 20);
   }
-  // Another game's box (classic remix) gives that game's own points.
-  if (const int32_t row = q.cvar_string(setting); !q.is(row, "") && q.tokenize(row) > 3)
-    q.set_f(me, q.L.f.health, number_of(q, q.argv(3)));
+  if (own > 0) q.set_f(me, q.L.f.health, own);
 }
 
 void armour_touch(A& q) {
