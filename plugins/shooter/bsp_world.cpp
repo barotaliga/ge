@@ -90,6 +90,12 @@ bool bsp_world(const brush::Map& map, BspWorld* out, std::string* error) {
     m.maxs = {md.maxs[0], md.maxs[1], md.maxs[2]};
     w.models.push_back(m);
   }
+  if (!w.models.empty()) {
+    BrushModel& world = w.models[0];
+    w.cells = std::make_shared<const ContentsCells>(
+        contents_cells(world.hulls[0], world.mins, world.maxs));
+    world.hulls[0].cells = w.cells.get();
+  }
   return true;
 }
 

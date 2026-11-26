@@ -35,12 +35,13 @@
 // ge:summary Clip hulls: planes and nodes, point contents, the box hull, the hull line trace
 // ge:keywords clip-hull hull clipnode plane contents point-contents box-hull trace line-trace
 // ge:keywords startsolid allsolid inopen inwater fraction impact dist-epsilon solid water
-// ge:keywords slime lava trace_hull point_contents
+// ge:keywords slime lava trace_hull point_contents contents_cells contents-grid
 // ge:skill shooter
 // ge:test tests/shooter_hull_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "shooter/vec.hpp"
 
@@ -74,11 +75,16 @@ struct ClipNode {
 
 // A view of a hull's arrays; the arrays belong to whoever built it (a map, `BoxHull`,
 // brush_hull.hpp).
+struct ContentsCells;
+
 struct Hull {
   const Plane* planes = nullptr;
   const ClipNode* nodes = nullptr;
   int32_t first_node = 0;
   int32_t last_node = -1;
+  // The contents by cubes (`contents_cells`); null: every point walks the tree. Owned, like the
+  // arrays, by whoever built the hull.
+  const ContentsCells* cells = nullptr;
 };
 
 // The leaf a point falls into: its contents number.
@@ -114,5 +120,23 @@ struct BoxHull {
   Hull hull() const { return {planes, nodes, 0, 5}; }
 };
 BoxHull make_box_hull(Vec3f mins, Vec3f maxs);
+
+// THE CONTENTS BY CUBES: a grid of cubes over a hull's extent, each holding the one contents
+// number every point in it (and within a unit of it) falls into, or 0 where the cube's points
+// fall into leaves of more than one. Found once by walking the tree with each cube's box: a box
+// wholly on one side of a plane goes down that side alone, else both. `point_contents` answers a
+// point in a cube of one contents without its walk down the tree, with the same number. A point
+// off the grid is 0 (walk).
+struct ContentsCells {
+  Vec3f lo;                // the grid's low corner
+  float cell = 32;         // a cube's side, units
+  int32_t n[3] = {};       // cubes along x, y, z
+  std::vector<int8_t> at;  // x fastest, then y, then z
+
+  int contents(Vec3f p) const;
+};
+// The grid over `mins`..`maxs` (the hull's space) in cubes of `cell` units, grown by one cube a
+// side; a huge extent takes bigger cubes.
+ContentsCells contents_cells(const Hull& hull, Vec3f mins, Vec3f maxs, float cell = 16);
 
 }  // namespace ge::shooter

@@ -3,7 +3,8 @@
 // stands 24 above it, walks through the east doorway, stops against a wall where the doorway is
 // not, and a large box as wide as the doorway is stopped there; hull 0 answers points; 38 and 46
 // are refused, naming the family; both families trace to the same bits, held golden
-// (tests/golden/shooter_bsp_world.txt); a mutated map that reads is traced to an end.
+// (tests/golden/shooter_bsp_world.txt); the contents by cubes answer every point as hull 0's walk
+// does; a mutated map that reads is traced to an end.
 //
 // A deliberate change to the fixture's hulls or the trace moves the golden: rewrite it with
 // `GE_GOLDEN_WRITE=1 build/<preset>/tests/shooter_bsp_world_test` and say why in the PR.
@@ -197,6 +198,46 @@ TEST(both_families_trace_to_the_same_bits_held_golden) {
   const auto golden = ge::test::golden_rows(kGolden);
   CHECK(golden.size() == rows.size());
   for (size_t r = 0; r < golden.size() && r < rows.size(); ++r) CHECK(golden[r] == rows[r]);
+}
+
+// Hull 0's contents by cubes give every point the walk's own answer: random points over the
+// world and points a hair either side of every axial plane of the fixture's.
+TEST(the_contents_by_cubes_answer_as_the_walk_does) {
+  for (br::Family family : {br::Family::v29, br::Family::bsp2}) {
+    const MapServer m(family);
+    const sh::Hull& with = m.world.models[0].hulls[0];
+    CHECK(with.cells != nullptr);
+    sh::Hull without = with;
+    without.cells = nullptr;
+    const sh::BrushModel& w = m.world.models[0];
+    ge::core::Rng rng = ge::core::make_rng(7);
+    int answered = 0, points = 0;
+    const auto same = [&](sh::Vec3f p) {
+      ++points;
+      if (with.cells->contents(p) != 0) ++answered;
+      CHECK(sh::point_contents(with, p) == sh::point_contents(without, p));
+    };
+    for (int n = 0; n < 200000; ++n) {
+      sh::Vec3f p;
+      for (int a = 0; a < 3; ++a)
+        p[a] = float(ge::core::range(rng, double(w.mins[a]) - 64, double(w.maxs[a]) + 64));
+      same(p);
+    }
+    for (const sh::Plane& pl : m.world.planes) {
+      if (pl.type >= 3) continue;
+      for (float off : {-1e-3f, 0.0f, 1e-3f}) {
+        for (int n = 0; n < 200; ++n) {
+          sh::Vec3f p;
+          for (int a = 0; a < 3; ++a)
+            p[a] = float(ge::core::range(rng, double(w.mins[a]) - 8, double(w.maxs[a]) + 8));
+          p[pl.type] = pl.dist + off;
+          same(p);
+        }
+      }
+    }
+    // Most of the world is answered by its cube.
+    CHECK(answered * 2 > points);
+  }
 }
 
 TEST(a_mutated_map_that_reads_is_traced_to_an_end) {
