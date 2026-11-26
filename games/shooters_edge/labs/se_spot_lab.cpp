@@ -741,6 +741,7 @@ bool load_scene(gl::Lab& lab, const ge::progs::Progs& progs, Scene& s, std::stri
   std::string entities;
   std::vector<uint8_t> bytes, store;
   std::span<const uint8_t> file;
+  cl::SearchPath files;  // outlives `file`: a map in a pack is a view into the pack it holds
   if (basedir.empty()) {
     if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes, &error))
       return false;
@@ -748,7 +749,6 @@ bool load_scene(gl::Lab& lab, const ge::progs::Progs& progs, Scene& s, std::stri
     s.name = "halls";
     entities = cn::kTeamHallsEntities;
   } else {
-    cl::SearchPath files;
     if (!cl::open_game_dir(basedir, lab.arg("game"), files, error)) return false;
     s.name = lab.arg("map");
     file = cl::find_file(files, "maps/" + s.name + ".bsp", store);

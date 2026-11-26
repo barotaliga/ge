@@ -403,6 +403,12 @@ enum class PilotMode : uint8_t {
 };
 inline constexpr int kPilotModes = 12;  // PilotMode's count: a table indexed by mode is this long
 const char* pilot_mode_name(PilotMode m);
+// Whether the pilot is on a jump (lining it up, running at it, flying it): the view is its own
+// then, and a spot the bot watches waits (bot.cpp; e1m4's trap room: a button watched across the
+// slime pit held the view off the jump across it, and it was never made).
+inline bool leaping_mode(PilotMode m) {
+  return m == PilotMode::run_up || m == PilotMode::jump || m == PilotMode::air;
+}
 
 enum class PilotHands : uint8_t { none, human, practised, steady };
 // The hands' axes: yaw (degrees), forward and side (shares of maxspeed), jump.
