@@ -239,7 +239,7 @@ firing or dropping:
   second) and the best weapon with ammo is chosen: railgun, hyperblaster, chaingun, machinegun,
   super shotgun (2 shells or more), shotgun, blaster.
 - **Ready without attack**: the idle frames, looping; at a pause frame it waits with a chance of
-  15 in 16 each step.
+  15 in 16 each step (the frames and the order: **The idle pauses** below).
 - **Firing**: at a fire frame the weapon fires (and moves the frame itself), else the frame steps;
   at the first idle frame + 1 it is ready again. So a weapon's period is **(last fire frame − last
   activate frame + 1) frames of 100 ms**.
@@ -307,6 +307,46 @@ is thrown at frame 12 at 400 + (3 − time left) × 400 / 3 units/s (so 400 to 8
 was held), with the time left as its fuse, from (8, 8) at the eye; frame 15 waits for the fuse's
 end before frame 16 makes it ready (idle 16 to 48, pauses 29, 34, 39, 48). Damage 125 (× 4
 quad), radius 165. It explodes as a grenade.
+
+**The idle pauses** (read; a reader on Q2PRO 601a8df, its base game library): each weapon lists
+the idle frames it may rest on. Blaster 19, 32; shotgun 22, 28, 34; super shotgun 29, 42, 57;
+machinegun 23, 45; chaingun 38, 43, 51, 61; grenade launcher 34, 51, 59; rocket launcher 25, 33,
+42, 50; hyperblaster none; railgun 56; BFG 39, 45, 50, 55; hand grenade 29, 34, 39, 48. Only a
+ready hand with attack neither held nor pressed consults them. Within that step: on the last idle
+frame the frame becomes the first idle frame and the step ends; otherwise, on a listed frame, one
+32-bit draw of the game's random generator decides: the hand moves on only when its lowest four
+bits are 0 (stays with chance 15/16); otherwise it advances one. So a pause listed on the last
+idle frame never holds (derived): the super shotgun's 57, machinegun's 45, chaingun's 61, grenade
+launcher's 59, rocket launcher's 50, railgun's 56 and BFG's 55. The hand grenade's own ready step
+checks 48 before its wrap, so 48 does rest, then 16 (derived). A rest lasts 1.6 s on average,
+1.1 s the median (derived, geometric with p = 1/16).
+
+**The view kick a shot gives** (read): pitch is down-positive, so a negative pitch tips the view
+up; the kick origin is a world vector added to the eye's offset, "back" opposite the whole aim
+(its pitch too).
+
+| Weapon | Kick angles | Kick origin |
+| --- | --- | --- |
+| Blaster, hyperblaster (each shot), grenade launcher, rocket launcher | pitch −1 | 2 back |
+| Shotgun (its frame 9 sets none), super shotgun | pitch −2 | 2 back |
+| Railgun | pitch −3 | 3 back |
+| Chaingun (each step it fires) | pitch, yaw, roll each uniform ±0.7 | each world axis ±0.35 |
+| Machinegun | pitch −1.5 × the shots before this one in the burst (capped at 9 outside deathmatch; the count never grows in deathmatch, so 0 there); yaw, roll ±0.7 | each world axis ±0.35 |
+| BFG (fire frame 17; frame 9 none) | none: the hurt kick instead, pitch −40 and roll ±8, fading linearly over 0.5 s | 2 back |
+| Hand grenade | none | none |
+
+- The machinegun's bullet direction is the aim plus that shot's kick angles; no other weapon's
+  (read). Quad does not scale the view kick (read).
+- The kick angles and the eye offset reach the client in quarter units truncated toward zero and
+  clamped to a signed byte: −32 to +31.75 (read), so the BFG's −40 arrives as −32 and the shakes
+  as quarter steps (derived). The eye offset is clamped to ±14 across and −22..+30 up (read).
+- A kick lives in one snapshot and is cleared after it; the client blends the previous and the
+  current snapshot's kick angles and eye offset across the 0.1 s (read), so a kick rises over
+  0.1 s and falls over the next (derived). The gun is placed at the eye and takes the kick angles
+  too (read).
+- `cl_kickangles` (default 1, cheat-protected) drops the kick angles only; the kick origin always
+  applies (read). The gun frame is blended between snapshots except right after a weapon change
+  (read).
 
 ## A player's life
 

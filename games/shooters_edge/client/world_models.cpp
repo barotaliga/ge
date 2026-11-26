@@ -606,6 +606,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
     p.entity = e;
     p.modelindex = ed.modelindex;
     if (qc) {
+      p.turns_as_q2 = true;
       p.frame = int(field_named(l, e, "frame"));
       p.skin = int(field_named(l, e, "skin"));
       p.effects = int(field_named(l, e, "effects"));
@@ -851,6 +852,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       k.frames = models::frame_groups(model);
       k.skins = models::skin_groups(model);
       k.spin = (model.flags & kSpin) != 0;
+      for (int item = 0; item < sv::kSqItemCount && !k.q2_turns; item++)
+        k.q2_turns = name == sv::kSqItems[item].model && sv::sq_turns(item);
       k.flags = model.flags;
       k.synced = model.synced;
       bool any_stand_in = false;
@@ -1440,12 +1443,13 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     for (int c = 0; c < 3; c++) g.now.position[c] = w[c];
     if (p.bobs && !in_place.items_still) g.now.position[1] += float(q2_bob_units(t) * br::kUnitM);
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
-    if (k.spin || p.turns) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
-    if (p.turns) ang[0] = ang[2] = 0;  // yaw only
+    const bool turns = p.turns || (p.turns_as_q2 && k.q2_turns);
+    if (k.spin || turns) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
+    if (turns) ang[0] = ang[2] = 0;  // yaw only
     if (in_place.roll_hack && p.entity > 0 && p.entity <= sh::kMaxClients &&
         p.entity != in_place.self)
       ang[2] = -ang[2];            // cl_rollhack: another player's lean the other way
-    if (p.spinning && !p.turns) {  // upside down, its own yaw turned on 500 degrees a second
+    if (p.spinning && !turns) {  // upside down, its own yaw turned on 500 degrees a second
       ang[0] = 0;
       ang[2] = 180;
       ang[1] = float(std::fmod(t * kSqSpinDegPerS + p.angles.y, 360.0));

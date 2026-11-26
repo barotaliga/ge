@@ -740,11 +740,14 @@ int run_main(int argc, char** argv) {
   cl::ServerRemix told;  // a server's or a demo's remix, not the player's own (remix.hpp)
   const auto remix_now = [&]() -> const auto& { return told.of(remix_settings); };
   // `cr_items` (remix.hpp's `worn_arsenal`): the other game's things worn, from the next map.
-  const auto remix_wear = [&] {  // true: the remix is worn as its settings say
+  // `reopened`: the remix's files were opened again, which forgets what it wore, so what is worn
+  // (the held set, the HUD, the rules' lines) is put on again even when the parts compare the same
+  // (a demo recorded without a remix after the player's own: everything back to the game's own).
+  const auto remix_wear = [&](bool reopened) {  // true: the remix is worn as its settings say
     remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
     const bool dressed = cl::remix_dress(remix, remix_now(), args.profile);
     listen.opt.remix_info = cl::remix_info_lines(remix);  // told to everyone who joins
-    if (!dressed) return true;
+    if (!dressed && !reopened) return true;
     cl::worn_hud_reset(worn_hud, remix);       // read again from the files now open
     pictures_enhanced = !picture.ce.pictures;  // the pictures read again (cr_menu)
     cl::wear_lines(listen.opt, remix, game_content.arsenal);
@@ -765,14 +768,14 @@ int run_main(int argc, char** argv) {
     if (same_files && cl::remix_parts(remix_now()) == remix_items) return true;
     if (cl::busy(loader)) return false;  // its threads may read the other game's files: next frame
     remix_items = cl::remix_parts(remix_now());
-    if (same_files) return remix_wear();
+    if (same_files) return remix_wear(false);
     remix_open = open;
     remix_for = args.basedir;
     if (const std::string said =
             cl::open_remix_for(remix, remix_now(), prefs, args.profile, args.basedir, args.game);
         !said.empty())
       console.print(said);
-    return remix_wear();
+    return remix_wear(true);
   };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;

@@ -102,6 +102,9 @@ struct HeldModel {
   // from one end to the other while the gun fires, in place of the file's flame.
   std::vector<uint32_t> arc_ends[2];
   std::vector<HeldClip> clips;  // the model's animations as runs of `frames` (empty: none)
+  // The frame it stands on at rest (a file that holds every animation, its raise first, rests
+  // past frame 0).
+  int rest = 0;
   uint32_t vertex_count() const {
     return frames.empty() ? 0 : static_cast<uint32_t>(frames[0].positions.size() / 3);
   }

@@ -386,7 +386,11 @@ the skill's lessons before the first edit.
   shots, damage, knockback, effects and samples. Lift the weapon's logic to `plugins/classic`
   first (`q2_arms.hpp`), make its own rules step it from there, then have the played rules step
   the same code; the swapped rows name only the slot, the ammunition that stands for its own and
-  the files. A weapon's own sounds are never swapped by `cr_sounds`.
+  the files. A weapon's own sounds are never swapped by `cr_sounds`. What the played rules have no
+  word for travels in what they do send: Quake II's idle rests are the shared hand step's own, its
+  view kick is read back off the hand's frames by the window (`client/q2_arms_kick.hpp`, from the
+  kick table both games read), and a pickup's lift is one more word in its row, its turn the
+  window's by the model (Quake II's own item of that model turns or not).
 - The other way round is the same rule: Quake II's rules wearing Quake's weapons fire Quake's eight
   as rows of their own (`server/q2_quake_arms.hpp`), each number from the one place Quake's own
   rules read it (`profiles::kQ1Weapons`, `plugins/classic/q1_arms.hpp`), never Quake II's weapons

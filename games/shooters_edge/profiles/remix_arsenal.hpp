@@ -68,7 +68,7 @@ constexpr WeaponRow q2_worn(int32_t slot, ge::classic::Q2ArmId id, Ammo ammo, st
           fire_sound, missile,
           land_sound, blast_sound,
           pickup,     pickup_ammo,
-          most};
+          most,       kQ2Lift};
 }
 
 // Quake's eight slots as Quake II's weapons, whole: the axe's slot the blaster, the nailguns the
@@ -101,11 +101,11 @@ inline constexpr WeaponRow kQ1AsQ2Weapons[] = {
 // its own count, adding onto the one worn up to its most.
 inline constexpr ArmourRow kQ1AsQ2Armour[] = {
     {1, ge::classic::kQ2Armours[1].normal, ge::classic::kQ2Armours[1].base, 0,
-     "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[1].maximum},
+     "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[1].maximum, kQ2Lift},
     {2, ge::classic::kQ2Armours[2].normal, ge::classic::kQ2Armours[2].base, 0,
-     "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[2].maximum},
+     "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[2].maximum, kQ2Lift},
     {3, ge::classic::kQ2Armours[3].normal, ge::classic::kQ2Armours[3].base, 0,
-     "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[3].maximum},
+     "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[3].maximum, kQ2Lift},
 };
 // Its ammunition and health as Quake II's: the nails the bullets, the cells the slugs, the
 // small health the medium, the plain one the large, the mega health Quake II's own, each giving
@@ -311,24 +311,26 @@ constexpr const RemixPhysics* remix_physics(std::string_view played, std::string
 using MoveFeel = ge::classic::Q2Feel;
 inline constexpr MoveFeel kQ1Feel{320, 4, 10, false, 0.7f, 4, 310, false};
 
-// A view model whose file holds every animation: the frame it rests on and its firing frames.
+// A view model whose file holds every animation: the frame it rests on and its firing frames,
+// and the weapon of Quake II's it is (its hand's runs and its kick, plugins/classic/q2_arms.hpp).
 struct HeldFrames {
   std::string_view model;
   int rest = 0;        // the first idle frame
   int fire_first = 0;  // the firing frames, both ends included
   int fire_last = 0;
+  ge::classic::Q2ArmId arm = ge::classic::Q2ArmId::blaster;
 };
 
 // Quake II's view models: up 0..a, firing a+1..f, idle from f+1.
 inline constexpr HeldFrames kHeldFrames[] = {
-    {"models/weapons/v_blast/tris.md2", 9, 5, 8},
-    {"models/weapons/v_shotg/tris.md2", 19, 8, 18},
-    {"models/weapons/v_shotg2/tris.md2", 18, 7, 17},
-    {"models/weapons/v_machn/tris.md2", 6, 4, 5},
-    {"models/weapons/v_chain/tris.md2", 32, 5, 31},
-    {"models/weapons/v_launch/tris.md2", 17, 6, 16},
-    {"models/weapons/v_rocket/tris.md2", 13, 5, 12},
-    {"models/weapons/v_rail/tris.md2", 19, 4, 18},
+    {"models/weapons/v_blast/tris.md2", 9, 5, 8, ge::classic::Q2ArmId::blaster},
+    {"models/weapons/v_shotg/tris.md2", 19, 8, 18, ge::classic::Q2ArmId::shotgun},
+    {"models/weapons/v_shotg2/tris.md2", 18, 7, 17, ge::classic::Q2ArmId::super_shotgun},
+    {"models/weapons/v_machn/tris.md2", 6, 4, 5, ge::classic::Q2ArmId::machinegun},
+    {"models/weapons/v_chain/tris.md2", 32, 5, 31, ge::classic::Q2ArmId::chaingun},
+    {"models/weapons/v_launch/tris.md2", 17, 6, 16, ge::classic::Q2ArmId::grenade_launcher},
+    {"models/weapons/v_rocket/tris.md2", 13, 5, 12, ge::classic::Q2ArmId::rocket_launcher},
+    {"models/weapons/v_rail/tris.md2", 19, 4, 18, ge::classic::Q2ArmId::railgun},
 };
 
 // The frames of the view model `model`, or null when its first frame is its rest and the rest its

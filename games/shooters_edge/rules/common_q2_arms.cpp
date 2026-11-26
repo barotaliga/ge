@@ -260,10 +260,27 @@ void fire_rail(A& q, int a) {
   q.trailparticles(me, q.particleeffectnum(q2s(q, idx(gc::kQ2RailLine))), start, last);
 }
 
-// One step's `shots` of weapon `a` (row `w`).
-void fire(A& q, float w, int a, int shots) {
+// The draw of a rest on an idle pause frame: off the rules' tenth and the player, so a rest moves
+// none of the rules' own random draws.
+uint32_t pause_draw(A& q, int32_t me) {
+  const auto tenth = static_cast<uint32_t>(static_cast<int64_t>(q.time() * 10.0f + 0.5f));
+  return gc::q2_pause_draw(tenth, static_cast<uint32_t>(me));
+}
+
+// One step's `shots` of weapon `a` (row `w`), the `held`th shot in a row. The machinegun's bullets
+// go where its kick tips the view: its climb (outside deathmatch) and its yaw and roll shake, the
+// shake drawn as the window draws its own (`gc::q2_shot_kick`), off the tenth and the player.
+void fire(A& q, float w, int a, int shots, int held) {
   const int32_t me = q.self();
-  q.makevectors(q.v(me, q.L.f.v_angle));
+  Vec3 aim = q.v(me, q.L.f.v_angle);
+  if (static_cast<gc::Q2ArmId>(a) == gc::Q2ArmId::machinegun) {
+    const float none[3] = {0, 0, 0};
+    const gc::Q2Kick k =
+        gc::q2_shot_kick(gc::Q2ArmId::machinegun, none,
+                         gc::q2_machine_climb(held - 1, in_deathmatch(q)), pause_draw(q, me));
+    aim = {aim.x + k.angles[0], aim.y + k.angles[1], aim.z + k.angles[2]};
+  }
+  q.makevectors(aim);
   const Vec3 dir = q.v_forward(), right = q.v_right(), up = q.v_up();
   const float kick = static_cast<float>(arm(a).kick);
   switch (static_cast<gc::Q2ArmId>(a)) {
@@ -342,7 +359,7 @@ void hand_step(A& q, float w, int a) {
       break;
     case kReady:
       if (!attack) {
-        gc::q2_idle_step(r.frames, frame);
+        gc::q2_idle_step(r.frames, gc::kQ2ArmPauses[a], frame, pause_draw(q, me));
         break;
       }
       if (!can_fire(q, w, a)) {
@@ -371,7 +388,7 @@ void hand_step(A& q, float w, int a) {
         q.set_f(me, f_show_hostile, q.time() + 1);
         q.set_f(me, q.L.f.effects, bor(q.f(me, q.L.f.effects), kEfMuzzleflash));
         if (quake_rules(q)) quake_quad_heard(q);
-        fire(q, w, a, f.shots);
+        fire(q, w, a, f.shots, held);
       }
       break;
     }

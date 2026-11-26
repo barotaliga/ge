@@ -45,7 +45,10 @@ SqStep fight_hand_step(Q2Server& s, int slot, bool attack, bool infinite, int sw
   Q2Player& p = s.players[slot];
   const int weapon = p.hand.weapon, was = p.hand.frame;
   const bool was_firing = p.hand.state == SqHandState::firing;
-  const SqStep step = sq_hand_step(p.hand, p.body, attack, s.level_time, infinite, swap);
+  // A rest on an idle pause frame, drawn off the frame and the slot (not the rules' stream).
+  const uint32_t draw = ge::classic::q2_pause_draw(static_cast<uint32_t>(s.frame_number),
+                                                   static_cast<uint32_t>(slot));
+  const SqStep step = sq_hand_step(p.hand, p.body, attack, s.level_time, infinite, swap, draw);
   const int k = sq_hand_sound(weapon, was, was_firing, p.hand);
   if (k >= 0)
     hand_sound(s, slot, kSqHandSound[k].sample, kSqHandSound[k].channel,

@@ -11,7 +11,7 @@
 //   shot starts from the eye (forward, right).
 // - **The hand** steps once a rules frame (0.1 s). Raising (`q2_raise_step`) climbs the activate
 //   run, `swap` frames a step, and is ready on the step after its last frame. Ready and idle
-//   (`q2_idle_step`) loops the idle run. Firing (`q2_firing_step`) walks the fire run, a shot on
+//   (`q2_idle_step`) loops the idle run, resting on its pause frames (`kQ2ArmPauses`). Firing (`q2_firing_step`) walks the fire run, a shot on
 //   each fire frame, and is ready again a step after its last fire frame, so a weapon's period is
 //   (last fire − last activate + 1) steps. Held fire (`q2_fire_frame`): the machinegun alternates
 //   frames 4 and 5 while attack is held; the chaingun runs 5 to 21 (1, then 2 from frame 10, then
@@ -30,6 +30,7 @@
 // ge:keywords q2 weapons q2-arms hand-step weapon-frames held-fire chaingun-spin machinegun
 // ge:keywords hyperblaster railgun rail-kick pellets bullet-spread rocket grenade bfg-ball blast
 // ge:keywords knockback remix-weapons cr_items real-weapons q2_firing_step q2_raise_step
+// ge:keywords idle-pause pause-frames view-kick kick-angles kick-origin recoil
 // ge:skill classic shooter
 // ge:test tests/classic_q2_arms_test.cpp
 #pragma once
@@ -112,9 +113,52 @@ constexpr bool q2_raise_step(const Q2ArmFrames& a, int& frame, int swap = 1) {
   return false;
 }
 
-// A ready hand with attack up: the idle run, round and round.
-constexpr void q2_idle_step(const Q2ArmFrames& a, int& frame) {
-  frame = frame >= a.last_idle ? a.last_fire + 1 : frame + 1;
+// THE IDLE RUN'S PAUSES: the idle frames a ready hand may rest on (0: no more), by `Q2ArmId`. On a
+// pause frame the hand stays a step with chance 15/16, so a rest lasts 1.6 s on average (1.1 s
+// the median). The last idle frame goes back to the first before its pause is asked, so a pause
+// listed there never holds, except the hand grenade's (`last_holds`): it rests on 48 too, then
+// goes back to 16. The hyperblaster never rests.
+struct Q2ArmPauses {
+  int at[4];
+  bool last_holds = false;
+};
+inline constexpr Q2ArmPauses kQ2ArmPauses[kQ2ArmCount] = {
+    {{19, 32, 0, 0}},  {{22, 28, 34, 0}},  {{29, 42, 57, 0}}, {{23, 45, 0, 0}},
+    {{38, 43, 51, 61}}, {{34, 51, 59, 0}}, {{25, 33, 42, 50}}, {{0, 0, 0, 0}},
+    {{56, 0, 0, 0}},   {{39, 45, 50, 55}}, {{29, 34, 39, 48}, true},
+};
+inline constexpr Q2ArmPauses kQ2NoPauses{};
+
+constexpr bool q2_pauses_on(const Q2ArmPauses& p, int frame) {
+  for (const int at : p.at)
+    if (at != 0 && at == frame) return true;
+  return false;
+}
+
+// The draw a pause takes, from the step and the player (not the rules' random stream, so a rest
+// moves no shot's spread): stays unless its low four bits are 0.
+constexpr uint32_t q2_pause_draw(uint32_t step, uint32_t who) {
+  uint32_t x = step * 0x9E3779B1u ^ (who + 0x7F4A7C15u) * 0x85EBCA77u;
+  x ^= x >> 16;
+  x *= 0x7FEB352Du;
+  x ^= x >> 15;
+  x *= 0x846CA68Bu;
+  x ^= x >> 16;
+  return x;
+}
+// A draw that always rests: a hand predicted ahead of its server waits there for the server's.
+inline constexpr uint32_t kQ2PauseRests = 1;
+
+// A ready hand with attack up: the idle run round and round, resting on its pause frames by
+// `draw` (`q2_pause_draw`).
+constexpr void q2_idle_step(const Q2ArmFrames& a, const Q2ArmPauses& p, int& frame,
+                            uint32_t draw) {
+  const bool rest = q2_pauses_on(p, frame) && (draw & 15u) != 0;
+  if (frame >= a.last_idle && !(p.last_holds && rest)) {
+    frame = a.last_fire + 1;
+    return;
+  }
+  if (!rest) frame++;
 }
 
 // The shots of a fire frame (the held-fire runs), the frame moved on. `have`: the shots the
@@ -371,6 +415,140 @@ inline constexpr float kQ2BfgSpeed = 400;
 inline constexpr int kQ2BfgSplash = 200;
 inline constexpr float kQ2BfgRadius = 100, kQ2BfgLaserReach = 256;
 inline constexpr int kQ2BfgLaserDm = 5, kQ2BfgLaserSp = 10;
+
+// THE VIEW'S KICK A SHOT GIVES, by `Q2ArmId`. Pitch is down-positive, so a kick of -1 tips the view
+// 1 degree up; `back` moves the eye that many units back along the whole aim (its pitch too).
+// `shake`: pitch, yaw and roll each ± `kQ2KickShake` degrees and the eye ± `kQ2KickShakeMove`
+// units along each of the world's axes (the chaingun); `climb`: the same but its pitch is the
+// machinegun's climb, never shaken; `heave`: the eye back and the view's hurt kick (pitch -40, roll
+// ± 8, fading over 0.5 s) instead of a kick of its own (the BFG). The hand grenade kicks none.
+enum class Q2KickKind : uint8_t { none, straight, shake, climb, heave };
+struct Q2KickRow {
+  Q2KickKind kind;
+  float pitch, back;
+};
+inline constexpr Q2KickRow kQ2Kicks[kQ2ArmCount] = {
+    {Q2KickKind::straight, -1, 2}, {Q2KickKind::straight, -2, 2}, {Q2KickKind::straight, -2, 2},
+    {Q2KickKind::climb, 0, 0},     {Q2KickKind::shake, 0, 0},     {Q2KickKind::straight, -1, 2},
+    {Q2KickKind::straight, -1, 2}, {Q2KickKind::straight, -1, 2}, {Q2KickKind::straight, -3, 3},
+    {Q2KickKind::heave, 0, 2},     {Q2KickKind::none, 0, 0},
+};
+inline constexpr float kQ2KickShake = 0.7f, kQ2KickShakeMove = 0.35f;
+inline constexpr float kQ2HeavePitch = -40, kQ2HeaveRoll = 8, kQ2HeaveFade = 0.5f;
+
+// A kick as the view shows it: angles (pitch, yaw, roll, degrees) and the eye's move (world
+// x, y, z, units).
+struct Q2Kick {
+  float angles[3] = {0, 0, 0};
+  float origin[3] = {0, 0, 0};
+};
+
+// A uniform draw in -most..most from a hash's state (stepped).
+constexpr float q2_kick_jitter(uint32_t& state, float most) {
+  state = q2_pause_draw(state, 0x6b1du);
+  const float u = static_cast<float>(state >> 8) * (1.0f / 16777216.0f);  // 0..1
+  return (u * 2 - 1) * most;
+}
+
+// The wire's grain: quarter units, cut toward zero, held to a signed byte (-32..31.75).
+constexpr float q2_kick_wire(float v) {
+  const float q = static_cast<float>(static_cast<int>(v * 4));
+  return (q < -128 ? -128 : q > 127 ? 127 : q) * 0.25f;
+}
+
+// The kick weapon `id`'s shot gives the view looking along `forward` (a unit vector): `climb`
+// is the machinegun's pitch up (degrees, ≥ 0; 0 in deathmatch), `draw` seeds the shakes. As the
+// view receives it, on the wire's grain. The BFG's hurt kick is the view's own (`kQ2Heave*`).
+constexpr Q2Kick q2_shot_kick(Q2ArmId id, const float forward[3], float climb, uint32_t draw) {
+  const Q2KickRow& r = kQ2Kicks[static_cast<int>(id)];
+  Q2Kick k;
+  switch (r.kind) {
+    case Q2KickKind::straight:
+    case Q2KickKind::heave:
+      k.angles[0] = r.pitch;
+      for (int i = 0; i < 3; i++) k.origin[i] = -forward[i] * r.back;
+      break;
+    case Q2KickKind::shake:
+    case Q2KickKind::climb: {
+      uint32_t st = draw;
+      const float pitch = q2_kick_jitter(st, kQ2KickShake);
+      k.angles[0] = r.kind == Q2KickKind::climb ? -climb : pitch;
+      k.angles[1] = q2_kick_jitter(st, kQ2KickShake);
+      k.angles[2] = q2_kick_jitter(st, kQ2KickShake);
+      for (float& o : k.origin) o = q2_kick_jitter(st, kQ2KickShakeMove);
+      break;
+    }
+    case Q2KickKind::none:
+      break;
+  }
+  for (int i = 0; i < 3; i++) {
+    k.angles[i] = q2_kick_wire(k.angles[i]);
+    k.origin[i] = q2_kick_wire(k.origin[i]);
+  }
+  return k;
+}
+
+// The machinegun's climb for its shot after `before` shots in a row: 1.5 degrees each, at most 9
+// of them; none in deathmatch.
+constexpr float q2_machine_climb(int before, bool deathmatch) {
+  if (deathmatch || before <= 0) return 0;
+  return kQ2MachineClimb * static_cast<float>(before < kQ2MachineClimbMost ? before
+                                                                          : kQ2MachineClimbMost);
+}
+
+// THE KICK DRAWN: a kick lives in one of the rules' frames (0.1 s) and the view eases from the
+// frame before to it, so it rises over 0.1 s and falls back over the next (a triangle 0.2 s wide);
+// a weapon kicking every frame eases from one kick to the next.
+inline constexpr double kQ2KickFrameS = 0.1;
+struct Q2KickBlend {
+  Q2Kick prev, cur;
+  double at = -1;  // when `cur`'s frame began, s; -1 none
+};
+constexpr Q2Kick q2_kick_at(const Q2KickBlend& b, double t) {
+  Q2Kick out;
+  if (b.at < 0) return out;
+  double f = (t - b.at) / kQ2KickFrameS;
+  f = f < 0 ? 0 : f > 1 ? 1 : f;
+  const auto g = static_cast<float>(f);
+  for (int i = 0; i < 3; i++) {
+    out.angles[i] = b.prev.angles[i] + (b.cur.angles[i] - b.prev.angles[i]) * g;
+    out.origin[i] = b.prev.origin[i] + (b.cur.origin[i] - b.prev.origin[i]) * g;
+  }
+  return out;
+}
+// The frames up to `t`: each one with no shot eases back toward none.
+constexpr void q2_kick_advance(Q2KickBlend& b, double t) {
+  for (int n = 0; b.at >= 0 && t >= b.at + kQ2KickFrameS; n++) {
+    if (n >= 2) {  // a long gap: nothing left to ease
+      b = Q2KickBlend{};
+      return;
+    }
+    b.prev = b.cur;
+    b.cur = Q2Kick{};
+    b.at += kQ2KickFrameS;
+  }
+}
+// A shot's kick in the frame that begins at `t`.
+constexpr void q2_kick_shot(Q2KickBlend& b, double t, const Q2Kick& k) {
+  q2_kick_advance(b, t);
+  b.prev = q2_kick_at(b, t);
+  b.cur = k;
+  b.at = t;
+}
+
+// Whether the hand's step from frame `was` to `now` fired (read off the frames alone, as a window
+// that sees only the frame does): the machinegun on each change between its two fire frames; any
+// other on a step that leaves a fire frame for the next frame (from the frame before it, from
+// outside the fire run as it starts, or round its loop). The hyperblaster let go on its last fire
+// frame reads as one shot more.
+constexpr bool q2_frame_fired(const Q2ArmFrames& a, Q2Held held, int was, int now) {
+  if (now == was) return false;
+  if (held == Q2Held::machinegun) return now >= a.fire_from && now <= a.fire_to;
+  const int left = now - 1;
+  if (left < a.fire_from || left > a.fire_to) return false;
+  const bool in_run = was > a.last_activate && was <= a.last_fire;
+  return was == left || !in_run || now < was;
+}
 
 // A blow's push along its way: 500 × knockback / mass (at least 50), 1600 × when a player hits
 // themselves (the rocket jump). A player's mass is 200.

@@ -100,6 +100,9 @@ struct Placed {
   int q2_anim = -1;
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
+  // Rules not Quake II's wearing its items (classic remix): it turns as Quake II's own item of
+  // the same model does (`ModelKind::q2_turns`), since those rules have no word for the turn.
+  bool turns_as_q2 = false;
   bool spinning = false;  // Quake II's spinning lights: upside down, 500 degrees a second
   bool bobs = false;      // Quake II's bob bit: rising and sinking 5 units
   // Quake II's render bits: lit full whatever the room, or never darker than a tenth.
@@ -246,6 +249,7 @@ struct ModelKind {
   uint32_t made = kNone;
   models::Groups frames, skins;
   bool spin = false, synced = true;
+  bool q2_turns = false;  // one of Quake II's items that turn where they lie (sq_turns)
   uint32_t flags = 0;  // a model file's effect flags (effects.hpp's kTrailGib, ...)
   // The colour its pack skin's glowing texels paint (linear, brightest channel 1) and their share
   // of the skin (0: nothing glows): what a grenade's red ends light round it (world_fx).

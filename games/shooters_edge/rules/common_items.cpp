@@ -212,9 +212,12 @@ void armour_start(A& q, float slot, float bit) {
   q.set_f(me, q.L.f.skin, number_of(q, q.argv(2)));
   // Quake II's take rule (classic remix): the most it holds, kept where an item has no health.
   q.set_f(me, q.L.f.max_health, words > 5 ? number_of(q, q.argv(5)) : 0);
+  // Another game's armour stands its model's origin that far over the floor (its box lowered).
+  const float lift = words > 6 ? number_of(q, q.argv(6)) : 0;
   q.set_f(me, q.L.f.items, bit);
   q.set_i(me, q.L.f.touch, q.fn(fn_armour_touch));
-  item_start(q, mdl, snd, {-16, -16, 0}, {16, 16, 56}, 20);
+  q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, lift});  // the box's foot stays
+  item_start(q, mdl, snd, {-16, -16, -lift}, {16, 16, 56 - lift}, 20);
 }
 
 // An ammunition box: `big` (spawnflags 1) holds twice as much and lies as the big box's model.
@@ -255,8 +258,11 @@ void weapon_start(A& q, float w, int32_t name, int32_t mdl) {
   q.set_i(me, q.L.f.netname, name);
   q.set_i(me, q.L.f.touch, q.fn(fn_weapon_touch));
   const int32_t pickup = weapon_word(q, w, 15);
+  float lift = 0;
   if (!q.is(pickup, "") & !q.is(pickup, "-")) {
     mdl = q.strzone(pickup);  // held by the item for as long as the map runs
+    // Another game's weapon stands its model's origin that far over the floor (its box lowered).
+    lift = weapon_number(q, w, 18);
     const float n = weapon_number(q, w, 16);
     const int32_t kind = weapon_word(q, w, 1);
     q.set_f(me, q.L.f.ammo_shells, 0);
@@ -277,7 +283,8 @@ void weapon_start(A& q, float w, int32_t name, int32_t mdl) {
   int32_t snd = q.s(s_pkup_wav);
   if (const int32_t own = q.cvar_string(q.s(s_arsenal_pickup)); !q.is(own, ""))
     snd = q.strzone(own);
-  item_start(q, mdl, snd, {-16, -16, 0}, {16, 16, 56}, 30);
+  q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, lift});  // the box's foot stays
+  item_start(q, mdl, snd, {-16, -16, -lift}, {16, 16, 56 - lift}, 30);
 }
 
 int32_t pack_weapon_name(A& q, float w) {

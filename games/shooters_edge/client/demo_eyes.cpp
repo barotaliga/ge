@@ -178,6 +178,33 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
     pose.eye = {pose.eye.x + k * f.x, pose.eye.y + k * f.y, pose.eye.z + k * f.z};
     pose.pitch -= 0.5 * e.kick * kDeg;
   }
+  // Quake II's weapons on other rules (classic remix): Quake II's kick, read off the hand's frames.
+  if (drawn.format != DemoFormat::q2) {
+    const int view = read.stats[kStatWeapon];
+    const std::string_view model = view > 0 && static_cast<size_t>(view) < read.models.size()
+                                       ? std::string_view(read.models[static_cast<size_t>(view)])
+                                       : std::string_view{};
+    const auto slot = static_cast<size_t>(read.player);
+    const int frame = read.format == DemoFormat::single             ? read.weapon_frame
+                      : read.player >= 0 && slot < read.players.size() ? read.players[slot].weapon_frame
+                                                                       : 0;
+    const sh::ViewAxes ax = sh::angle_vectors(drawn.angles);
+    const float forward[3] = {ax.forward.x, ax.forward.y, ax.forward.z};
+    bool deathmatch = true;  // a server that says otherwise climbs the machinegun
+    for (const auto& [key, value] : read.serverinfo)
+      if (key == "deathmatch") deathmatch = value != "0";
+    const ge::classic::Q2Kick k =
+        arms_kick_step(e.arms_kick, model, frame, clock_s, forward, deathmatch,
+                       static_cast<uint32_t>(read.player + 1));
+    const ge::camera::Vec3 o = engine_point({0, 0, 0}),
+                           d = engine_point({k.origin[0], k.origin[1], k.origin[2]});
+    pose.eye = {pose.eye.x + d.x - o.x, pose.eye.y + d.y - o.y, pose.eye.z + d.z - o.z};
+    if (e.view_kick == nullptr || *e.view_kick) {  // cl_kickangles 0: the angles left out
+      pose.pitch -= k.angles[0] * kDeg;
+      pose.yaw -= k.angles[1] * kDeg;
+      pose.roll += k.angles[2] * kDeg;
+    }
+  }
   if (dead || gib) pose.roll = kDeadRollDeg * kDeg;  // lying on the floor
   ge::render::FrameView view;
   ge::camera::to_frame_view(pose, view);

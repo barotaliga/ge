@@ -241,6 +241,23 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     v.pose.yaw -= v.kick.y * kDeg;
     v.pose.roll += v.kick.z * kDeg;
   }
+  // Quake II's weapons on other rules: Quake II's kick, read off the hand's frames.
+  if (listen_q2_arms(l)) {
+    const sh::ViewAxes ax = sh::angle_vectors(me.v_angle);
+    const float forward[3] = {ax.forward.x, ax.forward.y, ax.forward.z};
+    const ge::classic::Q2Kick k = arms_kick_step(
+        v.arms_kick, string_field_named(l, me.entity, "weaponmodel"),
+        static_cast<int>(field_named(l, me.entity, "weaponframe")), t, forward,
+        !wants_campaign(l.opt), static_cast<uint32_t>(me.entity));
+    const ge::camera::Vec3 o = engine_point({0, 0, 0}),
+                           d = engine_point({k.origin[0], k.origin[1], k.origin[2]});
+    v.pose.eye = {v.pose.eye.x + d.x - o.x, v.pose.eye.y + d.y - o.y, v.pose.eye.z + d.z - o.z};
+    if (v.q2 == nullptr || v.q2->kick_angles) {  // cl_kickangles 0: the angles left out
+      v.pose.pitch -= k.angles[0] * kDeg;
+      v.pose.yaw -= k.angles[1] * kDeg;
+      v.pose.roll += k.angles[2] * kDeg;
+    }
+  }
   // The program's punch on the view (pitch down and yaw left positive in the map's angles).
   v.pose.pitch -= me.punch.x * kDeg;
   v.pose.yaw -= me.punch.y * kDeg;
