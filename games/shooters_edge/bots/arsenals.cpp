@@ -214,11 +214,29 @@ int q2_item_ammo(ItemKind kind) {
   }
 }
 
-// The bots' kind of an ammunition of the rules (`none` for one they have no index for).
+// Ground Zero's: its flechettes, prox mines and disruptor rounds, by their place in its rules (the
+// tesla, thrown and never aimed, is left out).
+int q2_gz_item_ammo(ItemKind kind) {
+  switch (kind) {
+    case ItemKind::ammo_more1:  // flechettes
+      return 8;
+    case ItemKind::ammo_more2:  // prox mines
+      return 9;
+    case ItemKind::ammo_more3:  // disruptor rounds
+      return 11;
+    default:
+      return q2_item_ammo(kind);
+  }
+}
+
+// The bots' kind of an ammunition of the rules (`health` for one they have no index for). A pack's
+// own are its `ammo_more` kinds in its own order: no two packs are loaded at once.
 ItemKind q2_ammo_kind(server::SqAmmo a) {
-  const ItemKind kinds[] = {ItemKind::health,   ItemKind::shells,     ItemKind::nails,
-                            ItemKind::grenades, ItemKind::rockets,    ItemKind::cells,
-                            ItemKind::slugs,    ItemKind::ammo_more1, ItemKind::ammo_more2};
+  const ItemKind kinds[] = {ItemKind::health,     ItemKind::shells,     ItemKind::nails,
+                            ItemKind::grenades,   ItemKind::rockets,    ItemKind::cells,
+                            ItemKind::slugs,      ItemKind::ammo_more1, ItemKind::ammo_more2,
+                            ItemKind::ammo_more1, ItemKind::ammo_more2, ItemKind::health,
+                            ItemKind::ammo_more3};
   const auto i = static_cast<size_t>(a);
   return i < std::size(kinds) ? kinds[i] : ItemKind::health;
 }
@@ -267,11 +285,13 @@ std::vector<shooters_edge::profiles::ItemRow> q2_rows(server::Q2Pack pack) {
           r.kind = q2_ammo_kind(it.ammo);
           keep = it.ammo != server::SqAmmo::none && r.kind != ItemKind::health;
           break;
-        case server::SqKind::powerup:
-          keep = std::string_view(it.classname) == "item_quad" ||
-                 std::string_view(it.classname) == "item_invulnerability";
-          r.kind = std::string_view(it.classname) == "item_quad" ? ItemKind::quad : ItemKind::pent;
+        case server::SqKind::powerup: {
+          // Ground Zero's double damage is sought as the quad is: more damage for a while.
+          const std::string_view c = it.classname;
+          keep = c == "item_quad" || c == "item_double" || c == "item_invulnerability";
+          r.kind = c == "item_invulnerability" ? ItemKind::pent : ItemKind::quad;
           break;
+        }
         default:
           keep = false;
           break;
@@ -314,6 +334,14 @@ constexpr Q2Use kQ2Uses[] = {
     // phalanx's two balls (725 a second, each a blast).
     {11, 500, 0, 32, 700, false, false, WeaponCurve::spiker, 50, 1.4f},    // ion ripper
     {12, 725, -20, 80, 1200, false, true, WeaponCurve::rocket, 60, 1.8f},  // phalanx
+    // Ground Zero's: the chainfist at arm's length, the ETF rifle's stream of flechettes (1150 a
+    // second), the prox launcher's mines lobbed, the plasma beam's heat beam (it hits at once),
+    // the disruptor's tracker that homes on its target. The tesla is thrown, not aimed.
+    {14, 0, 0, 32, 64, true, false, WeaponCurve::blade, 10, 1},            // chainfist
+    {15, 1150, 0, 20, 1000, true, false, WeaponCurve::spiker, 45, 1.2f},   // ETF rifle
+    {16, 600, -20, 64, 500, false, true, WeaponCurve::lob, 35, 1.5f},      // prox launcher
+    {17, 0, 0, 24, 1000, true, false, WeaponCurve::beam, 65, 1.6f},        // plasma beam
+    {18, 1000, 0, 48, 1500, false, false, WeaponCurve::spiker, 60, 1.6f},  // disruptor
 };
 
 Q2Arsenal make_q2(server::Q2Pack pack) {
@@ -348,6 +376,16 @@ Q2Arsenal make_q2(server::Q2Pack pack) {
     a.ammo_max[7] = 5;
     a.short_of[6] = 10;
     a.short_of[7] = 1;
+  }
+  if (server::q2_pack_has(pack, server::Q2Pack::ground_zero)) {  // flechettes, prox, tesla, rounds
+    a.ammo_count = 12;
+    a.item_ammo = q2_gz_item_ammo;
+    const float gz_most[4] = {200, 50, 50, 100};
+    const float gz_short[4] = {50, 5, 0, 5};
+    for (int k = 0; k < 4; k++) {
+      a.ammo_max[8 + k] = gz_most[k];
+      a.short_of[8 + k] = gz_short[k];
+    }
   }
   a.read = q2_read;
   a.monster = q2_monster;
