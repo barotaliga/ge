@@ -11,8 +11,9 @@
 //   has no footsteps), so hearing Quake II as Quake leaves them out.
 // - **Many to one**: Quake II's machinegun picks among five shots, its hand grenade bounces two
 //   ways; the extra rows follow the first, so going back the first row's name is taken.
-// - **Names the games share** (`items/damage.wav`, `misc/talk.wav`) are not rows: the played
-//   game's own file is heard.
+// - **Names the games share** (`items/damage.wav`, `misc/talk.wav`, `player/gasp1.wav`) are not
+//   rows: the name is the same, and the chosen game's own copy of it is read, not the played
+//   game's over it (client/demo_sound.hpp's `hear_as`).
 // - **A player's own sounds** (Quake II's `*jump1.wav`, kept per figure): their row names the
 //   base voice, `player/male/<file>`, which a `*` name is looked up as.
 //
@@ -113,10 +114,17 @@ inline constexpr SoundMatch kSoundMatches[] = {
     {"player/death5.wav", "player/male/death4.wav", "death"},
     {"player/udeath.wav", "misc/udeath.wav", "gibbed"},
     {"player/gib.wav", "misc/udeath.wav", "gibbed"},
-    {"player/drown1.wav", "player/male/drown1.wav", "drowned"},
+    {"player/drown1.wav", "player/male/gurp1.wav", "choking under water"},
+    {"player/drown2.wav", "player/male/gurp2.wav", "choking under water"},
+    {"player/h2odeath.wav", "player/male/drown1.wav", "drowned"},
+    {"player/teledth1.wav", "misc/udeath.wav", "telefragged"},
     {"player/inh2o.wav", "player/watr_in.wav", "into the water"},
     {"player/h2ojump.wav", "player/watr_in.wav", "jumped into the water"},
     {"misc/outwater.wav", "player/watr_out.wav", "out of the water"},
+    {"", "player/watr_un.wav", "head under the water"},
+    {"misc/water1.wav", "player/wade1.wav", "swimming"},
+    {"misc/water2.wav", "player/wade2.wav", "swimming"},
+    {"misc/water1.wav", "player/wade3.wav", "swimming"},
     {"player/inlava.wav", "player/lava_in.wav", "into lava"},
     {"player/lburn1.wav", "player/lava1.wav", "burnt by lava"},
     {"player/lburn2.wav", "player/lava2.wav", "burnt by lava"},
@@ -134,6 +142,18 @@ constexpr bool same_name(std::string_view a, std::string_view b) {
   return true;
 }
 }  // namespace remix_sounds_detail
+
+// Whether `name` is a weapon's own sound (a weapon row's, either game's, or one under `weapons/`):
+// it is heard as its weapon's game names it, never as another's copy.
+constexpr bool weapon_sound(std::string_view name) {
+  if (name.size() >= 8 && remix_sounds_detail::same_name(name.substr(0, 8), "weapons/"))
+    return true;
+  for (const SoundMatch& m : kSoundMatches)
+    if (m.weapon && (remix_sounds_detail::same_name(m.classic, name) ||
+                     remix_sounds_detail::same_name(m.q2, name)))
+      return true;
+  return false;
+}
 
 // The column of game `game` in the table, or -1 when the table has none.
 constexpr int sound_column(std::string_view game) {

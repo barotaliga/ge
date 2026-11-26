@@ -84,9 +84,13 @@ constexpr std::string_view kWhoseValues =
     "\"\": the played game's own (the default); q1: Quake's; q2: Quake II's";
 
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
+  // The server's settings (M18u13c): the window's own match plays them and tells them to everyone
+  // who joins (`remix_info_lines`); kept in the player's config for the next match hosted.
+  constexpr uint32_t kServerSetting =
+      ge::console::kServer | ge::console::kServerInfo | ge::console::kArchive;
   cvars.bind({.name = "cr_enabled",
               .fallback = "0",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whether classic remix is on: one classic game played with another's maps "
                       "and items. It needs two classic games loaded as full games.",
               .kind = ge::console::CvarKind::boolean,
@@ -95,7 +99,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->enabled);
   cvars.bind({.name = "cr_items",
               .fallback = "",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whose items a map is played with under classic remix; the HUD follows "
                       "them.",
               .kind = ge::console::CvarKind::text,
@@ -103,7 +107,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->items);
   cvars.bind({.name = "cr_models",
               .fallback = "",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whose figure the players are drawn as under classic remix, from the next "
                       "map.",
               .kind = ge::console::CvarKind::text,
@@ -111,7 +115,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->models);
   cvars.bind({.name = "cr_physics",
               .fallback = "",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whose movement the players run, jump and strafe with under classic remix, "
                       "from the next map.",
               .kind = ge::console::CvarKind::text,
@@ -119,7 +123,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->physics);
   cvars.bind({.name = "cr_sounds",
               .fallback = "",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whose sounds a match is heard with under classic remix: the shots, blasts, "
                       "pickups and the players' jumps, pain and deaths. The items keep the "
                       "played game's sounds unless this names another game.",
@@ -128,7 +132,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->sounds);
   cvars.bind({.name = "cr_over_mods",
               .fallback = "0",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whether classic remix's choices hold over a mod's own rules too: with it "
                       "on, cr_physics moves the players as it names even while a mod plays. A "
                       "mod's weapons stay its own.",
@@ -138,7 +142,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->over_mods);
   cvars.bind({.name = "cr_monsters",
               .fallback = "",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whose monsters a map is played with under classic remix, each with its own "
                       "health, attacks and sounds, from the next map.",
               .kind = ge::console::CvarKind::text,
@@ -147,22 +151,15 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
   cvars.bind({.name = "cr_menu",
               .fallback = "",
               .flags = ge::console::kArchive,
-              .help = "Whose menu is drawn under classic remix: its pictures, titles and cursor. "
-                      "The pages and their settings stay the played game's.",
+              .help = "Whose menu is drawn under classic remix: its pictures, titles and cursor, "
+                      "and the letters the menu, the console and the status bar's counts are "
+                      "written in. The pages and their settings stay the played game's.",
               .kind = ge::console::CvarKind::text,
               .values = kWhoseValues},
              &out->menu);
-  cvars.bind({.name = "cr_charset",
-              .fallback = "",
-              .flags = ge::console::kArchive,
-              .help = "Whose letters the menu, the console and the status bar's counts are "
-                      "written in under classic remix.",
-              .kind = ge::console::CvarKind::text,
-              .values = kWhoseValues},
-             &out->charset);
   cvars.bind({.name = "cr_expansions",
               .fallback = "1",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "Whether classic remix takes the mission packs in too: the other game's "
                       "packs' maps, their weapons and items swapped by what they do, and the "
                       "played pack's own weapons laid down where it has them.",
@@ -172,7 +169,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->expansions);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "How many strong weapons (the rocket launcher's kind) a remixed map keeps at "
                       "least, when it has two weapons or more.",
               .kind = ge::console::CvarKind::integer,
@@ -182,7 +179,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->balance.strong_min);
   cvars.bind({.name = "cr_strong_share",
               .fallback = "0.4",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "The share of a remixed map's weapons that may be strong at most; the "
                       "rest are lowered.",
               .kind = ge::console::CvarKind::number,
@@ -192,7 +189,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->balance.strong_share);
   cvars.bind({.name = "cr_strong_same",
               .fallback = "2",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "How many copies of one strong weapon a remixed map keeps at most; the rest "
                       "are lowered, the one nearest a strong armour first.",
               .kind = ge::console::CvarKind::integer,
@@ -202,7 +199,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->balance.strong_same);
   cvars.bind({.name = "cr_weak_same",
               .fallback = "2",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "How many copies of one weak weapon (the shotguns' kind) a remixed map keeps "
                       "at most; the rest become boxes of its ammunition.",
               .kind = ge::console::CvarKind::integer,
@@ -212,7 +209,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->balance.weak_same);
   cvars.bind({.name = "cr_pool_radius",
               .fallback = "160",
-              .flags = ge::console::kArchive,
+              .flags = kServerSetting,
               .help = "How near one another a map's small pickups lie to be gathered into the "
                       "other game's larger ones.",
               .kind = ge::console::CvarKind::number,
@@ -327,11 +324,10 @@ bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played)
   RemixSettings of_monsters = s;
   of_monsters.sounds = s.monsters;
   const std::string_view monsters = heard_game(of_monsters, r.state, played);
-  RemixSettings of_menu = s, of_charset = s;
+  RemixSettings of_menu = s;
   of_menu.sounds = s.menu;
-  of_charset.sounds = s.charset;
   const std::string_view menu = heard_game(of_menu, r.state, played);
-  const std::string_view charset = heard_game(of_charset, r.state, played);
+  const std::string_view charset = menu;  // the menu's game writes its letters too
   if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics &&
       heard == r.heard && monsters == r.monsters && menu == r.menu && charset == r.charset)
     return false;
@@ -353,11 +349,45 @@ std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::
   if (r.looks != nullptr) lines.push_back("set sv_wear \"" + std::string(r.looks->items) + "\"");
   if (r.physics != nullptr)
     for (const std::string_view line : r.physics->lines) lines.emplace_back(line);
+  // Quake II's sounds on rules of another game: its footsteps too, at each stride of a run.
+  if (r.heard == "q2" && r.played != "q2") lines.emplace_back("set g_footsteps 1");
   return lines;
+}
+
+std::vector<std::string> remix_info_lines(const RemixFiles& r) {
+  std::vector<std::string> out;
+  if (!r.state.on) return out;
+  out.emplace_back("serverinfo cr_enabled 1");
+  const auto tell = [&](std::string_view key, std::string_view game) {
+    if (!game.empty() && game != r.played)
+      out.push_back("serverinfo " + std::string(key) + " " + std::string(game));
+  };
+  tell("cr_items", r.worn != nullptr    ? r.worn->items
+                   : r.looks != nullptr ? r.looks->items
+                                        : std::string_view());
+  tell("cr_models", r.figure != nullptr ? r.figure->models : std::string_view());
+  tell("cr_physics", r.physics != nullptr ? r.physics->physics : std::string_view());
+  tell("cr_sounds", r.heard);
+  tell("cr_monsters", r.monsters);
+  return out;
+}
+
+RemixSettings remix_told(std::span<const std::pair<std::string, std::string>> info) {
+  RemixSettings s;
+  for (const auto& [k, v] : info) {
+    if (k == "cr_enabled") s.enabled = v == "1";
+    if (k == "cr_items") s.items = v;
+    if (k == "cr_models") s.models = v;
+    if (k == "cr_physics") s.physics = v;
+    if (k == "cr_sounds") s.sounds = v;
+    if (k == "cr_monsters") s.monsters = v;
+  }
+  return s;
 }
 
 void wear_lines(ListenOptions& opt, const RemixFiles& r, const std::vector<std::string>& own) {
   opt.arsenal = worn_lines(r, own);
+  opt.remix_info = remix_info_lines(r);
   opt.over_mod.clear();
   if (r.mod_rules && r.physics != nullptr)
     for (const std::string_view line : r.physics->lines) opt.over_mod.emplace_back(line);
@@ -759,6 +789,7 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
         return false;
       }
     }
+  r.other_sources = r.files.vfs.sources.size() + base.vfs.sources.size();
   std::vector<ge::vfs::Source> sources = std::move(base.vfs.sources);
   for (ge::vfs::Source& src : own.vfs.sources) sources.push_back(std::move(src));
   for (const ce::MissionPack& p : mine->packs)
@@ -777,6 +808,18 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
   r.files.folder = own.folder;
   r.state = state;
   return true;
+}
+
+std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const std::string& prefs,
+                           std::string_view played, const std::string& basedir,
+                           const std::string& game) {
+  const RemixState st = remix_check(s, played, known_games(prefs, played, basedir));
+  std::string why;
+  if (!open_remix(r, st, played, basedir, game, why)) return why;
+  if (!st.on) return st.why;
+  const ce::Profile* other = ce::find_profile(st.other);
+  return "Classic remix is on: " + std::string(other != nullptr ? other->what : st.other) +
+         "'s maps can be played too.";
 }
 
 bool remix_monsters(std::string_view text, std::string_view played, std::string_view to,
