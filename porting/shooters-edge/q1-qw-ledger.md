@@ -410,7 +410,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C356 | `password` (qw, empty) | the server password sent in the user info | done | client/settings.cpp (`password`, user info, the classic layer), net/qw_remote.cpp (sent at the join and again when changed) |  |
 | C357 | `spectator` (qw, empty) | join as a spectator (or the spectator password) | done | games/shooters_edge/net/qw_remote.cpp (1 only; a spectator password is not sent) |  |
 | C358 | `name` (qw, unnamed) | your name (user info) | done | engine/console/view.cpp, net/qw_client.cpp |  |
-| C359 | `team` (qw, empty) | your team (user info) | done | the team command (engine/console/talk.cpp) and net/qw_client.cpp |  |
+| C359 | `team` (qw, empty) | your team (user info) | done | net/qw_remote.cpp (`remote_lobby`: setinfo team on a classic server; `team` alone says it), net/qw_game.cpp (our server with no lobby takes it as the user info), net/qw_client.cpp (stuffed) | corrected 2026-11-26: it was sent to the server as a command, refused |
 | C360 | `skin` (qw, empty) | your skin (user info) | done | games/shooters_edge/client/settings.cpp |  |
 | C361 | `topcolor` (qw, 0) | shirt colour (user info) | done | games/shooters_edge/client/settings.cpp |  |
 | C362 | `bottomcolor` (qw, 0) | pants colour (user info) | done | games/shooters_edge/client/settings.cpp |  |
