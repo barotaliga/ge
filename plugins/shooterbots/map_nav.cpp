@@ -711,6 +711,8 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
         mv.stops.push_back(at - bmins);
         const char* w = sb::block_value(*corner, "wait");
         mv.stop_wait_s.push_back(w ? std::max(0.f, static_cast<float>(std::atof(w))) : 0.f);
+        if (w != nullptr && std::atof(w) < 0 && mv.end_stop < 0)
+          mv.end_stop = static_cast<int32_t>(mv.stops.size()) - 1;
         tg = sb::block_value(*corner, "target");
       }
       if (mv.stops.size() >= 2) {
@@ -723,6 +725,8 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
         mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;
         const char* sp = sb::block_value(b, "speed");
         mv.speed = sp ? static_cast<float>(std::atof(sp)) : 100.f;
+        const char* dm = sb::block_value(b, "dmg");
+        mv.dmg = dm ? static_cast<float>(std::atof(dm)) : 0.f;
       } else {
         mv.stops.clear();
         mv.stop_wait_s.clear();
@@ -1242,6 +1246,26 @@ std::vector<sb::NavMover> map_movers(const ge::shooterbots::BotView& s,
   return movers_of(s, spec, tracer, entity_blocks(spec));
 }
 
+int64_t mark_crusher_harm(const NavGraph& g, const std::vector<NavMover>& movers,
+                          std::vector<uint8_t>& harm) {
+  int64_t marked = 0;
+  for (const NavMover& mv : movers) {
+    if (mv.dmg <= 0 || mv.end_stop < 0 || static_cast<size_t>(mv.end_stop) >= mv.stops.size())
+      continue;
+    const Vec3f a = mv.stops[static_cast<size_t>(mv.end_stop)] - mv.rest;
+    const Vec3f lo = mv.absmin + a, hi = mv.absmax + a;
+    for (size_t n = 0; n < g.nodes.size() && n < harm.size(); n++) {
+      const Vec3f o = g.nodes[n].origin;  // a standing player's box: 16 round, 24 down, 32 up
+      if (o.x + 16 > lo.x && o.x - 16 < hi.x && o.y + 16 > lo.y && o.y - 16 < hi.y &&
+          o.z + 32 > lo.z && o.z - 24 < hi.z - 1 && harm[n] == 0) {
+        harm[n] = 1;
+        marked++;
+      }
+    }
+  }
+  return marked;
+}
+
 bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                    const sb::MapBook& book, const char* start_class, MapNav& out,
                    std::string& error, const sb::NavSettings& set) {
@@ -1438,6 +1462,10 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     for (const NavBridge& br : out.bridges)
       if (br.touch)
         for (const int32_t n : br.nodes) out.harm[static_cast<size_t>(n)] = 1;
+    // (`crusher`) e1m4's crusher, shot down by two buttons, stays on its pit's floor: a bot that
+    // cannot die stood pinned under it the rest of the map. e1m3's ceiling comes down and goes
+    // back up, and harms nothing here.
+    sb::mark_crusher_harm(g, out.movers, out.harm);
     out.harm_links = sb::nav_close_entries(g, out.harm);
   }
   // Water: part of the graph (shooterbots/swim.hpp `nav_add_swim`): its cells are swim nodes, a
@@ -1547,7 +1575,8 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     const bool found = out.main.nodes() == graph.nodes.size();
     for (size_t n = 0; n < main.size(); n++)
       main[n] = found && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
-    const std::vector<uint8_t> back = sb::nav_back(graph, sb::nav_core(graph, main));
+    out.core = sb::nav_core(graph, main);
+    const std::vector<uint8_t> back = sb::nav_back(graph, out.core);
     out.trap.assign(graph.nodes.size(), 0);
     for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] && !out.harm[n] ? 0 : 1;
   }

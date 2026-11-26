@@ -125,6 +125,7 @@ struct MapNav {
   ge::shooterbots::NavEscapeCounts escapes_made;  // the rockets out of a pit's liquid
   ge::shooterbots::NavGapCounts gaps_made;        // the map's gap tricks proven into jump links
   std::vector<uint8_t> trap;  // the nodes no way on foot leads back from to the main part
+  std::vector<uint8_t> core;  // the main part's core the traps are reckoned from (`nav_core`)
   std::vector<ge::shooterbots::NavExtraLink> entries;  // the links into the water the graph closed
   std::vector<NavBridge> bridges;
   // The map's scripted routes to key items (the book's), each proven or refused.
@@ -174,6 +175,12 @@ std::vector<ge::shooter::Vec3f> crawl_path(const MapCrawl& c, int a, int b);
 std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView& s,
                                                   const ge::shooter::MapSpec& spec,
                                                   ge::brush::BrushTracer* tracer = nullptr);
+// (`crusher`) Marks in `harm` the nodes of `g` a crushing train (one with a `dmg` and an
+// `end_stop`) pins for good: those a standing player would share with its box where it comes to
+// rest for good. One standing on its top there is free (it is the way on). A crusher that only
+// passes harms nothing: whoever it pins goes free when it moves on. How many nodes it marked.
+int64_t mark_crusher_harm(const NavGraph& g, const std::vector<NavMover>& movers,
+                          std::vector<uint8_t>& harm);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
 // is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
 // `book`: the game's people's tricks and routes by map (shooterbots/map_book.hpp), each proven by

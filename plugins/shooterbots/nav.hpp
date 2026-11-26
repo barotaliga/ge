@@ -127,6 +127,8 @@ struct NavMover {
   std::vector<Vec3f> stops;
   std::vector<float> stop_wait_s;
   float speed = 100;
+  float dmg = 0;          // what it does to whoever it is blocked by (a crusher's), per blow
+  int32_t end_stop = -1;  // the stop it stays at for good once there (a corner's wait -1), or -1
 };
 
 // Whether the mover carries a player (a plat of either map family), not only blocks one.
