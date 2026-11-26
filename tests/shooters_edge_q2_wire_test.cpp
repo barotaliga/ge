@@ -16,6 +16,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -668,6 +669,78 @@ TEST(the_hit_report_goes_only_to_a_viewer_that_reads_it) {
     const bool carried = std::search(rec.bytes.begin(), rec.bytes.end(), std::begin(report),
                                      std::end(report)) != rec.bytes.end();
     CHECK_MSG(carried == reads, reads ? "the report is missing" : "a stock stream carried it");
+  }
+}
+
+// Quake's own looks (Quake's weapons fired by Quake II's rules under classic remix: `q1_*`) go
+// as our temporary entities 129 to 134 only to a viewer that reads them; read back, each is the
+// effect a Quake match keeps (a spike, a pellet's hit with its count, blood, a blast with no
+// Quake II kind byte, the shaft held by its owner). A stock client's stream carries none.
+TEST(quakes_looks_go_only_to_a_viewer_that_reads_them) {
+  for (const bool reads : {false, true}) {
+    sv::RulesRunner r = start();
+    sv::Q2Server& s = *sv::q2_of(r);
+    r.connect(0, "eve", false, false);
+    sv::Q2Recorder rec;
+    sv::Q2WireOptions opt;
+    opt.quake_looks = reads;
+    sv::q2_record_start(rec, *r, 0, opt);
+    uint32_t seq = 0;
+    for (int t = 0; t < 30; t++) {
+      sh::Packet p;
+      p.client = 0;
+      p.sequence = ++seq;
+      p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+      r.frame(&p, 1);
+      if (t == 20) {
+        const auto& o = s.players[0].move.origin;  // eighths of a unit
+        const sh::Vec3f at{float(o[0]) / 8, float(o[1]) / 8, float(o[2]) / 8};
+        for (const char* name :
+             {"q1_spike", "q1_superspike", "q1_gunshot", "q1_blood", "q1_explosion"}) {
+          sv::NetEvent ev;
+          ev.kind = sv::EventKind::point_effect;
+          ev.to = 0xffffffffu;  // everyone
+          ev.origin = at;
+          ev.values[3] = std::string_view(name) == "q1_blood" ? 3 : 0;
+          ev.text = name;
+          r->out.events.push_back(ev);
+          r->out.events_total++;
+        }
+        sv::NetEvent shaft;
+        shaft.kind = sv::EventKind::trail_effect;
+        shaft.to = 0xffffffffu;  // everyone
+        shaft.ent = 1;
+        shaft.origin = at;
+        shaft.values[0] = at.x + 100;
+        shaft.values[1] = at.y;
+        shaft.values[2] = at.z;
+        shaft.text = "q1_lightning2";
+        r->out.events.push_back(shaft);
+        r->out.events_total++;
+      }
+      sv::q2_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+    }
+    sv::q2_record_stop(rec);
+    cl::Demo d;
+    std::string error;
+    CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
+    std::string got;
+    while (cl::next_frame(d, error) == cl::DemoRead::frame)
+      for (const cl::DemoEffect& e : d.state.effects)
+        got += std::to_string(static_cast<int>(e.kind)) + ":" + std::to_string(e.code) + ":" +
+               std::to_string(e.count) + ":" + std::to_string(e.entity) + " ";
+    CHECK_MSG(error.empty(), error);
+    const auto has = [&](cl::DemoEffectKind k, int code, int count, int entity) {
+      const std::string want = std::to_string(static_cast<int>(k)) + ":" + std::to_string(code) +
+                               ":" + std::to_string(count) + ":" + std::to_string(entity) + " ";
+      return got.find(want) != std::string::npos;
+    };
+    CHECK_MSG(has(cl::DemoEffectKind::spike, 0, 1, 0) == reads, got);
+    CHECK_MSG(has(cl::DemoEffectKind::spike, 1, 2, 0) == reads, got);
+    CHECK_MSG(has(cl::DemoEffectKind::gunshot, 2, 1, 0) == reads, got);
+    CHECK_MSG(has(cl::DemoEffectKind::blood, 12, 3, 0) == reads, got);
+    CHECK_MSG(has(cl::DemoEffectKind::explosion, 0, 1, 0) == reads, got);
+    CHECK_MSG(has(cl::DemoEffectKind::beam, 6, 1, 1) == reads, got);
   }
 }
 

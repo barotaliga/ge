@@ -295,6 +295,7 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   bool told_voice = false;         // agreed voice (`*ge_ext` bit 128)
   bool told_frames = false;        // agreed every rules frame (`*ge_ext` bit 256)
   bool told_hits = false;          // agreed the damage it dealt (`*ge_ext` bit 1024)
+  bool told_looks = false;         // agreed Quake's looks by name (`*ge_ext` bit 1)
   TalkState talk;                  // its voice's target, mutes (qw_voice_route.hpp)
   std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
   int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it

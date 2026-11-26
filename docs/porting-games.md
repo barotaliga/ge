@@ -393,6 +393,8 @@ the skill's lessons before the first edit.
   renamed. The played game keeps its rules (armour, knockback, the items' timing); the items on
   the floor give the worn game's weapon of their role and its own amounts. Hits and blasts are
   sent by the worn game's look names (`q1_*`), which the window draws as that game's own effects.
+  A remote client of ours gets them over the Quake II wire as our own temporary entities (the
+  `named-effects` bit), read back as a Quake match's effects; a stock client gets none of them.
 - The items are the same: armour, health and ammunition are taken by their own game's rules, from
   numbers each game's rules read in one place (`plugins/classic/q1_body.hpp`, `q2_body.hpp`). A
   rule that differs (Quake II's armour adding onto the worn one, Quake's replacing it) travels as
