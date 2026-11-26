@@ -11,6 +11,7 @@
 
 #include "brush/trace.hpp"
 #include "core/num.hpp"
+#include "shooter/ladder.hpp"
 
 namespace ge::classic {
 
@@ -31,8 +32,6 @@ constexpr int kMaxClipPlanes = 5;
 float eighths(int32_t v) { return static_cast<float>(v) * 0.125f; }
 
 constexpr uint16_t kTimeFlags = kSqTimeWaterJump | kSqTimeLand | kSqTimeTeleport;
-
-float fabs_f(float x) { return x < 0 ? -x : x; }
 
 struct Move {
   Move(Q2Move& m, const Q2World& world) : pm(m), w(world) {}
@@ -194,18 +193,7 @@ struct Move {
   }
 
   void currents(Vec3f& wish) const {
-    if (ladder && fabs_f(velocity.z) <= 200) {
-      // Looking 15 or more up or down while moving forward climbs that way; else the up move.
-      const float pitch = pm.view_angles.x;
-      const bool looks = (pitch <= -15 || pitch >= 15) && pm.cmd.forward > 0;
-      const bool climbs = looks ? pitch <= -15 : pm.cmd.up > 0;
-      const bool descends = looks ? pitch >= 15 : pm.cmd.up < 0;
-      wish.z = climbs ? 200.0f : descends ? -200.0f : 0.0f;
-      for (int i = 0; i < 2; ++i) {
-        if (wish[i] < -25) wish[i] = -25;
-        if (wish[i] > 25) wish[i] = 25;
-      }
-    }
+    if (ladder) ladder_wish(wish, velocity.z, pm.view_angles.x, pm.cmd.forward, pm.cmd.up);
     const auto flow = [](int32_t bits) {
       Vec3f v;
       if (bits & kSqCurrent0) v.x += 1;
@@ -262,15 +250,7 @@ struct Move {
     const float g = float(pm.s.gravity);
     if (ladder) {
       accelerate(dir, speed, kAccelerate);
-      if (wish.z == 0) {
-        if (velocity.z > 0) {
-          velocity.z -= g * seconds;
-          if (velocity.z < 0) velocity.z = 0;
-        } else {
-          velocity.z += g * seconds;
-          if (velocity.z > 0) velocity.z = 0;
-        }
-      }
+      if (wish.z == 0) ladder_hold(velocity, g, seconds);
       step_slide();
     } else if (pm.ground_entity >= 0) {
       velocity.z = 0;
@@ -350,14 +330,13 @@ struct Move {
 
   void special() {
     if (pm.s.time) return;
-    ladder = false;
     Vec3f flat{forward.x, forward.y, 0};
     normalize(flat);
-    const Vec3f spot = mad(origin, 1.0f, flat);
+    const Vec3f spot = ladder_probe_end(origin, forward);
     const Q2Trace t = pm.ladder_mask && w.trace_mask != nullptr
                           ? w.trace_mask(w.ctx, origin, pm.mins, pm.maxs, spot, kSqLadder)
                           : trace(origin, spot);
-    if (t.fraction < 1 && (t.contents & kSqLadder)) ladder = true;
+    ladder = ladder_ahead(t.fraction, t.contents);
     if (pm.water_level != 2) return;
     Vec3f s = mad(origin, 30.0f, flat);
     s.z += 4;

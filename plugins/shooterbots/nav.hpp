@@ -488,6 +488,15 @@ int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side = 72,
 // Whether the player's box swept from `p` toward `to` (a wall stops it; a stair's step or two
 // climbed), then dropped to the floor (400 units at most), stands in lava or slime.
 bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to);
+// THE VOID (`nav_floor_in_void`, nav_void.cpp): whether a floor at `p` (the player's origin on it)
+// lies wholly in the world's point-hull rock and its open player hull runs on to the world's edge
+// or beyond any closed pocket: a map whose player hull was compiled unsealed. The build keeps such
+// floors out of the graph. `cache` keeps what each flood learned (cells by the world's 16-unit
+// grid: 0 unknown, 1 a pocket, 2 the void) for the next floor of the same map.
+struct NavVoid {
+  std::vector<uint8_t> cell;
+};
+bool nav_floor_in_void(const MoveWorld& world, Vec3f p, NavVoid& cache);
 
 // REPAIRING POCKETS (`nav_bridge_pockets`): after the build (and the water, the teleporters),
 // a POCKET is a set of nodes, joined by links among themselves, that the map's main part (the

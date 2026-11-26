@@ -208,11 +208,21 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // cloud's underside and far side go dark and its lit tops stand out: a volume, not a disc.
   let key = normalize(vec3f(0.0, 1.0, 0.0) + sun * (2.0 * b.light.w));
 
+  // The farthest the billows and the fray push the gas's edge out past the ball (gas_at's shape
+  // with every noise read at its extreme): a step beyond it finds no gas, so it skips the reads.
+  // Squared, and a hair over, so the test needs no root and rounding never skips a step with gas.
+  let reach = 1.0 + 0.5 * abs(b.shape.x) + 1.2 * abs(b.shape.y);
+  let reach2 = reach * reach * 1.002;
   var trans = 1.0;
   var light = vec3f(0.0);
   var t = t0 + dt * jitter(in.position.xy);
   for (var i = 0u; i < kSteps; i++) {
     let q = (ray * t - centre) * inv;
+    let qs = squeeze(q, axis, stretch);
+    if (dot(qs, qs) >= reach2) {
+      t += dt;
+      continue;
+    }
     let g = gas_at(b, q, axis, stretch, flow, side_a, side_b, true);
     let density = clamp(g.shape * kEdge, 0.0, 1.0) * presence;
     if (density > 0.0) {

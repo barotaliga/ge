@@ -319,7 +319,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
                                                     : 0;
     const bool brush = m > 0 && static_cast<size_t>(m) < model_count;
     if (std::strcmp(cn, "func_door") == 0 && brush)
-      way_note_closer(w, s, edict_of(s, model), sb::block_value(b, "spawnflags"));
+      way_note_closer(w, s, edict_of(s, model), sb::block_value(b, "spawnflags"),
+                      name != nullptr && name[0] != 0);
     WayStep st;
     const bool trigger =
         std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0;

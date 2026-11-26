@@ -55,6 +55,8 @@ inline constexpr int kSqByHeldGrenade = 104;
 inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
 // A map's laser, an exploding barrel, a deathmatch exit taken without allow-exit (`dmflags` 4096).
 inline constexpr int kSqByLaser = 109, kSqByBarrel = 110, kSqByExit = 111;
+// A bite, a claw, a leap, a spit or a tongue of a mission pack's monster ("that's gotta hurt.").
+inline constexpr int kSqByGotta = 119;
 // Ground Zero's A-M bomb (q2_gz.hpp): its blast's own words.
 inline constexpr int kSqByAmBomb = 113;
 // Ground Zero's spheres (q2_gz_spheres.cpp): the vengeance's, the defender's bolt, the hunter's;
