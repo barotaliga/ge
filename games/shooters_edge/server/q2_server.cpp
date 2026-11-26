@@ -1658,6 +1658,16 @@ bool sq_console(void* r, const std::string& line) {
     s.pending_change = MapChange::restart;
     return true;
   }
+  if (cmd == "serverinfo" && w.count >= 3) {  // a key every client is told (classic remix's)
+    const std::string key(ge::progs::word(w, 1)), value(ge::progs::word(w, 2));
+    auto at = std::find_if(s.serverinfo.begin(), s.serverinfo.end(),
+                           [&](const auto& kv) { return kv.first == key; });
+    if (at == s.serverinfo.end())
+      s.serverinfo.emplace_back(key, value);
+    else
+      at->second = value;
+    return true;
+  }
   if (cmd == "set" && w.count >= 3 && s.cvars.find(ge::progs::word(w, 1)) != nullptr)
     return sq_console(r, std::string(ge::progs::word(w, 1)) + " \"" + ge::progs::word(w, 2) + "\"");
   if (s.cvars.find(cmd) != nullptr) {

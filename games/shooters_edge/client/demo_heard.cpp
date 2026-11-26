@@ -67,7 +67,8 @@ DemoHearing::DemoHearing(ge::audio::Synth& synth, const bool* enhanced,
                          const ge::classic::Q2FxSwitches* q2)
     : synth_(synth), enhanced_(enhanced), q2_(q2) {}
 
-void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map) {
+void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map,
+                        std::string_view heard, size_t theirs) {
   if (!sounds_ || files_ != &files) {
     retired_.retire(std::move(sounds_));  // kept until its voices have faded
     sounds_ = std::make_unique<DemoSounds>(synth_, files);
@@ -76,6 +77,7 @@ void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::b
     files_ = &files;
   }
   if (!voices_) voices_ = std::make_unique<DemoVoices>(synth_);
+  sounds_->hear_as(heard, theirs);
   sounds_->level(s, map);
 }
 

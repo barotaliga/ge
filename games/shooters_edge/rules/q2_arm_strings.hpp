@@ -6,7 +6,7 @@
 // - **The list** (`kQ2ArmStrings`): the hand's one-shot sounds, the bullets' five samples, every
 //   other shot sample once, the hits' and blasts' effect names, the blasts', bounce's and click's
 //   samples, the bolt's class name, then each weapon's obituary words and tail, straight on and
-//   by a blast.
+//   by a blast; then the footsteps' switch and samples.
 // - **Finding one** (`q2_arm_string`): the index of a name in the list; -1 none. Constant, so a
 //   rule names its sample once and the index is worked out when it is built.
 //
@@ -21,6 +21,7 @@
 #include <string_view>
 
 #include "classic/q2_arms.hpp"
+#include "classic/q2_view.hpp"
 
 namespace shooters_edge::server::rules {
 
@@ -63,6 +64,10 @@ constexpr List build() {
       l.add(w.words);
       l.add(w.tail);
     }
+  // Quake II's footsteps on the classic rules (classic remix's `cr_sounds q2`): the server's switch
+  // and its four default steps.
+  l.add("g_footsteps");
+  for (const char* s : gc::kQ2Footsteps) l.add(s);
   return l;
 }
 

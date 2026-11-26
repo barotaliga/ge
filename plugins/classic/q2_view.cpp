@@ -62,13 +62,7 @@ Q2View step_q2_view(Q2ViewState& st, const Q2ViewSettings& set, const Q2ViewIn& 
 
   // The stride.
   const float speed = root_of(in.velocity.x * in.velocity.x + in.velocity.y * in.velocity.y);
-  if (speed < 5) {
-    st.bob_time = 0;
-    st.bob_step = 0;
-  } else if (in.on_ground) {
-    st.bob_step = speed > 210 ? 0.25f : speed > 100 ? 0.125f : 0.0625f;
-  }
-  st.bob_time += st.bob_step;
+  step_q2_stride(st.bob_time, st.bob_step, speed, in.on_ground, in.ducked);
   const float clock = in.ducked ? st.bob_time * 4 : st.bob_time;
   const bool odd = (static_cast<int>(clock) & 1) != 0;
   const auto share = static_cast<float>(

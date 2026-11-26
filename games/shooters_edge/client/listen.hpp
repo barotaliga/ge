@@ -136,9 +136,9 @@ struct ListenHost {
   std::shared_ptr<LoadedMap> map;     // the first map, read
   const SearchPath* files = nullptr;  // where the next map is read (null: the arena only)
   std::vector<std::string> lines;     // server lines before each map's rules start
-  // The remix's lines the match started with (`ListenOptions::arsenal` and `over_mod`): a map
-  // change after the remix changed starts the match afresh, its items the remix's new ones.
-  std::vector<std::string> worn, worn_over;
+  // The remix's lines the match started with (`ListenOptions::arsenal`, `over_mod`, `remix_info`):
+  // a map change after the remix changed starts the match afresh, its items the remix's new ones.
+  std::vector<std::string> worn, worn_over, worn_info;
   bool lobby = false;
   sv::LobbySettings lobby_settings;
   std::string player = "player";  // slot 0, the window's own player: a local seat
@@ -243,6 +243,9 @@ struct ListenOptions {
   // Lines a mod's own rules take too (classic remix's `cr_over_mods`: `cr_physics`'s), after the
   // window's own; `arsenal` is left out while a mod plays.
   std::vector<std::string> over_mod;
+  // The remix the match plays as server info lines (classic remix's `remix_info_lines`), for every
+  // client that joins, a mod's rules or not; our client follows them.
+  std::vector<std::string> remix_info;
   std::string player = "player";
   std::string hostname = "Shooter's Edge";
   std::string accounts_dir;
