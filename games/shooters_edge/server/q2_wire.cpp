@@ -94,7 +94,8 @@ enum class TeBody : uint8_t {
   count,
   lightning,
   id_point,
-  steam
+  steam,
+  count_point
 };
 struct TeName {
   const char* name;
@@ -164,11 +165,22 @@ constexpr TeName kTeNames[] = {
     {"te_widowsplash", 52, TeBody::point, 0},
     {"te_explosion1_np", 54, TeBody::point, 0},
     {"te_steam", 40, TeBody::steam, 0},  // target_steam's jet
+    // Quake's own looks (its weapons fired whole by Quake II's rules, classic/q1_arms.hpp), sent
+    // only to our own client (Q2WireOptions::quake_looks): a spike's and a big spike's hit, a
+    // pellet's (its count, then the point), blood (the same), a blast, the shaft (its owner, the
+    // start, the end).
+    {"q1_spike", 129, TeBody::point, 0},
+    {"q1_superspike", 130, TeBody::point, 0},
+    {"q1_gunshot", 131, TeBody::count_point, 0},
+    {"q1_blood", 132, TeBody::count_point, 0},
+    {"q1_explosion", 133, TeBody::point, 0},
+    {"q1_lightning2", 134, TeBody::entity_line, 0},
 };
 
 }  // namespace
 
 std::string q2_temp_entity_name(int code) {
+  if (code >= kQ2QuakeLookFirst) return {};  // our own, never a map's
   for (const TeName& t : kTeNames)
     if (t.kind == code) return std::string(t.name);
   return {};
@@ -203,12 +215,13 @@ bool write_flash(Out& o, const NetEvent& e) {
   return true;
 }
 
-// A temporary entity for `e` onto `o`; false for a name the protocol has none for.
-bool write_temp_entity(Out& o, const NetEvent& e) {
+// A temporary entity for `e` onto `o`; false for a name the protocol has none for, and for
+// Quake's looks to a viewer that does not read them (`quake_looks` false).
+bool write_temp_entity(Out& o, const NetEvent& e, bool quake_looks) {
   const TeName* row = nullptr;
   for (const TeName& t : kTeNames)
     if (e.text == t.name) row = &t;
-  if (row == nullptr) return false;
+  if (row == nullptr || (row->kind >= kQ2QuakeLookFirst && !quake_looks)) return false;
   const auto point = [&o](sh::Vec3f p) {
     o.i16(coord(p.x));
     o.i16(coord(p.y));
@@ -247,6 +260,12 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
     case TeBody::count:
       o.i16(static_cast<int>(e.values[0]));
       break;
+    case TeBody::count_point: {  // the times asked for, 1..255 (none: once), then the point
+      const float n = e.values[3];
+      o.u8(n >= 1 ? static_cast<uint32_t>(std::min(n, 255.0f)) : 1u);
+      point(e.origin);
+      break;
+    }
     case TeBody::entity_line:
       o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
       point(e.origin);
@@ -1031,7 +1050,7 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     if (cut && !q2_sight_hears(w, ear, e.origin)) continue;
     if (block.size() + 18 + 13 > cap) break;                          // a sound's room kept too
     if (e.text == "te_damage_dealt" && !w.opt.hit_reports) continue;  // a stock client has none
-    if (!write_flash(o, e)) write_temp_entity(o, e);
+    if (!write_flash(o, e)) write_temp_entity(o, e, w.opt.quake_looks);
   }
   for (size_t i = from; i < events.size(); i++) {
     const NetEvent& e = events[i];
@@ -1255,11 +1274,11 @@ void q2_write_player(std::vector<uint8_t>& out, const Q2PlayerState& from,
   write_player(o, from, to);
 }
 
-bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e) {
+bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e, bool quake_looks) {
   if (e.kind != EventKind::point_effect && e.kind != EventKind::trail_effect) return false;
   Out o{out};
   const size_t before = out.size();
-  if (!write_flash(o, e)) write_temp_entity(o, e);
+  if (!write_flash(o, e)) write_temp_entity(o, e, quake_looks);
   return out.size() > before;
 }
 

@@ -1971,6 +1971,14 @@ mean, 0.9 % of pixels off by more than 8, thin lines along moving ridges) and a 
 jittered frame against it (0.78 levels, 2.3 %). At 50 % scale the `world` lab's views are
 hard to tell from full size by eye; what each scale costs on a real GPU waits for `profile`.
 
+**Shooter's Edge** draws at the window's size with no temporal pass by default. Its `r_scale`
+(0.25 to 1; `plugins/classic/app/look.hpp`) under 1 draws the 3D picture at that share of the
+window a side and resolves it with the same TAA-U to the window, before the bloom and post; the
+HUD is drawn after, at the window's size. The resolve's pipeline is made at the load, so the
+setting changes live (the targets are made again). A view that moves more than 3 m between two
+frames (a teleport, a respawn, a demo's jump) is a cut: the history starts over
+(`client/world_draw.cpp`).
+
 **4× MSAA with no temporal pass** is the fallback for the lowest tier, where a phone's
 tile memory resolves MSAA almost for free.
 

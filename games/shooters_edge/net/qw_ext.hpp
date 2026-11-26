@@ -70,6 +70,8 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // when it comes back, svc id 119 to a spawned client when it is taken and again as it changes (the
 // client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server; the
 // damage the player dealt (Quake II's temporary entity 128, the hit marker's) on Quake II's server;
+// named effects (bit 1) on Quake II's server are Quake's looks of Quake's weapons fired by its
+// rules under classic remix, temporary entities 129 to 134 (server/q2_wire.hpp's `quake_looks`);
 // the server's settings sheet (engine/server/sheet.hpp), svc id 125 in answer to `ge_sheet`
 // (net/qw_sheet.hpp); the weapons the player holds and his ammunition of each kind on Quake II's
 // server, svc id 118 when they change (the window predicts a weapon change on them:

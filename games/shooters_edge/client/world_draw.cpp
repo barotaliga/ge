@@ -46,6 +46,7 @@
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
+#include "render/taa.hpp"
 #include "render/ui_pass.hpp"
 #include "render/viewmodel.hpp"
 #include "shooters_edge/app/ladder.hpp"
@@ -86,7 +87,15 @@ struct WorldDraw {
   gr::FrameUniforms staged{};
   wgpu::BindGroupLayout layout;
   ::ge::render::FrameGroup frame;  // group 0, and its parts for the passes that read few
-  wgpu::BindGroup post_group[2];   // classic, modern
+  // The post pass's groups: [look][the history it reads] (classic, modern; with r_scale under 1
+  // the TAA history the last resolve wrote, else the HDR target for both).
+  wgpu::BindGroup post_group[2][2];
+  // r_scale: the output's size (the window's), the scale the targets were made at, and TAA-U's
+  // resolve to the output while it is under 1 (its jitter counted by `taa_frame`).
+  uint32_t out_w = 1, out_h = 1;
+  double scale = 1;
+  gr::Taa taa;
+  uint64_t taa_frame = 0;
   gr::Sky skypass;
   gr::CloudPass clouds;
   gr::Bloom bloom;
@@ -161,6 +170,16 @@ namespace {
 // The weapon's light off the floor's: the share that is all round and the share from above, and
 // the brightest the floor's light is taken as (twice the light as baked).
 constexpr float kHeldAmbient = 0.55f, kHeldDirect = 0.45f, kHeldMost = 1.6f;
+// THE GUN'S ROLL-OFF (viewmodel::tone_held), measured against the floor's light under the eye (the
+// light the walls around the player show, `level`, its brightest channel, at least kHeldLeast):
+// the gun's light shows as it adds up to `level`, and past it eases toward kHeldMostShare times
+// it. The room's lamps (ce_weapons) light the gun by an inverse square on top of the floor's light,
+// which already holds them as baked, so a step from a torch they add several whites: with no
+// roll-off the gun outshone the wall behind it and the frame's tone map paled it almost to white.
+// Now the lamp's side reads at most twice as bright as the room, its colours kept. The
+// classic flat light never passes `level`, so the classic look is as it was. kHeldLeast lets a
+// muzzle flash still light the gun in a dark corridor.
+constexpr float kHeldMostShare = 2.0f, kHeldLeast = 0.5f;
 constexpr float kParticleSoftM = 0.06f;  // the particles' softening against what is behind them
 
 // THE LIGHT AT A POINT (engine metres), for the smoke there: the open sky's share (1 when a march
@@ -189,8 +208,16 @@ gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
 // The open sky's light on a smoke puff, in whites, as `light_at`'s share of it.
 constexpr float kOpenWhites = 0.8f;
 
+// A view that moves further than this between two frames has cut (a teleport, a respawn, a
+// demo's jump): TAA-U's history starts over, m.
+constexpr double kCutM = 3.0;
+
 // Everything sized to the targets: made at create and again at a resize.
 void make_targets(ge::gpu::Device& d, WorldDraw& f) {
+  f.scale = f.picture ? std::clamp(f.picture->render_scale, 0.25, 1.0) : 1.0;
+  const bool upscale = f.scale < 1;
+  f.w = upscale ? gr::taa_render_size(f.out_w, f.scale) : f.out_w;
+  f.h = upscale ? gr::taa_render_size(f.out_h, f.scale) : f.out_h;
   f.targets = gr::create_targets(d, "shooters_edge", f.w, f.h);
   // Group 0 with the scene the faces reflect, kept at the targets' size.
   gr::create_mirror_targets(d, f.mirror, f.targets, f.uniforms);
@@ -198,10 +225,17 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
                             f.mirror.last_view);
   f.history = {};
   gr::bind_cloud_targets(d, f.clouds, f.targets);
-  const wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
-  gr::create_bloom_targets(d, f.bloom, f.w, f.h, inputs);
+  // The bloom and the post pass read TAA's two histories at the output's size, or the HDR target.
+  wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
+  if (upscale) {
+    gr::create_taa_targets(d, f.taa, f.targets, f.out_w, f.out_h);
+    inputs[0] = f.taa.history_views[0];
+    inputs[1] = f.taa.history_views[1];
+  }
+  gr::create_bloom_targets(d, f.bloom, f.out_w, f.out_h, inputs);
   for (int p = 0; p < 2; ++p)
-    f.post_group[p] = gr::post_group(d, f.post[p], f.targets.hdr_view, f.bloom.view);
+    for (int k = 0; k < 2; ++k)
+      f.post_group[p][k] = gr::post_group(d, f.post[p], inputs[k], f.bloom.view);
   gr::bind_particle_targets(d, f.particles, f.targets);
   gr::bind_explosion_targets(d, f.explosions, f.targets);
   gr::bind_beam_targets(d, f.beams, f.targets);
@@ -280,6 +314,7 @@ void room_lights(const WorldDraw& f, std::span<const effects::Light> moment, con
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
 // the eye (the lightmap's 0.5 the light as baked, from above), by its own flash and by the room's
 // lights (ce_weapons); with ce_weapons off, the classic's flat light: the floor's all round alone.
+// Either way rolled off past the floor's light (kHeldMostShare), so no lamp washes it out to white.
 gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
                        const gr::FrameView& view, bool engine_fire, float shown,
                        std::span<const effects::Light> moment) {
@@ -314,9 +349,12 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
                        static_cast<float>(view.eye[2] / ge::brush::kUnitM),
                        static_cast<float>(view.eye[1] / ge::brush::kUnitM)};
   const bool lit_by_room = f.picture == nullptr || f.picture->ce.weapons;
+  float level = 1;  // the floor's light, its brightest channel (1: the light as baked, no map)
   if (f.has_map && ge::brush::light_below(f.probe, f.scene.map, at, rgb)) {
+    level = 0;
     for (int k = 0; k < 3; ++k) {
       const float lit = std::min(2 * rgb[k], kHeldMost);
+      level = std::max(level, lit);
       probe.ambient[k] = lit_by_room ? kHeldAmbient * lit : lit;
       probe.direct[k] = lit_by_room ? kHeldDirect * lit : 0;
     }
@@ -337,6 +375,8 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
     room_lights(f, moment, view.eye, h.flashing, f.held_lights);
   }
   g.light = vm::light_held(probe, f.held_lights, pose, grip);
+  g.light.knee = std::max(level, kHeldLeast);
+  g.light.most = kHeldMostShare * g.light.knee;
   if (h.placement.mirror) vm::mirror_lighting(g.light);
   return g;
 }
@@ -570,6 +610,8 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     for (int p = 0; p < 2; ++p)
       gr::create_post(d, f.pipelines, f.post[p], f.layout, f.format,
                       look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, made));
+    // TAA-U's resolve, made whether r_scale is under 1 or not, so the setting turns it on live.
+    gr::create_taa(d, f.pipelines, f.taa, f.layout, gr::TaaSettings{});
     f.gamma = f.picture->gamma;
     f.classic_grade = std::move(read.classic_grade);
     gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
@@ -671,8 +713,8 @@ bool finish_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
   }
   ge::gpu::end_load(d);
   f.rec.init(d, "shooters_edge.timer", gr::kMaxPasses);  // every pass timed
-  f.w = std::max(1u, width);
-  f.h = std::max(1u, height);
+  f.out_w = std::max(1u, width);
+  f.out_h = std::max(1u, height);
   make_targets(d, f);
   return true;
 }
@@ -718,8 +760,8 @@ std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w
 }
 
 void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t height) {
-  f.w = std::max(1u, width);
-  f.h = std::max(1u, height);
+  f.out_w = std::max(1u, width);
+  f.out_h = std::max(1u, height);
   make_targets(d, f);
 }
 
@@ -792,7 +834,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const int p = lk == look::Look::classic ? 0 : 1;
   {
     std::string refused;
-    f.stops = look::picture_stops(*f.picture, f.w, f.h, f.kept_stops, refused);
+    f.stops = look::picture_stops(*f.picture, f.out_w, f.out_h, f.kept_stops, refused);
     f.on = look::drawn_switches(f.picture->ce, f.stops);
     if (!refused.empty())
       ge::core::output::warn("shooters_edge: the picture's quality word was refused: " + refused +
@@ -861,7 +903,24 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   // the eye sees it, not lifted with the dark sky round it (a red moon clipped to flat pink).
   if (o.mode == ba::Mode::v2 && !o.pack_sky)
     view.sky_lift = std::max(o.sky_light * o.sky_seen, 1e-6);
-  gr::fill_uniforms(f.staged, view, f.w, f.h, o.reflections > 0 ? &f.history : nullptr);
+  // r_scale changed: the targets made again at the new size (the history starts over).
+  if (std::clamp(f.picture->render_scale, 0.25, 1.0) != f.scale) make_targets(d, f);
+  const bool upscale = f.scale < 1;
+  // TAA-U: this frame's sub-pixel jitter, and a cut (a teleport, a respawn, a jump of the view)
+  // starts its history over so nothing of the last place is smeared over the new.
+  double jitter[2] = {0, 0};
+  if (upscale) {
+    gr::taa_jitter(f.taa_frame++, gr::taa_phases(f.scale), jitter);
+    double moved = 0;
+    for (int k = 0; k < 3; ++k)
+      moved += (view.eye[k] - f.history.eye[k]) * (view.eye[k] - f.history.eye[k]);
+    if (!f.history.valid || moved > kCutM * kCutM) {
+      f.history.valid = false;
+      gr::reset_taa(f.taa);
+    }
+  }
+  gr::fill_uniforms(f.staged, view, f.w, f.h, o.reflections > 0 || upscale ? &f.history : nullptr,
+                    upscale ? jitter : nullptr);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.skypass, view);
   // The moment's lights less the kinds the player puts out (r_rocketlight and its kin).
@@ -1076,8 +1135,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   gr::set_post_ripple(d, f.post[p], ripple);
   // Quake II's viewsize under 100: the whole view drawn smaller in the middle.
-  const Q2ViewRect vr = q2_view_rect(f.w, f.h, f.picture->view_size);
-  gr::set_post_view(d, f.post[p], {vr.x, vr.y, vr.w, vr.h}, f.w, f.h);
+  const Q2ViewRect vr = q2_view_rect(f.out_w, f.out_h, f.picture->view_size);
+  gr::set_post_view(d, f.post[p], {vr.x, vr.y, vr.w, vr.h}, f.out_w, f.out_h);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's
@@ -1119,10 +1178,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // The world as drawn kept for the next frame's reflections, before the weapon in front of it.
     if (o.reflections > 0) gr::encode_mirror(f.mirror, f.pipelines, f.rec, e);
     if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
-    gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
-    gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p], target);
+    if (upscale) gr::encode_taa(d, f.taa, f.pipelines, f.rec, e, f.frame);
+    const int input = upscale ? f.taa.written : 0;
+    gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, input);
+    gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p][input], target);
     if (overlay.size() > 0) {
-      gr::prepare_ui(d, f.ui, overlay, f.w, f.h);
+      gr::prepare_ui(d, f.ui, overlay, f.out_w, f.out_h);
       gr::encode_ui(f.ui, f.pipelines, f.rec, e, target);
     }
     f.rec.end_frame(e);

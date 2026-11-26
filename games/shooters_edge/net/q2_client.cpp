@@ -64,7 +64,8 @@ std::string userinfo_of(const Q2ClientEnd& c) {
       (c.cfg.ask_login ? kGeAccountKey : 0u) | (c.cfg.ask_feel ? kGeMoveFeel : 0u) |
       (c.cfg.voice ? kGeVoice : 0u) | (c.cfg.ask_frames ? kGeEveryFrame : 0u) |
       (c.cfg.ask_back ? kGeItemBack : 0u) | (c.cfg.ask_hits ? kGeHitReports : 0u) |
-      (c.cfg.ask_sheet ? kGeSettings : 0u) | (c.cfg.ask_arsenal ? kGeArsenal : 0u);
+      (c.cfg.ask_sheet ? kGeSettings : 0u) | (c.cfg.ask_arsenal ? kGeArsenal : 0u) |
+      (c.cfg.ask_looks ? kGeNamedEffects : 0u);
   if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }

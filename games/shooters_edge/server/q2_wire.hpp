@@ -122,7 +122,14 @@ struct Q2WireOptions {
   // The viewer reads the hit report (temporary entity 128, `fight_dealt`): our own client does,
   // a stock client does not, so it is sent nothing of it.
   bool hit_reports = false;
+  // The viewer reads Quake's own looks (temporary entities 129 to 134: Quake's weapons fired by
+  // Quake II's rules under classic remix, `q1_*`): our own client does, and draws them as Quake
+  // draws them; a stock client is sent none of them.
+  bool quake_looks = false;
 };
+
+// The first of our own temporary entities that carry Quake's looks (q2_wire.cpp's table).
+inline constexpr int kQ2QuakeLookFirst = 129;
 
 // The sky the map's world entity names (its `sky`, `skyaxis` and `skyrotate` keys) into `opt`.
 void q2_sky(const ge::brush::Map& map, Q2WireOptions& opt);
@@ -237,8 +244,9 @@ void q2_write_entity(std::vector<uint8_t>& out, uint32_t flags, int number,
                      const Q2EntityState& to);
 void q2_write_player(std::vector<uint8_t>& out, const Q2PlayerState& from, const Q2PlayerState& to);
 // A rules' effect event (a point or a trail) as its muzzle flash or temporary entity message;
-// false when the protocol has none for it (nothing written).
-bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e);
+// false when the protocol has none for it (nothing written). Quake's looks only for a reader of
+// ours (`quake_looks`, Q2WireOptions'): a stock reader's stream carries none.
+bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e, bool quake_looks = false);
 
 // The map's checksum as configstring 31 carries it: the MD4 of the whole map file, its four
 // little-endian words XORed, read as a signed number.
