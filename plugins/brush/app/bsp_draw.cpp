@@ -391,8 +391,8 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
                             wgpu::BufferUsage::Storage);
   device.queue.WriteBuffer(d.movers, 0, d.mover_rows.data(),
                            d.mover_rows.size() * sizeof(GpuMover));
-  d.lights =
-      r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512, wgpu::BufferUsage::Storage);
+  d.lights = r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * kMaxFrameLights,
+                            wgpu::BufferUsage::Storage);
   d.grid = r::make_buffer(device, "bsp.grid", sizeof(uint32_t) * (kGridCells + 1 + kMaxGridRefs),
                           wgpu::BufferUsage::Storage);
   d.grid_rows.assign(kGridCells + 1 + kMaxGridRefs, 0);
@@ -705,8 +705,44 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   look.bonfires = o.bonfires;
   look.pace = o.fire_pace;
   d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos + size_t(kCasterLights) * 6 + 1, GpuJob{});
-  for (const LightOffer& offer : choice.drawn) {
+  // The cube slots (light_pick.hpp's deal_cubes): each caster keeps the slot that already holds
+  // its cube; the rest take the slot left unused longest, at most `fresh_cubes` a frame, and fade
+  // in from dark as their cube arrives: a light waiting for its cube lights nothing, never through
+  // the walls. The map's first frame that shadows draws every cube whole: it is the load's, not
+  // play's (unless the caller warms the map up over frames of its own: `first_all` off).
+  d.slots.slots = d.cube_slots;
+  const bool any_held = std::any_of(d.slots.held.begin(), d.slots.held.begin() + d.cube_slots,
+                                    [](bool held) { return held; });
+  const size_t budget = fresh_cube_budget(o, any_held, d.cube_slots);
+  std::vector<std::array<float, 4>>& keys = d.caster_keys;
+  keys.clear();
+  for (const size_t c : choice.casters) {
+    double sphere[4];
+    light_sphere(*choice.drawn[c].light, o.bonfires, sphere);
+    keys.push_back({float(sphere[0]), float(sphere[1]), float(sphere[2]), float(sphere[3])});
+  }
+  // The time since the last frame (a still clock, a lab's, counts a frame at 60 Hz).
+  const double dt = view.time_s > d.last_time_s && view.time_s - d.last_time_s < 0.25
+                        ? view.time_s - d.last_time_s
+                        : 1.0 / 60;
+  d.last_time_s = view.time_s;
+  deal_cubes(d.slots, keys, budget, dt, o.light_fade_s, d.deal);
+  d.fresh_slots = d.deal.fresh;
+  d.shadows_waiting = d.deal.waiting;
+  // Each drawn light's caster row (-1: not a caster).
+  std::vector<int>& row_of = d.caster_row;
+  row_of.assign(choice.drawn.size(), -1);
+  for (size_t k = 0; k < choice.casters.size(); ++k) row_of[choice.casters[k]] = int(k);
+  // The casters with their cube, by priority, as indices into frame_lights.
+  std::vector<size_t>& casters = d.frame_casters;
+  casters.clear();
+  for (size_t at = 0; at < choice.drawn.size(); ++at) {
+    const LightOffer& offer = choice.drawn[at];
     const PointLight& l = *offer.light;
+    const int row = row_of[at];
+    const int slot = row >= 0 ? d.deal.slot[size_t(row)] : -1;
+    const double fade = row >= 0 ? d.deal.fade[size_t(row)] : 1.0;
+    if (fade <= 0) continue;  // waiting for its cube: dark this frame
     GpuLight g{};
     double near = 0;  // m: what its light is softened over near it (`near_soft`)
     double sphere[4];
@@ -721,7 +757,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
           l.value / 256.0 * half * half * l.gain * o.strength *
           (o.flicker || l.flicker != Flicker::candle ? fire_flicker(l, view.time_s, look)
                                                      : kFireFlickerMean) *
-          fire_light_gain(l, o.bonfires);
+          fire_light_gain(l, o.bonfires) * fade;
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
       near = o.near_soft * half;
     }
@@ -729,10 +765,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     // A fire lights the wall behind it from its whole flame: its light softened over its height.
     const double soft = std::max(fire_light_size(l, o.bonfires), l.soft_m);
     const double spread = std::max(soft, near);
-    // An aimed light: full inside info.w's cosine, none outside spot.w's.
-    set4(g.info, -1, spread * spread, 0, l.spot ? l.cone_cos[0] : -1);
-    // A dynamic light moves or goes out from one frame to the next, so a cube of it would be drawn
-    // again every frame: it lights without a shadow.
+    // An aimed light: full inside info.w's cosine, none outside spot.w's; x its cube's first face
+    // (-1: none).
+    set4(g.info, slot >= 0 ? slot * 6 : -1, spread * spread, 0, l.spot ? l.cone_cos[0] : -1);
     // Whether it throws a figure's shadow (Options::fill_shadows): a source he can see.
     // Over the lightmaps every picked light throws one: a map lit by its lightmaps (Quake II's)
     // names few of its lights' sources.
@@ -744,29 +779,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
     else
       set4(g.spot, 0, -1, 0, -2);
+    if (slot >= 0) casters.push_back(d.frame_lights.size());
     d.frame_lights.push_back(g);
   }
-  const std::vector<size_t>& casters = choice.casters;
-  // The cube slots (light_pick.hpp's deal_cubes): each caster keeps the slot that already holds
-  // its cube; the rest take the slot left unused longest, at most `fresh_cubes` a frame. The map's
-  // first frame that shadows draws every cube: it is the load's, not play's (unless the caller
-  // warms the map up over frames of its own: `first_all` off).
-  d.slots.slots = d.cube_slots;
-  const bool any_held = std::any_of(d.slots.held.begin(), d.slots.held.begin() + d.cube_slots,
-                                    [](bool held) { return held; });
-  const size_t budget = fresh_cube_budget(o, any_held, d.cube_slots);
-  std::vector<std::array<float, 4>>& keys = d.caster_keys;
-  keys.clear();
-  for (const size_t c : casters) {
-    const GpuLight& g = d.frame_lights[c];
-    keys.push_back({g.pos[0], g.pos[1], g.pos[2], g.pos[3]});
-  }
-  deal_cubes(d.slots, keys, budget, 0, 0, d.deal);
-  for (size_t k = 0; k < casters.size(); ++k) {
-    if (d.deal.slot[k] >= 0) d.frame_lights[casters[k]].info[0] = float(d.deal.slot[k] * 6);
-  }
-  d.fresh_slots = d.deal.fresh;
-  d.shadows_waiting = d.deal.waiting;
   // Every held slot's six faces, so the jobs buffer always says what its cubes hold.
   for (int k = 0; k < d.cube_slots; ++k) {
     if (!d.slots.held[size_t(k)]) continue;

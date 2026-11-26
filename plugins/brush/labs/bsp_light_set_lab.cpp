@@ -56,11 +56,11 @@ std::vector<std::string> split(const std::string& s, char c) {
   return out;
 }
 
-constexpr double kStepM = 0.125;        // a step of the walk: a run's frame at 60 Hz, near enough
-constexpr double kDt = 1.0 / 60;        // s a step
-constexpr double kEyeUnits = 22;        // the eye over the path, map units
-constexpr double kPopShare = 0.25;      // a light's share jumping by this or more in one step pops
-constexpr double kLeakShare = 1.0;      // an unshadowed light's share (it lights through walls)
+constexpr double kStepM = 0.125;    // a step of the walk: a run's frame at 60 Hz, near enough
+constexpr double kDt = 1.0 / 60;    // s a step
+constexpr double kEyeUnits = 22;    // the eye over the path, map units
+constexpr double kPopShare = 0.25;  // a light's share jumping by this or more in one step pops
+constexpr double kLeakShare = 1.0;  // an unshadowed light's share (it lights through walls)
 
 // The path in the map's units: the given one, or the player spawns in the map's order.
 std::vector<std::array<double, 3>> path_of(gl::Lab& lab, const gb::Map& map) {
@@ -78,6 +78,26 @@ std::vector<std::array<double, 3>> path_of(gl::Lab& lab, const gb::Map& map) {
     if (std::sscanf(e.get("origin").c_str(), "%lf %lf %lf", &x, &y, &z) == 3)
       out.push_back({x, y, z});
   }
+  if (out.size() >= 2) return out;
+  // No spawns (a fixture): across the box of its lights, at their mean height less the eye's.
+  out.clear();
+  double lo[3] = {1e30, 1e30, 0}, hi[3] = {-1e30, -1e30, 0}, z = 0;
+  int count = 0;
+  for (const gb::Entity& e : map.entities) {
+    if (e.get("classname").rfind("light", 0) != 0) continue;
+    double p[3];
+    if (std::sscanf(e.get("origin").c_str(), "%lf %lf %lf", &p[0], &p[1], &p[2]) != 3) continue;
+    for (int k = 0; k < 2; ++k) {
+      lo[k] = std::min(lo[k], p[k]);
+      hi[k] = std::max(hi[k], p[k]);
+    }
+    z += p[2];
+    ++count;
+  }
+  if (count < 2) return out;
+  z = z / count - kEyeUnits;
+  out.push_back({lo[0], lo[1], z});
+  out.push_back({hi[0], hi[1], z});
   return out;
 }
 
@@ -93,7 +113,7 @@ void run(gl::Lab& lab) {
     }
     const auto pal = ba::pack_file(pack, "gfx/palette.lmp");
     palette.assign(pal.begin(), pal.end());
-    name = lab.arg("maps").empty() ? "dm2" : lab.arg("maps");
+    name = lab.arg("maps");
     path = "maps/" + name + ".bsp";
   } else {
     std::vector<uint8_t> bytes;
@@ -129,6 +149,10 @@ void run(gl::Lab& lab) {
   for (const ba::PointLight& l : lava) offers.push_back({&l, false});
   for (const ba::PointLight& l : portals) offers.push_back({&l, false});
   const ba::LightReach reach = ba::light_reach(map, scene.lights);
+  // Every offer's clusters, for the lab's own question of which lights could show.
+  std::vector<ba::PointLight> all;
+  for (const ba::LightOffer& o2 : offers) all.push_back(*o2.light);
+  const ba::LightReach reach_all = ba::light_reach(map, all);
   ba::PickRules rules;
   rules.most = o.most;
   rules.shadowed = o.shadowed;
@@ -148,7 +172,16 @@ void run(gl::Lab& lab) {
       t_leak{"unshadowed (through walls)", {}, {}}, t_could{"could show", {}, {}},
       t_pops{"pops (running total)", {}, {}};
   double walked = 0;
-  int pops = 0, steps = 0, most_could = 0, most_leak = 0;
+  int counted = 0;
+  int pops = 0, steps = 0, most_could = 0, most_leak = 0, most_dark = 0;
+  double dark_sum = 0, near_dark_sum = 0;
+  int most_near_dark = 0;
+  // The steps with the most pops: where to look with a window's frames (se-client's --views).
+  struct Spot {
+    int pops;
+    double at[3], yaw, walked;
+  };
+  std::vector<Spot> spots;
   for (size_t seg = 0; seg + 1 < route.size(); ++seg) {
     double a[3], b[3];
     {
@@ -179,7 +212,7 @@ void run(gl::Lab& lab) {
         keys.push_back({float(s[0]), float(s[1]), float(s[2]), float(s[3])});
       }
       const size_t budget = steps == 0 ? size_t(slots.slots) : size_t(o.fresh_cubes);
-      ba::deal_cubes(slots, keys, budget, kDt, 0.0, deal);
+      ba::deal_cubes(slots, keys, budget, kDt, o.light_fade_s, deal);
       // Each offer's share this step.
       std::fill(share.begin(), share.end(), 0.0);
       int drawn = 0, shadowed = 0, leak = 0;
@@ -212,17 +245,21 @@ void run(gl::Lab& lab) {
         share[idx] = v;
       }
       // Which lights could show (policy-free): their reach in the view's cone and in a cluster
-      // the eye's set holds.
-      {
-        const float fe[3] = {float(view.eye[0] / gb::kUnitM), float(view.eye[2] / gb::kUnitM),
-                             float(view.eye[1] / gb::kUnitM)};
-        gb::clusters_seen_from(map, fe, 1.0f, seen);
+      // the eye's set holds. A step whose eye is in solid (a straight path through a wall) counts
+      // nothing, nor the step after it.
+      const float fe[3] = {float(view.eye[0] / gb::kUnitM), float(view.eye[2] / gb::kUnitM),
+                           float(view.eye[1] / gb::kUnitM)};
+      if (!map.leaves.empty() && map.leaves[gb::leaf_at(map, fe)].solid) {
+        std::fill(could_last.begin(), could_last.end(), uint8_t{0});
+        walked += len / count;
+        continue;
       }
+      gb::clusters_seen_from(map, fe, 1.0f, seen);
       double ahead[3];
       r::look_dir(view.heading, view.pitch, ahead);
-      const double cone = std::atan(std::tan(view.fov_y / 2) *
-                                    std::sqrt(1 + rules.widest * rules.widest));
-      int could_n = 0;
+      const double cone =
+          std::atan(std::tan(view.fov_y / 2) * std::sqrt(1 + rules.widest * rules.widest));
+      int could_n = 0, popped = 0;
       for (size_t q = 0; q < n; ++q) {
         double s[4];
         ba::light_sphere(*offers[q].light, rules.bonfires, s);
@@ -234,20 +271,40 @@ void run(gl::Lab& lab) {
           in = std::acos(std::clamp(along, -1.0, 1.0)) - std::asin(s[3] / dist) <= cone;
         }
         bool vis = true;
-        if (in && q < reach.clusters.size() && !reach.clusters[q].empty() && !seen.empty()) {
+        if (in && !reach_all.clusters[q].empty() && !seen.empty()) {
           vis = false;
-          for (const int32_t cl : reach.clusters[q])
+          for (const int32_t cl : reach_all.clusters[q])
             vis = vis || cl < 0 || (seen[size_t(cl) >> 3] >> (cl & 7) & 1) != 0;
         }
         could[q] = in && vis;
         could_n += could[q];
         if (could[q] && could_last[q] && last[q] >= 0 && std::fabs(share[q] - last[q]) >= kPopShare)
-          ++pops;
+          ++popped;
+      }
+      pops += popped;
+      if (popped > 0) {
+        Spot sp{popped, {}, 0, walked};
+        for (int c = 0; c < 3; ++c)
+          sp.at[c] = route[seg][c] + (route[seg + 1][c] - route[seg][c]) * k;
+        sp.yaw = std::atan2(route[seg + 1][1] - route[seg][1], route[seg + 1][0] - route[seg][0]) *
+                 180 / 3.14159265358979;
+        spots.push_back(sp);
       }
       last = share;
       could_last = could;
       most_could = std::max(most_could, could_n);
       most_leak = std::max(most_leak, leak);
+      // The lights that could show but light nothing this step (waiting for a cube, or left out).
+      int dark = 0;
+      for (size_t q = 0; q < n; ++q) dark += could[q] && share[q] <= 0;
+      // And of the 48 most important (the nearest reach) that the frame draws.
+      int near_dark = 0;
+      for (size_t c = 0; c < choice.casters.size() && c < 48; ++c) near_dark += deal.fade[c] <= 0;
+      most_near_dark = std::max(most_near_dark, near_dark);
+      near_dark_sum += near_dark;
+      most_dark = std::max(most_dark, dark);
+      dark_sum += dark;
+      ++counted;
       t_drawn.x.push_back(walked);
       t_drawn.y.push_back(drawn);
       t_shadowed.x.push_back(walked);
@@ -268,6 +325,10 @@ void run(gl::Lab& lab) {
   lab.metric(name + ".pops-per-100m", per100, "count");
   lab.metric(name + ".most-could-show", most_could, "count");
   lab.metric(name + ".most-unshadowed", most_leak, "count");
+  lab.metric(name + ".most-dark", most_dark, "count");
+  lab.metric(name + ".mean-dark", counted > 0 ? dark_sum / counted : 0, "count");
+  lab.metric(name + ".most-dark-of-nearest-48", most_near_dark, "count");
+  lab.metric(name + ".mean-dark-of-nearest-48", counted > 0 ? near_dark_sum / counted : 0, "count");
 
   gl::LineChart line;
   line.frame = {"THE FRAME'S LIGHTS ALONG A WALK THROUGH " + name,
@@ -284,6 +345,18 @@ void run(gl::Lab& lab) {
             "the pops' line flat; no light drawn unshadowed",
             {{"map", name}}},
            gl::to_picture(chart.plot));
+  std::stable_sort(spots.begin(), spots.end(),
+                   [](const Spot& a, const Spot& b) { return a.pops > b.pops; });
+  gl::LabTable worst{"THE STEPS WITH THE MOST POPS (map units; the view a step before it)",
+                     {"walked m", "pops", "x,y,z,yaw"},
+                     {}};
+  for (size_t i = 0; i < spots.size() && i < 8; ++i) {
+    const Spot& sp = spots[i];
+    worst.rows.push_back({fmt(sp.walked, 2), std::to_string(sp.pops),
+                          fmt(sp.at[0], 0) + "," + fmt(sp.at[1], 0) + "," +
+                              fmt(sp.at[2] + kEyeUnits, 0) + "," + fmt(sp.yaw, 0)});
+  }
+  lab.table(worst);
   lab.table({"THE WALK",
              {"measure", "value"},
              {{"lights offered", std::to_string(n)},
@@ -291,7 +364,10 @@ void run(gl::Lab& lab) {
               {"pops", std::to_string(pops)},
               {"pops a 100 m", fmt(per100, 2)},
               {"most lights that could show at once", std::to_string(most_could)},
-              {"most lights drawn unshadowed at once", std::to_string(most_leak)}}});
+              {"most lights drawn unshadowed at once", std::to_string(most_leak)},
+              {"most lights that could show left dark at once", std::to_string(most_dark)},
+              {"lights that could show left dark, mean a step",
+               fmt(counted > 0 ? dark_sum / counted : 0, 1)}}});
 }
 
 const gl::LabSpec kSpec{
@@ -302,7 +378,10 @@ const gl::LabSpec kSpec{
     "render",
     "As the player walks through a map, does any light that could show come and go, lose its "
     "shadow or shine through a wall from one step to the next?",
-    {},
+    {{"pak", "", "a pack file holding maps/*.bsp (none: the sample fixture)"},
+     {"maps", "dm2", "the map in the pack, without maps/ and .bsp"},
+     {"path", "",
+      "the walk in the map's units, x,y,z;x,y,z;... (none: from player spawn to player spawn)"}},
     "",
     run,
 };
