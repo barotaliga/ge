@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "classic/q1_arms.hpp"
 #include "classic/q2_fx_switches.hpp"
 #include "core/num.hpp"
 #include "progs/layout.hpp"
@@ -134,10 +135,18 @@ bool arena_effect(std::span<const uint8_t> b, Effect& e) {
 // A mod's named effect for the player (pointparticles, trailparticles; the events' `to` holds
 // slot 0): a classic name as the classic effect (its temporary entity's bytes read as a match's
 // are; an explosion into `explosions`), any other by its name, for the files' effect of it.
-void take_named(Listen& l, const sv::NetEvent& ev) {
+void take_named(Listen& l, const sv::NetEvent& ev, bool quake_look = false) {
   if ((ev.to & 1u) == 0) return;
+  // Quake's own look in any game (Quake's weapons fired whole by Quake II's rules,
+  // classic/q1_arms.hpp): its `q1_` name drawn as Quake's temporary entity of that name.
+  if (const char* own = ge::classic::q1_look_name(ev.text.c_str()); own != nullptr) {
+    sv::NetEvent quake = ev;
+    quake.text = std::string("te_") + own;
+    take_named(l, quake, true);
+    return;
+  }
   // Quake II's look for its hits and blasts: its game, or its weapons fired whole by ours.
-  const bool q2_look = listen_is_q2(l) || listen_q2_arms(l);
+  const bool q2_look = !quake_look && (listen_is_q2(l) || listen_q2_arms(l));
   // Quake II's gun flashes (q2_flash_fx.hpp): a player's shot is its sounds and the flash at his
   // gun (his own: the sounds alone); a monster's flash line plays its gun's sound beside the look.
   const bool player_flash = ev.text == "q2_flash";

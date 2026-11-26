@@ -148,22 +148,12 @@ inline constexpr float kOnFloor = -kQ2Lift;
 inline constexpr float kArtifact = 24 - kQ2Lift;
 
 // Quake II's rules in Quake's things, by role as the item table maps the items
-// (profiles/remix.hpp): the shotgun the double-barrelled one, the machinegun and chaingun the
-// nailguns, the hyperblaster, railgun and BFG the lightning gun; the boxes and packs by kind and
-// size; the blaster Quake's first gun, the hand grenades its grenade launcher.
+// (profiles/remix.hpp): the weapons on the floor (the shotgun the double-barrelled one, the
+// machinegun and chaingun the nailguns, the hyperblaster, railgun and BFG the lightning gun), the
+// armour, the boxes and packs by kind and size, the artifacts, what the monsters' missiles look
+// and sound like, the pickups' sounds. The weapons in the hand are not renamed: Quake's own eight
+// are fired whole (server/q2_quake_arms.hpp), their models and sounds their own.
 inline constexpr Look kQ2AsQ1[] = {
-    // In the hand.
-    {"models/weapons/v_blast/tris.md2", "progs/v_shot.mdl"},
-    {"models/weapons/v_shotg/tris.md2", "progs/v_shot2.mdl"},
-    {"models/weapons/v_shotg2/tris.md2", "progs/v_shot2.mdl"},
-    {"models/weapons/v_machn/tris.md2", "progs/v_nail.mdl"},
-    {"models/weapons/v_chain/tris.md2", "progs/v_nail2.mdl"},
-    {"models/weapons/v_launch/tris.md2", "progs/v_rock.mdl"},
-    {"models/weapons/v_handgr/tris.md2", "progs/v_rock.mdl"},
-    {"models/weapons/v_rocket/tris.md2", "progs/v_rock2.mdl"},
-    {"models/weapons/v_hyperb/tris.md2", "progs/v_light.mdl"},
-    {"models/weapons/v_rail/tris.md2", "progs/v_light.mdl"},
-    {"models/weapons/v_bfg/tris.md2", "progs/v_light.mdl"},
     // On the floor.
     {"models/weapons/g_shotg/tris.md2", "progs/g_shot.mdl", 0, {0, 0, kOnFloor}},
     {"models/weapons/g_shotg2/tris.md2", "progs/g_shot.mdl", 0, {0, 0, kOnFloor}},
@@ -195,17 +185,6 @@ inline constexpr Look kQ2AsQ1[] = {
     {"models/objects/grenade/tris.md2", "progs/grenade.mdl"},
     {"models/objects/laser/tris.md2", "progs/laser.mdl"},
     // Heard.
-    {"weapons/blastf1a.wav", "weapons/guncock.wav"},
-    {"weapons/shotgf1b.wav", "weapons/shotgn2.wav"},
-    {"weapons/sshotf1b.wav", "weapons/shotgn2.wav"},
-    {"weapons/machgf1b.wav", "weapons/rocket1i.wav"},
-    {"weapons/machgf2b.wav", "weapons/spike2.wav"},
-    {"weapons/grenlf1a.wav", "weapons/grenade.wav"},
-    {"weapons/hgrent1a.wav", "weapons/grenade.wav"},
-    {"weapons/rocklf1a.wav", "weapons/sgun1.wav"},
-    {"weapons/hyprbf1a.wav", "weapons/lhit.wav"},
-    {"weapons/railgf1a.wav", "weapons/lhit.wav"},
-    {"weapons/bfg__f1y.wav", "weapons/lhit.wav"},
     {"weapons/rocklx1a.wav", "weapons/r_exp3.wav"},
     {"weapons/grenlx1a.wav", "weapons/r_exp3.wav"},
     {"weapons/grenlb1b.wav", "weapons/bounce.wav"},

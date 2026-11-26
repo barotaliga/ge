@@ -18,6 +18,7 @@
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_quake_arms.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_stats.hpp"
 
@@ -33,8 +34,8 @@ bool fightable(const Q2Server& s, int i) {
 
 // The weapon called `name` that plays under the server's pack; -1 none.
 int weapon_named(const Q2Server& s, std::string_view name) {
-  const int w = sq_weapon_named(name);
-  return sq_weapon_plays(w, s.opt.pack) ? w : -1;
+  const int w = sq_weapon_named(name, s.quake_arms);
+  return sq_weapon_plays(w, s.opt.pack, s.quake_arms) ? w : -1;
 }
 
 // The weapon a thrown ammunition is (the grenades, The Reckoning's traps); -1 none.
@@ -63,9 +64,11 @@ constexpr SqWeapon kReckoningCycle[] = {SqWeapon::blaster,
 constexpr int kReckoningCycleSize = static_cast<int>(std::size(kReckoningCycle));
 
 int cycle_size(const Q2Server& s) {
+  if (s.quake_arms) return kSqWeaponCount - kSqQuakeFirst;  // Quake's eight, in Quake's order
   return s.opt.pack == Q2Pack::reckoning ? kReckoningCycleSize : int(SqWeapon::hand_grenade) + 1;
 }
 int cycle_at(const Q2Server& s, int k) {
+  if (s.quake_arms) return kSqQuakeFirst + k;
   return s.opt.pack == Q2Pack::reckoning ? int(kReckoningCycle[k]) : k;
 }
 int cycle_place(const Q2Server& s, int w) {
@@ -121,8 +124,16 @@ int reckoning_toggle(const Q2Server& s, int slot, int w, std::string& refused) {
 
 void fight_took(Q2Server& s, int slot, int item, int before) {
   stats_item(s, slot, item);
-  const int w = sq_weapon_of_item(item);
   Q2Player& p = s.players[slot];
+  if (p.body.quake) {  // Quake's weapons worn: the Quake weapon the item gives (q2_quake_arms.hpp)
+    const SqQuakeTake t = sq_quake_take(item);
+    const int w = sq_weapon_of_item(t.item, true);
+    if (w < 0 || p.body.counts[t.item] != 1) return;  // only a newly owned weapon
+    // Quake's choice: in deathmatch only a weapon ranked above the one in hand.
+    if (!deathmatch(s) || w > p.hand.weapon) sq_choose(p.hand, p.body, w);
+    return;
+  }
+  const int w = sq_weapon_of_item(item);
   const SqItem& it = kSqItems[item];
   const bool dm = deathmatch(s);
   // The status bar's pickup (3 s), and the item selected when it has a use.

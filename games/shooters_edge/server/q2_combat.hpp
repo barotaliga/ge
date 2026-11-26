@@ -34,6 +34,7 @@
 
 #include "classic/q2_arms.hpp"
 #include "shooter/vec.hpp"
+#include "shooters_edge/profiles/arsenal.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 
 namespace shooters_edge::server {
@@ -65,8 +66,21 @@ enum class SqWeapon : uint8_t {
   plasma_beam,
   disruptor,
   tesla,
+  // Quake's eight (q2_quake_arms.hpp), fired whole by these rules when they wear Quake's things
+  // (classic remix's `cr_items q1`): then they alone are held, in Quake's order.
+  q1_axe,
+  q1_shotgun,
+  q1_super_shotgun,
+  q1_nailgun,
+  q1_super_nailgun,
+  q1_grenade_launcher,
+  q1_rocket_launcher,
+  q1_lightning,
 };
-inline constexpr int kSqWeaponCount = 20;
+inline constexpr int kSqWeaponCount = 28;
+inline constexpr int kSqQuakeFirst = int(SqWeapon::q1_axe);
+// Whether weapon `w` is one of Quake's.
+constexpr bool sq_quake_weapon(int w) { return w >= kSqQuakeFirst && w < kSqWeaponCount; }
 
 // What one shot is. The Reckoning's after the base game's: the ion ripper's bouncing bolt, the
 // hyper guard's blue bolt, the phalanx's plasma ball, the beta maiden's homing rocket, the gekk's
@@ -103,22 +117,57 @@ enum class SqShot : uint8_t {
   defender_sphere,
   hunter_sphere,
   vengeance_sphere,
+  // Quake's (q2_quake_arms.hpp): the spike and the super spike, the grenade that bursts on what
+  // it touches, the rocket.
+  q1_spike,
+  q1_super_spike,
+  q1_grenade,
+  q1_rocket,
 };
-inline constexpr int kSqShotKinds = 25;
+inline constexpr int kSqShotKinds = 29;
+inline constexpr int kSqQuakeShotFirst = int(SqShot::q1_spike);
+// Whether shot kind `k` is one of Quake's.
+constexpr bool sq_quake_shot(SqShot k) { return int(k) >= kSqQuakeShotFirst; }
 // Each kind's effect bits in flight (its trail and light on a client): a bolt the blaster's (8), a
 // grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000);
 // the ion ripper's trail (0x00100000), the blue bolt's (0x00400000), the plasma's (0x01000000,
 // its frames fast), the spit the blaster's; Ground Zero's mines and bomb the grenade's smoke, the
-// disruptor's bolt the tracker's (0x04000000), the green bolt the blaster's and the tracker's.
-inline constexpr int kSqShotEffects[kSqShotKinds] = {
-    8,  0, 0, 32, 16, 0,  128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000,
-    16, 8, 0, 0,  32, 32, 0x04000000,   32, 0,          0,          8 | 0x04000000,
-    0,  0, 0};
+// disruptor's bolt the tracker's (0x04000000), the green bolt the blaster's and the tracker's;
+// Quake's spikes none, its grenade the grenade's smoke, its rocket the rocket's.
+inline constexpr int kSqShotEffects[kSqShotKinds] = {8,
+                                                     0,
+                                                     0,
+                                                     32,
+                                                     16,
+                                                     0,
+                                                     128 | 0x2000,
+                                                     32,
+                                                     0x00100000,
+                                                     0x00400000,
+                                                     0x01000000 | 0x2000,
+                                                     16,
+                                                     8,
+                                                     0,
+                                                     0,
+                                                     32,
+                                                     32,
+                                                     0x04000000,
+                                                     32,
+                                                     0,
+                                                     0,
+                                                     8 | 0x04000000,
+                                                     0,
+                                                     0,
+                                                     0,
+                                                     0,
+                                                     0,
+                                                     32,
+                                                     16};
 // The render flag each kind is drawn with (8 full bright: the ion ripper's bolt, the flechette;
 // 0x8000 seen through IR goggles: Ground Zero's mines and bomb; its spheres both).
 inline constexpr int kSqShotRender[kSqShotKinds] = {
-    0, 0, 0,      0,      0, 0,      0, 0, 8, 0,          0,          0,         0,
-    0, 8, 0x8000, 0x8000, 0, 0x8000, 0, 0, 0, 8 | 0x8000, 8 | 0x8000, 8 | 0x8000};
+    0,      0,      0, 0,      0, 0, 0, 0,          8,          0,          0, 0, 0, 0, 8,
+    0x8000, 0x8000, 0, 0x8000, 0, 0, 0, 8 | 0x8000, 8 | 0x8000, 8 | 0x8000, 0, 0, 0, 0};
 
 struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
@@ -137,6 +186,9 @@ struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): 
   // The rules it belongs to (q2_pack.hpp): its view model, sound and shots are registered only
   // under its pack, so the base game's lists do not move.
   Q2Pack pack = Q2Pack::base;
+  // Quake's (q2_quake_arms.hpp): held, registered and fired only when the rules wear Quake's
+  // weapons, and then alone.
+  bool quake = false;
 };
 
 // A base game's weapon's row: its numbers the shared hand's (classic/q2_arms.hpp), so these
@@ -162,6 +214,40 @@ constexpr SqWeaponRow sq_base_row(ge::classic::Q2ArmId id, const char* item, con
           a.kick,
           a.forward,
           a.right};
+}
+
+// One of Quake's weapons' row (`profiles::kQ1Weapons`' row `i`: its view model, its sound, its
+// damage): a weapon of `period` steps stands on frame 0, fires on frame 1 and is ready again on
+// the step its period is up; one of a single step (the nailguns, the lightning gun) fires each
+// step while attack is held, frames 1 and 2 in turn (q2_quake_arms.hpp turns these into the
+// frames Quake's view models show). Each shot takes one of its ammunition (the super shotgun's and
+// the super nailgun's second is their fire's).
+constexpr SqWeaponRow sq_quake_row(int i, const char* name, const char* item, SqAmmo ammo,
+                                   int period, SqShot shot) {
+  const profiles::WeaponRow& w = profiles::kQ1Weapons[i];
+  const bool held = period == 1;
+  const int last_fire = held ? 2 : period - 1;
+  const int damage = static_cast<int>(w.damage);
+  return {name,
+          item,
+          w.view.data(),
+          w.fire_sound.data(),
+          ammo,
+          ammo == SqAmmo::none ? 0 : 1,
+          0,
+          last_fire,
+          last_fire + 1,
+          last_fire + 2,
+          1,
+          held ? 2 : 1,
+          shot,
+          damage,
+          damage,
+          damage,
+          0,
+          0,
+          Q2Pack::base,
+          true};
 }
 
 inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
@@ -221,6 +307,17 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
      SqAmmo::rounds, 1, 4, 9, 29, 34, 5, 5, SqShot::tracker, 30, 45, 0, 24, 8, Q2Pack::ground_zero},
     {"Tesla", "ammo_tesla", "models/weapons/v_tesla/tris.md2", "weapons/hgrent1a.wav",
      SqAmmo::tesla, 1, 0, 8, 32, 32, 1, 2, SqShot::tesla, 3, 3, 8, 0, -4, Q2Pack::ground_zero},
+    // Quake's (q2_quake_arms.hpp).
+    sq_quake_row(0, "Axe", nullptr, SqAmmo::none, 5, SqShot::pellets),
+    sq_quake_row(1, "Shotgun", nullptr, SqAmmo::shells, 5, SqShot::pellets),
+    sq_quake_row(2, "Super Shotgun", "weapon_supershotgun", SqAmmo::shells, 7, SqShot::pellets),
+    sq_quake_row(3, "Nailgun", "weapon_machinegun", SqAmmo::bullets, 1, SqShot::q1_spike),
+    sq_quake_row(4, "Super Nailgun", "weapon_chaingun", SqAmmo::bullets, 1, SqShot::q1_super_spike),
+    sq_quake_row(5, "Grenade Launcher", "weapon_grenadelauncher", SqAmmo::rockets, 6,
+                 SqShot::q1_grenade),
+    sq_quake_row(6, "Rocket Launcher", "weapon_rocketlauncher", SqAmmo::rockets, 8,
+                 SqShot::q1_rocket),
+    sq_quake_row(7, "Thunderbolt", "weapon_railgun", SqAmmo::cells, 1, SqShot::rail),
 };
 
 // A row's runs of frames and how weapon `w`'s fire frames fire, as the shared hand steps them.
@@ -228,6 +325,9 @@ constexpr ge::classic::Q2ArmFrames sq_runs(const SqWeaponRow& r) {
   return {r.last_activate, r.last_fire, r.last_idle, r.last_deactivate, r.fire_from, r.fire_to};
 }
 constexpr ge::classic::Q2Held sq_held_fire(int w) {
+  if (sq_quake_weapon(w))  // the nailguns and the lightning gun: a shot each step while held
+    return kSqWeapons[w].fire_to > kSqWeapons[w].fire_from ? ge::classic::Q2Held::loop
+                                                           : ge::classic::Q2Held::once;
   return w >= 0 && w < ge::classic::kQ2ArmCount ? ge::classic::kQ2Arms[w].held
                                                 : ge::classic::Q2Held::once;
 }
@@ -240,14 +340,22 @@ inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {
     Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::ground_zero, Q2Pack::ground_zero,
     Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
     Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
-    Q2Pack::ground_zero};
+    Q2Pack::ground_zero, Q2Pack::base,        Q2Pack::base,        Q2Pack::base,
+    Q2Pack::base};  // Quake's last: registered only when its weapons are worn
+// Whether shot kind `k` flies under `pack`, with Quake's weapons worn or not (`quake`).
+constexpr bool sq_shot_flies(int k, Q2Pack pack, bool quake) {
+  return sq_quake_shot(SqShot(k)) ? quake : q2_pack_has(pack, kSqShotPacks[k]);
+}
 // Whether a weapon steps and throws as the hand grenade does (the grenades and the trap).
 constexpr bool sq_thrown(int w) {
   return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap);
 }
-// Whether weapon `w` plays under `pack` (the base game's always, a pack's under it).
-constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
-  return w >= 0 && w < kSqWeaponCount && q2_pack_has(pack, kSqWeapons[w].pack);
+// Whether weapon `w` plays under `pack` (the base game's always, a pack's under it); with Quake's
+// weapons worn (`quake`), Quake's eight alone.
+constexpr bool sq_weapon_plays(int w, Q2Pack pack, bool quake = false) {
+  if (w < 0 || w >= kSqWeaponCount) return false;
+  if (quake || kSqWeapons[w].quake) return quake && kSqWeapons[w].quake;
+  return q2_pack_has(pack, kSqWeapons[w].pack);
 }
 
 // The hand grenade's fuse, s, lit at frame 11; its throw's speed runs from the least (let go at
@@ -255,20 +363,23 @@ constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
 inline constexpr double kSqGrenadeFuse = 3.2;
 inline constexpr float kSqThrowLeast = 400, kSqThrowMost = 800;
 
-// The weapon `item` (an item row) gives, or -1 when it gives none.
-int sq_weapon_of_item(int item);
-// The weapon called `name` (its name, any case), or -1.
-int sq_weapon_named(std::string_view name);
+// The weapon `item` (an item row) gives, or -1 when it gives none; `quake`: among Quake's, by the
+// item that stands for it (q2_quake_arms.hpp).
+int sq_weapon_of_item(int item, bool quake = false);
+// The weapon called `name` (its name, any case), or -1; `quake`: among Quake's.
+int sq_weapon_named(std::string_view name, bool quake = false);
 
 // The item a player calls `name` (its pickup name, any case), or -1.
 int sq_item_named(std::string_view name);
 
-// Whether `body` holds weapon `w` (the blaster always).
+// Whether `body` holds weapon `w` (the blaster always; Quake's axe and shotgun always when Quake's
+// are worn, and none of these rules' own then).
 bool sq_holds(const SqBody& body, int w);
 // Whether `body` holds `w` and the ammo for a shot of it.
 bool sq_can_fire(const SqBody& body, int w);
 // The best weapon with ammo: railgun, hyperblaster, chaingun, machinegun, super shotgun (2 shells
-// or more), shotgun, blaster.
+// or more), shotgun, blaster; with Quake's worn: lightning gun, super nailgun, super shotgun,
+// nailgun, shotgun, axe.
 int sq_best_weapon(const SqBody& body);
 
 enum class SqHandState : uint8_t { activating, ready, firing, dropping };

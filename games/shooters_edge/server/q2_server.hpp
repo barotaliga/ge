@@ -399,6 +399,14 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   int hunter_cam = -1;
   double dual_fire_until = 0;  // a pack's dual fire (q2_powers.hpp): the hand steps twice a frame
   int silencer_shots = 0;
+  // Quake's weapons (q2_quake_arms.hpp): the axe's cut to land (level time; 0 none), the nailgun's
+  // next barrel (left when set), the lightning gun's loud hit next due and whether its start was
+  // heard this hold, and the frame the view model's fire run began and the last shot's.
+  double q1_cut_at = 0;
+  bool q1_nail_left = false;
+  double q1_beam_next = 0;
+  bool q1_beam_held = false;
+  int64_t q1_run_from = -100, q1_last_shot = -100;
   bool power_on = false;
   double power_flash = 0;  // the screen's plate or the shield's shell shown till then: a blow taken
   double air_until = 0, drown_at = 0;
@@ -683,6 +691,9 @@ struct Q2Server : RulesCommon {
   // remix's `cr_physics`): its ground, air, landing and water, and no harm from a fall. Read as a
   // map starts.
   bool q1_physics = false;
+  // Quake's weapons fired whole (classic remix's `cr_items q1`, the `sv_wear q1` the rules wear,
+  // q2_quake_arms.hpp): Quake's eight held in place of these rules' own. Read as a map starts.
+  bool quake_arms = false;
   // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
