@@ -7,6 +7,8 @@
 //
 // - `first_arsenal()`: Quake's eight weapons and four ammunitions (shells, nails, rockets,
 //   cells), held bit-exact to the fighter's play before the seam (the bots' lab digests).
+// - a mission pack's arsenal (games/shooters_edge/bots/arsenals.hpp): the base game's rows and the
+//   pack's own guns, whose impulses (225, 226) lie past the base numbers: each says its aim slot.
 // - `q2_arsenal()`: Quake II's ten weapons and six ammunitions, off its rules' own weapon
 //   table (server/q2_combat.hpp); a weapon's bit is 1 << its index there, and the impulse that
 //   asks for it is the index + 1, as Quake II's rules take it.
@@ -48,6 +50,7 @@ enum class WeaponCurve : uint8_t {
   hitscan,    // a gun that is as good at any range (the machine guns)
   rail,       // a slug: best far, still good near
   big_blast,  // a huge blast: only far from itself
+  kept,       // carried, never fought with (a mine layer: its mines wait for anyone, him too)
 };
 
 // The highest number a weapon of any game's arsenal answers to (Quake II's ten run 1..10): a

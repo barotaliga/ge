@@ -59,6 +59,10 @@ namespace sh = ge::shooter;
 struct OptionalFields {
   int items2 = -1, maxspeed = -1, gravity = -1, movement = -1, vw_index = -1;
   int hideentity = -1, trackent = -1, visclients = -1, hideplayers = -1, teleported = -1;
+  // A program that keeps a player's true ammunition apart from the four the status bar shows
+  // (Dissolution of Eternity: the base four's stock, then lava nails, multi rockets and plasma),
+  // read into `PlayerNumbers::stock` for the bots; -1 each when the program has none.
+  int stock[7] = {-1, -1, -1, -1, -1, -1, -1};
 };
 
 constexpr int kMaxQcNesting = 40;

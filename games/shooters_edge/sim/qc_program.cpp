@@ -325,6 +325,10 @@ bool create_qc_program(QcProgram& q, const pg::Progs& progs, int max_edicts, std
   f.visclients = optional_field(progs, "visclients");
   f.hideplayers = optional_field(progs, "hideplayers");
   f.teleported = optional_field(progs, "teleported");
+  static constexpr const char* kStock[7] = {"ammo_shells1", "ammo_nails1",     "ammo_rockets1",
+                                            "ammo_cells1",  "ammo_lava_nails", "ammo_multi_rockets",
+                                            "ammo_plasma"};
+  for (int k = 0; k < 7; k++) f.stock[k] = optional_field(progs, kStock[k]);
   sh::Program& h = q.hooks;
   h = {};
   h.start_frame = hook_global(progs, q.layout->g.start_frame);
