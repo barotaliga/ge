@@ -38,6 +38,7 @@
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
+#include "shooters_edge/server/q2_quake_arms.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
@@ -46,6 +47,13 @@
 #include "shooters_edge/server/shot_help.hpp"
 
 namespace shooters_edge::server {
+
+namespace {
+
+// The weapon impulse `n` picks (1 the first): with Quake's weapons worn, Quake's `n`th.
+int impulse_weapon(const Q2Server& s, int n) { return (s.quake_arms ? kSqQuakeFirst : 0) + n - 1; }
+
+}  // namespace
 
 namespace {
 
@@ -403,6 +411,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   p.pressed = 0;
   p.view_angles = {0, yaw, 0};
   p.body = sq_new_body(s.opt.pack);
+  if (s.quake_arms) sq_quake_body(p.body);  // Quake's weapons (q2_quake_arms.hpp)
   p.body.health = static_cast<int>(p.health);
   p.mega = -1;
   p.taken.clear();
@@ -747,7 +756,8 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
   gz_gravity_touch(s, slot);  // Ground Zero's gravity triggers, for his next move
   if (p.noclip) {
-    if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
+    if (c.impulse >= 1 && c.impulse <= kSqWeaponCount)
+      fight_choose(s, slot, impulse_weapon(s, c.impulse));
     if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
       p.stepped = true;
       fight_step(s, slot, true);
@@ -757,7 +767,8 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   fight_moved(s, slot, was_on_ground, pm.cmd.up);
   touch_items(s, slot);
   map_touch(s, slot);
-  if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
+  if (c.impulse >= 1 && c.impulse <= kSqWeaponCount)
+    fight_choose(s, slot, impulse_weapon(s, c.impulse));
   // The first command of the frame that presses attack steps the hand at once.
   if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
     p.stepped = true;
@@ -1318,6 +1329,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
       worn != nullptr)
     s.looks = worn->looks;
   s.q1_physics = s.cvars.find("sv_physics")->value == "q1";
+  s.quake_arms = quake_arms_worn(s);
   s.entities.clear();
   int cubes = 0;                // the power cubes so far (each its own bit in coop)
   std::vector<char> inhibited;  // by the map's order: left out by skill or mode

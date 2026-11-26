@@ -34,6 +34,7 @@
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
+#include "shooters_edge/server/q2_quake_arms.hpp"
 #include "shooters_edge/server/q2_reckoning.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -103,7 +104,11 @@ constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris
                                                       "models/proj/laser2/tris.md2",
                                                       "models/items/defender/tris.md2",
                                                       "models/items/hunter/tris.md2",
-                                                      "models/items/vengnce/tris.md2"};
+                                                      "models/items/vengnce/tris.md2",
+                                                      "progs/spike.mdl",
+                                                      "progs/s_spike.mdl",
+                                                      "progs/grenade.mdl",
+                                                      "progs/missile.mdl"};
 constexpr const char* kClick = gc::kQ2NoAmmo;
 constexpr const char* kBoom = gc::kQ2RocketBoom;
 constexpr const char* kGrenadeBoom = gc::kQ2GrenadeBoom;
@@ -691,8 +696,9 @@ void rail(Q2Server& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int da
 
 // Quake II's weapons by the names the aim help's lists use (shot_help.hpp).
 constexpr const char* kSqAimNames[kSqWeaponCount] = {
-    "blaster", "sg", "ssg", "mg",   "cg", "gl",  "rl",   "hb", "rg",  "bfg",
-    "hg",      "ir", "ph",  "trap", "cf", "etf", "prox", "pb", "dis", "tesla"};
+    "blaster", "sg", "ssg", "mg",   "cg",  "gl",  "rl",   "hb", "rg",  "bfg",
+    "hg",      "ir", "ph",  "trap", "cf",  "etf", "prox", "pb", "dis", "tesla",
+    "axe",     "sg", "ssg", "ng",   "sng", "gl",  "rl",   "lg"};
 
 // Whether the aim help acts for `slot`'s shot of weapon `w`: granted, and the weapon allowed.
 bool aim_helped_weapon(const Q2Server& s, int slot, int w) {
@@ -983,6 +989,7 @@ void fire(Q2Server& s, int slot, int shots) {
   Q2Player& p = s.players[slot];
   const int w = p.hand.weapon;
   if (kSqWeapons[w].pack == Q2Pack::ground_zero) return gz_fire(s, slot, shots);
+  if (kSqWeapons[w].quake) return quake_fire(s, slot, shots);
   // The phalanx's second ball (its frame then 9) makes no flash and no noise of its own.
   const bool second = w == int(SqWeapon::phalanx) && p.hand.frame == 9;
   // A shot is a noise, but for a silenced one and a thrown grenade (heard when it bursts).
@@ -1093,21 +1100,24 @@ void fight_precache(Q2Server& s) {
     return static_cast<int>(s.models.size()) - 1;
   };
   for (int w = 0; w < kSqWeaponCount; w++)
-    if (sq_weapon_plays(w, s.opt.pack)) s.weapon_models[w] = model(kSqWeapons[w].view_model);
+    if (sq_weapon_plays(w, s.opt.pack, s.quake_arms))
+      s.weapon_models[w] = model(kSqWeapons[w].view_model);
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const Carried& c : kCarried)
     if (q2_pack_has(s.opt.pack, c.pack))
       s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
   for (int k = 0; k < kSqShotKinds; k++)
-    if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
+    if (sq_shot_flies(k, s.opt.pack, s.quake_arms)) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
   };
-  for (const SqWeaponRow& r : kSqWeapons)
-    if (q2_pack_has(s.opt.pack, r.pack)) add_sound(r.sound);
+  for (int w = 0; w < kSqWeaponCount; w++)
+    if (sq_weapon_plays(w, s.opt.pack, s.quake_arms)) add_sound(kSqWeapons[w].sound);
+  if (s.quake_arms)
+    for (const char* name : kQuakeArmSounds) add_sound(name);
   for (const char* name :
        {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib, kSqHandSound[0].sample,
         kSqHandSound[1].sample, kSqHandSound[2].sample, kSqHandSound[3].sample})
@@ -1150,6 +1160,7 @@ void fight_spawn(Q2Server& s, int slot) {
   p.hurt_by = -1;
   p.hunter_cam = -1;
   p.view = {};
+  quake_arms_spawn(s, slot);
 }
 
 namespace {
@@ -1363,6 +1374,7 @@ void fight_clear(Q2Server& s) {
 void fight_step(Q2Server& s, int slot, bool attack) {
   Q2Player& p = s.players[slot];
   if (!fightable(s, slot)) return;
+  if (s.quake_arms) quake_arms_frame(s, slot, attack);
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
   if (const ge::console::Cvar* fast = s.cvars.find("g_fast_weap_switch"); fast != nullptr)
@@ -1383,7 +1395,7 @@ void fight_step(Q2Server& s, int slot, bool attack) {
 void fight_missiles(Q2Server& s) {
   const float gravity = static_cast<float>(s.cvars.find("sv_gravity")->number);
   for (Q2Missile& m : s.missiles) {
-    if (!m.live || gz_missile(s, m)) continue;  // Ground Zero's fly by their own rules
+    if (!m.live || gz_missile(s, m) || quake_missile(s, m)) continue;  // theirs, by their rules
     if (s.level_time + 0.001 >= m.dies_at) {
       if (grenade(m.kind))
         explode(s, m, m.origin, -1);
@@ -1601,37 +1613,6 @@ bool fight_anyflag(const Q2Server& s, int bit) {
   return (s.cvars.find("dmflags")->integer() & bit) != 0;
 }
 
-bool fight_midair(const Q2Server& s) {
-  const auto* c = s.cvars.find("k_midair");
-  return deathmatch(s) && c != nullptr && c->on();
-}
-
-void fight_midair_kit(Q2Server& s, int slot) {
-  Q2Player& p = s.players[slot];
-  if (!fight_midair(s) || !p.alive) return;
-  p.health = sh::kMidairHealth;
-  p.body.health = static_cast<int>(sh::kMidairHealth);
-  p.body.armour = SqArmour::body;
-  p.body.armour_count = static_cast<int>(sh::kMidairArmour);
-  const int rockets = static_cast<int>(SqAmmo::rockets);
-  p.body.max_ammo[rockets] = 255;
-  p.body.ammo[rockets] = 255;
-  p.body.counts[sq_item("weapon_rocketlauncher")] = 1;
-  p.hand = SqHand{};
-  p.hand.weapon = int(SqWeapon::rocket_launcher);
-}
-
-std::vector<std::string> fight_midair_report(const Q2Server& s) {
-  std::vector<std::string> out;
-  if (!fight_midair(s)) return out;
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    if (!s.clients[i].active) continue;
-    std::string line = sh::midair_tally_line(name_of(s, i), s.players[i].midair);
-    if (!line.empty()) out.push_back(std::move(line));
-  }
-  return out;
-}
-
 void fight_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
                 int weapon, int flags) {
   hurt(s, target, attacker, dir, damage, knockback, (flags & 4) != 0, weapon, (flags & 1) != 0,
@@ -1733,7 +1714,7 @@ void fight_rows(Q2Server& s) {
     const SqWeaponRow& r = kSqWeapons[p.hand.weapon];
     n.weapon = float(p.hand.weapon + 1);
     n.weapon_model = p.alive && s.intermission_at <= 0 ? s.weapon_models[p.hand.weapon] : 0;
-    n.weapon_frame = float(p.hand.frame);
+    n.weapon_frame = float(quake_view_frame(s, p));  // the hand's own but for Quake's weapons
     n.current_ammo = r.ammo == SqAmmo::none ? 0 : float(p.body.ammo[static_cast<int>(r.ammo)]);
     w.entities[size_t(i) + 1].loop = player_loop(s, p);
   }

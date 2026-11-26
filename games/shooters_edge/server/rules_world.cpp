@@ -79,6 +79,8 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
   n.impulse = static_cast<int>(field(s, e, f.impulse));
   n.items = field(s, e, f.items);
   n.items2 = s.q.fields.items2 >= 0 ? field(s, e, s.q.fields.items2) : 0;
+  if (s.q.fields.stock[0] >= 0)  // the true stock kept apart from the status bar's four
+    for (int k = 0; k < 7; k++) n.stock[k] = field(s, e, s.q.fields.stock[k]);
   n.view_z = field(s, e, f.view_ofs + 2);
   n.frags = field(s, e, f.frags);
   n.weapon_model = model_index_of(

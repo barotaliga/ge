@@ -623,7 +623,7 @@ bool commands_in_intermission(const std::string& cmd) {
 
 bool commands_refuse_item(Q2Server& s, int slot, bool use, const std::string& name) {
   const Q2Player& p = s.players[slot];
-  const int w = sq_weapon_named(name);
+  const int w = sq_weapon_named(name, s.quake_arms);
   const int item = sq_item_named(name);
   if (w < 0 && item < 0) {
     fight_print(s, slot, "unknown item: " + name + "\n");

@@ -27,6 +27,7 @@ constexpr float kStepHeight = 18;  // the move climbs a step this high without a
 constexpr float kArriveUp = 2;     // a proof arrives within this up or down, units
 constexpr float kStall_s = 0.25f;  // a proof getting no nearer for this long is refused
 constexpr float kNearestUp = 64;   // nav_nearest's reach up and down, units
+constexpr int32_t kSwimUnder = 2;  // and a swimmer's swim node looked for this many cells down
 constexpr float kGapUp = 24;  // a floor this near the straight line between two nodes bridges it
 // A jump may land this short of its target on the target's floor (a stair's tread), units.
 constexpr float kLandShort = 24;
@@ -834,12 +835,16 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
       best_d = dd;
     }
   }
-  // The swim node of the cell `p` is in, when it is the nearer.
+  // The swim node of the cell `p` is in, when it is the nearer; or, with none there, of the
+  // nearest cell under it within kSwimUnder cells: a swimmer at the surface floats in a cell
+  // with no node (its centre out of the water), and with no node near enough either he planned
+  // from nowhere (e2m1's courtyard pool: 13 minutes at its top, the way out under water).
   if (g.swim_first >= 0 && g.swim_cell > 0) {
     const auto i = static_cast<int32_t>(std::floor((p.x - g.swim_lo.x) / g.swim_cell));
     const auto j = static_cast<int32_t>(std::floor((p.y - g.swim_lo.y) / g.swim_cell));
-    const auto k = static_cast<int32_t>(std::floor((p.z - g.swim_lo.z) / g.swim_cell));
-    if (i >= 0 && j >= 0 && k >= 0 && i < g.swim_nx && j < g.swim_ny && k < g.swim_nz) {
+    const auto k0 = static_cast<int32_t>(std::floor((p.z - g.swim_lo.z) / g.swim_cell));
+    for (int32_t k = k0; k >= k0 - kSwimUnder; k--) {
+      if (i < 0 || j < 0 || k < 0 || i >= g.swim_nx || j >= g.swim_ny || k >= g.swim_nz) continue;
       const int32_t n = g.swim_node[(static_cast<size_t>(k) * static_cast<size_t>(g.swim_ny) +
                                      static_cast<size_t>(j)) *
                                         static_cast<size_t>(g.swim_nx) +
@@ -850,6 +855,7 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
         const Vec3f d = g.nodes[static_cast<size_t>(n)].origin - p;
         const float dd = dot(d, d);
         if (best < 0 || dd < best_d) best = n;
+        break;
       }
     }
   }
