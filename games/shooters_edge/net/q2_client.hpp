@@ -126,6 +126,10 @@ struct Q2ClientConfig {
   // `ask_hits`: asks our server for the damage the player dealt (`*ge_ext` bit 1024), the hit
   // marker's (`cl_hit_markers`); a stock client is sent none of it.
   bool ask_hits = false;
+  // `ask_looks`: asks our server for Quake's own looks of Quake's weapons fired by Quake II's
+  // rules under classic remix (`*ge_ext` bit 1, temporary entities 129 to 134); a stock client is
+  // sent none of them.
+  bool ask_looks = false;
   // `ask_sheet`: asks our server for its settings sheet (`*ge_ext` bit 2048, net/q2_votes.hpp),
   // the server settings page's; a stock client is offered none.
   bool ask_sheet = false;

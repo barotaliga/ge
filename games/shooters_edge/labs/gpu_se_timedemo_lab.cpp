@@ -456,6 +456,14 @@ void run(gl::Lab& lab) {
   std::string error;
   shooters_edge::look::Picture picture;  // the world reads it every frame
   if (!lab.arg("look").empty()) picture.look = lab.arg("look");
+  {
+    // The runner's --cvars ("r_scale 0.75"), on every run: the timed one, its pictures and each
+    // priced row's base.
+    ge::console::Console con;
+    shooters_edge::look::add_cvars(con, picture);
+    con.execute(lab.cvars());
+    for (const auto& p : con.problems()) lab.note("--cvars: " + p.what);
+  }
   cl::SearchPath files;
   if (basedir.empty()) {
     std::vector<uint8_t> pak;
@@ -658,10 +666,9 @@ void run(gl::Lab& lab) {
       rest = bar == std::string_view::npos ? std::string_view{} : rest.substr(bar + 1);
       const size_t eq = item.find('=');
       const std::string label(item.substr(0, eq));
-      shooters_edge::look::Picture at;
+      shooters_edge::look::Picture at = picture;  // the runner's --cvars under the set's
       ge::console::Console con;
       shooters_edge::look::add_cvars(con, at);
-      at.look = picture.look;
       con.execute(eq == std::string_view::npos ? item : item.substr(eq + 1));
       if (!row(label, at, false)) return;
     }

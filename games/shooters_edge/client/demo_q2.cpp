@@ -964,6 +964,31 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 63:  // explosions that give no light
       point(DemoEffectKind::explosion);
       break;
+    // Quake's own looks of Quake's weapons fired by Quake II's rules (classic remix; our server's,
+    // to our client alone: server/q2_wire.hpp's `quake_looks`), kept as a Quake match's are: a
+    // spike's and a big spike's hit, a pellet's and blood (a count, then the point), a blast, the
+    // shaft (its owner, start and end). No Quake II puff or sound: the server sends Quake's.
+    case 129:
+    case 130:
+      point(DemoEffectKind::spike);
+      e.code = kind - 129;  // Quake's own kind byte: 0 a spike, 1 a big one
+      e.count = kind == 130 ? 2 : 1;
+      break;
+    case 131:
+    case 132:
+      e.count = m.u8();
+      point(kind == 131 ? DemoEffectKind::gunshot : DemoEffectKind::blood);
+      e.code = kind == 131 ? 2 : 12;
+      break;
+    case 133:
+      point(DemoEffectKind::explosion);
+      e.code = 0;  // no Quake II kind byte: Quake's own blast
+      break;
+    case 134:
+      e.entity = m.i16();
+      line(DemoEffectKind::beam);
+      e.code = 6;  // Quake's shaft, its own bolt
+      break;
     case 128: {  // damage dealt: the hit marker's (q2_bar.hpp) and its sound, heard everywhere
       if (m.i16() > 0 && !m.bad) {
         s.hits++;

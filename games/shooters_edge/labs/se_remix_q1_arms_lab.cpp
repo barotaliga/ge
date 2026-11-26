@@ -5,11 +5,12 @@
 // shot made and the looks its hits were drawn by. Beside each, the weapon of Quake II that stood
 // for it before (Quake II's weapon in Quake's files) measured the same way: the period, the damage
 // and the looks that were Quake II's. The picture puts the time between shots side by side:
-// Quake's own number, the weapon fired now, the renamed one before.
+// Quake's own number, the weapon fired now, the renamed one before. A second picture follows the
+// looks over the Quake II wire: what reached a remote client before, and a client of ours now.
 //
 // ge:summary Lab: Quake's eight weapons on Quake II's rules measured against Quake's numbers
 // ge:keywords lab se-remix-q1-arms cr_items sv_wear q1-arms quake-weapons remix-weapons period
-// ge:keywords real-weapons reskin before-after shot-looks
+// ge:keywords real-weapons reskin before-after shot-looks remote-looks quake-looks
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_remix_q1_arms_test.cpp
 #include <algorithm>
@@ -27,6 +28,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_quake_arms.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 namespace {
 
@@ -120,6 +122,7 @@ struct Measured {
   float damage = 0;
   std::string sound;
   std::set<std::string> looks;
+  std::set<std::string> remote, stock;  // the looks that reach a remote client of ours; a stock one
   double period() const { return shots > 1 ? (last - first) / (shots - 1) : 0; }
 };
 
@@ -186,8 +189,15 @@ Measured measure(bool worn, const Case& c, int w, std::string& error) {
       if (ev.kind == sv::EventKind::sound && ev.ent == 1 && m.sound.empty() && worn)
         m.sound = ev.text;
       if ((ev.kind == sv::EventKind::point_effect || ev.kind == sv::EventKind::trail_effect) &&
-          !own && !ev.text.empty())
+          !own && !ev.text.empty()) {
         m.looks.insert(ev.text);
+        // Over the Quake II wire: to a remote client of ours, and to a stock one (as ours was
+        // sent before Quake's looks had their own temporary entities).
+        std::vector<uint8_t> bytes;
+        if (sv::q2_write_effect(bytes, ev, true)) m.remote.insert(ev.text);
+        bytes.clear();
+        if (sv::q2_write_effect(bytes, ev, false)) m.stock.insert(ev.text);
+      }
     }
     if (!fired) continue;
     if (m.shots++ == 0) m.first = t;
@@ -218,7 +228,8 @@ void run(gl::Lab& lab) {
   gl::draw_text(pic, kLeft, 34, "Quake's own number", kQuake);
   gl::draw_text(pic, kLeft + 200, 34, "fired by Quake II's rules now", kNow);
   gl::draw_text(pic, kLeft + 450, 34, "Quake II's weapon renamed (before)", kBefore);
-  int matched = 0, quake_looks = 0, q2_looks = 0;
+  int matched = 0, quake_looks = 0, q2_looks = 0, remote_looks = 0, stock_looks = 0;
+  std::vector<std::vector<std::string>> remote_rows;
   for (int i = 0; i < 8; i++) {
     const Case& c = kCases[i];
     const int w = sv::kSqQuakeFirst + i;
@@ -237,6 +248,10 @@ void run(gl::Lab& lab) {
     matched += same;
     for (const std::string& l : now.looks) quake_looks += l.rfind("q1_", 0) == 0;
     for (const std::string& l : was.looks) q2_looks += l.rfind("q1_", 0) != 0;
+    remote_looks += static_cast<int>(now.remote.size());
+    stock_looks += static_cast<int>(now.stock.size());
+    remote_rows.push_back({std::string(sv::kSqWeapons[size_t(w)].name), joined(now.looks),
+                           joined(now.stock), joined(now.remote)});
     rows.push_back({std::string(sv::kSqWeapons[size_t(w)].name), fixed(own.refire, 2),
                     fixed(now.period(), 2), std::to_string(now.shots), std::to_string(now.spent),
                     fixed(now.damage, 0), now.sound.empty() ? "-" : now.sound, joined(now.looks)});
@@ -271,6 +286,41 @@ void run(gl::Lab& lab) {
             "against 1.2 s, the rocket launcher's 0.8 s against 0.9 s)",
             {}},
            pic);
+  // Quake's looks over the Quake II wire: what a remote client got before (the names the protocol
+  // knows, as a stock client still gets) and what a client of ours gets now.
+  {
+    constexpr int kLine = 22, kW = 1100;
+    const int cols[4] = {8, 200, 560, 760};
+    gl::Picture wire =
+        gl::create_picture(kW, static_cast<int>(remote_rows.size() + 2) * kLine + 12, kPaper);
+    gl::draw_text(wire, cols[0], 14, "WEAPON", kInk);
+    gl::draw_text(wire, cols[1], 14, "LOOKS ITS HITS SEND", kInk);
+    gl::draw_text(wire, cols[2], 14, "REMOTE, BEFORE", kBefore);
+    gl::draw_text(wire, cols[3], 14, "REMOTE CLIENT OF OURS, NOW", kNow);
+    for (size_t i = 0; i < remote_rows.size(); i++) {
+      const int y = static_cast<int>(i + 1) * kLine + 8;
+      if (i % 2 == 0) gl::fill_rect(wire, 0, y - 4, kW, kLine, {236, 233, 224, 255});
+      const std::vector<std::string>& r = remote_rows[i];
+      gl::draw_text(wire, cols[0], y + 10, r[0], kInk);
+      gl::draw_text(wire, cols[1], y + 10, r[1], kFaint);
+      gl::draw_text(wire, cols[2], y + 10, r[2], kBefore);
+      gl::draw_text(wire, cols[3], y + 10, r[3], kNow);
+    }
+    lab.shot(
+        {"q1-arms-remote-looks",
+         "QUAKE'S LOOKS OVER THE QUAKE II WIRE",
+         "Each of Quake's weapons fired by Quake II's rules: the looks its hits send, which of "
+         "them reached a remote client before (none: the Quake II wire has no name for them, "
+         "as a stock client still gets), and which reach a remote client of ours now.",
+         "every look in the second column is in the last, and the before column is empty",
+         {}},
+        wire);
+  }
+  lab.metric("quake-looks-remote", remote_looks, "names");
+  lab.metric("quake-looks-stock", stock_looks, "names");
+  lab.table({"Quake's looks over the Quake II wire",
+             {"weapon", "looks sent", "to a stock client (and ours before)", "to ours now"},
+             remote_rows});
   lab.metric("weapons-at-quakes-period", matched, "weapons");
   lab.metric("quake-looks", quake_looks, "names");
   lab.metric("q2-looks-before", q2_looks, "names");
