@@ -153,6 +153,7 @@ struct WayThrough {
   std::vector<sh::Vec3f> sinks_at;  // and where each stands until called
   std::vector<int32_t> barred;      // those shut now (the plan's)
   std::vector<int32_t> barred_was;  // and at the last plan
+  std::vector<uint8_t> shut_trap;   // (`shuttrap`) traps while the barred doors stay shut
   std::vector<int32_t> node_door;   // each node: the bridge it stands on (map_nav.hpp), -1 none
   // The links whose line crosses a secret wall at rest (a drop past it down a hidden lift's shaft
   // carries no mover of its own): (the link's index, its from node, the wall's entity).
@@ -315,6 +316,13 @@ void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, co
 // across the doorway; each found the first time it stands closed and still); whether that set
 // changed since the last call.
 bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s);
+// (`shuttrap`) The nodes from which no way leads back to the main part's core (`MapNav::core`)
+// while the doors `barred` stay shut: the links through them (`NavLink::mover`) cut. A closet a
+// drop leads into and only a trigger's door out of (e1m4's ogres over the slime pit: dropped in to
+// kill them, he stood there for the last eight minutes) is a trap until that door moves.
+std::vector<uint8_t> way_shut_trap(const ge::shooterbots::NavGraph& g,
+                                   const std::vector<uint8_t>& core,
+                                   const std::vector<int32_t>& barred);
 // (`complete`) A map with monsters only a blast puts down (e3m2's zombies): the weapons lying on it
 // that blast (`BotArsenal::blast_pickup`) as steps walked over first (`WayStep::first`), so he
 // carries one before they wait.

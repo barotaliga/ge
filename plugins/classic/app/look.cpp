@@ -6,6 +6,7 @@
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
+// ge:keywords r_scale render-scale
 // ge:keywords r_particles scr_centertime centre-message r_powershells r_itempulse power-shells
 // ge:skill classic shooter render
 // ge:test tests/classic_look_test.cpp
@@ -207,6 +208,16 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "1: their own size (the default); 0.25..8: that many times it (2 or 3 shows "
                   "plainly where a shot lands)"},
        &picture.particle_scale);
+  bind(cv,
+       {.name = "r_scale",
+        .flags = gc::kArchive,
+        .help = "The size the 3D picture is drawn at against the window's; under 1 it is drawn "
+                "smaller, smoothed over time and upscaled, faster and a little softer.",
+        .min = 0.25,
+        .max = 1,
+        .values = "1: the window's size (the default); 0.25..1: that share of it a side "
+                  "(0.75 draws about half the pixels)"},
+       &picture.render_scale);
   bind(cv,
        {.name = "ce_water_specks",
         .flags = gc::kArchive,

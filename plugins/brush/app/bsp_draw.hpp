@@ -59,6 +59,7 @@
 #include "brush/app/casters.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/light_grid.hpp"
+#include "brush/app/light_pick.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
@@ -67,7 +68,7 @@
 namespace ge::brush::app {
 
 // The lights that cast shadows at most (Options::shadowed, a cube each kept in its slot).
-inline constexpr int kMaxShadowedLights = 48;
+inline constexpr int kMaxShadowedLights = kMaxCubeSlots;
 
 enum class Mode : uint8_t { classic, v2 };
 enum class Lighting : uint8_t { lightmaps, lights, rebaked };
@@ -89,7 +90,11 @@ struct Options {
   double classic_lift = 0;
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
-  int shadowed = kMaxShadowedLights;  // the lights that cast shadows (in view first, nearest first)
+  // The lights that cast shadows: the cubes kept (light_pick.hpp). Every map light a frame draws
+  // casts one; one with no cube yet waits dark and fades in over `light_fade_s` once it has one.
+  // 0: none casts, every light shines unshadowed (ce_shadows off).
+  int shadowed = kMaxShadowedLights;
+  double light_fade_s = 0.25;
   // A map's light near it softened over this share of its half reach (0: over its source's size
   // alone). Its inverse square matches the classic's straight fall-off at the half reach, but the
   // classic's light is at most twice that at the light, where the square's grows without end: a
@@ -140,11 +145,11 @@ struct Options {
   // (shadows_waiting says when every cube is in). `fresh_cube_budget` decides.
   int fresh_cubes = 2;
   bool first_all = true;
-  int most = 160;           // the lights a frame draws at most (the nearest)
-  bool lava_lights = true;  // the lava's glow lights the walls round it
-  double lava_glow = 1;     // that glow's strength, 0 none
-  double slime_glow = 1;    // the slime's faint green glow on the walls round it, 0 none
-  double fire_glow = 1;     // the flames' own brightness, a share of kFireGlow's (bsp_flames.hpp)
+  int most = kMaxFrameLights;  // the lights a frame draws at most (light_pick.hpp)
+  bool lava_lights = true;     // the lava's glow lights the walls round it
+  double lava_glow = 1;        // that glow's strength, 0 none
+  double slime_glow = 1;       // the slime's faint green glow on the walls round it, 0 none
+  double fire_glow = 1;  // the flames' own brightness, a share of kFireGlow's (bsp_flames.hpp)
   double fire_pace = kFirePace;   // how fast the fires puff, 1 a real fire's (draw_data.hpp)
   double water_pace = kPoolPace;  // how fast the pools move, 1 a real water's (draw_data.hpp)
   // The specks suspended in the water seen from under it (render/underwater.hpp's `motes`), a
@@ -450,15 +455,22 @@ struct BspDraw {
   // THE SHADOW MAPS KEPT: the world they see does not move, so a light's cube is drawn when the
   // light takes a slot (or moves) and kept while it holds it, and an orthographic map when its
   // camera changes. A slot's key is its light's place and reach as the GPU sees them.
-  std::array<std::array<float, 4>, kMaxShadowed> slot_key{};
-  std::array<bool, kMaxShadowed> slot_held{};      // a slot's cube holds its key's light
-  std::array<uint64_t, kMaxShadowed> slot_used{};  // the shadow_frame a light last read it
+  CubeSlots slots;  // light_pick.hpp: each slot's light, when it was last read
   // The cubes this device holds: kMaxShadowed, or fewer where its texture array is shorter
   // (a browser's default limit is 256 layers: 42 cubes).
   int cube_slots = kMaxShadowed;
-  uint64_t shadow_frame = 0;     // prepare_bsp's count
   int shadows_waiting = 0;       // this frame's casters over the budget, unshadowed (prepare_bsp)
   std::vector<int> fresh_slots;  // this frame's slots to draw (prepare_bsp)
+  // This frame's lights chosen (light_pick.hpp), kept to reuse their room; `reach` the clusters
+  // each of the map's lights touches (made once).
+  std::vector<LightOffer> offers;
+  LightChoice choice;
+  std::vector<std::array<float, 4>> caster_keys;
+  CubeDeal deal;
+  std::vector<int> caster_row;        // by drawn light: its row in the deal (-1 none)
+  std::vector<size_t> frame_casters;  // the lights with their cube, as frame_lights' indices
+  double last_time_s = 0;             // the last prepare_bsp's view time (the fades' clock)
+  LightReach reach;
   std::array<GpuJob, kOrthos> ortho_drawn{};  // what each orthographic map holds
   std::array<bool, kOrthos> ortho_held{};
   std::array<bool, kOrthos> ortho_fresh{};  // this frame's to draw

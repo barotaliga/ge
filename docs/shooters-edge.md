@@ -440,19 +440,25 @@ build/release/se -basedir ~/Games/classic --size=2560x1600 \
   or getting busier over the minutes reads as no saving), and the largest gap between neighbouring
   all-on runs is the noise. The lab charts each run's frames as a box and lists what each switch
   saved off the median frame, the most first.
-- **The shadow maps** (the modern look): the shadowed few (48) are the nearest lights in the
-  eye's potentially visible set whose reach comes into the view first (the cone round the look
-  that holds a 32:9 picture), then the nearest of the others in that set, then the nearest of the
-  rest; by nearness alone the map's big lights behind walls took half the slots on an open map (a
-  dm4 doorway: 14 of the 30 lights in view lit unshadowed, their shadows popping in a few steps
-  on). A light with no slot shines through what stands before it: with 32 slots, start's corridor
-  (57 lights in view) left the lamps before the NORMAL hall's slipgate unshadowed, and the frame's
-  shadow on the wall behind it (in the map's own lightmap too) came only once the player walked in.
-  48 cost about 5% of a frame on llvmpipe over 32 (demo1, the modern look: 358 -> 375 ms median). A light's cube is drawn when
-  it joins the few and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
-  room's torches unshadowed for the frames until their turn, so walking into a room costs no
-  frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.
-- **The light grid** (the modern look): the frame's up to 160 lights are binned on the CPU into
+- **The lights a frame draws** (the modern look, `plugins/brush/app/light_pick.hpp`): every light
+  whose reach can touch what the eye sees, and no other: its reach inside the cone round the look
+  that holds a 32:9 picture, and one of the clusters its reach touches (listed once a map) in the
+  eye's potentially visible set. Nothing culls a light by distance or by count (up to 512), so a
+  light leaves the set only where it cannot show: behind the eye, behind what the map's visibility
+  already hides. The frame used to draw the 160 nearest of the lights within 40 m and shadow 48 of
+  them; the rest of a room's lights shone through its walls unshadowed, and which ones changed with
+  every step (dm2's big room: 175 lights, the lighting changing as the player walked; the
+  `bsp-light-set` lab counts those pops along a walk).
+- **The shadow maps** (the modern look): every light the frame draws casts (the pools' glows and
+  the moment's lights excepted), a cube each, up to 96 kept (`kMaxCubeSlots`; fewer where a device's
+  texture arrays are shorter). A light keeps its cube while its slot is not needed; a light new to
+  a slot has its cube drawn, at most two a frame (`Options::fresh_cubes`) so walking into a room of
+  torches costs no frame more than two cubes, and it waits DARK until then and fades in over a
+  quarter of a second (`Options::light_fade_s`): a light never shines through a wall, the pop the
+  eye catches. A light past the slots (more than 96 that could show at once) waits dark until one
+  is free. `ce_shadows off` casts none: every light then shines unshadowed. A dynamic light (a
+  flash, a rocket) lights without a shadow.
+- **The light grid** (the modern look): the frame's lights are binned on the CPU into
   4 m world cells round the eye (32 x 16 x 32), each cell listing the lights whose reach touches
   it, in order; a pixel loops over its cell's lights only, not all of them. A light left out of a
   cell is one the pixel would have skipped by its reach, and the rest are summed in the same

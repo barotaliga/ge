@@ -391,8 +391,8 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
                             wgpu::BufferUsage::Storage);
   device.queue.WriteBuffer(d.movers, 0, d.mover_rows.data(),
                            d.mover_rows.size() * sizeof(GpuMover));
-  d.lights =
-      r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512, wgpu::BufferUsage::Storage);
+  d.lights = r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * kMaxFrameLights,
+                            wgpu::BufferUsage::Storage);
   d.grid = r::make_buffer(device, "bsp.grid", sizeof(uint32_t) * (kGridCells + 1 + kMaxGridRefs),
                           wgpu::BufferUsage::Storage);
   d.grid_rows.assign(kGridCells + 1 + kMaxGridRefs, 0);
@@ -602,6 +602,7 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.lava = lava_lights(scene, 1150, 0.3);
   d.slime = slime_lights(scene);
   d.portals = portal_lights(scene);
+  d.reach = light_reach(scene.map, scene.lights);
 }
 
 void create_bsp_targets(gpu::Device& device, BspDraw& d, const r::FrameTargets& targets) {
@@ -641,26 +642,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // for their cubes alone; the pools', the teleporters' and the moment's lights stay off.
   const bool overlay = lightmap_overlay(o);
   const bool picked = lights || overlay;
-  // The lights near enough to the eye to reach what it sees, nearest first.
-  struct Pick {
-    const PointLight* l;
-    double d;
-  };
-  std::vector<Pick> picks;
-  const auto consider = [&](const PointLight& l) {
-    const double reach = l.physical ? l.reach : l.reach * 1.5;
-    const double dx = l.pos[0] - view.eye[0], dy = l.pos[1] - view.eye[1],
-                 dz = l.pos[2] - view.eye[2];
-    const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-    if (dist < reach + 40) picks.push_back({&l, dist - reach});
-  };
+  // The lights offered: the map's own first (light_pick.hpp's reach lists follow their order),
+  // then the pools', the teleporters' and the moment's.
   d.dynamic_points.clear();
-  if (picked) {
-    GE_ZONE("bsp.pick");
-    for (const PointLight& l : s.lights) consider(l);
-  }
   if (lights) {
-    // The pools' lights at the options' strengths, copied before any is picked.
+    // The pools' lights at the options' strengths, copied before any is offered.
     const auto scaled = [](const std::vector<PointLight>& from, double k,
                            std::vector<PointLight>& to) {
       to.clear();
@@ -672,11 +658,6 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     };
     scaled(d.lava, o.lava_lights ? o.lava_glow : 0, d.lava_points);
     scaled(d.slime, o.slime_glow, d.slime_points);
-    for (const PointLight& l : d.lava_points) consider(l);
-    for (const PointLight& l : d.slime_points) consider(l);
-    if (o.portal_lights) {
-      for (const PointLight& l : d.portals) consider(l);
-    }
     // The dynamic lights as point lights of the classic's brightness: the radius its reach.
     for (const DynamicLight& dl : d.dynamic) {
       PointLight l;
@@ -689,12 +670,34 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
         l.colour[k] = 0.5 * dl.colour[k] * 256 / l.value * o.dynamic_strength * dl.boost;
       d.dynamic_points.push_back(l);
     }
-    for (const PointLight& l : d.dynamic_points) consider(l);
   }
+  std::vector<LightOffer>& offers = d.offers;
+  offers.clear();
   if (picked) {
-    std::sort(picks.begin(), picks.end(), [](const Pick& a, const Pick& b) { return a.d < b.d; });
-    const int most = overlay ? kOverlayLights : std::min(o.most, 512);
-    if (picks.size() > size_t(most)) picks.resize(size_t(most));
+    for (const PointLight& l : s.lights) offers.push_back({&l, false});
+  }
+  if (lights) {
+    for (const PointLight& l : d.lava_points) offers.push_back({&l, false});
+    for (const PointLight& l : d.slime_points) offers.push_back({&l, false});
+    if (o.portal_lights) {
+      for (const PointLight& l : d.portals) offers.push_back({&l, false});
+    }
+    for (const PointLight& l : d.dynamic_points) offers.push_back({&l, true});
+  }
+  PickRules rules;
+  rules.most = o.most;
+  rules.shadowed = d.options.shadowed;
+  rules.overlay = overlay;
+  rules.overlay_most = kOverlayLights;
+  rules.bonfires = o.bonfires;
+  rules.widest = kWidestAspect;
+  LightChoice& choice = d.choice;
+  if (picked) {
+    GE_ZONE("bsp.pick");
+    choose_lights(s.map, offers, &d.reach, view, rules, choice);
+  } else {
+    choice.drawn.clear();
+    choice.casters.clear();
   }
   d.frame_lights.clear();
   // The fires' lights swell and dim with their flames' puffs (bsp_flames.hpp's fire_flicker).
@@ -702,43 +705,49 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   look.bonfires = o.bonfires;
   look.pace = o.fire_pace;
   d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos + size_t(kCasterLights) * 6 + 1, GpuJob{});
-  // The lights that cast shadows, by their index in frame_lights: the nearest of those the eye's
-  // cluster can see whose reach comes into the view first, then the nearest of the others it can
-  // see (behind the eye), then the nearest of the rest. Nearness alone (the distance less the
-  // reach) let a map's big lights behind walls take the shadowed few from the room in view: on a
-  // map of a few score lights, the room ahead lit flat, its shadows popping in a few steps on. And
-  // a light left without a slot shines through the walls and frames in front of it: start's
-  // corridor sees 57 lights ahead, so the two lamps before the NORMAL hall's slipgate went
-  // unshadowed from there and its frame's shadow on the wall behind (the map's own lightmap has
-  // it) appeared only once the player walked in.
-  std::vector<size_t> casters, aside, unseen;
-  const Map& map = s.map;
-  // Whether a light's reach comes into the view: its sphere against the cone round the look that
-  // holds the whole picture at the widest screen a window has (kWidestAspect).
-  double ahead[3];
-  r::look_dir(view.heading, view.pitch, ahead);
-  const double half_y = std::tan(view.fov_y / 2);
-  const double cone = std::atan(half_y * std::sqrt(1 + kWidestAspect * kWidestAspect));
-  const auto in_view = [&](const GpuLight& g) {
-    const double to[3] = {g.pos[0] - view.eye[0], g.pos[1] - view.eye[1], g.pos[2] - view.eye[2]};
-    const double dist = std::sqrt(to[0] * to[0] + to[1] * to[1] + to[2] * to[2]);
-    const double reach = g.pos[3];
-    if (dist <= reach) return true;
-    const double along = (to[0] * ahead[0] + to[1] * ahead[1] + to[2] * ahead[2]) / dist;
-    const double off = std::acos(std::clamp(along, -1.0, 1.0));
-    return off - std::asin(reach / dist) <= cone;
-  };
-  const auto cluster_of = [&](const double p[3]) {
-    const float f[3] = {float(p[0] / kUnitM), float(p[2] / kUnitM), float(p[1] / kUnitM)};
-    return map.leaves.empty() ? -1 : map.leaves[leaf_at(map, f)].cluster;
-  };
-  const int32_t eye_cluster = cluster_of(view.eye);
-  for (const Pick& p : picks) {
-    const PointLight& l = *p.l;
+  // The cube slots (light_pick.hpp's deal_cubes): each caster keeps the slot that already holds
+  // its cube; the rest take the slot left unused longest, at most `fresh_cubes` a frame, and fade
+  // in from dark as their cube arrives: a light waiting for its cube lights nothing, never through
+  // the walls. The map's first frame that shadows draws every cube whole: it is the load's, not
+  // play's (unless the caller warms the map up over frames of its own: `first_all` off).
+  d.slots.slots = d.cube_slots;
+  const bool any_held = std::any_of(d.slots.held.begin(), d.slots.held.begin() + d.cube_slots,
+                                    [](bool held) { return held; });
+  const size_t budget = fresh_cube_budget(o, any_held, d.cube_slots);
+  std::vector<std::array<float, 4>>& keys = d.caster_keys;
+  keys.clear();
+  for (const size_t c : choice.casters) {
+    double sphere[4];
+    light_sphere(*choice.drawn[c].light, o.bonfires, sphere);
+    keys.push_back({float(sphere[0]), float(sphere[1]), float(sphere[2]), float(sphere[3])});
+  }
+  // The time since the last frame (a still clock, a lab's, counts a frame at 60 Hz).
+  const double dt = view.time_s > d.last_time_s && view.time_s - d.last_time_s < 0.25
+                        ? view.time_s - d.last_time_s
+                        : 1.0 / 60;
+  d.last_time_s = view.time_s;
+  deal_cubes(d.slots, keys, budget, dt, o.light_fade_s, d.deal);
+  d.fresh_slots = d.deal.fresh;
+  d.shadows_waiting = d.deal.waiting;
+  // Each drawn light's caster row (-1: not a caster).
+  std::vector<int>& row_of = d.caster_row;
+  row_of.assign(choice.drawn.size(), -1);
+  for (size_t k = 0; k < choice.casters.size(); ++k) row_of[choice.casters[k]] = int(k);
+  // The casters with their cube, by priority, as indices into frame_lights.
+  std::vector<size_t>& casters = d.frame_casters;
+  casters.clear();
+  for (size_t at = 0; at < choice.drawn.size(); ++at) {
+    const LightOffer& offer = choice.drawn[at];
+    const PointLight& l = *offer.light;
+    const int row = row_of[at];
+    const int slot = row >= 0 ? d.deal.slot[size_t(row)] : -1;
+    const double fade = row >= 0 ? d.deal.fade[size_t(row)] : 1.0;
+    if (fade <= 0) continue;  // waiting for its cube: dark this frame
     GpuLight g{};
     double near = 0;  // m: what its light is softened over near it (`near_soft`)
+    double sphere[4];
+    light_sphere(l, o.bonfires, sphere);
     if (l.physical) {
-      set4(g.pos, l.pos[0], l.pos[1], l.pos[2], l.reach);
       set4(g.colour, l.colour[0] * l.value, l.colour[1] * l.value, l.colour[2] * l.value, 1);
     } else {
       // The classic's light at half its reach, value / 2 of 128, matched by an inverse square:
@@ -748,24 +757,21 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
           l.value / 256.0 * half * half * l.gain * o.strength *
           (o.flicker || l.flicker != Flicker::candle ? fire_flicker(l, view.time_s, look)
                                                      : kFireFlickerMean) *
-          fire_light_gain(l, o.bonfires);
-      set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l, o.bonfires), l.pos[2], l.reach * 1.5);
+          fire_light_gain(l, o.bonfires) * fade;
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
       near = o.near_soft * half;
     }
+    set4(g.pos, sphere[0], sphere[1], sphere[2], sphere[3]);
     // A fire lights the wall behind it from its whole flame: its light softened over its height.
     const double soft = std::max(fire_light_size(l, o.bonfires), l.soft_m);
     const double spread = std::max(soft, near);
-    // An aimed light: full inside info.w's cosine, none outside spot.w's.
-    set4(g.info, -1, spread * spread, 0, l.spot ? l.cone_cos[0] : -1);
-    // A dynamic light moves or goes out from one frame to the next, so a cube of it would be drawn
-    // again every frame: it lights without a shadow.
-    const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
-                         p.l < d.dynamic_points.data() + d.dynamic_points.size();
+    // An aimed light: full inside info.w's cosine, none outside spot.w's; x its cube's first face
+    // (-1: none).
+    set4(g.info, slot >= 0 ? slot * 6 : -1, spread * spread, 0, l.spot ? l.cone_cos[0] : -1);
     // Whether it throws a figure's shadow (Options::fill_shadows): a source he can see.
     // Over the lightmaps every picked light throws one: a map lit by its lightmaps (Quake II's)
     // names few of its lights' sources.
-    const bool figure = o.fill_shadows || overlay || dynamic || (l.seen && !l.physical);
+    const bool figure = o.fill_shadows || overlay || offer.dynamic || (l.seen && !l.physical);
     // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp; z 1 when
     // it throws a figure's.
     set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), figure ? 1 : 0, 0);
@@ -773,69 +779,13 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
     else
       set4(g.spot, 0, -1, 0, -2);
-    if (!l.physical && !dynamic) {
-      // A light in solid or outside the map (no cluster) counts as seen: nothing says it is not.
-      const int32_t at = cluster_of(l.pos);
-      const bool seen = eye_cluster < 0 || at < 0 || cluster_sees(map, eye_cluster, at);
-      (!seen ? unseen : in_view(g) ? casters : aside).push_back(d.frame_lights.size());
-    }
+    if (slot >= 0) casters.push_back(d.frame_lights.size());
     d.frame_lights.push_back(g);
-  }
-  casters.insert(casters.end(), aside.begin(), aside.end());
-  casters.insert(casters.end(), unseen.begin(), unseen.end());
-  if (int(casters.size()) > d.options.shadowed) casters.resize(size_t(d.options.shadowed));
-  // Each caster keeps the slot that already holds its cube; the rest, nearest first, take the
-  // slot left unused longest (a light that steps out of the nearest few and back in finds its cube
-  // still there), at most `fresh_cubes` a frame: one over the budget lights without a shadow until
-  // a later frame draws its cube, so a doorway into a room of torches costs no frame more than
-  // the budget's cubes. The map's first frame draws them all.
-  const auto key_of = [](const GpuLight& g) {
-    return std::array<float, 4>{g.pos[0], g.pos[1], g.pos[2], g.pos[3]};
-  };
-  ++d.shadow_frame;
-  std::array<bool, kMaxShadowed> taken{};
-  std::vector<size_t> homeless;
-  for (const size_t c : casters) {
-    const std::array<float, 4> key = key_of(d.frame_lights[c]);
-    int slot = -1;
-    for (int k = 0; k < d.cube_slots && slot < 0; ++k)
-      if (d.slot_held[size_t(k)] && !taken[size_t(k)] && d.slot_key[size_t(k)] == key) slot = k;
-    if (slot < 0) {
-      homeless.push_back(c);
-      continue;
-    }
-    taken[size_t(slot)] = true;
-    d.slot_used[size_t(slot)] = d.shadow_frame;
-    d.frame_lights[c].info[0] = float(slot * 6);
-  }
-  d.fresh_slots.clear();
-  d.shadows_waiting = 0;
-  // The map's first frame that shadows draws every cube: it is the load's, not play's (unless
-  // the caller warms the map up over frames of its own: `first_all` off).
-  const bool any_held = std::any_of(d.slot_held.begin(), d.slot_held.begin() + d.cube_slots,
-                                    [](bool held) { return held; });
-  const size_t budget = fresh_cube_budget(o, any_held, d.cube_slots);
-  for (const size_t c : homeless) {
-    if (d.fresh_slots.size() >= budget) {
-      ++d.shadows_waiting;  // info[0] stays -1: lit, unshadowed, this frame
-      continue;
-    }
-    int slot = -1;
-    for (int k = 0; k < d.cube_slots; ++k) {
-      if (taken[size_t(k)]) continue;
-      if (slot < 0 || d.slot_used[size_t(k)] < d.slot_used[size_t(slot)]) slot = k;
-    }
-    taken[size_t(slot)] = true;  // casters <= cube_slots: one is always free
-    d.slot_key[size_t(slot)] = key_of(d.frame_lights[c]);
-    d.slot_held[size_t(slot)] = true;
-    d.slot_used[size_t(slot)] = d.shadow_frame;
-    d.fresh_slots.push_back(slot);
-    d.frame_lights[c].info[0] = float(slot * 6);
   }
   // Every held slot's six faces, so the jobs buffer always says what its cubes hold.
   for (int k = 0; k < d.cube_slots; ++k) {
-    if (!d.slot_held[size_t(k)]) continue;
-    const std::array<float, 4>& key = d.slot_key[size_t(k)];
+    if (!d.slots.held[size_t(k)]) continue;
+    const std::array<float, 4>& key = d.slots.key[size_t(k)];
     for (int f = 0; f < 6; ++f) {
       const int i = f / 2;
       const double sign = f % 2 ? -1.0 : 1.0;
