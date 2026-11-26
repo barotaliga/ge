@@ -82,3 +82,5 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 - A game's server that passes only part of the user info to its rules breaks skin-based teams
   silently: check what reaches the rules layer.
 - A game uses only its own sounds outside remix.
+- A weapon's own sounds stay its own under remix: a weapon swapped in is its game's whole, so
+  `cr_sounds` never renames a shot, a blast, a bounce or a hit (`SoundMatch::weapon`).

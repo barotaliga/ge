@@ -497,3 +497,190 @@ Original [read]: the host frame is the real time since the last, at most 72 a se
   - `bf` is dropped (row 3). It is the only stuffed command this program sends [derived from its strings].
   - `restart` and `skill` reach our server's console through `localcmd` (`server/commands.cpp`), so those match.
   - `menu_loadgame` is the re-release's program, not this one.
+
+## The final boss's death and the game's ending (clean-room answers, 2026-11-26)
+
+Ours follows this since the PR that rebuilt the ending (`games/shooters_edge/rules/campaign_bosses.cpp`), keeping our own closing words and falling back to the start when a map has no intermission spot or no teleport ball instead of stopping. Marks as below: [read], [derived], [engine], [open].
+
+Time origin: t = 0 is the server frame in which the telefrag blow lands. A monster's animation
+frame lasts 0.1 s [read].
+
+### Background facts the answers rely on
+
+- The boss (classname `monster_oldone`) spawns with 40000 health, takes damage, and its pain
+  reaction puts its health back to 40000, so only one blow of more than 40000 kills it [read].
+  In deathmatch it is removed at spawn, so the whole sequence below never happens there [read].
+- The telefrag blow is 50000 points, dealt by the telefrag box (classname `teledeath`) that a
+  teleporter places at its destination for 0.2 s; the box is both the inflictor and the
+  attacker [read].
+- The boss's spawn does NOT give it the monster flag (it does not go through the common monster
+  start) [read]. Consequence: the generic death handling does not count it as a kill and sends
+  no kill message for it; the finale counts it itself (Q1) [derived].
+- On death the generic handling, in this order, before the boss's own death routine: records the
+  attacker as its enemy, prints no obituary (obituaries are printed only for players) [read],
+  makes it unhurtable, clears its touch, fires the boss's own `target` if the map gave it one
+  (with the attacker as activator) [read], then runs the boss's death routine, which is the
+  finale [read]. The boss's think (its idle loop) is NOT changed by death [read].
+
+### 1. What happens, in order, with times
+
+All at t = 0, in the same server frame as the blow, in this order [read]:
+
+1. The killed-monsters count goes up by one and a kill message (svc 27, killed monster) is
+   written to all clients reliably [read].
+2. The intermission exit time is set to now plus 10,000,000 seconds (about 115.7 days), so no
+   exit is ever allowed [read; days derived], and the intermission flag is set to 1 [read].
+3. The first entity with classname `info_intermission` is found. If there is none, the server
+   stops with the error text "no info_intermission" [read]. There is NO random choice among
+   several intermission spots here: always the first one found [read].
+4. The first entity with classname `misc_teleporttrain` is found and removed at once. If there
+   is none, the server stops with the error text "no teleporttrain" [read]. (On `end` this is
+   the moving teleport ball [derived from the classname; the map's contents not read].)
+5. A finale message (svc 31) with an EMPTY string is written to all clients reliably [read].
+   No intermission message (svc 30) is sent at any point of this sequence [read].
+6. Every entity with classname `player` (all clients, in co-op too) is moved to the spot (see
+   Q5 for everything changed on each) [read]. The view is placed at the spot's origin with no
+   eye height (the eye offset is set to zero), facing the spot's `mangle` angles (pitch, yaw,
+   roll), turned there at once by the fix-angle flag [read].
+7. A timer entity is spawned to act at t = 1.0 s [read].
+
+Later steps are in Q2-Q4. The engine's handling of an empty svc 31 (what the client draws) is
+not in this source [engine].
+
+### 2. What the boss does, and when
+
+- t = 0 to t = 3 s: the boss keeps playing its idle loop (46 frames, `old1` to `old46`, 0.1 s
+  each, looping) because its think is untouched by death [read; continuity derived]. It plays no
+  sound in the idle loop [read]. It stays solid as before (a slide box) but cannot be hurt and
+  has no touch [read].
+- t = 1.0 s: a teleport splash temporary entity (svc 23, effect 11, the teleport splash) is
+  broadcast UNRELIABLY at the boss's origin minus 100 units on y (z and x unchanged) [read].
+  The sound `misc/r_tele1.wav` plays on the boss, voice channel (2), volume 1, attenuation 1
+  (normal) [read]. The timer is rescheduled for t = 3.0 s [read].
+- t = 3.0 s: the boss's next think is switched to the first thrash frame (its next-think time is
+  NOT changed, so the thrash starts at the boss's next scheduled tick, within 0.1 s after t = 3)
+  [read; the delay derived]. The sound `boss2/death.wav` plays on the boss, voice channel,
+  volume 1, attenuation normal [read]. Light style 0 (the default world light) is set to the
+  pulsing pattern `abcdefghijklmlkjihgfedcb` [read], which the first thrash frame then overrides
+  with a single letter within at most 0.1 s [derived]. The timer entity is not removed by the
+  program and is left with no further think [read: nothing removes it].
+- Thrash (call its first tick T, with T in (3.0, 3.1] s): frames `shake1` to `shake15`, one per
+  0.1 s, each setting light style 0 to one letter: m, k, k, i, g, e, c, a, c, e, g, i, k, m, m
+  [read]. After `shake15` a pass counter on the boss (zero at spawn unless the map sets it
+  [derived]) goes up by one; while it is not yet 3 the boss loops back to `shake1` [read]. So the
+  15-frame pass plays 3 times (45 frames, 4.5 s) [derived], then `shake16` to `shake19` set the
+  light to g, c, b, a [read], then `shake20` runs the final step (Q3, Q4) [read]. `shake20` is
+  reached at T + 4.9 s, i.e. between t = 7.9 and 8.0 s [derived: 49 ticks of 0.1 s after T].
+  Total: 50 thrash frames [derived].
+- Frame numbers: the idle frames are model frames 0-45 and `shake1` is 46 [derived from the frame
+  list's order]. The frame list declares the name `shake12` twice, so the numbers from `shake12`
+  on depend on how the compiler treats a repeated name; the source does not settle whether
+  `shake20` is model frame 65 or 66 [open; measure on the shipped program].
+- Screen shaking: none. The program sends no view kick, punch or shake to any player during the
+  sequence; "shake" is only the name of the boss's model frames [read].
+- No explosions are thrown at any time; the only pieces are the gibs at the end (Q3) [read].
+
+### 3. When the boss is removed, and its pieces
+
+All in the `shake20` tick, t about 7.9-8.0 s [derived], in this order [read]:
+
+1. The sound `boss2/pop2.wav` plays on the boss, voice channel, volume 1, attenuation normal
+   (on the same entity channel as the earlier death sound, so it cuts that sound off if it is
+   still playing [engine]).
+2. 50 gibs are thrown [derived: 2 heights x 5 x 5]. They start on a grid around the boss's
+   origin: x offsets -64, -32, 0, 32, 64; y offsets -64, -32, 0, 32, 64; z offsets +16 and +112
+   units [read]. For each, a random number picks the model: below 0.3 `progs/gib1.mdl`, below
+   0.6 `progs/gib2.mdl`, else `progs/gib3.mdl` (about 30/30/40 percent) [read]. Each gib uses
+   the heaviest throw: velocity x and y each uniform in -1000..+1000 u/s, z uniform in
+   2000..3000 u/s [derived: base x, y in -100..100, z in 200..300, times 10 for a blow below
+   -200]; it bounces, is not solid, has zero size, spins at a random 0-600 degrees/s on each axis,
+   frame 0, and is removed after 10-20 s (uniform) [read]. Random draws per gib, in order: the
+   model pick, then the velocity (x, y, z), then the three spin rates, then the lifetime [read].
+3. The finale text is sent (Q4).
+4. A stand-in body is spawned: model `progs/player.mdl`, frame 1, yaw 290 degrees (pitch and
+   roll 0), at the boss's original origin minus 32 on x and minus 264 on y (z unchanged). It is
+   not solid, has no movement and no think [read].
+5. The boss itself is removed (deleted, not merely made invisible) [read].
+6. The music change and the light reset follow (Q6).
+
+The boss's origin is moved around the grid while the gibs are placed, but the entity is removed
+in the same tick, so no client sees it moved [derived].
+
+### 4. The finale text, the next map, and the button
+
+- When: in the `shake20` tick, t about 7.9-8.0 s, after the gibs and before the stand-in body
+  [read; time derived]. It is svc 31 (finale) written to all clients reliably [read].
+- The exact text (line breaks are newline characters in the string) [read]:
+
+> Congratulations and well done! You have  
+> beaten the hideous Shub-Niggurath, and  
+> her hundreds of ugly changelings and  
+> monsters. You have proven that your  
+> skill and your cunning are greater than  
+> all the powers of Quake. You are the  
+> master now. Id Software salutes you.
+
+- The next map: the finale does not set the server's next map [read]. It copies the boss's own
+  `map` key (from the map file) onto each player's `map` field [read]; whether that key is set on
+  `end` is a map question this source does not settle [open].
+- A button press: during the intermission each player's pre-think only checks for exit, and an
+  exit happens only once the exit time has passed AND attack, jump or the third button is held
+  [read]. Since the exit time is 10,000,000 s away, no button does anything: the player waits
+  forever, the game stays on the finale text until the user leaves by the console or menu
+  [derived]. The engine's own reaction to keys on the finale screen is not in this source
+  [engine].
+- Exception: a client CONNECTING while the intermission flag is set forces an exit at once: the
+  flag goes to 2, the exit time to now plus 1 s, and, because `end` is none of the four
+  episode-end maps that have text at that step, the server changes level to its stored next map
+  (or the same map if the console variable `samelevel` is set) [read; that `end` matches none of
+  them derived from the four map names, `maps/e1m7.bsp`, `maps/e2m6.bsp`, `maps/e3m6.bsp`,
+  `maps/e4m7.bsp`]. What that stored next map is on `end` is not settled by this source [open].
+
+### 5. The players during the sequence; co-op
+
+For every entity with classname `player` at t = 0, alive or dead, in single player and co-op
+alike [read]:
+
+- Eye offset set to zero (so the view sits exactly at the spot) [read].
+- Angles set to the spot's `mangle`, with the fix-angle flag so the client turns at once [read].
+  The program writes the same angles to the AIM angles of a different entity (the one the
+  engine had as the "other" party of the touch that dealt the blow), not to the players' aim
+  [read]; in the teleport path that party is the boss [derived], so the players' aim angles are
+  not set by the finale [derived].
+- Next think set to now + 0.5 s (their existing think, not a new one) [read].
+- Made unhurtable, not solid, no movement, and invisible (model index 0) [read].
+- Moved to the spot's origin [read].
+- The weapon is not changed by the program (no weapon, ammo or view-model change) [read]. Whether
+  the held weapon is drawn on the finale screen is the engine's decision [engine].
+- From then on each player's per-frame pre-think does only the exit check, and the post-think
+  stops early because the eye offset is zero: no weapon frames, firing, fall damage, power-up
+  timers or other per-frame player rules run [read].
+- No per-player difference in co-op: every client gets the same treatment and the same broadcast
+  messages; there is no co-op branch in the finale [read]. The one co-op difference is the
+  connecting-client exception in Q4, which a joining player can trigger [read].
+- A player who is not yet connected at t = 0 is not moved [derived: only existing `player`
+  entities are walked]; connecting triggers the Q4 exception instead [read].
+
+### 6. Music and flags
+
+- Music: yes, once, in the `shake20` tick after the boss is removed: svc 32 (CD track) with
+  track 3 and loop track 3, to all clients reliably [read]. No other track change in the
+  sequence [read].
+- Light: light style 0 is set to `m` (the normal level) as the very last step [read].
+- Flags and globals set: the intermission flag (1) and the intermission exit time (now plus
+  10,000,000 s) at t = 0; the killed-monsters count up by one at t = 0 [read]. The server flags
+  (the rune bits) are not touched [read]. No console variable is set [read]. No svc 30
+  (intermission) and no svc 33 (sell screen) are sent [read].
+
+### Summary timeline
+
+| Time | Event | Mark |
+| --- | --- | --- |
+| 0 | blow; boss unhurtable; kill counted, svc 27; intermission flag 1, exit never; `misc_teleporttrain` removed; svc 31 with empty text; all players moved to the first `info_intermission`, frozen, invisible, unhurtable | read |
+| 0-3 s | boss keeps idling, silent | derived |
+| 1.0 s | teleport splash (svc 23, effect 11) 100 u along -y from the boss; `misc/r_tele1.wav` on the boss | read |
+| 3.0 s | `boss2/death.wav` on the boss; light style 0 pulses | read |
+| 3.0-3.1 s | thrash starts: `shake1`-`shake15` three times, light stepping m..a..m | derived |
+| 7.5-7.9 s | `shake16`-`shake19`, light g, c, b, a | derived |
+| 7.9-8.0 s | `boss2/pop2.wav`; 50 gibs; svc 31 with the finale text; stand-in `progs/player.mdl`; boss removed; svc 32 track 3 loop 3; light style 0 `m` | read, times derived |
+| after | nothing: no exit on any button | derived |

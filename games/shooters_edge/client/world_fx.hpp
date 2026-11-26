@@ -550,6 +550,7 @@ struct FxScene {
   bool campaign = false;                  // a campaign's program (its own fog and blows)
   bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
   bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog
+  bool q2_arms = false;   // Quake II's weapons fired whole by ours: their trails, hits, blasts
   int effect_models = 0;  // where the effects' own models start (EffectModel)
   int beam_model = -1;    // the model list's `progs/beam.mdl` (the grappling beam's), -1 none
   std::vector<Placed> models;  // every entity to draw (not the local player)

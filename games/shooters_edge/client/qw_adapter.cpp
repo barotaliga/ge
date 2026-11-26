@@ -94,16 +94,9 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
       continue;
     }
     found++;
-    // A view model of another game's (classic remix): its rest and firing frames alone, in the
-    // order the hand reads them (profiles/remix_arsenal.hpp).
-    if (const pf::HeldFrames* f = pf::held_frames(name); f != nullptr) {
-      const auto at = [&m](int i) {
-        return m.morph.frames[size_t(std::clamp<int>(i, 0, int(m.morph.frames.size()) - 1))];
-      };
-      std::vector<ge::morph::Frame> kept{at(f->rest)};
-      for (int i = f->fire_first; i <= f->fire_last; ++i) kept.push_back(at(i));
-      m.morph.frames = std::move(kept);
-    }
+    // A view model of Quake II's (classic remix's `cr_items q2`): Quake II's weapon whole, every
+    // frame kept, drawn on the frame its hand is on (the rules' `weaponframe`, client/held.cpp).
+    const bool whole = pf::held_frames(name) != nullptr;
     ge::viewmodel::HeldModel h = ge::classicenhance::held_from_morph(m.morph, palette, 0);
     if (!m.skins.empty() && m.skins[0].width > 0) {  // a picture beside it, alpha and all
       h.skin.image = std::move(m.skins[0]);
@@ -120,7 +113,7 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     const int firing = int(h.frames.size()) - 1;
     const int takes =
         fire != nullptr && fire->takes > 1 && firing % fire->takes == 0 ? fire->takes : 1;
-    for (int k = 0; k < takes && firing > 0; ++k)
+    for (int k = 0; k < takes && firing > 0 && !whole; ++k)
       h.clips.push_back(
           {.name = "fire",
            .first = 1 + k * (firing / takes),
