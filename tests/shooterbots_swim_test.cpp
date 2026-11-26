@@ -124,6 +124,27 @@ TEST(the_water_is_part_of_the_graph) {
   CHECK_MSG(!sb::nav_route(g, 0, deep, search).nodes.empty(), "no way off the ledge into the pool");
 }
 
+// A swimmer floating at the top of the water, far from the bank: his own cell's centre is out of
+// the water (no swim node), and no node lies within reach up or down, yet the swim node under him
+// is where he plans from (e2m1's courtyard pool: 13 minutes at its top with no plan, the way out
+// under water).
+TEST(a_swimmer_at_the_top_of_the_water_plans_from_the_swim_node_under_him) {
+  const Pool p(20);  // the water's top at z -20: the cells' centres at -16 lie out of it
+  sb::NavGraph g = p.g;
+  const std::vector<uint8_t> wet_floor(g.nodes.size(), 0);
+  sb::nav_add_swim(p.world, g, wet_floor);
+  for (const float z : {-30.f, -24.f, -18.f, -12.f}) {
+    const int32_t at = sb::nav_nearest(g, {900, 400, z});
+    CHECK_MSG(at >= g.swim_first,
+              "a swimmer floating at z " + std::to_string(z) +
+                  " found no node to plan from (nav_nearest's cells under him)");
+    if (at < 0) continue;
+    ge::ai::Search search;
+    CHECK_MSG(!sb::nav_route(g, at, 0, search).nodes.empty(),
+              "no route out of the pool from the top of the water at z " + std::to_string(z));
+  }
+}
+
 // A bank 20 over the water: Quake's water jump (24 ahead, solid 8 up, open 32 up) climbs it,
 // Quake II's (30 ahead, solid 4 up, open 20 up, 350 up) cannot, so a swim under Quake II's move
 // proves no climb out there and plans its way out elsewhere (base1's river: he jumped at such a
