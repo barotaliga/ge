@@ -110,13 +110,13 @@ bool start(cl::Listen& l) {
   return l.server != nullptr && sv::qc_of(*l.rules) != nullptr;
 }
 
-// The player's field `name` (the program's own, by name).
-float& field(cl::Listen& l, const char* name) {
+// Entity `e`'s field `name` (the program's own, by name; 1 the player, 0 the world).
+float& field(cl::Listen& l, const char* name, int e = 1) {
   sv::QcServer* qc = sv::qc_of(*l.rules);
   const ge::progs::Def* d = ge::progs::find_field(baseline(), name);
   CHECK_MSG(d != nullptr, name);
   return *reinterpret_cast<float*>(
-      ge::progs::entity_field(qc->q.vm, 1, d != nullptr ? d->offset : 0));
+      ge::progs::entity_field(qc->q.vm, e, d != nullptr ? d->offset : 0));
 }
 
 }  // namespace
@@ -199,4 +199,25 @@ TEST(classic_rules_take_q2s_armour_and_health_by_q2s_rules) {
   l.server->sv.edicts[1].health = 50;  // the engine's own copy, which the program reads
   for (int i = 0; i < 40; i++) cl::listen_frame(l, {});
   CHECK_MSG(l.server->sv.edicts[1].health == 60, std::to_string(l.server->sv.edicts[1].health));
+}
+
+// Quake II's carry limits on the classic rules wearing its weapons: each weapon row ends with its
+// ammunition's limit (shells 100, bullets 200, rockets 50, slugs 50), kept in the world's
+// ammunition fields, and a player is filled no further than that.
+TEST(classic_rules_carry_q2s_ammunition_to_q2s_limits) {
+  const pf::RemixArsenal* worn = pf::remix_arsenal("q1", "q2");
+  CHECK(worn != nullptr);
+  if (worn == nullptr) return;
+  CHECK(worn->arsenal.weapons[6].ammo_most == gc::kQ2MostRockets);
+  CHECK(worn->arsenal.weapons[7].ammo_most == gc::kQ2MostSlugs);
+  CHECK(pf::weapon_text(worn->arsenal.weapons[6]).ends_with(" 5 50"));
+  CHECK(pf::weapon_text(pf::kQ1Arsenal.weapons[6]).ends_with(" 5"));  // Quake's own: no limit word
+
+  cl::Listen l;
+  if (!start(l)) return;
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  CHECK_MSG(field(l, "ammo_rockets", 0) == 50, std::to_string(field(l, "ammo_rockets", 0)));
+  CHECK_MSG(field(l, "ammo_cells", 0) == 50, std::to_string(field(l, "ammo_cells", 0)));
+  CHECK_MSG(field(l, "ammo_shells", 0) == 100, std::to_string(field(l, "ammo_shells", 0)));
+  CHECK_MSG(field(l, "ammo_nails", 0) == 200, std::to_string(field(l, "ammo_nails", 0)));
 }

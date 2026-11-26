@@ -2,7 +2,8 @@
 // `cr_items`, plugins/classic/q1_body.hpp and q2_body.hpp). Each armour, health and ammunition
 // item of one game, played on the other game's rules, picked up by a fresh player (and the armour
 // over the one worn): what it gave when the played rules took it by their own numbers under the
-// other game's model (before), and what it gives now, by the rules of the game it belongs to.
+// other game's model (before), and what it gives now, by the rules of the game it belongs to; and
+// how much of each ammunition is carried, by the played rules' limits before and its own now.
 // Quake II's rules are run for real (its item table and body); the classic rules' rows are read
 // as the server is given them.
 //
@@ -104,6 +105,14 @@ void run(gl::Lab& lab) {
       rows.push_back({std::string(kAmmoNames[last - '1']), "Quake", quake_ammo[last - '1'],
                       std::to_string(l.amount)});
   }
+  // How much of each ammunition is carried: Quake's limits before, the weapon row's word now.
+  const char* carried[4] = {"shells carried", "bullets carried (nails)", "rockets carried",
+                            "slugs carried (cells)"};
+  const int quake_most[4] = {100, 200, 100, 100};
+  const int slot_of[4] = {1, 3, 6, 7};  // a weapon of each kind
+  for (int k = 0; k < 4; k++)
+    rows.push_back({carried[k], "Quake", std::to_string(quake_most[k]),
+                    std::to_string(worn->arsenal.weapons[slot_of[k]].ammo_most)});
 
   constexpr int kRow = 22, kW = 1100;
   gl::Picture pic = gl::create_picture(kW, static_cast<int>(rows.size() + 2) * kRow + 12, kPaper);

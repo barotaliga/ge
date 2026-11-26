@@ -101,10 +101,18 @@ bool ammo_give(A& q, float shells, float nails, float rockets, float cells) {
            q.f(o, q.L.f.ammo_cells);
   };
   const float before = sum();
-  q.set_f(o, q.L.f.ammo_shells, min_of(q.f(o, q.L.f.ammo_shells) + shells, kMaxShells));
-  q.set_f(o, q.L.f.ammo_nails, min_of(q.f(o, q.L.f.ammo_nails) + nails, kMaxNails));
-  q.set_f(o, q.L.f.ammo_rockets, min_of(q.f(o, q.L.f.ammo_rockets) + rockets, kMaxRockets));
-  q.set_f(o, q.L.f.ammo_cells, min_of(q.f(o, q.L.f.ammo_cells) + cells, kMaxCells));
+  // Another game's weapons (classic remix) carry to that game's limits, kept in the world's own
+  // ammunition fields by arsenal_keep (0: Quake's).
+  const int32_t w = q.world();
+  const auto most = [&](int f, float own) { return q.f(w, f) > 0 ? q.f(w, f) : own; };
+  q.set_f(o, q.L.f.ammo_shells,
+          min_of(q.f(o, q.L.f.ammo_shells) + shells, most(q.L.f.ammo_shells, kMaxShells)));
+  q.set_f(o, q.L.f.ammo_nails,
+          min_of(q.f(o, q.L.f.ammo_nails) + nails, most(q.L.f.ammo_nails, kMaxNails)));
+  q.set_f(o, q.L.f.ammo_rockets,
+          min_of(q.f(o, q.L.f.ammo_rockets) + rockets, most(q.L.f.ammo_rockets, kMaxRockets)));
+  q.set_f(o, q.L.f.ammo_cells,
+          min_of(q.f(o, q.L.f.ammo_cells) + cells, most(q.L.f.ammo_cells, kMaxCells)));
   return sum() > before;
 }
 
