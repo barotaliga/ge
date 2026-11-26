@@ -5,7 +5,9 @@
 //
 // - **The settings** (`RemixSettings`, `bind_remix`): `cr_enabled` (0 off, the default; 1 on)
 //   and `cr_items` (empty: the played game's own items; a game's id its: q1 Quake's,
-//   q2 Quake II's), both kept in the player's config.
+//   q2 Quake II's), both kept in the player's config. They are SERVER settings (`kServer`,
+//   `kServerInfo`): the window's own match plays them and tells them in its server info, and our
+//   client joining a match plays the one its server tells (`remix_told`, below).
 // - **The check** (`remix_check`): the installs the window knows, each with its edition; the
 //   remix is on when it is enabled and a second full game is there, else the refusal says what
 //   is missing in the game's words.
@@ -31,12 +33,13 @@
 //   (profiles/remix_sounds.hpp), on the client, whoever's things the rules wear: with it 0 the
 //   played game's, so `cr_items` alone swaps what is seen and never what is heard.
 // - **The menu and the letters** (client/remix_pictures.hpp): `cr_menu` names the game whose menu
-//   pictures are drawn, `cr_charset` the game whose glyph sheet writes every letter.
+//   pictures are drawn and whose glyph sheet writes every letter. It is the player's own setting:
+//   the menu is drawn before any server is joined. Every other cr_ setting is the server's (below).
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
 // ge:keywords cr_models cr_physics worn_figure worn_physics cr_sounds heard_game cr_over_mods
-// ge:keywords cr_monsters remix_monsters cr_menu cr_charset
+// ge:keywords cr_monsters remix_monsters cr_menu letters server-remix remix_told remix_info_lines
 // ge:keywords other-game-map item-swap full-game entity-text map-items
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
@@ -71,18 +74,16 @@ struct RemixSettings {
   std::string sounds;      // cr_sounds: the same for the sounds heard
   bool over_mods = false;  // cr_over_mods: the swaps above set over a mod's own too
   std::string monsters;    // cr_monsters: the same for a campaign map's monsters
-  std::string menu;        // cr_menu: the same for the menu's pictures
-  std::string charset;     // cr_charset: the same for the glyph sheet every letter is
+  std::string menu;        // cr_menu: the same for the menu's pictures and its letters
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
   bool expansions = true;          // cr_expansions: the mission packs' maps and items taken too
 };
 
 // The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
-// cr_sounds, cr_over_mods, cr_monsters, cr_menu, cr_charset.
-using RemixParts = std::array<std::string, 8>;
+// cr_sounds, cr_over_mods, cr_monsters, cr_menu.
+using RemixParts = std::array<std::string, 7>;
 inline RemixParts remix_parts(const RemixSettings& s) {
-  return {s.items,    s.models, s.physics, s.sounds, s.over_mods ? "1" : "0",
-          s.monsters, s.menu,   s.charset};
+  return {s.items, s.models, s.physics, s.sounds, s.over_mods ? "1" : "0", s.monsters, s.menu};
 }
 
 // A remix setting changed while a map is played waits for the next map: the HUD and the held
@@ -91,7 +92,7 @@ inline RemixParts remix_parts(const RemixSettings& s) {
 inline bool remix_waits(bool map_in_play, bool map_asked) { return map_in_play && !map_asked; }
 
 // `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods`, `cr_monsters`,
-// `cr_menu`, `cr_charset`, `cr_expansions` and the balance's, writing `out`.
+// `cr_menu`, `cr_expansions` and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -163,6 +164,7 @@ struct RemixFiles {
   RemixState state;
   std::string played;              // the played game's profile id
   SearchPath files;                // the other game's, the played game's over it (empty while off)
+  size_t other_sources = 0;        // how many of `files`' first sources are the other game's
   profiles::RemixBalance balance;  // the settings' (the window copies them before a load)
   std::string pack;  // the played game's mission pack folder, lower case ("" the base game)
   // The other game's weapons and armour the played game's rules wear (`cr_items`,
@@ -179,7 +181,7 @@ struct RemixFiles {
   // The game whose monsters a map is played with (`cr_monsters`, `heard_game`'s rule): "" while
   // off.
   std::string_view monsters;
-  // The games whose menu pictures (`cr_menu`) and glyph sheet (`cr_charset`) the window draws
+  // The games whose menu pictures and glyph sheet (both `cr_menu`'s) the window draws
   // (client/remix_pictures.hpp, `heard_game`'s rule): "" while off.
   std::string_view menu, charset;
   // A mod's own module plays the rules (its qwprogs.qvm): it sets the weapons, the HUD's numbers
@@ -192,6 +194,11 @@ struct RemixFiles {
   bool from_files() const { return wearing() || (!monsters.empty() && monsters != played); }
   // True while a sound may be heard from the other game's files: wearing, or `cr_sounds` naming it.
   bool heard_from_files() const { return wearing() || (!heard.empty() && heard != played); }
+  // How many of the first sources the game heard owns (DemoSounds::hear_as's `theirs`): the other
+  // game's while the sounds are its, else 0.
+  size_t heard_theirs() const {
+    return !heard.empty() && heard != played && heard == state.other ? other_sources : 0;
+  }
   // Where the sounds are read: the remix's `files` while `heard_from_files`, else the game's `own`.
   const SearchPath& heard_from(const SearchPath& own) const {
     return heard_from_files() ? files : own;
@@ -213,6 +220,28 @@ std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::
 // The window's server lines while `r` is dressed: `opt.arsenal` (`worn_lines`) and, while a mod's
 // own rules play and `cr_over_mods` is on, `opt.over_mod`: the physics taken (`cr_physics`).
 void wear_lines(ListenOptions& opt, const RemixFiles& r, const std::vector<std::string>& own);
+
+// THE SERVER'S REMIX (M18u13c): the cr_ settings are the server's. A match the window hosts tells
+// every client the remix it plays in its server info (`remix_info_lines`: `cr_enabled 1` and each
+// part that names another game: `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_monsters`);
+// our client, joining it or playing a demo of it, reads them back (`remix_told`) and plays the
+// level as the server does: the other game's files opened, its map, figures and sounds read from
+// them, whatever the player's own cr_ settings say. A server that tells none is played as itself.
+std::vector<std::string> remix_info_lines(const RemixFiles& r);
+// The remix a server's info tells (`key`, `value` pairs as a demo's state keeps them): off when it
+// names none.
+RemixSettings remix_told(std::span<const std::pair<std::string, std::string>> info);
+// The window's choice between the two: while a server joined or a demo plays (`follow` at each
+// of its levels), the remix its server tells; else (`on` false) the player's own settings.
+struct ServerRemix {
+  RemixSettings told;
+  bool on = false;
+  void follow(std::span<const std::pair<std::string, std::string>> info) {
+    told = remix_told(info);
+    on = true;
+  }
+  const RemixSettings& of(const RemixSettings& own) const { return on ? told : own; }
+};
 
 // The entity text `text` of a map played on `played`'s rules with every monster made game `to`'s
 // by the monster table (profiles/remix_monsters.hpp), where `played`'s rules run it, else the
@@ -262,6 +291,12 @@ std::string_view heard_game(const RemixSettings& s, const RemixState& state,
 // install does not open.
 bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
                 const std::string& basedir, const std::string& game, std::string& error);
+
+// The remix `s` asks for checked against the games the window knows (`prefs`, installs.hpp) and
+// opened into `r` (`remix_check`, `open_remix`); the console's line about it, "" when none.
+std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const std::string& prefs,
+                           std::string_view played, const std::string& basedir,
+                           const std::string& game);
 
 // The map `name`: the played game's own from `files`, else (the remix on) the other game's from
 // `remix->files`, its items made the played game's (`said`: the line saying so). A map of brushes

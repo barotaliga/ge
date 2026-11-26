@@ -606,8 +606,8 @@ int run_main(int argc, char** argv) {
                          remix.state.on ? remix.state.other : "", args.game);
   });
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
-    cl::bar_pictures(q2_bar, pics);  // read again; its words in cr_charset's letters
-    // The loaded game's own, or cr_menu's and cr_charset's game's (client/remix_pictures.hpp).
+    cl::bar_pictures(q2_bar, pics);  // read again; its words in cr_menu's letters
+    // The loaded game's own, or cr_menu's game's (client/remix_pictures.hpp).
     game_menu.set_art(std::move(pics.menu));
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
     classic_art = std::move(pics.hud);
@@ -737,13 +737,16 @@ int run_main(int argc, char** argv) {
   worn_hud.bar.screen = &q2_screen;
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
-  // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
-  // other game's weapons: the server's rows and files, the weapons in the hand.
+  cl::ServerRemix told;  // a server's or a demo's remix, not the player's own (remix.hpp)
+  const auto remix_now = [&]() -> const auto& { return told.of(remix_settings); };
+  // `cr_items` (remix.hpp's `worn_arsenal`): the other game's things worn, from the next map.
   const auto remix_wear = [&] {  // true: the remix is worn as its settings say
     remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
-    if (!cl::remix_dress(remix, remix_settings, args.profile)) return true;
+    const bool dressed = cl::remix_dress(remix, remix_now(), args.profile);
+    listen.opt.remix_info = cl::remix_info_lines(remix);  // told to everyone who joins
+    if (!dressed) return true;
     cl::worn_hud_reset(worn_hud, remix);       // read again from the files now open
-    pictures_enhanced = !picture.ce.pictures;  // the pictures read again (cr_menu, cr_charset)
+    pictures_enhanced = !picture.ce.pictures;  // the pictures read again (cr_menu)
     cl::wear_lines(listen.opt, remix, game_content.arsenal);
     listen.opt.files = remix.from_files() ? &remix.files : &files;
     in_hand = {};
@@ -757,27 +760,18 @@ int run_main(int argc, char** argv) {
   cl::RemixParts remix_items{};              // remix.hpp's `remix_parts`
   const auto remix_sync = [&]() -> bool {    // false: the loader is busy, in step next frame
     remix.balance = remix_settings.balance;  // the next map read weighs by them
-    const auto open = std::pair(remix_settings.enabled, remix_settings.expansions);
+    const auto open = std::pair(remix_now().enabled, remix_now().expansions);
     const bool same_files = open == remix_open && remix_for == args.basedir;
-    if (same_files && cl::remix_parts(remix_settings) == remix_items) return true;
+    if (same_files && cl::remix_parts(remix_now()) == remix_items) return true;
     if (cl::busy(loader)) return false;  // its threads may read the other game's files: next frame
-    remix_items = cl::remix_parts(remix_settings);
+    remix_items = cl::remix_parts(remix_now());
     if (same_files) return remix_wear();
     remix_open = open;
     remix_for = args.basedir;
-    const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
-                                              cl::known_games(prefs, args.profile, args.basedir));
-    std::string why;
-    if (!cl::open_remix(remix, st, args.profile, args.basedir, args.game, why)) {
-      console.print(why);
-    } else if (st.on) {
-      const ge::classicenhance::Profile* other = ge::classicenhance::find_profile(st.other);
-      console.print(
-          "Classic remix is on: " + std::string(other != nullptr ? other->what : st.other) +
-          "'s maps can be played too.");
-    } else if (!st.why.empty()) {
-      console.print(st.why);
-    }
+    if (const std::string said =
+            cl::open_remix_for(remix, remix_now(), prefs, args.profile, args.basedir, args.game);
+        !said.empty())
+      console.print(said);
     return remix_wear();
   };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
@@ -1090,7 +1084,8 @@ int run_main(int argc, char** argv) {
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
     synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
-    heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
+    heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard,
+                     remix.heard_theirs());
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): client/bot_client.hpp.
   if (args.bots > 0) {
@@ -1397,6 +1392,7 @@ int run_main(int argc, char** argv) {
         !cl::cinematic_holds(cine))
       next_map = listen.pending_map;
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
+    if (!elsewhere) told.on = false;   // the player's own cr_ settings again
     if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
     const bool remix_ready =
         cl::remix_waits(listen.map != nullptr, !next_map.empty()) || remix_sync();
@@ -1568,8 +1564,10 @@ int run_main(int argc, char** argv) {
       }
       if (step == cl::TimedemoStep::new_level) {
         std::vector<std::string> lines;
-        const cl::SearchPath& from =
-            cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
+        told.follow(ds.serverinfo), remix_sync();  // its server's remix: the level read from it
+        const cl::SearchPath& from = remix.state.on ? remix.files
+                                                    : cl::demo_folder(bench_folder, args.basedir,
+                                                                      args.game, ds, files, lines);
         for (const std::string& line : lines)  // a server joined plays from what the window has
           if (!drawn_remote) console.print("playdemo: " + line);
         if (locs_fetched) places.map.clear();  // the same map, with the file it just fetched
@@ -1594,7 +1592,7 @@ int run_main(int argc, char** argv) {
         if (drawn_remote)
           sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get(),
                            &bench_map->bsp.map);
-        if (paced) hearing.level(ds, from, &bench_map->bsp.map);
+        if (paced) hearing.level(ds, from, &bench_map->bsp.map, remix.heard, remix.heard_theirs());
       } else if (step != cl::TimedemoStep::frame) {
         const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t, attract)) return 1;

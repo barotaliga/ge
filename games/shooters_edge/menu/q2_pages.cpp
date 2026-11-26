@@ -451,7 +451,6 @@ constexpr Entry kQ2[] = {
     spin("remix", "cr_physics", "movement", kRemixWhose),
     spin("remix", "cr_sounds", "sounds", kRemixWhose),
     spin("remix", "cr_menu", "menu", kRemixWhose),
-    spin("remix", "cr_charset", "letters", kRemixWhose),
     spin("remix", "cr_over_mods", "over mods", kRemixOnOff),
     slide("remix", "cr_strong_min", "strong at least", 0, 8, 1),
     slide("remix", "cr_strong_share", "strong at most", 0, 1, 0.1),

@@ -12,7 +12,10 @@
 //
 // THE CPU (`cpu by zone`): every timed frame's timing zones (prof/zones.hpp: the demo's step, the
 // HUD, the world's prepares, its encode and submit, the wait for the frame before), each zone's
-// median a frame, as a note and as `cpu.<zone>` metrics.
+// median a frame, as a note and as `cpu.<zone>` metrics. THE SLOW FRAMES: every frame over twice
+// the median counted (`frame.slow-share`), and the dearest in a table with the GPU's span beside
+// each and the zones that ran past their own medians, so a hitch says whether the CPU or the GPU
+// held it, and where.
 //
 // What it shows: three frames of the run (its start, the middle, the end), the frame time and the
 // GPU span of every timed frame as lines with the median and the 99th percentile as rules, and
@@ -28,6 +31,7 @@
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
+// ge:keywords slow-frames hitch stall spike frame-tail
 // ge:keywords offscreen price switch-off-pricing cpu-zones frame-in-flight price-stops ladder
 // ge:skill shooter perf labs
 #include <algorithm>
@@ -155,6 +159,10 @@ struct Played {
   // zones in the order they first opened.
   bool zones = false;
   std::vector<std::pair<uint32_t, std::vector<double>>> zone_ms;
+  // With `zones`: every timed frame's zones (name, ms) and its GPU span (NaN: none read), in the
+  // order of the bench's frame times, so a slow frame can be told apart from the rest.
+  std::vector<std::vector<std::pair<uint32_t, double>>> frame_zones;
+  std::vector<double> frame_span;
 };
 
 struct Rig {
@@ -165,6 +173,7 @@ struct Rig {
   ge::gpu::Target* out = nullptr;
   uint32_t w = 0, h = 0;
   int64_t total = 0;
+  int stride = 1;  // draw every stride-th of the demo's frames (the price's runs; the rest stepped)
 };
 
 bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bool shots,
@@ -289,48 +298,60 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
         for (size_t k = had; blast_at < 0 && k < demo_fx.explosions.size(); k++)
           if (in_front(bench.demo.state, demo_fx.explosions[k])) blast_at = p.frames + kBlastLag;
       }
-      cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
-      // A picture's frame waits for its read back, which a window never does: not timed.
-      if (shot < 3 && p.frames == picks[shot]) bench.skip = std::max(bench.skip, 1);
-      if (bench.skip == 0) cl::record_span(*world, bench.passes);
-      if (shots && p.frames == blast_at) {
-        settle();
-        const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
-        lab.shot({"blast",
-                  "A BLAST IN A PLAYED DEMO",
-                  "The first explosion the demo sends in front of the recorded eye, " +
-                      std::to_string(kBlastLag) +
-                      " frames into its burst: the temporary entity the recording carries, drawn "
-                      "by the effects a game played here draws.",
-                  "the fireball and its light on the walls and floor where the rocket ended; "
-                  "the rocket's trail before it",
-                  {{"demo", bench.name}, {"frame", std::to_string(p.frames)}}},
-                 gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-                 gl::Det::measured);
-        p.blast_frame = p.frames;
-      }
-      if (shot < 3 && p.frames == picks[shot]) {
-        settle();
-        const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
-        lab.shot(
-            {ids[shot],
-             "DEMO FRAME " + std::to_string(p.frames) + " OF " + std::to_string(total),
-             "The benchmark's frame " + std::to_string(p.frames) + " of " + bench.name + " on " +
-                 bench.demo.state.map +
-                 ", drawn by the window's world frame and "
-                 "HUD from the demo's eye.",
-             "the map from the recorded eye, the other players where the demo has them, the HUD's "
-             "stats from the demo",
-             {{"demo", bench.name}, {"size", lab.arg("size")}}},
-            gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-            gl::Det::measured);
-        shot++;
-      } else {
-        const wgpu::Future done = device->queue.OnSubmittedWorkDone(
-            wgpu::CallbackMode::WaitAnyOnly, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
-        GE_ZONE("gpu.wait");
-        settle();
-        in_flight = done;
+      // A frame between the stride's is stepped, never drawn nor timed.
+      const bool drawn = shots || rig.stride <= 1 || p.frames % rig.stride == 0;
+      if (!drawn) bench.skip = std::max(bench.skip, 1);
+      if (drawn) {
+        cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
+        // A picture's frame waits for its read back, which a window never does: not timed.
+        if (shot < 3 && p.frames == picks[shot]) bench.skip = std::max(bench.skip, 1);
+        if (bench.skip == 0) {
+          const size_t had_spans = bench.passes.span_ms.size();
+          cl::record_span(*world, bench.passes);
+          if (p.zones)
+            p.frame_span.push_back(bench.passes.span_ms.size() > had_spans
+                                       ? bench.passes.span_ms.back()
+                                       : std::nan(""));
+        }
+        if (shots && p.frames == blast_at) {
+          settle();
+          const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
+          lab.shot({"blast",
+                    "A BLAST IN A PLAYED DEMO",
+                    "The first explosion the demo sends in front of the recorded eye, " +
+                        std::to_string(kBlastLag) +
+                        " frames into its burst: the temporary entity the recording carries, drawn "
+                        "by the effects a game played here draws.",
+                    "the fireball and its light on the walls and floor where the rocket ended; "
+                    "the rocket's trail before it",
+                    {{"demo", bench.name}, {"frame", std::to_string(p.frames)}}},
+                   gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                   gl::Det::measured);
+          p.blast_frame = p.frames;
+        }
+        if (shot < 3 && p.frames == picks[shot]) {
+          settle();
+          const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
+          lab.shot({ids[shot],
+                    "DEMO FRAME " + std::to_string(p.frames) + " OF " + std::to_string(total),
+                    "The benchmark's frame " + std::to_string(p.frames) + " of " + bench.name +
+                        " on " + bench.demo.state.map +
+                        ", drawn by the window's world frame and "
+                        "HUD from the demo's eye.",
+                    "the map from the recorded eye, the other players where the demo has them, the "
+                    "HUD's "
+                    "stats from the demo",
+                    {{"demo", bench.name}, {"size", lab.arg("size")}}},
+                   gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                   gl::Det::measured);
+          shot++;
+        } else {
+          const wgpu::Future done = device->queue.OnSubmittedWorkDone(
+              wgpu::CallbackMode::WaitAnyOnly, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+          GE_ZONE("gpu.wait");
+          settle();
+          in_flight = done;
+        }
       }
     } else if (!device && shot < 3 && p.frames == picks[shot]) {
       ls::placeholders(lab, {ids[shot++]});
@@ -339,6 +360,9 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
     if (p.zones) {
       if (bench.skip == 0) {
         ge::prof::totals(ge::prof::spans(), rows);
+        p.frame_zones.emplace_back();
+        for (const ge::prof::ZoneTotal& z : rows)
+          p.frame_zones.back().emplace_back(z.name, static_cast<double>(z.incl_ns) * 1e-6);
         for (const ge::prof::ZoneTotal& z : rows) {
           auto at = std::find_if(p.zone_ms.begin(), p.zone_ms.end(),
                                  [&](const auto& e) { return e.first == z.name; });
@@ -354,6 +378,57 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
   settle();
   if (p.zones) ge::prof::stop();
   return true;
+}
+
+// THE SLOW FRAMES: every timed frame over twice the median, counted, and the dearest of them with
+// the GPU's span beside it (read a frame late, so a GPU stall shows on the frame after) and the
+// zones that ran longest past their own medians: a frame slow on the CPU names its zone, one slow
+// on the GPU shows a long span with no zone past its usual.
+void slow_frames(gl::Lab& lab, const Played& p, const std::vector<double>& frame_s, double p50_ms) {
+  if (p.frame_zones.size() != frame_s.size() || frame_s.empty()) return;
+  std::vector<std::pair<uint32_t, double>> zone_p50;
+  zone_p50.reserve(p.zone_ms.size());
+  for (const auto& [zone, ms] : p.zone_ms) zone_p50.emplace_back(zone, cl::median_of(ms));
+  std::vector<size_t> slow;
+  for (size_t i = 0; i < frame_s.size(); i++)
+    if (frame_s[i] * 1e3 > 2 * p50_ms) slow.push_back(i);
+  const double share = static_cast<double>(slow.size()) / static_cast<double>(frame_s.size());
+  lab.metric("frame.slow-share", share, "fraction", gl::Det::measured);
+  std::vector<double> spans;
+  for (const double v : p.frame_span)
+    if (!std::isnan(v)) spans.push_back(v);
+  std::sort(spans.begin(), spans.end());
+  if (!spans.empty()) {
+    lab.metric("gpu.span.p95", spans[spans.size() * 95 / 100], "ms", gl::Det::measured);
+    lab.metric("gpu.span.max", spans.back(), "ms", gl::Det::measured);
+  }
+  std::sort(slow.begin(), slow.end(), [&](size_t a, size_t b) { return frame_s[a] > frame_s[b]; });
+  gl::LabTable t{"the slow frames (over twice the median), the dearest first",
+                 {"frame", "ms", "GPU span (ms)", "zones past their median (ms over)"},
+                 {}};
+  for (size_t k = 0; k < slow.size() && k < 24; k++) {
+    const size_t i = slow[k];
+    std::vector<std::pair<double, uint32_t>> over;
+    for (const auto& [zone, ms] : p.frame_zones[i]) {
+      double usual = 0;
+      for (const auto& [z, m] : zone_p50)
+        if (z == zone) usual = m;
+      if (ms - usual > 0.5) over.emplace_back(ms - usual, zone);
+    }
+    std::sort(over.rbegin(), over.rend());
+    std::string zones;
+    for (size_t j = 0; j < over.size() && j < 4; j++)
+      zones.append(j ? ", " : "")
+          .append(ge::prof::zone_name(over[j].second))
+          .append(" +")
+          .append(fixed(over[j].first, 1));
+    const double span = i + 1 < p.frame_span.size() ? p.frame_span[i + 1] : std::nan("");
+    t.rows.push_back({std::to_string(i), fixed(frame_s[i] * 1e3, 1),
+                      std::isnan(span) ? "-" : fixed(span, 1), zones.empty() ? "-" : zones});
+  }
+  lab.note("slow frames: " + std::to_string(slow.size()) + " of " + std::to_string(frame_s.size()) +
+           " over twice the median (" + fixed(2 * p50_ms, 1) + " ms)");
+  lab.table(t, gl::Det::measured);
 }
 
 // A run's timed frames in ms.
@@ -473,6 +548,7 @@ void run(gl::Lab& lab) {
     }
     lab.note(line);
   }
+  slow_frames(lab, base, bench.frame_s, s.p50_ms);
   lab.metric("demo.frames", static_cast<double>(base.frames), "count");
   lab.metric("demo.levels", levels, "count");
   lab.metric("demo.explosions", static_cast<double>(base.explosions), "count");
@@ -520,9 +596,15 @@ void run(gl::Lab& lab) {
 
   // THE PRICE: the demo again with each drawn switch off in turn, each between two all-on runs.
   if (price && device) {
-    std::vector<cl::PriceRun> bases{price_run("", base)}, off;
-    std::vector<std::vector<double>> frames_of;               // each switched-off run's frames, ms
-    std::vector<double> base_ms = ms_of(base.bench.frame_s);  // every all-on run's frames, ms
+    rig.stride = std::max(1, static_cast<int>(lab.arg_num("price-stride")));
+    // With a stride the first all-on run is played again at it, so every run beside a price
+    // draws the same frames.
+    Played first;
+    if (rig.stride > 1 && !play(rig, picture, false, false, first)) return;
+    const Played& start = rig.stride > 1 ? first : base;
+    std::vector<cl::PriceRun> bases{price_run("", start)}, off;
+    std::vector<std::vector<double>> frames_of;                // each switched-off run's frames, ms
+    std::vector<double> base_ms = ms_of(start.bench.frame_s);  // every all-on run's frames, ms
     const auto row = [&](const std::string& label, const shooters_edge::look::Picture& pic,
                          bool no_hud) {
       Played p;
@@ -660,6 +742,9 @@ const gl::LabSpec kSpec{
       "1: price the quality ladder instead (app/ladder.hpp): each of shadows, water and skies "
       "lowered alone to off, low and medium, then r_quality low, medium and high and every row "
       "off, each between two all-on runs"},
+     {"price-stride", "1",
+      "with a price: draw only every Nth of the demo's frames in the priced runs (the rest "
+      "stepped), so a long demo's whole set of switches fits in a sitting"},
      {"price-cvars", "",
       "label=cvars|label=cvars: price these sets of the picture's cvars instead (as the console "
       "takes them: \"water low=ce_water_quality low|no mirror shadows=...\"), each between two "

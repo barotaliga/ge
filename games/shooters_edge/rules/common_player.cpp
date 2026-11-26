@@ -323,7 +323,7 @@ void player_fall(A& q) {
 }
 
 // void() PlayerPostThink: a hard fall's harm; a weapon select waits out the refire; the weapon
-// fired; the powers.
+// fired; Quake II's footsteps where they are on; the powers.
 void PlayerPostThink(A& q) {
   const int32_t me = q.self();
   if ((q.f(me, q.L.f.deadflag) != kDeadNo) | (q.g(g_match_over) != 0)) return;
@@ -335,6 +335,7 @@ void PlayerPostThink(A& q) {
   if (q.f(me, q.L.f.deadflag) != kDeadNo) return;
   if ((q.f(me, q.L.f.impulse) != 0) & (q.time() >= q.f(me, f_attack_finished))) weapon_impulse(q);
   weapon_frame(q);
+  q2_footsteps(q);  // classic remix's `cr_sounds q2`: Quake II's footsteps
   power_frame(q);
   if (quake_rules(q)) quake_power_frame(q);
   q.set_f(q.self(), q.L.f.dmg_take, 0);

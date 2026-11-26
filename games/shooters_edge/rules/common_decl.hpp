@@ -68,7 +68,8 @@ namespace pg = ge::progs;
   X(corpse, kTypeEntity)           \
   X(q2_arms, kTypeFloat)           \
   X(q2_blow, kTypeFloat)           \
-  X(q2_kick, kTypeFloat)
+  X(q2_kick, kTypeFloat)           \
+  X(q2_steps, kTypeFloat)
 
 // THE FIELDS after the form's, in the QC's order (the server finds `maxspeed`, `gravity` and
 // `attack_finished` by name; a map's "light" key fills `light_lev`).
@@ -141,7 +142,10 @@ namespace pg = ge::progs;
   X(q2_held, kTypeFloat)               \
   X(q2_next, kTypeFloat)               \
   X(q2_click, kTypeFloat)              \
-  X(q2_sound, kTypeFloat)
+  X(q2_sound, kTypeFloat)              \
+  X(q2_bob, kTypeFloat)                \
+  X(q2_bob_step, kTypeFloat)           \
+  X(q2_stride_next, kTypeFloat)
 
 // THE STRINGS the rules store or pass, both variants'.
 #define SE_RULES_STRINGS(X)                                                                        \
@@ -676,6 +680,14 @@ namespace pg = ge::progs;
   X(the_thing_at_the,                                                                              \
     "The thing at the bottom of the world is gone, torn apart from the inside.\n\nThe four runes " \
     "go quiet. The way home is open.")                                                             \
+  X(misc_teleporttrain_class, "misc_teleporttrain")                                                \
+  X(style_pulse, "abcdefghijklmlkjihgfedcb")                                                       \
+  X(style_b, "b")                                                                                  \
+  X(style_c, "c")                                                                                  \
+  X(style_e, "e")                                                                                  \
+  X(style_g, "g")                                                                                  \
+  X(style_i, "i")                                                                                  \
+  X(style_k, "k")                                                                                  \
   X(boss2_pop2_wav, "boss2/pop2.wav")                                                              \
   X(boss2_death_wav, "boss2/death.wav")                                                            \
   X(oldone_mdl, "progs/oldone.mdl")                                                                \

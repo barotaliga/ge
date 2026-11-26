@@ -1,7 +1,7 @@
 // THE VIEW FROM UNDER A BODY (render/liquid.hpp § Seen from below): one triangle over the screen
 // when the eye is under a lava's or a slime's level, drawn after the surfaces. A slime is a fog
-// of its own colour lit by the light that reaches the eye's depth, its surface from below a
-// window onto the world over it and a mirror past it, its scum a shadow on the window; a lava is
+// of its own colour lit by the light that reaches the eye's depth, its surface from below the
+// slime itself (no window up out of it: only water has one), its scum dark patches on it; a lava is
 // opaque, its melt's glow all round, cooler streaks rising through it; with a game's reach a thick
 // light-red glowing goo the eye sees a few metres into, under a ceiling of opaque melt.
 #include "render/wgsl/frame.wgsl"
@@ -132,26 +132,16 @@ fn fs_under(in: UnderOut) -> FragmentOut {
   var path = d;
   if (ts < d) {
     path = ts;
+    // No window up out of it (only water has one): the thick stuff's surface from below is the
+    // slime itself, its scum's patches dark on it.
     let hit = dir * ts;
-    let out_dir = refract(dir, vec3f(0.0, -1.0, 0.0), 1.34);
-    if (dot(out_dir, out_dir) < 0.25) {
-      // Past the window: the surface mirrors the slime below.
-      beyond = veil;
-    } else {
-      let across = scene_toward(hit + out_dir * max(d - ts, 1.0));
-      let sky = mix(room, sky_luminance(out_dir), open_sky);
-      let seen = mix(sky, across.rgb, across.a);
-      let f = fresnel(dir.y, 0.02);
-      beyond = mix(seen, veil, f);
-      // The scum floating over the window: its underside, dark.
-      let xz = hit.xz + frame.eye.xz;
-      let drift = xz - body.flow.xy * t;
-      let field = fbm(drift * 0.9) * 0.7 + fbm(drift * 4.0) * 0.3;
-      let cover = body.slime0.z;
-      let scum = step(1e-3, cover) *
-                 smoothstep(1.0 - cover - 0.05, 1.0 - cover + 0.1, field);
-      beyond = mix(beyond, veil * 0.25, clamp(scum, 0.0, 1.0));
-    }
+    beyond = veil;
+    let xz = hit.xz + frame.eye.xz;
+    let drift = xz - body.flow.xy * t;
+    let field = fbm(drift * 0.9) * 0.7 + fbm(drift * 4.0) * 0.3;
+    let cover = body.slime0.z;
+    let scum = step(1e-3, cover) * smoothstep(1.0 - cover - 0.05, 1.0 - cover + 0.1, field);
+    beyond = mix(beyond, veil * 0.25, clamp(scum, 0.0, 1.0));
   }
   let through = exp(-c * path);
   out.colour = vec4f(beyond * through + veil * (1.0 - through), 1.0);

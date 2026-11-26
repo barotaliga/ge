@@ -15,9 +15,9 @@
 //
 // ge:summary Lab: Quake II's status bar: stats, program and pictures over the player's view
 // `--letters=<install>` writes the bar's words in Quake's letters there, as classic
-// remix's `cr_charset q1` does (client/remix_pictures.hpp).
+// remix's `cr_menu q1` does (client/remix_pictures.hpp).
 //
-// ge:keywords cr_charset
+// ge:keywords cr_menu
 // ge:keywords lab se-q2-hud q2 status-bar stats layout pickup timer flash deathmatch
 // ge:keywords power-shield q2-hud screenshot scoreboard help-computer inventory scr_lag_draw
 // ge:skill ui labs

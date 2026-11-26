@@ -30,7 +30,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 | --- | --- | --- | --- | --- |
 | Files | WAV under `sound/` | WAV under `sound/`; player sounds by figure | WAV and other formats | sound lumps in the archive (a new reader) |
 | Ambience | by the map's leaves | by the map's entities' loop sounds | entity loops | sector sounds |
-| Footsteps | none (remix carries Quake II's) | its own, by the surface's `.mat` material (`cl_footsteps`) | its own | none |
+| Footsteps | none (remix's `cr_sounds q2` makes Quake II's: `g_footsteps 1` on the classic rules) | its own, by the surface's `.mat` material (`cl_footsteps`) | its own | none |
 | Looped sounds of one kind | the level's loops of one file merged into one, always | entity loops merged into one (`al_merge_looping`) | merged | none |
 | The music switched off | stops (`cd off`) | pauses where it is (`ogg_enable`, the console's `off_pauses`) | | |
 | Voice on our server | `*ge_ext` voice bit, `sv_voip` off by default | the same route, its own message id | the same route | the same route |
@@ -84,3 +84,9 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 - A game uses only its own sounds outside remix.
 - A weapon's own sounds stay its own under remix: a weapon swapped in is its game's whole, so
   `cr_sounds` never renames a shot, a blast, a bounce or a hit (`SoundMatch::weapon`).
+- Two games ship many sounds by one name (`player/gasp1.wav`, `items/protect.wav`): under remix the
+  played game's copy hides the other's on the search path, so "heard as the other game" must read
+  that game's own copy below it (`DemoSounds::hear_as`'s `theirs`), not the name's winner.
+- Test a sound part through the hearing the window runs (`ListenHearing`, `DemoHearing`), not the
+  table alone: the table was right while a joined game never heard it
+  (`tests/shooters_edge_remix_heard_test.cpp`).

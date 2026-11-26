@@ -378,15 +378,15 @@ struct PilotSettings {
 // `air`: in a flight (a jump's, a rocket jump's, a grenade jump's) STEERED as a player steers in
 // the air: the aim its target, or near it a point a little past it toward the node after it when
 // the route walks on (the momentum carried round the corner it turns there); off the velocity's
-// line, the side key toward the turn (pressed by how far off) and the view led on the velocity by
-// the move's turn, as the hop does (the air's 30 unit/s cap turns a fast flight only with the wish
-// across it: forward does nothing past 30 units/s); on the line, the view along the velocity and no
-// key; slow, or the aim behind, forward at it as the proof flew. A flip's view turns back to its
-// target first (`flip_keys`). `grenade`: a GRENADE JUMP (nav.hpp `NavKind::grenade`), on the
-// ground: to its start and still there, the view on the target and `NavLink::pitch` down, the
-// grenade fired (only while the sense says the launcher is in hand), then to the link's `lead` past
-// where it will lie (the nav's `grenade_at`, with the world), and jump as the fuse runs out (the
-// jump key passes the hands at once); the flight is a jump's.
+// line, the side key toward the turn and the view where its wish lies at most 90 degrees off the
+// velocity (`air_strafe`: the air's 30 unit/s cap turns a fast flight only with the wish across it,
+// forward does nothing past 30 units/s, and a wish past 90 brakes); on the line, the view along the
+// velocity and no key; slow, or the aim behind, forward at it as the proof flew. A flip's view
+// turns back to its target first (`flip_keys`). `grenade`: a GRENADE JUMP (nav.hpp
+// `NavKind::grenade`), on the ground: to its start and still there, the view on the target and
+// `NavLink::pitch` down, the grenade fired (only while the sense says the launcher is in hand),
+// then to the link's `lead` past where it will lie (the nav's `grenade_at`, with the world), and
+// jump as the fuse runs out (the jump key passes the hands at once); the flight is a jump's.
 enum class PilotMode : uint8_t {
   idle,
   walk,
@@ -403,6 +403,24 @@ enum class PilotMode : uint8_t {
 };
 inline constexpr int kPilotModes = 12;  // PilotMode's count: a table indexed by mode is this long
 const char* pilot_mode_name(PilotMode m);
+// Whether the pilot is on a jump (lining it up, running at it, flying it): the view is its own
+// then, and a spot the bot watches waits (bot.cpp; e1m4's trap room: a button watched across the
+// slime pit held the view off the jump across it, and it was never made).
+inline bool leaping_mode(PilotMode m) {
+  return m == PilotMode::run_up || m == PilotMode::jump || m == PilotMode::air;
+}
+
+// THE AIR'S STRAFE (`air`, off the line): the view's yaw and the side key (-1 left, 1 right) that
+// turn a flight heading `vh` (degrees) at `speed` toward an aim `err` degrees off it
+// (counter-clockwise positive), under an air whose wish is capped at `wish_cap` (0: no cap). The
+// side key's wish lies 90 degrees off the velocity (the most turn, nothing taken off the speed)
+// from `kAirFull` degrees off, nearer the velocity the less off, down to where the air adds
+// nothing (acos(cap / speed)); never past 90, where it brakes.
+struct AirStrafe {
+  float yaw = 0;
+  float side = 0;
+};
+AirStrafe air_strafe(float vh, float err, float speed, float wish_cap);
 
 enum class PilotHands : uint8_t { none, human, practised, steady };
 // The hands' axes: yaw (degrees), forward and side (shares of maxspeed), jump.

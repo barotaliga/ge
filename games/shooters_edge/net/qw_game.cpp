@@ -1400,6 +1400,21 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     }
     if (g.host != nullptr) g.host->room = g.room.get();
   }
+  // With no lobby, `team <name>` keeps Quake's meaning: the player's team in his user info.
+  if (!g.room && g.qw && (line == "team" || line.starts_with("team ")) && slot >= 0 && slot < 32) {
+    std::string name = line.substr(4);
+    name.erase(0, name.find_first_not_of(" \t\""));
+    name.erase(std::min(name.size(), name.find_first_of('"')));
+    while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) name.pop_back();
+    if (name.empty())
+      client_print(*g.qw, slot, 2,
+                   "\"team\" is \"" +
+                       info_get(g.qw->clients[static_cast<size_t>(slot)].userinfo, "team") +
+                       "\"\n");
+    else
+      qw_set_info(*g.qw, slot, "team", name);
+    return true;
+  }
   if (!g.room) return mate_words(g, slot, line);
   cl::Room& r = *g.room;
   QwServer& cs = *g.qw;

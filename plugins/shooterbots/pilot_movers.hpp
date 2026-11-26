@@ -36,6 +36,13 @@ inline bool boxes_meet(Vec3f alo, Vec3f ahi, Vec3f blo, Vec3f bhi) {
          blo.z < ahi.z;
 }
 
+// Whether a door's leaf, its box now `lo`..`hi`, stands across the way from `a` to `b` (players'
+// origins): the way's swept box with its floor a step up, so a door sunk to within a step of the
+// floor is walked over. A `leap`'s floor is its take-off's (`a`): a jumper rises from it, so a door
+// sunk level with the ledge he jumps down from is under him (e1m4's trap room: its
+// door, lowered into the slime pit it is jumped across, held the bot at the ledge for good).
+bool leaf_in_way(Vec3f a, Vec3f b, bool leap, Vec3f lo, Vec3f hi);
+
 // Each ridden mover's height noted, and when it moved (`Pilot::movers_seen`): once a command.
 void see_movers(Pilot& p, const PilotSense& s);
 // Whether ridden mover `m` has not moved for a beat (a plat's wait at its rest is silent).

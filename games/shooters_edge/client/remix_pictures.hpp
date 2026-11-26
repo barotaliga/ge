@@ -1,16 +1,17 @@
 // THE MENU'S AND THE LETTERS' GAME UNDER CLASSIC REMIX: `cr_menu` names the game whose menu is
 // drawn (its pictures: the plaque, the titles, the strips or plates, the cursor, the console's
-// background) and `cr_charset` the game whose glyph sheet writes every letter (the menu's rows,
-// the console, the HUD's counts, Quake II's status bar's words), each apart from the other. Both
-// are read from the remix's files (client/remix.hpp) through that game's adapter, so each game's
-// pictures are read as that game reads them; with either 0, or the remix off, the played game's
-// own. The menu's pages stay the played game's: only how they are drawn changes.
+// background) and whose glyph sheet writes every letter (the menu's rows, the console, the HUD's
+// counts, Quake II's status bar's words): one game's look whole. Both are read from the remix's
+// files (client/remix.hpp) through that game's adapter, so each game's pictures are read as that
+// game reads them; with it empty, or the remix off, the played game's own. The menu's pages stay
+// the played game's: only how they are drawn changes. (`RemixFiles::charset` is kept apart from
+// `menu` so the letters may one day be named on their own; today it is always the menu's.)
 //
 // A glyph sheet taken from a set at another density (one enhanced, `ce_pictures`, the other not)
 // is scaled to the set's when it divides it, else the set keeps its own letters.
 //
-// ge:summary Classic remix's cr_menu and cr_charset: another game's menu pictures and letters
-// ge:keywords remix classic-remix cr_menu cr_charset menu-style glyph-sheet conchars pictures
+// ge:summary Classic remix's cr_menu: another game's menu pictures and its letters
+// ge:keywords remix classic-remix cr_menu letters menu-style glyph-sheet conchars pictures
 // ge:skill ui classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
 #pragma once

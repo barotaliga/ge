@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -147,6 +148,27 @@ TEST(each_name_is_won_by_the_last_source_mounted) {
   CHECK(vfs::find(sp, "pak0.pak") == nullptr);
   CHECK(vfs::find(sp, "misc.pak") == nullptr);
   CHECK(vfs::find(sp, "a.pk3dir/d.txt") == nullptr);
+}
+
+// A copy another source hides is still found among the sources mounted before it.
+TEST(find_below_finds_the_copy_a_later_source_hides) {
+  vfs::SearchPath sp;
+  std::string error;
+  std::vector<uint8_t> under, over;
+  CHECK(
+      vfs::write_pak({{"Sound/Gasp.wav", text("under")}, {"only.txt", text("u")}}, &under, &error));
+  CHECK(vfs::write_pak({{"sound/gasp.wav", text("over")}}, &over, &error));
+  CHECK(vfs::add_archive(&sp, "under.pak", under, "base", &error));
+  CHECK(vfs::add_archive(&sp, "over.pak", over, "base", &error));
+  CHECK(contents(sp, "sound/gasp.wav") == "over");
+  const std::optional<vfs::FileRef> hidden = vfs::find_below(sp, "SOUND\\gasp.wav", 1);
+  CHECK(hidden.has_value());
+  std::vector<uint8_t> bytes;
+  if (hidden) CHECK(vfs::read(sp, *hidden, &bytes, &error) && bytes == text("under"));
+  CHECK(!vfs::find_below(sp, "missing.txt", 2).has_value());
+  const std::optional<vfs::FileRef> top = vfs::find_below(sp, "sound/gasp.wav", 2);
+  CHECK(top.has_value() && top->source == 1);  // all of them: the winner's
+  CHECK(!vfs::find_below(sp, "only.txt", 0).has_value());
 }
 
 TEST(a_layout_with_archives_over_loose_ranks_as_its_game_does) {

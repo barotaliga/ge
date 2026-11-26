@@ -27,6 +27,11 @@ namespace r = ge::render;
 
 namespace {
 
+// How far round a point's way from a light the soft shadow's taps reach, radians: bsp.wgsl's
+// soft_shadow keeps its search and its penumbra within 0.15 of the way's tangent (atan 0.149), and
+// a tap reads the nearest texel of a face 384 a side (half a texel's diagonal, 0.004); kept wide.
+constexpr double kSearchWiden = 0.16;
+
 // Whether this renderer draws kind `k`'s faces (v2 leaves the liquids to the engine's passes
 // unless their warped faces are asked for).
 bool drawn_here(const Options& o, Kind k) {
@@ -865,10 +870,14 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // this frame (the options' count of them at most).
   d.caster_lights = 0;
   d.caster_count = 0;
+  for (auto& c : d.staged.caster_cones) c[3] = 2;  // a row with no cube: no way inside
+  d.caster_runs.clear();
   const int cast_by = std::clamp(o.caster_lights, 0, kCasterLights);
   const bool casting = picked && !d.casters.empty() && cast_by > 0;
   if (casting) {
     d.caster_count = uint32_t(std::min<size_t>(d.casters.size() / 3, kMaxCasterVerts) / 3 * 3);
+    bool runs_known = true;
+    for (const CasterBox& b : d.caster_boxes) runs_known = runs_known && b.count > 0;
     // Only the lights that throw a figure's shadow get a cube of the casters.
     std::vector<size_t> figure;
     for (const size_t c : casters)
@@ -878,6 +887,32 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       GpuLight& g = d.frame_lights[c];
       const int n = d.caster_lights++;
       g.more[0] = float(n);
+      const CasterCones cones = caster_cones(g, d.caster_boxes, kSearchWiden);
+      g.more[3] = cones.nearest;
+      for (int k = 0; k < kCasterCones; ++k)
+        for (int a = 0; a < 4; ++a)
+          d.staged.caster_cones[n * kCasterCones + k][a] = cones.cone[k][a];
+      // Each face draws only the casters that reach it (all of them when a box's run is unknown).
+      for (int f = 0; f < 6; ++f) {
+        d.caster_face_first[n * 6 + f] = uint32_t(d.caster_runs.size());
+        if (!runs_known) {
+          d.caster_runs.insert(d.caster_runs.end(), {0, d.caster_count});
+          continue;
+        }
+        for (const CasterBox& b : d.caster_boxes) {
+          const uint32_t end = std::min(b.first + b.count, d.caster_count);
+          if (b.first >= end || !box_in_face(b, g.pos, g.pos[3], f)) continue;
+          // A run that follows the last one joins it.
+          const size_t r = d.caster_runs.size();
+          if (r > d.caster_face_first[n * 6 + f] &&
+              d.caster_runs[r - 2] + d.caster_runs[r - 1] == b.first) {
+            d.caster_runs[r - 1] = end - d.caster_runs[r - 2];
+          } else {
+            d.caster_runs.insert(d.caster_runs.end(), {b.first, end - b.first});
+          }
+        }
+      }
+      d.caster_face_first[n * 6 + 6] = uint32_t(d.caster_runs.size());
       for (int f = 0; f < 6; ++f) {
         GpuJob j = d.frame_jobs[size_t(g.info[0]) + size_t(f)];  // the world cube's face
         set4(j.o, g.pos[0], g.pos[1], g.pos[2], g.pos[3]);
@@ -1188,9 +1223,15 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
       const float size = float(kCasterSize);
       for (int n = 0; n < d.caster_lights; ++n)
         for (int f = 0; f < 6; ++f) {
+          const uint32_t from = d.caster_face_first[n * 6 + f],
+                         to = d.caster_face_first[n * 6 + f + 1];
+          if (from == to) continue;  // no caster reaches this face: left clear
           pass.SetViewport(float(f) * size, float(n) * size, size, size, 0, 1);
-          ++rec.current().draws;
-          pass.Draw(d.caster_count, 1, 0, first_caster + uint32_t(n * 6 + f));
+          for (uint32_t r = from; r < to; r += 2) {
+            ++rec.current().draws;
+            pass.Draw(d.caster_runs[r + 1], 1, d.caster_runs[r],
+                      first_caster + uint32_t(n * 6 + f));
+          }
         }
       if (d.sun_caster) {
         pass.SetViewport(0, float(kCasterLights) * size, size, size, 0, 1);

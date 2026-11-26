@@ -1840,6 +1840,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonAttack);
       if (pressed) finger_why = FingerWhy::turning;
     }
+    f.finger_now = static_cast<int32_t>(finger_why);
     // 18b's ledger: the command's finger with the launcher up, by its reason.
     f.finger_last = -1;
     if (holds_launcher(st)) {

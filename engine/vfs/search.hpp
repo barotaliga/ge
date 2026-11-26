@@ -39,6 +39,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -130,6 +131,10 @@ bool add_file(SearchPath* sp, const std::string& dir, const std::string& name,
 
 // The file that wins `path`, or nullptr. Never allocates.
 const FileRef* find(const SearchPath& sp, std::string_view path);
+// The newest copy of `path` among the first `sources` sources (the ones mounted before the rest, a
+// game's own under another mounted over it), or nothing: a copy another source hides, found by a
+// walk of those sources' entries (not the index), so for the odd lookup only.
+std::optional<FileRef> find_below(const SearchPath& sp, std::string_view path, size_t sources);
 // The file's bytes; false with the reason.
 bool read(const SearchPath& sp, const FileRef& file, std::vector<uint8_t>* out, std::string* error);
 // A zip entry's packed bytes as they lie in its archive when they are a raw deflate stream

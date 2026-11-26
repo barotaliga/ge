@@ -1223,6 +1223,52 @@ TEST(a_map_change_on_the_server_joined_starts_the_window_s_prediction_over) {
                                                   " units off the prediction");
 }
 
+// A level started again hands the window a new copy of the map: the movers the last prediction kept
+// point into the copy let go, so none are kept over the change (the window read freed memory on
+// its next prediction when a server restarted its map on `ready`).
+TEST(a_new_world_drops_the_movers_kept_from_the_last_one) {
+  Rig rig;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  auto old_world = std::make_unique<std::vector<sh::BrushModel>>(sv::arena_models(true));
+  cn::remote_world(rig.remote, old_world.get());
+  const sh::ClientModel door{&(*old_world)[1], {}, {}, 1e30f};
+  rig.remote.movers_last = {door};
+  rig.remote.movers_prev = {door};
+  rig.remote.movers_last_level = rig.remote.movers_prev_level = rig.remote.levels;
+  const std::vector<sh::BrushModel> new_world = sv::arena_models(true);
+  cn::remote_world(rig.remote, &new_world);
+  old_world.reset();
+  CHECK(rig.remote.movers_last.empty());
+  CHECK(rig.remote.movers_prev.empty());
+  CHECK(rig.remote.movers_prev_level != rig.remote.levels);
+  for (int f = 0; f < 77; f++) {  // a second's prediction on the new world reads only it
+    rig.remote.hands.forward = 400;
+    rig.frame();
+  }
+  CHECK(rig.remote.predicted);
+}
+
+// On a classic QuakeWorld server (no ge settings agreed) `team blue` is Quake's: the team in the
+// player's user info, set by setinfo, so the server shows it to everyone; never a command it
+// refuses.
+TEST(team_on_a_classic_quakeworld_server_sets_the_user_info_team) {
+  Rig rig;
+  rig.join_with = [](cn::ClientConfig& cc) { cc.ask[cn::ExtFamily::ge] = 0; };
+  CHECK(rig.start());
+  CHECK(rig.join());
+  CHECK(cn::remote_lobby(rig.remote, "team blue"));
+  CHECK(rig.remote.end.cfg.team == "blue");
+  for (int f = 0; f < 40; f++) rig.frame();
+  const cn::QwClient* me = nullptr;
+  for (const cn::QwClient& c : rig.server.clients)
+    if (c.state == cn::ConnState::spawned) me = &c;
+  CHECK(me != nullptr);
+  if (me != nullptr)
+    CHECK_MSG(ge::classic::protocol::info_get(me->userinfo, "team") == "blue", me->userinfo);
+  CHECK(!said_has(rig.said, "Bad user command"));
+}
+
 // THE NATIVE LINK (M18x): on a server with sv_native the window joins through the server's node
 // and a classic player beside it joins as before, both on the server's one port; the window's
 // moves are predicted where the server puts it as on the classic road, and only its datagrams

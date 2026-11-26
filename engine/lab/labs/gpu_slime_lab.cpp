@@ -287,8 +287,9 @@ void run(gl::Lab& lab) {
               "surface: the toxic slime (under_reach 4 m, a game's least view; as thick as it is "
               "it shows nothing past 2 cm) and the clear gel (as it is).",
               "the toxic slime a green fog with the pit's floor fading into it a few metres off "
-              "and its surface a bright window overhead; the gel clear, the bed and walls "
-              "tinted, the sky through Snell's window and the gel below mirrored round it",
+              "and its surface overhead the slime itself, no window up out of it (only water "
+              "has one); the gel clear, the bed and walls tinted, its surface overhead the gel "
+              "with no sky through it",
               {}},
              strip(pics, labels, 2), Det::measured);
   }

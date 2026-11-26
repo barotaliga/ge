@@ -852,6 +852,11 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
   if (level != nullptr) remote_teleporters(r, level);
   r.world = models;
   r.smooth = sh::Smoothing{};
+  // The movers kept from the last prediction point into the world they ran over: a new world
+  // (a level started again, its map read again) leaves none.
+  r.movers_last.clear();
+  r.movers_prev.clear();
+  r.movers_last_level = r.movers_prev_level = -1;
   q2_predict_map(r.q2_ahead, brushes);
 }
 
@@ -909,31 +914,6 @@ void remote_mic(Remote& r, std::span<const float> samples) {
   in.insert(in.end(), samples.begin(), samples.end());
   if (in.size() > static_cast<size_t>(kMicMostSamples))  // a stall: the oldest dropped
     in.erase(in.begin(), in.end() - kMicMostSamples);
-}
-
-bool remote_lobby(Remote& r, const std::string& line) {
-  if (!r.active || r.watch) return false;
-  remote_command(r, line);
-  return true;
-}
-
-bool remote_rules_word(Remote& r, const std::string& line) {
-  if (!r.active || r.watch) return false;
-  if (r.nq) {  // a server of protocol 15: the words it takes from a player
-    if (!nq_server_word(line.substr(0, line.find_first_of(" \t")))) return false;
-    nq_command(*r.nq, line);
-    return true;
-  }
-  if (!r.q2) {  // Quake's client sends on only its server's own words, never any unknown one
-    const std::string word = line.substr(0, line.find_first_of(" \t"));
-    // Our own server's match words (it agreed the ge set's settings bit): its stats.
-    const bool ours = r.end.ext.has(ExtFamily::ge, kGeSettings);
-    const bool stats_word = word == "stats" || word == "teamstats" || word == "laststats";
-    if (word != "kill" && word != "pause" && word != "serverinfo" && !(ours && stats_word))
-      return false;
-  }
-  remote_command(r, line);  // Quake II's: every word the window does not know (`use Railgun`)
-  return true;
 }
 
 void remote_command(Remote& r, const std::string& line) {

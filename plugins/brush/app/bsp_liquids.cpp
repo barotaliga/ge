@@ -331,7 +331,10 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
 }
 
 int eye_water_body(const Map& map, const LiquidWorld& lw, const double eye[3]) {
-  if (!liquid(map, leaf_of(map, eye[0], eye[1], eye[2]))) return -1;
+  // Water's leaf only: an eye in lava or slime is under no water, however near a pool's level
+  // stands over it (it was taken for one, and the water's view from below, Snell's window with the
+  // world over it, was drawn in the lava and the slime).
+  if (leaf_cell(map, leaf_of(map, eye[0], eye[1], eye[2])) != Cell::water) return -1;
   int best = -1, slot = 0;
   double best_d = 1e300;
   for (size_t i = 0; i < lw.world.bodies.size(); ++i) {

@@ -49,8 +49,11 @@ class DemoHearing {
                        const ge::classic::Q2FxSwitches* q2 = nullptr);
 
   // A level of the demo starts: its sounds read through `files` (made again when the folder
-  // changed), the level's loops and the ambience over `map`.
-  void level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map);
+  // changed), the level's loops and the ambience over `map`; each heard as game `heard`'s with
+  // `theirs` its own sources (classic remix's `cr_sounds` as the server tells it, DemoSounds::
+  // hear_as; "" each as named).
+  void level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map,
+             std::string_view heard = {}, size_t theirs = 0);
   // One drawn frame: what `h` gathered played, its ended lines appended to `lines` (a line's
   // start printed without its newline waits for the rest, from later prints) and its centre
   // message (if any, its lines on one line) in `centre`; `h` emptied. `dt` moves the ambience, s.
