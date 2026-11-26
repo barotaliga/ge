@@ -17,6 +17,7 @@
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_team.hpp"
+#include "shooters_edge/net/qw_team_nav.hpp"
 
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
@@ -109,4 +110,22 @@ TEST(a_maps_goals_are_only_what_its_items_and_areas_allow) {
     if (g.kind == bt::GoalKind::clear)
       CHECK((g.needs & bt::kNeedPower) != 0 && g.horizon == bt::Horizon::power);
   CHECK(!bt::goals_text(goals).empty());
+}
+
+// A fighter set up after an item was taken (not yet back) sees one item fewer: the team plan's
+// indices name the first fighter's list, so it plays without the plan rather than read past its
+// own (se-load's 16 players crashed in the opening's pick).
+TEST(a_fighter_whose_items_differ_from_the_plans_plays_without_it) {
+  cn::TeamNav tn;
+  tn.plan_items = {"rl@0,0", "ra@64,0", "mh@128,0"};
+  std::vector<bt::ItemSpot> items(3);
+  items[0].label = "rl@0,0";
+  items[1].label = "ra@64,0";
+  items[2].label = "mh@128,0";
+  CHECK(cn::plan_fits(tn, items));
+  items.erase(items.begin() + 1);  // the red armour taken: its entity not sent
+  CHECK(!cn::plan_fits(tn, items));
+  items.insert(items.begin(), bt::ItemSpot{});
+  items[0].label = "ya@0,64";
+  CHECK(!cn::plan_fits(tn, items));
 }

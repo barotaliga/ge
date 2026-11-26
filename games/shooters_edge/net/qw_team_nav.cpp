@@ -18,6 +18,13 @@ namespace sb = ge::shooterbots;
 
 namespace shooters_edge::net {
 
+bool plan_fits(const TeamNav& tn, const std::vector<bt::ItemSpot>& items) {
+  if (items.size() != tn.plan_items.size()) return false;
+  for (size_t i = 0; i < items.size(); i++)
+    if (items[i].label != tn.plan_items[i]) return false;
+  return true;
+}
+
 namespace {
 
 // Place names off the items, for a map with no place names file: each key item, weapon and mega
@@ -72,9 +79,12 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sb::BotView& seen, in
     if (map.rfind("maps/", 0) == 0) map.erase(0, 5);
     if (map.size() > 4 && map.ends_with(".bsp")) map.resize(map.size() - 4);
     tn.goals = bt::map_goals(tn.plan, f.items, map, bt::quake_maps());
+    tn.plan_items.clear();
+    for (const bt::ItemSpot& it : f.items) tn.plan_items.push_back(it.label);
     tn.plan_made = true;
   }
-  f.plan = f.features[sb::Feature::plan] ? &tn.plan : nullptr;  // the plan a switch (features)
+  // The plan a switch (features), and only over the items its indices name.
+  f.plan = f.features[sb::Feature::plan] && plan_fits(tn, f.items) ? &tn.plan : nullptr;
   f.trap = &tn.nav.trap;
   // The ways to every item (`fields`): the map's buttons as errands, set up with the first, one
   // for each of its button spots in their order (an errand's index is its button's; a button no
