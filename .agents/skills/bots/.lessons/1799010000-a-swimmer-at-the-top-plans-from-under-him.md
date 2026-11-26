@@ -2,7 +2,7 @@
 title: A swimmer at the top of the water is in a cell with no swim node; plan from the one under him
 date: 2026-11-26
 scope: plugins/shooterbots/nav.cpp, tests/shooterbots_swim_test.cpp, games/shooters_edge/bots/coop_episode.cpp
-concepts: [swim, nav_nearest, surface, no-route, reach_from, pool, swim-node]
+concepts: [swim, nav-nearest, surface, no-route, reach-from, pool, swim-node]
 ---
 
 - A swim node stands where its cell's centre is in the water, so a swimmer floating at the top
