@@ -48,6 +48,7 @@ HullTrace brushes_trace(const Solid& s, Vec3f start, Vec3f end, Vec3f lo, Vec3f 
   tr.plane.normal = {t.plane.n[0], t.plane.n[1], t.plane.n[2]};
   tr.plane.dist = t.plane.d;
   tr.plane.type = plane_type(tr.plane.normal);
+  tr.brush_bits = t.contents;
   return tr;
 }
 

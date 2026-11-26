@@ -9,6 +9,7 @@
 #include "shooter/pmove.hpp"
 
 #include "shooter/brush_hull.hpp"
+#include "shooter/ladder.hpp"
 #include "shooter/slide.hpp"
 
 namespace ge::shooter {
@@ -157,7 +158,10 @@ void friction(Mover& m) {
     return;
   }
   float drop = 0;
-  if (s.waterlevel >= 2) {
+  if (m.ladder) {  // on the rungs: the ground's friction as if standing, never the water's
+    const float control = speed < m.set.stopspeed ? m.set.stopspeed : speed;
+    drop = control * m.set.friction * m.dt;
+  } else if (s.waterlevel >= 2) {
     drop = speed * m.set.waterfriction * static_cast<float>(s.waterlevel) * m.dt;
   } else if (flying(s)) {
     drop = speed * 4 * m.dt;
@@ -239,8 +243,22 @@ Vec3f wish_velocity(const ViewAxes& ax, const MoveCmd& cmd, bool flatten) {
   return w;
 }
 
+// ON A LADDER (shooter/ladder.hpp): the level wish held to the rungs, climbing by the view or the
+// up move, gravity holding still when neither asks; the ground's acceleration, a stepping slide.
+int ladder_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax) {
+  MoveState& s = m.s;
+  Vec3f wish = wish_velocity(ax, cmd, true);
+  ladder_wish(wish, s.velocity.z, s.angles.x, cmd.forward, cmd.up);
+  Vec3f wishdir;
+  const float wishspeed = wish_of(wish, s.maxspeed, wishdir);
+  accelerate(m, wishdir, wishspeed, m.set.accelerate);
+  if (wish.z == 0) ladder_hold(s.velocity, s.entgravity * m.set.gravity, m.dt);
+  return step_slide_move(m, false);
+}
+
 int walk_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax) {
   MoveState& s = m.s;
+  if (m.ladder) return ladder_move(m, cmd, ax);
   Vec3f wishdir;
   const float wishspeed = wish_of(wish_velocity(ax, cmd, true), s.maxspeed, wishdir);
   const float fall = s.entgravity * m.set.gravity * m.dt;
@@ -277,6 +295,7 @@ int swim_or_fly_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax, bool wate
     wishvel.z = wishvel.z - kIdleSink;
   else
     wishvel.z = wishvel.z + static_cast<float>(cmd.up);
+  if (water && m.ladder) ladder_wish(wishvel, s.velocity.z, s.angles.x, cmd.forward, cmd.up);
   Vec3f wishdir;
   float wishspeed = wish_of(wishvel, s.maxspeed, wishdir);
   if (water) wishspeed = static_cast<float>(wishspeed * m.set.swimscale);  // pm_swimscale
@@ -345,6 +364,7 @@ MoveResult player_move(MoveState& s, const MoveCmd& cmd, const MoveSettings& set
   MoveResult r;
   Mover m{s, set, world, r.touches};
   m.dt = static_cast<float>(cmd.msec * 0.001);
+  m.brush_world = world.count > 0 && world.solids[0].kind == SolidKind::brushes;
 
   if (s.type == MoveType::none || s.type == MoveType::lock) {
     categorize(m);
@@ -378,6 +398,12 @@ MoveResult player_move(MoveState& s, const MoveCmd& cmd, const MoveSettings& set
 
     jump(m, cmd);
   }
+  // A version 38 map's ladder ahead (shooter/ladder.hpp); a hull map has none, so it is not traced.
+  if (m.brush_world && s.type != MoveType::dead && s.waterjump_time <= 0) {
+    const HullTrace lt = player_trace(m.world, s.origin, ladder_probe_end(s.origin, ax.forward));
+    m.ladder = ladder_ahead(lt.fraction, lt.brush_bits);
+  }
+  r.ladder = m.ladder;
   friction(m);
 
   const float falling = s.velocity.z;  // before the move's slide clips it on the floor

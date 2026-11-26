@@ -12,6 +12,7 @@ move". The move's knobs for any genre are `docs/movement.md`.
 | --- | --- | --- |
 | Engine | `engine/move/` | The mover for any genre: knobs and presets (`classic_arena`, `strafe_arena`, ...), the step over a trace callback (`docs/movement.md`) |
 | Shooter kit | `plugins/shooter/pmove.hpp`, `framemove.hpp`, `slide.hpp`, `vec.hpp` | Quake's move in 32-bit floats over clip hulls, every move type; the original frame move; the slide and step |
+| Shooter kit | `plugins/shooter/ladder.hpp` | The ladder of a version 38 map (a brush with the ladder bit): taking hold, the wish on the rungs, holding on; one rule both moves run, so Quake's move climbs Quake II's ladders in remix |
 | Shooter kit | `plugins/shooter/row.hpp`, `row_recording.hpp` | The classic numbers as rows of the engine's mover, held to the recordings |
 | Shooter kit | `plugins/shooter/settings.hpp` | The move's and the loop's server settings by name (`sv_playermove`, the `pm_` switches), ranges, server info |
 | Shooter kit | `plugins/shooter/usercmd.hpp`, `client.hpp` | The client's commands (rate, msec carry, key shares, the angle grid); the server's speed check on them |
@@ -57,6 +58,7 @@ move". The move's knobs for any genre are `docs/movement.md`.
 | The easy jump and the blast-jump helper | ours, on Quake's move | the kit; Quake II's air law too (`cl_speedjump`) |
 | The landing dip | Quake II's fall kick | `engine/camera` (`cl_landdip`, 0 in Quake) |
 | Any move on any map | ours | `sv_playermove`, one trace |
+| Ladders climbed by every move on a map that has them | Quake II's move | `ladder.hpp`: Quake's move on Quake II's maps (remix) takes hold too; a map of Quake's family has none, so Quake's feel there is untouched |
 
 | Drawback left behind | How |
 | --- | --- |
@@ -74,11 +76,15 @@ with ALL of them, the landing pause too; the move is never "improved".
 ## Labs and tests
 
 `pmove`, `move-strafe`, `move-trace`, `se-moves`, `se-hop`, `se-rj`, `se-remix-physics`,
-`se-speedjump`, `se-q2-speedjump`, `se-rjump`; `tests/classic_q2_move_test.cpp`.
+`se-speedjump`, `se-q2-speedjump`, `se-rjump`; `tests/classic_q2_move_test.cpp`,
+`tests/shooter_ladder_test.cpp`.
 
 ## Lessons
 
 - A setting that replaces a constant keeps the constant's arithmetic, or the goldens move.
 - The stair double jump lives in the air's slide, not the jump.
+- Quake's move on a map of brushes: the brush trace stops 1/32 short of a plane, so a slide meets
+  the same plane again at no distance; it pushes off it by its normal (on brushes only), or a
+  player sticks on a sloped face (q2dm3's ladders).
 - A per-client feel only to clients that understand it (an extension bit), or stock clients
   mispredict.

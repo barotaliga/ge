@@ -20,6 +20,7 @@
 #include "core/math.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooterbots/way_parts.hpp"
 #include "shooterbots/way_through.hpp"
 
 namespace sb = ge::shooterbots;
@@ -391,11 +392,13 @@ int32_t way_node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   return best;
 }
 
-void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, const char* sf) {
+void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, const char* sf,
+                     bool named) {
   if (e < 0 || !sf || (std::atoi(sf) & 1) == 0) return;
   const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
   const sh::Vec3f size = d.absmax - d.absmin;
-  if (size.z < size.x && size.z < size.y) w.closers.push_back({e, d.origin, false, {}, {}});
+  const bool flat = size.z < size.x && size.z < size.y;
+  if (flat || named) w.closers.push_back({e, d.origin, false, flat, {}, {}});
 }
 
 bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s) {
@@ -412,8 +415,9 @@ bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::
         for (int32_t k = 0; k < n.links; k++) {
           const int32_t li = n.first_link + k;
           const sb::NavLink& l = g.links[static_cast<size_t>(li)];
-          if (!way_through_floor(n.origin, g.nodes[static_cast<size_t>(l.to)].origin, d.absmin,
-                                 d.absmax))
+          const sh::Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
+          if (c.flat ? !way_through_floor(n.origin, to, d.absmin, d.absmax)
+                     : !way_parts::crosses(n.origin, to, d.absmin, d.absmax))
             continue;
           c.links.push_back(li);
           c.froms.push_back(static_cast<int32_t>(a));

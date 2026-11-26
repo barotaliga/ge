@@ -109,7 +109,9 @@ inline constexpr SqMonsterPoses kSqMonsterPoses[] = {
      .stand = {162, 191},
      .walk = {0, 12},
      .run = {0, 12},
-     .attack = {{{53, 70}}, {{71, 87}}},
+     // The Reckoning's brain's ranged two: its tongue (the tentacles' run) and its eyes' lasers
+     // (the walk's first eleven).
+     .attack = {{{53, 70}}, {{71, 87}}, {{71, 87}}, {{0, 10}}},
      .pain = {{88, 108}, {109, 116}, {117, 122}},
      .death = {{123, 140}, {141, 145}},
      .fidget = {192, 221}},
@@ -324,6 +326,21 @@ inline constexpr SqMonsterPoses kSqMonsterPoses[] = {
      .walk = {0, 24},
      .run = {25, 49},
      .attack = {{}, {}, {{50, 59}}}},
+    // The Reckoning's own (q2-reckoning-monsters.md).
+    {.classname = "monster_gekk",
+     .stand = {0, 38},
+     .walk = {39, 44},
+     .run = {39, 44},
+     .attack = {{{45, 53}}, {{62, 70}}, {{71, 89}}, {{235, 241}}},
+     .pain = {{90, 100}, {101, 113}, {344, 349}},
+     .death = {{114, 123}, {135, 141}, {142, 176}},
+     .fidget = {203, 234}},
+    {.classname = "monster_fixbot",
+     .stand = {121, 139},
+     .walk = {181, 181},
+     .run = {181, 181},
+     .attack = {{}, {}, {{0, 30}}},
+     .pain = {{140, 145}, {146, 153}}},
 };
 
 }  // namespace shooters_edge::server

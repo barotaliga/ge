@@ -40,6 +40,8 @@ struct Mover {
   // The last floor a slide hit (pm_pground's landing reads it): its solid and its plane.
   int floor_ent = -1;
   Vec3f floor_normal{};
+  bool ladder = false;       // on a version 38 map's ladder this command (shooter/ladder.hpp)
+  bool brush_world = false;  // the world is a version 38 map's brushes (slide.cpp's same plane)
 };
 
 Vec3f clip_velocity(Vec3f v, Vec3f normal, float overbounce);

@@ -179,6 +179,7 @@ struct WayThrough {
     int door = -1;
     sh::Vec3f spawn{};
     bool known = false;
+    bool flat = true;  // a floor; else an upright door (a doorway) fired shut
     std::vector<int32_t> links, froms;
   };
   std::vector<Closer> closers;
@@ -304,11 +305,15 @@ bool way_through_floor(sh::Vec3f a, sh::Vec3f b, sh::Vec3f lo, sh::Vec3f hi);
 // The node a player standing on touches the box from, nearest its middle; else the nearest a step
 // beyond it; else one under it that a fall through it lands on; else none.
 int32_t way_node_in(const ge::shooterbots::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi);
-// Door `e` (spawnflags `sf`) noted as a closer (`WayThrough::closers`) when it starts open and lies
-// flat: a floor that closes when fired.
-void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, const char* sf);
-// The closers away from where they spawned: their links in `closed_shut` (each found the first time
-// it stands closed and still); whether that set changed since the last call.
+// Door `e` (spawnflags `sf`, `named` when it has a targetname) noted as a closer
+// (`WayThrough::closers`) when it starts open: lying flat, a floor that closes when fired; upright
+// and named, a doorway a trigger shuts behind him that no touch opens again (e2m2's trap room,
+// whose north door rises shut as he walks in and leaves the south door the way on).
+void way_note_closer(WayThrough& w, const ge::shooterbots::BotView& s, int e, const char* sf,
+                     bool named);
+// The closers away from where they spawned: their links in `closed_shut` (through the floor, or
+// across the doorway; each found the first time it stands closed and still); whether that set
+// changed since the last call.
 bool way_closed_floors(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s);
 // (`complete`) A map with monsters only a blast puts down (e3m2's zombies): the weapons lying on it
 // that blast (`BotArsenal::blast_pickup`) as steps walked over first (`WayStep::first`), so he
