@@ -6,6 +6,8 @@
 // ge:test tests/shooter_hull_test.cpp
 #include "shooter/hull.hpp"
 
+#include "core/parallel.hpp"
+
 namespace ge::shooter {
 
 namespace {
@@ -176,6 +178,10 @@ uint8_t plane_type(Vec3f n) {
 }
 
 int point_contents(const Hull& hull, Vec3f p) {
+  if (hull.cells) {
+    const int c = hull.cells->contents(p);
+    if (c != 0) return c;
+  }
   int32_t num = hull.first_node;
   while (num >= 0) {
     const ClipNode& node = hull.nodes[num];
@@ -224,6 +230,91 @@ BoxHull make_box_hull(Vec3f mins, Vec3f maxs) {
     }
   }
   return b;
+}
+
+int ContentsCells::contents(Vec3f p) const {
+  int32_t i[3];
+  for (int a = 0; a < 3; a++) {
+    const float f = (p[a] - lo[a]) / cell;
+    if (!(f >= 0) || f >= float(n[a])) return 0;  // off the grid (or NaN)
+    i[a] = int32_t(f);
+  }
+  return at[(size_t(i[2]) * size_t(n[1]) + size_t(i[1])) * size_t(n[0]) + size_t(i[0])];
+}
+
+ContentsCells contents_cells(const Hull& hull, Vec3f mins, Vec3f maxs, float cell) {
+  ContentsCells g;
+  // At most about four million cubes.
+  for (;;) {
+    double count = 1;
+    for (int a = 0; a < 3; a++) count *= double(maxs[a] - mins[a]) / cell + 3;
+    if (count <= 4e6) break;
+    cell *= 2;
+  }
+  g.cell = cell;
+  for (int a = 0; a < 3; a++) {
+    g.lo[a] = mins[a] - cell;
+    g.n[a] = int32_t((maxs[a] - mins[a]) / cell) + 3;
+  }
+  g.at.assign(size_t(g.n[0]) * size_t(g.n[1]) * size_t(g.n[2]), 0);
+  // A cube's box is grown by a unit a side, far more than the float rounding of a plane's
+  // distance or of the cube's index: a point the walk at run time sends into a leaf lies in a box
+  // this walk sent into that leaf too.
+  constexpr double kGrow = 1.0;
+  // Each cube on its own: the slabs of z in bands over the workers, the same grid on any count.
+  core::parallel_bands(size_t(g.n[2]), [&](size_t z_lo, size_t z_hi) {
+    std::vector<int32_t> stack;
+    for (int32_t z = int32_t(z_lo); z < int32_t(z_hi); z++) {
+      for (int32_t y = 0; y < g.n[1]; y++) {
+        for (int32_t x = 0; x < g.n[0]; x++) {
+          const int32_t i[3] = {x, y, z};
+          double lo[3], hi[3];
+          for (int a = 0; a < 3; a++) {
+            lo[a] = double(g.lo[a]) + double(cell) * i[a] - kGrow;
+            hi[a] = double(g.lo[a]) + double(cell) * (i[a] + 1) + kGrow;
+          }
+          int32_t one = 0;  // the contents met so far; 0 none, 1 more than one
+          stack.clear();
+          stack.push_back(hull.first_node);
+          // A damaged tree may loop: a cube that visits more nodes than the tree holds, four
+          // times over, is left to the walk.
+          int64_t visits = 0;
+          const int64_t most = 4 * (int64_t(hull.last_node) + 1) + 16;
+          while (!stack.empty() && one != 1) {
+            if (++visits > most) {
+              one = 1;
+              break;
+            }
+            const int32_t num = stack.back();
+            stack.pop_back();
+            if (num < 0) {
+              one = one == 0 || one == num ? num : 1;
+              continue;
+            }
+            const ClipNode& node = hull.nodes[num];
+            const Plane& pl = hull.planes[node.plane];
+            double near = -double(pl.dist), far = -double(pl.dist);
+            for (int a = 0; a < 3; a++) {
+              const double k = pl.type < 3 ? (a == pl.type ? 1.0 : 0.0) : double(pl.normal[a]);
+              near += k * (k >= 0 ? lo[a] : hi[a]);
+              far += k * (k >= 0 ? hi[a] : lo[a]);
+            }
+            if (near >= 0) {
+              stack.push_back(node.children[0]);
+            } else if (far < 0) {
+              stack.push_back(node.children[1]);
+            } else {
+              stack.push_back(node.children[0]);
+              stack.push_back(node.children[1]);
+            }
+          }
+          g.at[(size_t(z) * size_t(g.n[1]) + size_t(y)) * size_t(g.n[0]) + size_t(x)] =
+              int8_t(one < 0 ? one : 0);
+        }
+      }
+    }
+  });
+  return g;
 }
 
 }  // namespace ge::shooter

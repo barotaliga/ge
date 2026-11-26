@@ -23,6 +23,7 @@
 // ge:test tests/shooter_bsp_world_test.cpp
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,8 @@ struct BspWorld {
   std::vector<ClipNode> point_nodes;  // hull 0: the node tree, leaves as contents
   std::vector<ClipNode> clip_nodes;   // hulls 1 and 2
   std::vector<BrushModel> models;     // [0] the world, then the inline models
+  // The world's hull 0 by cubes (models[0].hulls[0].cells points here).
+  std::shared_ptr<const ContentsCells> cells;
 };
 
 // Fills `out` from `map`; false with the reason (and the next step) in `*error`.
