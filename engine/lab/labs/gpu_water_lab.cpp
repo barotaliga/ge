@@ -7,7 +7,8 @@
 // in six looks (the colour from what is in the water, water/optics.hpp); the gale's whitecaps
 // and a whitecap's trail, the surf on the beach and its wet sand by day and under a full moon
 // (render/water.hpp's `foam_of`); and a slow fly-out
-// over the sea, every distance's band in one strip. It holds the GPU's crest to the
+// over the sea, every distance's band in one strip; the surface's pass timed with each of its dear
+// parts off (`--cost=1`: `cost.<part>`). It holds the GPU's crest to the
 // simulation's (the depth read back looking straight down against `surface_at` with the same
 // waves kept) and the detail band's slope variance to the spectrum's, and fails on a GPU error,
 // a pipeline made after the load, or a view with no water in it.
@@ -254,6 +255,60 @@ void run(gl::Lab& lab) {
     }
     lab.shot({c.id, c.title, c.caption, c.look_for, {{"wind", fixed(c.wind, 1) + " m/s"}}}, pic,
              Det::measured);
+  }
+
+  // THE COST: the surface's pass ("water") timed in the fresh wind from 4 m up looking down at the
+  // shallows, the water filling the picture, with each of its dear parts off in turn (the
+  // quality's switches: the sun under it, the chop, the reflection, the shore's band), the median
+  // of a few frames each. On a tiled GPU a pass's stamps may hold its neighbours' work, so what
+  // each part takes off is the reading, not the pass's whole.
+  if (lab.arg("cost") == "1") {
+    gw::World world = lake_world(10.0, "nordic-clear");
+    if (lake.water.bodies.empty()) {
+      gr::add_water_body(d, lake.water, world.bodies[0]);
+    } else {
+      gr::set_water_body(d, lake.water, 0, world.bodies[0]);
+    }
+    const gr::FrameView v =
+        view_at(kLakeX - 250, kLakeLevel + 4, kLakeZ - 118, 1.0, -0.45, 0.6, 2.2, 3.0);
+    const auto water_ms = [&]() {
+      std::vector<double> ms;
+      for (int k = 0; k < 9; ++k) {
+        draw(d, lake, v);
+        lake.rec.wait(d);
+        if (k < 2) continue;
+        for (int i = 0; i < lake.rec.stats.count; ++i)
+          if (lake.rec.stats.passes[size_t(i)].name == "water")
+            ms.push_back(lake.rec.stats.passes[size_t(i)].gpu_ms);
+      }
+      std::sort(ms.begin(), ms.end());
+      return ms.empty() || std::isnan(ms[ms.size() / 2]) ? std::nan("") : ms[ms.size() / 2];
+    };
+    struct Part {
+      const char* id;
+      void (*off)(gr::WaterQuality&);
+    };
+    static const Part kParts[] = {
+        {"all", [](gr::WaterQuality&) {}},
+        {"no-sun-under", [](gr::WaterQuality& q) { q.sunlight = false; }},
+        {"no-chop", [](gr::WaterQuality& q) { q.chop = false; }},
+        {"no-reflection", [](gr::WaterQuality& q) { q.reflect = false; }},
+        {"no-shore", [](gr::WaterQuality& q) { q.shore = false; }},
+    };
+    std::string line = "water from 4 m up in a fresh wind (ms, median):";
+    for (const Part& part : kParts) {
+      lake.water.quality = {};
+      part.off(lake.water.quality);
+      const double ms = water_ms();
+      if (std::isnan(ms)) {
+        line = "water: this GPU has no timestamp queries: nothing timed";
+        break;
+      }
+      lab.metric(std::string("cost.") + part.id, ms, "ms", Det::measured);
+      line.append(" ").append(part.id).append(" ").append(fixed(ms, 2));
+    }
+    lake.water.quality = {};
+    lab.note(line);
   }
 
   // THE WAKE: a 5 m boat across the calm lake at 5 m/s for 40 s, its rings summed as the
@@ -556,6 +611,8 @@ void run(gl::Lab& lab) {
   // (WaterDraw::foam): these views turn it on, and the surf's turns it off again after.
   {
     gw::World world = sea_world(20, "adriatic");
+    // The sea's body exists only once a sea view drew it (--shots may have skipped them all).
+    if (sea.water.bodies.empty()) gr::add_water_body(dsea, sea.water, world.bodies[0]);
     sea.water.bodies[0].draw.foam = true;
     gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
     const gr::WaterFoam foam = gr::foam_of(world.bodies[0].waves);
@@ -848,7 +905,8 @@ const gl::LabSpec kSpec{
     "render",
     "Does the water's surface draw a lake and a sea by their wind, the rain's rings by its rate, "
     "at sunset, in every look and at every distance, with the simulation's crest?",
-    {{"width", "640", "a view's width, px (16:9)"}},
+    {{"width", "640", "a view's width, px (16:9)"},
+     {"cost", "0", "1: also time the surface's pass with each of its dear parts off (cost.*)"}},
     "--width=256",
     run};
 GE_LAB(kSpec);
