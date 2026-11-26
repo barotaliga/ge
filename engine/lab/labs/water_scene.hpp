@@ -155,7 +155,7 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, float (*height)(double, dou
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
   gr::create_wet_lens_target(d, s.lens, s.targets.hdr_view, w, h);
   s.post_lens_group = gr::post_group(d, s.post, s.lens.target_view);
-  s.rec.init(d, "gpu-water.timer", 10);
+  s.rec.init(d, "gpu-water.timer", 12);
   s.out = ge::gpu::create_target(d, "gpu-water.final", w, h);
   return true;
 }
