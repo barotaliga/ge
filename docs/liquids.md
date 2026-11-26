@@ -255,11 +255,9 @@ sees the liquid all round it. One full-screen triangle is drawn after the surfac
   layer over exp(-(K + S) d) of the path. That colour is lit by the light reaching the eye's
   depth: the sun, the sky and the room over the surface, dimmed on the way down by the two-flux
   diffuse attenuation sqrt(K (K + 2 S)). The slime's own glow is added. The view wobbles slowly.
-- **Its surface from below.** A ray that meets the surface before the scene is refracted out
-  (n = 1.34). Inside Snell's window it shows the world over the surface from the scene copy,
-  with Fresnel's reflected share as the slime's veil. Past the window the surface mirrors the
-  slime below (total internal reflection). A scum's patches show on the window as dark
-  undersides.
+- **Its surface from below has no window.** Only water has Snell's window up out of it. A ray
+  that meets the slime's surface before the scene sees the slime itself, its veil, as the thick
+  stuff hides what is over it. A scum's patches show on it as dark undersides.
 - **Lava is opaque.** The melt's own glow fills the view, with cooler streaks rising through it.
   The eye is keyed to the melt at 0.6 of a white face's luminance, so the view stays orange
   and the tone curve does not whiten it. Only what touches the eye shows through
