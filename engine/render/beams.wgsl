@@ -230,14 +230,13 @@ fn burn_ember(heat: f32) -> vec3f {
 const kPaintFloorUp = 0.7;
 // THE PAINT'S MARCH: what the last frame drew along the reflected ray `r` from `rel` (rgb, and
 // in a the share it counts for; 0 where it meets nothing it may take). A pool lies under the feet
-// of whoever stands in it, so the march starts in steps of a few centimetres that lengthen with the
-// square of the way out to kPaintReach (24 of them: 48 cost a wet pool about twice as much in a
-// fight for pictures within 0.14% of their pixels, se-blood), and takes a hit only where the ray passes behind what was drawn
+// of whoever stands in it, so the march starts in centimetre steps that lengthen with the square
+// of the way out to kPaintReach, and takes a hit only where the ray passes behind what was drawn
 // by less than kPaintThick: the shared helper's coarse first step (a fifth of a metre) passed over
 // the boots standing in it and took the wall between the legs, so a pool showed streaks of the
 // wall where the boots should stand.
 const kPaintReach = 30.0;
-const kPaintSteps = 24;
+const kPaintSteps = 48;
 // What was drawn is taken this deep, the share fading from kPaintSure on: a ray just behind a
 // boot standing in the pool mirrors the boot (its back, which the picture lacks, as its front), and
 // a ray far behind a nearer thing (the wall seen past the legs) mirrors nothing there, rather than
