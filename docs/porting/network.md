@@ -45,7 +45,7 @@ proves it. The `ge` set travels in user info and server info (`*ge_ext`), one bi
 
 | Bit | Name | What it carries |
 | --- | --- | --- |
-| 1 | `named-effects` | The rules' effects by name, drawn by our client's own effects |
+| 1 | `named-effects` | The rules' effects by name, drawn by our client's own effects; on Quake II's server, Quake's looks of Quake's weapons under classic remix as temporary entities 129 to 134 |
 | 2 | `aim-bend` | The aim help's bent shot |
 | 4 | `download-origin` | The archive a downloaded file came from (`content.md`) |
 | 8 | `other-moves` | Every other player's move state, so our client runs them forward |

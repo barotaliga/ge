@@ -459,7 +459,7 @@ bool mkick(QwReferee& r, const QwRefereeGame& g, int slot, const std::string& li
     if (!found)
       tell(s, slot, "mkick: client " + id + " not found");
     else
-      qw_referee_line(r, g, slot, "kick " + id + reason);
+      qw_referee_line(r, g, slot, std::string("kick ").append(id).append(reason));
   }
   return true;
 }
