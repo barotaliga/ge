@@ -86,6 +86,8 @@ GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t wi
     g.direct[k] = l.direct[k];
     g.toward[k] = l.toward[k];
   }
+  g.tone[0] = l.knee;
+  g.tone[1] = l.most;
   g.ambient[3] = l.gloss;
   g.direct[3] = static_cast<float>(l.shininess);
   const int count = std::clamp(l.count, 0, viewmodel::kHeldLights);

@@ -30,6 +30,7 @@ struct HeldDraw {
   right: vec4f,           // the view's right (camera-relative world); the lens ratio
   up: vec4f,              // and its up; the lift, in NDC (the gun raised over a status bar)
   forward: vec4f,         // and its forward; 1 - the opacity (a ghost's dither)
+  tone: vec4f,            // the light's roll-off: knee, most (viewmodel::tone_held); 0; 0
   lights: array<vec4f, 16>,  // a light: at (view), range; rgb, radius
   warp: Warp,                // the held frame's: its axis in the held frame
 }
@@ -177,6 +178,19 @@ fn held_white(d: HeldDraw) -> f32 {
 }
 
 // The pixel in the held unit: the surface's colour times its light, or a glowing texel's own.
+// viewmodel::tone_held: past the knee the brightest channel eases toward `most` and every channel
+// (the highlight's too) is scaled with it, so a lamp beside the gun never washes it out to white.
+fn tone(s: ptr<function, Shade>, knee: f32, most: f32) {
+  let m = max((*s).diffuse.r, max((*s).diffuse.g, (*s).diffuse.b));
+  if (!(most > knee) || !(m > knee)) {
+    return;
+  }
+  let e = m - knee;
+  let k = (knee + e / (1.0 + e / (most - knee))) / m;
+  (*s).diffuse *= k;
+  (*s).specular *= k;
+}
+
 fn held_colour(in: VertexOut) -> vec3f {
   let d = draws[in.draw];
   let m = models[d.info.z];
@@ -232,6 +246,7 @@ fn held_colour(in: VertexOut) -> vec3f {
     }
   }
   s.diffuse = max(s.diffuse, vec3f(d.mix.w));
+  tone(&s, d.tone.x, d.tone.y);
   return base * s.diffuse + s.specular * shine;
 }
 

@@ -1,6 +1,6 @@
 // Who has the mouse (engine/input/mouse_capture.hpp): the focus takes it with no click, the
-// console lets it go and closing it takes it back, a menu keeps it by default and lets it go when
-// its bit is set, a lost focus always lets it go, and a step is reported once per change.
+// console lets it go and closing it takes it back, a menu lets it go by default and keeps it when
+// its bit is cleared, a lost focus always lets it go, and a step is reported once per change.
 //
 // ge:summary Tests: the mouse taken on focus, let go only for the release bits, steps once each
 // ge:keywords test input mouse capture focus release follow_capture
@@ -36,14 +36,19 @@ TEST(the_console_lets_it_go_and_closing_it_takes_it_back) {
   CHECK(in::follow_capture(c, f, in::kReleaseDefault) == in::CaptureStep::take);
 }
 
-TEST(a_menu_keeps_it_by_default_and_lets_it_go_when_asked) {
+TEST(a_menu_lets_it_go_by_default_and_keeps_it_when_its_bit_is_cleared) {
   in::MouseCapture c;
-  in::CaptureFacts f{.focused = true, .menu = true};
-  CHECK(in::follow_capture(c, f, in::kReleaseDefault) == in::CaptureStep::take);
-  CHECK(!c.pointer());  // the menu reads the keys, not the frozen pointer
-  CHECK(in::follow_capture(c, f, in::kReleaseDefault | in::kReleaseMenu) ==
-        in::CaptureStep::let_go);
+  in::CaptureFacts f{.focused = true};
+  in::follow_capture(c, f, in::kReleaseDefault);
+  f.menu = true;  // ESCAPE: the main menu's pointer hovers and clicks, as the console's does
+  CHECK(in::follow_capture(c, f, in::kReleaseDefault) == in::CaptureStep::let_go);
   CHECK(c.pointer());
+  f.menu = false;
+  CHECK(in::follow_capture(c, f, in::kReleaseDefault) == in::CaptureStep::take);
+  f.menu = true;
+  const uint32_t keys_only = in::kReleaseDefault & ~uint32_t{in::kReleaseMenu};
+  CHECK(in::follow_capture(c, f, keys_only) == in::CaptureStep::none);
+  CHECK(!c.pointer());  // the menu reads the keys, not the frozen pointer
 }
 
 TEST(each_bit_lets_go_alone_and_none_keeps_it_through_everything) {
