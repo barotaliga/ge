@@ -29,6 +29,7 @@
 #include <string_view>
 
 #include "classic/q2_arms.hpp"
+#include "classic/q2_body.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/profiles/arsenal.hpp"
 
@@ -88,22 +89,34 @@ inline constexpr WeaponRow kQ1AsQ2Weapons[] = {
     q2_worn(8, ge::classic::Q2ArmId::railgun, Ammo::cells, "models/weapons/v_rail/tris.md2",
             "weapons/railgf1a.wav", "-", "-", "-", "models/weapons/g_rail/tris.md2", 15),
 };
-// Its three armours as Quake II's jacket, combat and body armour.
+// Its three armours as Quake II's jacket, combat and body armour, taken by Quake II's rule: each
+// its own count, adding onto the one worn up to its most.
 inline constexpr ArmourRow kQ1AsQ2Armour[] = {
-    {1, 0.3f, 100, 0, "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav"},
-    {2, 0.6f, 150, 0, "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav"},
-    {3, 0.8f, 200, 0, "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav"},
+    {1, ge::classic::kQ2Armours[1].normal, ge::classic::kQ2Armours[1].base, 0,
+     "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[1].maximum},
+    {2, ge::classic::kQ2Armours[2].normal, ge::classic::kQ2Armours[2].base, 0,
+     "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[2].maximum},
+    {3, ge::classic::kQ2Armours[3].normal, ge::classic::kQ2Armours[3].base, 0,
+     "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[3].maximum},
 };
 // Its ammunition and health as Quake II's: the nails the bullets, the cells the slugs, the
-// small health the medium, the plain one the large, the mega health Quake II's own.
+// small health the medium, the plain one the large, the mega health Quake II's own, each giving
+// Quake II's own points.
 inline constexpr ItemLook kQ1AsQ2Looks[] = {
-    {"arsenal_ammo1", "models/items/ammo/shells/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
-    {"arsenal_ammo2", "models/items/ammo/bullets/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
-    {"arsenal_ammo3", "models/items/ammo/rockets/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
-    {"arsenal_ammo4", "models/items/ammo/slugs/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift},
-    {"arsenal_health1", "models/items/healing/medium/tris.md2", "items/n_health.wav", kQ2Lift},
-    {"arsenal_health2", "models/items/healing/large/tris.md2", "items/l_health.wav", kQ2Lift},
-    {"arsenal_health3", "models/items/mega_h/tris.md2", "items/m_health.wav", kQ2Lift},
+    {"arsenal_ammo1", "models/items/ammo/shells/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift,
+     ge::classic::kQ2AmmoShells},
+    {"arsenal_ammo2", "models/items/ammo/bullets/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift,
+     ge::classic::kQ2AmmoBullets},
+    {"arsenal_ammo3", "models/items/ammo/rockets/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift,
+     ge::classic::kQ2AmmoRockets},
+    {"arsenal_ammo4", "models/items/ammo/slugs/medium/tris.md2", "misc/am_pkup.wav", kQ2Lift,
+     ge::classic::kQ2AmmoSlugs},
+    {"arsenal_health1", "models/items/healing/medium/tris.md2", "items/n_health.wav", kQ2Lift,
+     ge::classic::kQ2HealthMedium},
+    {"arsenal_health2", "models/items/healing/large/tris.md2", "items/l_health.wav", kQ2Lift,
+     ge::classic::kQ2HealthLarge},
+    {"arsenal_health3", "models/items/mega_h/tris.md2", "items/m_health.wav", kQ2Lift,
+     ge::classic::kQ2HealthMega},
 };
 // The view models by slot, 1..8.
 inline constexpr std::string_view kQ1AsQ2Held[] = {

@@ -678,6 +678,13 @@ void run(gl::Lab& lab) {
     const std::vector<cl::Price> saved = cl::prices(bases, off);
     for (const std::string& line : cl::price_report(bases, saved, stops ? "" : " off"))
       lab.note(line);
+    // A strided run's drawn frame follows frames that drew nothing, so the GPU starts it idle and
+    // its frame time holds the whole of its GPU work and any CPU work the steps between put off:
+    // the frames' column is not a played frame's then, and the span's is the one to read.
+    if (rig.stride > 1)
+      lab.note("  price: with --price-stride=" + std::to_string(rig.stride) +
+               " each drawn frame starts with the GPU idle, so read the savings by their span; "
+               "the frame column is not a played frame's");
     for (const cl::Price& pr : saved) {
       std::string id = pr.name;  // "ce_water low" is metric price.ce_water.low
       std::replace(id.begin(), id.end(), ' ', '.');
