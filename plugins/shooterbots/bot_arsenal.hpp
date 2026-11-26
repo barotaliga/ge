@@ -29,7 +29,7 @@
 
 namespace ge::shooterbots {
 
-inline constexpr int kMaxAmmo = 8;  // the most ammunitions a game's arsenal has
+inline constexpr int kMaxAmmo = 12;  // the most ammunitions a game's arsenal has
 
 // The part a weapon plays in a bot's plans (the map's key items, the team's talk, the jumps): the
 // launcher, the lob, the beam, the heavy spray; `none` for the rest.

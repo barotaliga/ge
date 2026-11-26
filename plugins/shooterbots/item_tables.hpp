@@ -49,8 +49,9 @@ enum class ItemKind : uint8_t {
   // `item_ammo` says which of its ammunitions each is).
   ammo_more1,
   ammo_more2,
+  ammo_more3,
 };
-inline constexpr int kItemKinds = 16;
+inline constexpr int kItemKinds = 17;
 
 struct ItemRow {
   std::string_view class_name{};  // a trailing '*' matches any rest
