@@ -1009,6 +1009,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   f.bot.pilot.pilot.hollow = w.cars;  // and a car at rest is walked through
   if (w.barred != w.barred_was || w.hatch_shut != w.hatch_shut_was || closed_now ||
       (!w.exit_links.empty() && w.step != w.exit_step_was)) {  // nor onto a bridge still in
+    if (w.barred != w.barred_was) w.shut_trap = way_shut_trap(g, nav.core, w.barred);
     w.barred_was = w.barred;
     w.hatch_shut_was = w.hatch_shut;
     w.exit_step_was = w.step;
@@ -1361,7 +1362,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // nothing else is left: base2's trigger in its south pool held him there for good, though the
   // lever the exit needed lay on the ledge above. So is a button that drains a pool.
   const auto trapped_in = [&](int32_t n) {
-    return n >= 0 && static_cast<size_t>(n) < nav.trap.size() && nav.trap[static_cast<size_t>(n)];
+    if (n < 0) return false;
+    const auto i = static_cast<size_t>(n);
+    return (i < nav.trap.size() && nav.trap[i]) || (i < w.shut_trap.size() && w.shut_trap[i]);
   };
   const bool me_trapped = trapped_in(from);
   // A key's lock is walked to with a key in hand: none taken yet, it opens nothing.
@@ -1830,6 +1833,49 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     w.log->push_back(said);
   }
   w.stats.by_kind[static_cast<int>(w.kind)]++;
+}
+
+std::vector<uint8_t> way_shut_trap(const sb::NavGraph& g, const std::vector<uint8_t>& core,
+                                   const std::vector<int32_t>& barred) {
+  const size_t nn = g.nodes.size();
+  std::vector<uint8_t> out(nn, 0);
+  if (barred.empty() || core.size() != nn) return out;
+  const auto open = [&](const sb::NavLink& l) {
+    if (sb::nav_blast(l.kind)) return false;
+    for (const int32_t b : barred)
+      if (l.mover == b) return false;
+    return true;
+  };
+  // Each node's links in, then a walk backward from the core over the open ones.
+  std::vector<int32_t> start(nn + 1, 0);
+  for (const sb::NavLink& l : g.links)
+    if (open(l)) start[static_cast<size_t>(l.to) + 1]++;
+  for (size_t n = 0; n < nn; n++) start[n + 1] += start[n];
+  std::vector<int32_t> from(static_cast<size_t>(start.back())),
+      fill(start.begin(), start.end() - 1);
+  for (size_t a = 0; a < nn; a++) {
+    const sb::NavNode& n = g.nodes[a];
+    for (int32_t k = 0; k < n.links; k++) {
+      const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      if (open(l))
+        from[static_cast<size_t>(fill[static_cast<size_t>(l.to)]++)] = static_cast<int32_t>(a);
+    }
+  }
+  std::vector<uint8_t> back = core;
+  std::vector<int32_t> queue;
+  for (size_t n = 0; n < nn; n++)
+    if (back[n]) queue.push_back(static_cast<int32_t>(n));
+  for (size_t q = 0; q < queue.size(); q++) {
+    const auto n = static_cast<size_t>(queue[q]);
+    for (int32_t x = start[n]; x < start[n + 1]; x++) {
+      const int32_t a = from[static_cast<size_t>(x)];
+      if (back[static_cast<size_t>(a)]) continue;
+      back[static_cast<size_t>(a)] = 1;
+      queue.push_back(a);
+    }
+  }
+  for (size_t n = 0; n < nn; n++) out[n] = back[n] ? 0 : 1;
+  return out;
 }
 
 }  // namespace ge::shooterbots
