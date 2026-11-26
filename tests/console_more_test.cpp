@@ -141,6 +141,22 @@ TEST(toggle_steps_through_its_values) {
   CHECK(c.output().back() == "\"crosshair\" is \"9\", can't cycle");
 }
 
+TEST(a_games_own_meaning_of_a_command_runs_in_place_of_ours_while_its_layer_is_loaded) {
+  Console c;
+  c.cvars().add({.name = "a", .fallback = "0"});
+  c.cvars().add({.name = "b", .fallback = "1"});
+  c.execute("flip a b");
+  CHECK(c.cvars().find("a")->value == "1" && c.cvars().find("b")->value == "0");
+  c.cvars().set_layer("game:test");
+  c.add_command_own("toggle", "flip");
+  c.cvars().set_layer("engine");
+  c.execute("toggle a b");  // each name flipped, not `a` cycled through `b`'s value
+  CHECK(c.cvars().find("a")->value == "0" && c.cvars().find("b")->value == "1");
+  c.drop_layer("game:test");
+  c.execute("toggle a 0 1");  // ours again
+  CHECK(c.cvars().find("a")->value == "1");
+}
+
 TEST(uptime_reads_in_both_forms) {
   CHECK(uptime_short(65) == "01.05");
   CHECK(uptime_short(3600 + 125) == "1:02.05");

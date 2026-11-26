@@ -15,7 +15,7 @@
 //   set_calc <name> strlen <s> | substr <s> <from> [<count>] | strstr <s> <find> | pos <s> <find>
 //       | int <x> | tobrown <s> | towhite <s> | <a>
 //   inc <name> [<by>]   dec <name> [<by>]   mul <name> [<by>]   div <name> [<by>]
-//   toggle <name>   cycle <name> <v1> <v2> ...
+//   toggle <name>   flip <name> ...   cycle <name> <v1> <v2> ...
 //   msg_trigger [<alias> [<match> [-l <level>]]]   a game line of that print level (0 low, 1
 //       medium, 2 high, the default; 3 chat, t the team's chat) holding match runs the alias;
 //       $triggermatch is the line
@@ -30,7 +30,7 @@
 // ge:summary The console's scripting: if/else, if_exists, eval, set_calc, inc, cycle, triggers
 // ge:keywords console script if else then set_calc calc arithmetic strlen substr strstr inc dec
 // ge:keywords if_exists eval set_eval div xor tobrown towhite pos regex
-// ge:keywords mul div toggle cycle msg_trigger trigger conditional compare isin isini eq ne
+// ge:keywords mul div toggle flip cycle msg_trigger trigger conditional compare isin isini eq ne
 // ge:keywords triggermatch trigger-level alias_in alias_out cvar_in cvar_out set_alias_str
 // ge:keywords set_bind_str hash qt sc
 // ge:skill console
@@ -412,6 +412,15 @@ void register_script(Console& con) {
         }
         store(c, a, a[1], truthy(value_of(c, a[1])) ? "0" : "1");
       });
+  con.add_command("flip", "flip <name> [<name> ...]: each cvar between 0 and 1",
+                  [](Console& c, const Args& a) {
+                    if (a.size() < 2) {
+                      c.error("flip needs a cvar", "usage: flip <name> [<name> ...]");
+                      return;
+                    }
+                    for (size_t i = 1; i < a.size(); ++i)
+                      store(c, a, a[i], truthy(value_of(c, a[i])) ? "0" : "1");
+                  });
   con.add_command("cycle", "cycle <name> <v1> <v2> ...: a cvar to the value after its own",
                   [cycle](Console& c, const Args& a) {
                     if (a.size() < 3) {
