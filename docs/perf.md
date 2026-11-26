@@ -168,6 +168,7 @@ land 0.10 (the cloud marched at a quarter of the pixels costs what every pixel d
 | The mirror's fragments beyond the water's plane dropped before they are shaded, not after | both rows: the top 6.52 → 6.38 (main's run against this tree's) | `brush/app/bsp.wgsl` |
 | `r_quality medium` against the top (shadows hard-edged with no capsules, the water's reflection marched off the screen and no sun under it, the sky with no far land) | 6.38 → 5.21 (frame 6.63 → 5.49) | `shooters_edge/app/ladder.cpp` |
 | `r_quality low` (no figure's shadow, a still and unreflecting pool, our sky with its mean cloud) | 6.38 → 4.67 | |
+| The light shafts under water read each wave once for eight of their sixteen steps, its sine turned on from the first step's rather than taken again (under one level surface the steps' points on it lie on a line); the same net (`gpu-underwater` pictures 76 dB and over). The shafts were 95% of `water.under`: an eye under dm3's water cost 15 ms of a 21 ms frame at 2560x1440 | `water.under` on the software adapter 998 → 334 (the shafts 944 → 278) | `render/underwater.wgsl` |
 
 ## Shooter's Edge's start and map loads
 
