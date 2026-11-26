@@ -736,8 +736,9 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
       if (l == line) return true;
     return false;
   };
-  CHECK(said("set arsenal_ammo1 \"models/items/ammo/shells/medium/tris.md2 misc/am_pkup.wav 15\""));
-  CHECK(said("set arsenal_health3 \"models/items/mega_h/tris.md2 items/m_health.wav 15\""));
+  CHECK(said(
+      "set arsenal_ammo1 \"models/items/ammo/shells/medium/tris.md2 misc/am_pkup.wav 15 10\""));
+  CHECK(said("set arsenal_health3 \"models/items/mega_h/tris.md2 items/m_health.wav 15 100\""));
   CHECK(said("set arsenal_pickup \"misc/w_pkup.wav\""));
   for (const std::string& l : pf::arsenal_lines(pf::kQ1Arsenal))
     CHECK_MSG(l.find("arsenal_ammo") == std::string::npos &&

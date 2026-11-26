@@ -28,6 +28,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "classic/q2_body.hpp"
+
 #include "shooters_edge/server/q2_pack.hpp"
 
 namespace shooters_edge::server {
@@ -56,16 +58,10 @@ inline constexpr int kSqAmmoKinds = 13;  // `none` included, so an `SqAmmo` inde
 // The armours, worse to better (0 none).
 enum class SqArmour : uint8_t { none, jacket, combat, body };
 
-struct SqArmourRow {
-  int base, maximum;
-  float normal, energy;  // the share of a blow it takes, of a normal hit and of an energy hit
-};
-inline constexpr SqArmourRow kSqArmours[] = {
-    {0, 0, 0, 0},              // none
-    {25, 50, 0.30f, 0.00f},    // jacket
-    {50, 100, 0.60f, 0.30f},   // combat
-    {100, 200, 0.80f, 0.60f},  // body
-};
+// The armours' counts and shares (plugins/classic/q2_body.hpp, which another game's rules wearing
+// Quake II's armour read too).
+using SqArmourRow = ge::classic::Q2ArmourRow;
+inline constexpr const SqArmourRow (&kSqArmours)[4] = ge::classic::kQ2Armours;
 
 struct SqItem {           // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* classname;  // the map's name for it
@@ -113,17 +109,17 @@ inline constexpr SqItem kSqItems[] = {
     {"weapon_bfg", "BFG10K", "models/weapons/g_bfg/tris.md2", "misc/w_pkup.wav", SqKind::weapon, 50,
      SqAmmo::cells, 30},
     {"ammo_shells", "Shells", "models/items/ammo/shells/medium/tris.md2", "misc/am_pkup.wav",
-     SqKind::ammo, 10, SqAmmo::shells, 30},
+     SqKind::ammo, ge::classic::kQ2AmmoShells, SqAmmo::shells, 30},
     {"ammo_bullets", "Bullets", "models/items/ammo/bullets/medium/tris.md2", "misc/am_pkup.wav",
-     SqKind::ammo, 50, SqAmmo::bullets, 30},
+     SqKind::ammo, ge::classic::kQ2AmmoBullets, SqAmmo::bullets, 30},
     {"ammo_cells", "Cells", "models/items/ammo/cells/medium/tris.md2", "misc/am_pkup.wav",
-     SqKind::ammo, 50, SqAmmo::cells, 30},
+     SqKind::ammo, ge::classic::kQ2AmmoCells, SqAmmo::cells, 30},
     {"ammo_rockets", "Rockets", "models/items/ammo/rockets/medium/tris.md2", "misc/am_pkup.wav",
-     SqKind::ammo, 5, SqAmmo::rockets, 30},
+     SqKind::ammo, ge::classic::kQ2AmmoRockets, SqAmmo::rockets, 30},
     {"ammo_slugs", "Slugs", "models/items/ammo/slugs/medium/tris.md2", "misc/am_pkup.wav",
-     SqKind::ammo, 10, SqAmmo::slugs, 30},
+     SqKind::ammo, ge::classic::kQ2AmmoSlugs, SqAmmo::slugs, 30},
     {"ammo_grenades", "Grenades", "models/items/ammo/grenades/medium/tris.md2", "misc/am_pkup.wav",
-     SqKind::ammo, 5, SqAmmo::grenades, 30},
+     SqKind::ammo, ge::classic::kQ2AmmoGrenades, SqAmmo::grenades, 30},
     {"item_health_small", "Health", "models/items/healing/stimpack/tris.md2", "items/s_health.wav",
      SqKind::health, 2, SqAmmo::none, 30},
     {"item_health", "Health", "models/items/healing/medium/tris.md2", "items/n_health.wav",

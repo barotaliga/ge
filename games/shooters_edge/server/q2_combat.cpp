@@ -280,7 +280,7 @@ bool sq_flash_plays(int value, const char* sample) {
 int sq_armour_save(SqBody& body, int damage, bool energy) {
   if (body.armour == SqArmour::none || body.armour_count <= 0 || damage <= 0) return 0;
   const SqArmourRow& a = kSqArmours[static_cast<int>(body.armour)];
-  const float share = energy ? a.energy : a.normal;
+  const float share = energy && !body.quake ? a.energy : a.normal;  // Quake's knows no energy
   const float exact = share * float(damage);
   int saved = static_cast<int>(exact);
   if (float(saved) < exact) saved++;  // rounded up
