@@ -236,13 +236,9 @@ void event_lightning(A& q) {
   q.set_i(q.self(), q.L.f.use, q.fn(fn_lightning_use));
 }
 
-// THE FINAL BOSS (monster_oldone): nothing hurts it but arriving inside it.
-void oldone_end(A& q) {
-  intermission_start(q);
-  q.set_ge(g_next_map, q.s(s_start));
-  q.WriteByte(kMsgAll, kSvcFinale);
-  q.WriteString(kMsgAll, q.s(s_the_thing_at_the));
-}
+// THE FINAL BOSS (monster_oldone): nothing hurts it but arriving inside it. The blow that kills it
+// ends the game at once: everyone is taken to the first intermission spot to watch, no button
+// leaves, and the boss tears itself apart over the next eight seconds.
 
 namespace {
 
@@ -270,35 +266,121 @@ void oldone_gibs(A& q) {
   }
 }
 
-}  // namespace
+// The thrash, step by step (0.1 s each): the first fifteen shaking frames three times over, then
+// four more, then the burst on the fiftieth. Each step dims or brightens the world's light.
+constexpr int kThrashPass = 15, kThrashPasses = 3, kThrashSteps = kThrashPass * kThrashPasses + 5;
 
-// Torn apart: it shakes through its last frames, then bursts, and the game ends.
-void oldone_burst(A& q) {
-  anim_tick(q);
-  const int32_t me = q.self();
-  if (q.f(me, q.L.f.frame) < q.v(me, f_fr_now).y) {
-    q.set_f(me, q.L.f.nextthink, q.time() + 0.1f);
-    return;
-  }
-  q.sound(me, kChanVoice, q.s(s_boss2_pop2_wav), 1, kAttnNone);
-  oldone_gibs(q);
-  q.set_f(q.self(), q.L.f.modelindex, 0);
-  q.set_i(q.self(), q.L.f.think, q.fn(fn_oldone_end));
-  q.set_f(q.self(), q.L.f.nextthink, q.time() + 2);
+// The model's frame for shaking frame n (1..20): its first eleven follow the sway's 46 frames,
+// and the frame after the eleventh is never shown.
+float thrash_frame(int n) { return static_cast<float>(n <= 11 ? 45 + n : 46 + n); }
+
+// The world's light on shaking frame n (1..19).
+St thrash_light(int n) {
+  static constexpr St kPass[kThrashPass] = {s_style0,  s_style_k, s_style_k,   s_style_i, s_style_g,
+                                            s_style_e, s_style_c, s_style_off, s_style_c, s_style_e,
+                                            s_style_g, s_style_i, s_style_k,   s_style0,  s_style0};
+  static constexpr St kLast[4] = {s_style_g, s_style_c, s_style_b, s_style_off};
+  return n <= kThrashPass ? kPass[n - 1] : kLast[n - kThrashPass - 1];
 }
 
+// The burst: the pieces fly, the closing words come, a body is left lying where it stood, and the
+// music and the light come back.
+void oldone_burst(A& q) {
+  const int32_t me = q.self();
+  q.sound(me, kChanVoice, q.s(s_boss2_pop2_wav), 1, kAttnNorm);
+  oldone_gibs(q);
+  q.WriteByte(kMsgAll, kSvcFinale);
+  q.WriteString(kMsgAll, q.s(s_the_thing_at_the));
+  const int32_t body = q.spawn();
+  q.setmodel(body, q.s(s_player_mdl));
+  q.setorigin(body, q.v(me, q.L.f.origin) - Vec3{32, 264, 0});
+  q.set_v(body, q.L.f.angles, {0, 290, 0});
+  q.set_f(body, q.L.f.frame, 1);
+  q.set_f(body, q.L.f.solid, kSolidNot);
+  q.set_f(body, q.L.f.movetype, kMovetypeNone);
+  q.remove(me);
+  q.WriteByte(kMsgAll, kSvcCdtrack);
+  q.WriteByte(kMsgAll, 3);
+  q.WriteByte(kMsgAll, 3);
+  q.lightstyle(0, q.s(s_style0));
+}
+
+}  // namespace
+
+// One step of the thrash.
+void oldone_thrash(A& q) {
+  const int32_t me = q.self();
+  const int step = static_cast<int>(q.f(me, f_state));
+  if (step >= kThrashSteps - 1) {
+    oldone_burst(q);
+    return;
+  }
+  const int n = step < kThrashPass * kThrashPasses ? step % kThrashPass + 1 : step - 29;
+  q.set_f(me, q.L.f.frame, thrash_frame(n));
+  q.lightstyle(0, q.s(thrash_light(n)));
+  q.set_f(me, f_state, static_cast<float>(step + 1));
+  q.set_f(me, q.L.f.nextthink, q.time() + 0.1f);
+}
+
+// A second after the blow, a flash beside it and the sound of something coming through.
+void oldone_flash(A& q) {
+  const int32_t timer = q.self();
+  const int32_t boss = q.i(timer, q.L.f.owner);
+  effect_head(q, kTeTeleport);
+  write_vec(q, q.v(boss, q.L.f.origin) - Vec3{0, 100, 0});
+  q.sound(boss, kChanVoice, q.s(s_r_tele1_wav), 1, kAttnNorm);
+  q.set_i(timer, q.L.f.think, q.fn(fn_oldone_wake));
+  q.set_f(timer, q.L.f.nextthink, q.time() + 2);
+}
+
+// Three seconds after the blow it cries out and starts to thrash on its next frame, the light
+// pulsing until the thrash takes it over.
+void oldone_wake(A& q) {
+  const int32_t timer = q.self();
+  const int32_t boss = q.i(timer, q.L.f.owner);
+  q.set_f(boss, f_state, 0);
+  q.set_i(boss, q.L.f.think, q.fn(fn_oldone_thrash));
+  q.sound(boss, kChanVoice, q.s(s_boss2_death_wav), 1, kAttnNorm);
+  q.lightstyle(0, q.s(s_style_pulse));
+  q.remove(timer);
+}
+
+// The blow lands: counted, its targets fired, and the game is over on the spot. The boss stays
+// where it is, swaying, solid and beyond harm, until the thrash.
 void oldone_die(A& q) {
   const int32_t me = q.self();
-  q.set_f(me, q.L.f.solid, kSolidNot);
   q.set_f(me, q.L.f.takedamage, kDamageNo);
-  q.add_to(q.L.g.killed_monsters, 1);
-  q.WriteByte(kMsgAll, kSvcKilledmonster);
-  q.sound(me, kChanVoice, q.s(s_boss2_death_wav), 1, kAttnNone);
   q.set_ge(g_activator, q.ge(g_damage_attacker));
   use_targets(q);
-  anim_begin(q, q.v(q.self(), f_fr_death));
-  q.set_i(q.self(), q.L.f.think, q.fn(fn_oldone_burst));
-  q.set_f(q.self(), q.L.f.nextthink, q.time() + 0.1f);
+  q.add_to(q.L.g.killed_monsters, 1);
+  q.WriteByte(kMsgAll, kSvcKilledmonster);
+  q.set_g(g_intermission_exit, q.time() + 10000000);  // never: the game has ended
+  q.set_g(g_intermission_running, 1);
+  q.set_g(g_match_over, 1);
+  int32_t spot = q.find(q.world(), q.L.f.classname, q.s(s_info_intermission));
+  if (spot == 0) spot = q.find(q.world(), q.L.f.classname, q.s(s_info_player_start));
+  const int32_t ball = q.find(q.world(), q.L.f.classname, q.s(s_misc_teleporttrain_class));
+  if (ball != 0) q.remove(ball);
+  q.WriteByte(kMsgAll, kSvcFinale);
+  q.WriteString(kMsgAll, q.s(s_empty));
+  for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+       p = q.find(p, q.L.f.classname, q.s(s_player))) {
+    q.set_v(p, q.L.f.view_ofs, {0, 0, 0});
+    q.set_v(p, q.L.f.angles, q.v(spot, f_mangle));
+    q.set_v(p, q.L.f.v_angle, q.v(spot, f_mangle));
+    q.set_f(p, q.L.f.fixangle, 1);
+    q.set_f(p, q.L.f.nextthink, q.time() + 0.5f);
+    q.set_f(p, q.L.f.takedamage, kDamageNo);
+    q.set_f(p, q.L.f.solid, kSolidNot);
+    q.set_f(p, q.L.f.movetype, kMovetypeNone);
+    q.set_v(p, q.L.f.velocity, {0, 0, 0});
+    q.set_f(p, q.L.f.modelindex, 0);
+    q.setorigin(p, q.v(spot, q.L.f.origin));
+  }
+  const int32_t timer = q.spawn();
+  q.set_i(timer, q.L.f.owner, me);
+  q.set_i(timer, q.L.f.think, q.fn(fn_oldone_flash));
+  q.set_f(timer, q.L.f.nextthink, q.time() + 1);
 }
 
 // Alive, it sways: a frame every 0.1 s.
@@ -310,7 +392,8 @@ void oldone_sway(A& q) {
 void monster_oldone(A& q) {
   if (no_monsters_here(q)) return;
   q.precache_model(q.s(s_oldone_mdl));
-  precache_sounds(q, {s_boss2_death_wav, s_boss2_idle_wav, s_boss2_sight_wav, s_boss2_pop2_wav});
+  precache_sounds(
+      q, {s_boss2_death_wav, s_boss2_idle_wav, s_boss2_sight_wav, s_boss2_pop2_wav, s_r_tele1_wav});
   q.add_to(q.L.g.total_monsters, 1);
   const int32_t me = q.self();
   q.set_f(me, q.L.f.flags, bor(q.f(me, q.L.f.flags), kFlMonster));
@@ -323,8 +406,7 @@ void monster_oldone(A& q) {
   q.set_f(me, q.L.f.takedamage, kDamageYes);
   q.set_i(me, f_th_hurt, q.fn(fn_noop));  // it does not flinch
   q.set_i(me, f_th_die, q.fn(fn_oldone_die));
-  set_frames(q, f_fr_stand, 0, 45);   // its sway
-  set_frames(q, f_fr_death, 46, 66);  // its shaking apart
+  set_frames(q, f_fr_stand, 0, 45);  // its sway
   q.set_i(me, q.L.f.think, q.fn(fn_oldone_sway));
   const float t = q.time() + 0.1f;
   q.set_f(me, q.L.f.nextthink, t + q.random() * 0.5f);

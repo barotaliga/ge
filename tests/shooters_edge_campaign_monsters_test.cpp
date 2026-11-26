@@ -376,9 +376,23 @@ TEST(arriving_inside_the_final_boss_kills_it_and_ends_the_game) {
   CHECK_MSG(g.frame(0), g.error);
   // The player stands inside it, as a teleporter would have put him there.
   CHECK(g.call("teleport_arrived", {g.ent(1)}));
+  // The game ends on the blow: counted, everyone taken away to watch, unseen.
   CHECK(g.global("killed_monsters") == 1);
-  for (int i = 0; i < kFrames * 5 && g.global("intermission_running") == 0; i++)
-    CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.global("intermission_running") == 1);
+  CHECK(g.field(1, g.f().modelindex) == 0);
+  CHECK(g.field(1, g.f().takedamage) == 0);
+  // It sways on, then thrashes, for seven and a half seconds; no button leaves meanwhile.
+  for (int i = 0; i < kFrames * 15 / 2; i++) CHECK_MSG(g.frame(0, 1), g.error);
+  CHECK(g.find("monster_oldone") == boss);
+  CHECK(g.global("intermission_running") == 1);
+  // By eight and a half seconds it has burst, leaving a body lying where it stood.
+  for (int i = 0; i < kFrames; i++) CHECK_MSG(g.frame(0, 1), g.error);
+  CHECK(g.find("monster_oldone") == 0);
+  int body = 0;
+  for (int e = 2; e < g.s().sv.num_edicts && body == 0; e++)
+    if (!g.ed(e).free && g.field(e, g.f().angles + 1) == 290 && g.field(e, g.f().frame) == 1)
+      body = e;
+  CHECK(body != 0);
   CHECK(g.global("intermission_running") == 1);
   CHECK(g.s().q.faults == 0);
 }
