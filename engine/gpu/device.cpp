@@ -223,6 +223,13 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
 #endif
                         : options.validation != 0;
 #if !defined(__EMSCRIPTEN__)
+  // GE_GPU_LABELS=1: our passes' and objects' labels handed down to the backend, so a native GPU
+  // tool (Instruments' Metal System Trace, Xcode's frame capture, PIX, RenderDoc) names each pass
+  // as the frame's table does; off by default, as a label costs each object a string to the driver.
+  static constexpr const char* kNoChecksLabels[] = {"skip_validation", "disable_robustness",
+                                                    "use_user_defined_labels_in_backend"};
+  static constexpr const char* kLabels[] = {"use_user_defined_labels_in_backend"};
+  const bool labels = env_on("GE_GPU_LABELS");
   static constexpr const char* kNoChecks[] = {"skip_validation", "disable_robustness"};
   // Dawn rounds every timestamp down to 2^16 ns by default (a browser's guard against timing
   // attacks), which leaves a pass's GPU time in steps of 0.0655 ms: the engine times its own
@@ -230,8 +237,11 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
   static constexpr const char* kFullTimers[] = {"timestamp_quantization"};
   wgpu::DawnTogglesDescriptor toggles{};
   if (!dev->validation) {
-    toggles.enabledToggleCount = 2;
-    toggles.enabledToggles = kNoChecks;
+    toggles.enabledToggleCount = labels ? 3 : 2;
+    toggles.enabledToggles = labels ? kNoChecksLabels : kNoChecks;
+  } else if (labels) {
+    toggles.enabledToggleCount = 1;
+    toggles.enabledToggles = kLabels;
   }
   toggles.disabledToggleCount = 1;
   toggles.disabledToggles = kFullTimers;
