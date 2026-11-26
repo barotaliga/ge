@@ -52,6 +52,35 @@ void stage(BspView& v, const r::FrameUniforms& main, const float vp[16], const f
   std::memset(v.staged.jitter, 0, sizeof v.staged.jitter);
 }
 
+// Whether any of the box lo..hi (world m) can reach the view's picture: inside its frustum's four
+// sides and before the eye (clip = view_proj (p - eye)), and on the kept side of its cut. A box
+// out of it is clipped or dropped whole when drawn, so leaving it out changes no pixel.
+bool view_may_see(const BspView& v, const float lo[3], const float hi[3]) {
+  const float* m = v.staged.view_proj;
+  const float* cut = v.staged.planes[5];
+  uint32_t outside = 0x3f;  // a bit a side every corner lies beyond so far
+  for (int c = 0; c < 8; ++c) {
+    double p[3];
+    for (int k = 0; k < 3; ++k) p[k] = (c >> k & 1 ? hi[k] : lo[k]);
+    double r[3];
+    for (int k = 0; k < 3; ++k) r[k] = p[k] - double(v.staged.eye[k]);
+    double clip[4];
+    for (int i = 0; i < 4; ++i)
+      clip[i] = double(m[i]) * r[0] + double(m[4 + i]) * r[1] + double(m[8 + i]) * r[2] + m[12 + i];
+    uint32_t out = 0;
+    if (clip[0] < -clip[3]) out |= 1;
+    if (clip[0] > clip[3]) out |= 2;
+    if (clip[1] < -clip[3]) out |= 4;
+    if (clip[1] > clip[3]) out |= 8;
+    if (clip[3] <= 0) out |= 16;
+    if (double(cut[0]) * p[0] + double(cut[1]) * p[1] + double(cut[2]) * p[2] + cut[3] < 0)
+      out |= 32;
+    outside &= out;
+    if (outside == 0) return true;
+  }
+  return false;
+}
+
 void draw_view(const BspDraw& d, const BspView& v, const gpu::PipelineSet& pipelines,
                r::FrameRecorder& rec, wgpu::CommandEncoder& encoder, int part, int parts) {
   wgpu::RenderPassColorAttachment colours[3]{};
@@ -83,13 +112,47 @@ void draw_view(const BspDraw& d, const BspView& v, const gpu::PipelineSet& pipel
   pass.SetIndexBuffer(d.indices, wgpu::IndexFormat::Uint32);
   const bool v2 = d.options.mode == Mode::v2;
   const Kind drawn[] = {kSolid, kSky, kWarp, kTele, kWater, kSlime, kLava};
+  bool want[kKinds] = {};
   for (Kind k : drawn) {
     const bool own = (k == kWater && !d.options.warped_water) ||
                      (k == kSlime && !d.options.warped_slime) ||
                      (k == kLava && !d.options.warped_lava);
-    if ((v2 && own) || d.range[k][1] == 0) continue;
-    pass.DrawIndexed(d.range[k][1], 1, d.range[k][0], 0, 0);
+    want[k] = !(v2 && own) && d.range[k][1] > 0;
+  }
+  const BspCull& cull = d.cull;
+  if (cull.chunks == 0) {  // no faces to cull by: each kind whole
+    for (Kind k : drawn) {
+      if (!want[k]) continue;
+      pass.DrawIndexed(d.range[k][1], 1, d.range[k][0], 0, 0);
+      ++rec.current().draws;
+    }
+    pass.End();
+    return;
+  }
+  // The faces the view can see, a run of neighbours one draw: the view's every face drawn again
+  // was its bill, not its pixels. A brush model's face moves with it: always drawn.
+  uint32_t first = 0, count = 0;
+  const auto flush = [&] {
+    if (count == 0) return;
+    pass.DrawIndexed(count, 1, first, 0, 0);
     ++rec.current().draws;
+    count = 0;
+  };
+  for (Kind k : drawn) {  // in the kinds' order, as each kind whole was
+    if (!want[k]) continue;
+    for (uint32_t c = 0; c < cull.chunks; ++c) {
+      const GpuChunk& g = cull.placed[c];
+      if (g.info[0] != uint32_t(k) || g.count == 0) continue;
+      if (cull.world[c] && !view_may_see(v, g.lo, g.hi)) continue;
+      if (count > 0 && first + count == g.first) {
+        count += g.count;
+        continue;
+      }
+      flush();
+      first = g.first;
+      count = g.count;
+    }
+    flush();
   }
   pass.End();
 }
