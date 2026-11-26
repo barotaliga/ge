@@ -12,6 +12,8 @@
 
 #include <algorithm>
 
+#include "classic/q2_arms.hpp"
+
 namespace shooters_edge::server {
 
 namespace {
@@ -27,48 +29,6 @@ bool fold_equal(std::string_view a, std::string_view b) {
     if (low(a[i]) != low(b[i])) return false;
   }
   return true;
-}
-
-// The shots of the held-fire and single weapons at the hand's frame, the frame moved on.
-int fire_frame(SqHand& h, const SqBody& b, bool attack, bool infinite) {
-  const SqWeaponRow& r = row_of(h.weapon);
-  const int idle = r.last_fire + 1;
-  const int have = infinite || r.per_shot == 0 ? 1 << 20 : ammo_of(b, r.ammo) / r.per_shot;
-  switch (static_cast<SqWeapon>(h.weapon)) {
-    case SqWeapon::machinegun:  // 4 and 5 in turn while held and stocked
-      if (!attack || have < 1) {
-        h.frame = idle;
-        h.held_shots = 0;
-        return 0;
-      }
-      h.frame = h.frame == 4 ? 5 : 4;
-      h.held_shots++;
-      return 1;
-    case SqWeapon::chaingun: {
-      if (h.frame == 14 && !attack) {  // let go before the spin: it ends here
-        h.frame = idle;
-        return 0;
-      }
-      const int want = h.frame <= 9 ? 1 : h.frame <= 14 ? 2 : 3;
-      const int shots = std::min(want, have);
-      if (shots == 0) {
-        h.frame = idle;
-        return 0;
-      }
-      h.frame = h.frame == 21 ? (attack && have > shots ? 15 : 22) : h.frame + 1;
-      return shots;
-    }
-    case SqWeapon::hyperblaster:
-      if (!attack || have < 1) {
-        h.frame = 12;
-        return 0;
-      }
-      h.frame++;
-      return 1;
-    default:
-      h.frame++;
-      return have >= 1 ? 1 : 0;
-  }
 }
 
 // The hand grenade's and the trap's step through 1..15 (q2_combat.hpp states it); ammo taken at
@@ -180,12 +140,7 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
   const SqWeaponRow& r = row_of(h.weapon);
   switch (h.state) {
     case SqHandState::activating:
-      if (h.frame >= r.last_activate) {
-        h.state = SqHandState::ready;
-        h.frame = r.last_fire + 1;
-      } else {
-        h.frame = std::min(h.frame + swap, r.last_activate);
-      }
+      if (ge::classic::q2_raise_step(sq_runs(r), h.frame, swap)) h.state = SqHandState::ready;
       return out;
     case SqHandState::dropping:
       if (h.frame >= r.last_deactivate) {
@@ -206,7 +161,7 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
         return out;
       }
       if (!attack) {
-        h.frame = h.frame >= r.last_idle ? r.last_fire + 1 : h.frame + 1;
+        ge::classic::q2_idle_step(sq_runs(r), h.frame);
         return out;
       }
       if ((!infinite || h.weapon == int(SqWeapon::trap) || h.weapon == int(SqWeapon::disruptor)) &&
@@ -226,18 +181,16 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
     case SqHandState::firing:
       if (r.pack == Q2Pack::ground_zero) return gz_hand_fire(h, body, attack, now, infinite);
       if (sq_thrown(h.weapon)) return grenade_step(h, body, attack, now, infinite);
-      if (h.frame > r.last_fire) {
-        h.state = SqHandState::ready;
-        return out;
-      }
-      if (h.weapon == int(SqWeapon::hyperblaster) && h.frame == 12 && attack &&
-          (infinite || sq_can_fire(body, h.weapon))) {
-        h.frame = 6;  // held: round again, firing at once
-        out.shots = fire_frame(h, body, attack, infinite);
-      } else if (h.frame >= r.fire_from && h.frame <= r.fire_to) {
-        out.shots = fire_frame(h, body, attack, infinite);
-      } else {
-        h.frame++;
+      {
+        const int have = infinite || r.per_shot == 0 ? 1 << 20 : ammo_of(body, r.ammo) / r.per_shot;
+        const bool again = attack && (infinite || sq_can_fire(body, h.weapon));
+        const ge::classic::Q2Firing f = ge::classic::q2_firing_step(
+            sq_runs(r), sq_held_fire(h.weapon), h.frame, h.held_shots, attack, have, again);
+        if (f.done) {
+          h.state = SqHandState::ready;
+          return out;
+        }
+        out.shots = f.shots;
       }
       // The phalanx's mag slug goes with a pull's second ball (its frame then 9).
       if (out.shots > 0 && !infinite && r.per_shot > 0 &&
@@ -250,17 +203,12 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
 
 int sq_hand_sound(int weapon, int was, bool was_firing, const SqHand& after) {
   if (after.weapon != weapon || (after.frame == was && was_firing)) return -1;
+  if (weapon < ge::classic::kQ2ArmCount)  // the base game's: the shared hand's (q2_arms.hpp)
+    return ge::classic::q2_arm_sound(static_cast<ge::classic::Q2ArmId>(weapon), was, was_firing,
+                                     after.frame, after.state == SqHandState::firing);
   switch (static_cast<SqWeapon>(weapon)) {
-    case SqWeapon::hand_grenade:  // the pin pulled
-      return after.frame == 5 ? 0 : -1;
     case SqWeapon::trap:  // The Reckoning's trap cocked
       return after.frame == 5 ? 4 : -1;
-    case SqWeapon::chaingun:  // spun up from its first fire frame (5, shown with the first shots);
-                              // spun down at the burst's end (not when let go early)
-      if (!was_firing && after.state == SqHandState::firing) return 1;
-      return after.frame == 22 ? 2 : -1;
-    case SqWeapon::hyperblaster:  // wound down
-      return after.frame == 12 ? 3 : -1;
     default:
       return -1;
   }
@@ -334,7 +282,7 @@ int sq_armour_save(SqBody& body, int damage, bool energy) {
 
 float sq_knockback(int knockback, float mass, bool self) {
   if (knockback <= 0) return 0;
-  return (self ? 1600.0f : 500.0f) * float(knockback) / std::max(mass, 50.0f);
+  return ge::classic::q2_push(knockback, mass, self);
 }
 
 namespace {
@@ -412,40 +360,13 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
   const char* words = nullptr;
   const char* tail = "";
   const bool blast = how == kSqHowBlast;
+  if (weapon >= 0 && weapon < ge::classic::kQ2ArmCount &&
+      weapon != int(SqWeapon::bfg)) {  // the base game's (classic/q2_arms.hpp)
+    const ge::classic::Q2ArmWords w =
+        ge::classic::q2_arm_words(static_cast<ge::classic::Q2ArmId>(weapon), blast);
+    words = w.words, tail = w.tail;
+  }
   switch (weapon) {
-    case int(SqWeapon::blaster):
-      words = "was blasted by";
-      break;
-    case int(SqWeapon::shotgun):
-      words = "was gunned down by";
-      break;
-    case int(SqWeapon::super_shotgun):
-      words = "was blown away by", tail = "'s super shotgun";
-      break;
-    case int(SqWeapon::machinegun):
-      words = "was machinegunned by";
-      break;
-    case int(SqWeapon::chaingun):
-      words = "was cut in half by", tail = "'s chaingun";
-      break;
-    case int(SqWeapon::grenade_launcher):
-      if (blast)
-        words = "was shredded by", tail = "'s shrapnel";
-      else
-        words = "was popped by", tail = "'s grenade";
-      break;
-    case int(SqWeapon::rocket_launcher):
-      if (blast)
-        words = "almost dodged", tail = "'s rocket";
-      else
-        words = "ate", tail = "'s rocket";
-      break;
-    case int(SqWeapon::hyperblaster):
-      words = "was melted by", tail = "'s hyperblaster";
-      break;
-    case int(SqWeapon::railgun):
-      words = "was railed by";
-      break;
     case int(SqWeapon::bfg):
       if (how == kSqHowLaser)
         words = "saw the pretty lights from", tail = "'s BFG";
@@ -453,12 +374,6 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
         words = "couldn't hide from", tail = "'s BFG";
       else
         words = "was disintegrated by", tail = "'s BFG blast";
-      break;
-    case int(SqWeapon::hand_grenade):
-      if (blast)
-        words = "didn't see", tail = "'s handgrenade";
-      else
-        words = "caught", tail = "'s handgrenade";
       break;
     case kSqByHeldGrenade:
       words = "feels", tail = "'s pain";

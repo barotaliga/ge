@@ -9,6 +9,8 @@
 // ge:test tests/shooters_edge_q2_fight_test.cpp
 #include "shooters_edge/server/q2_fight.hpp"
 
+#include "classic/q2_arms.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -43,8 +45,8 @@ namespace {
 
 namespace num = ge::core::num;
 
-constexpr float kMass = 200;    // a player's
-constexpr float kRange = 8192;  // a line shot's reach
+constexpr float kMass = 200;                         // a player's
+constexpr float kRange = ge::classic::kQ2ShotRange;  // a line shot's reach
 constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster | sh::kSqDeadMonster;  // and bodies
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
@@ -102,10 +104,10 @@ constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris
                                                       "models/items/defender/tris.md2",
                                                       "models/items/hunter/tris.md2",
                                                       "models/items/vengnce/tris.md2"};
-constexpr const char* kClick = "weapons/noammo.wav";
-constexpr const char* kBoom = "weapons/rocklx1a.wav";
-constexpr const char* kGrenadeBoom = "weapons/grenlx1a.wav";
-constexpr const char* kBounce = "weapons/grenlb1b.wav";
+constexpr const char* kClick = ge::classic::kQ2NoAmmo;
+constexpr const char* kBoom = ge::classic::kQ2RocketBoom;
+constexpr const char* kGrenadeBoom = ge::classic::kQ2GrenadeBoom;
+constexpr const char* kBounce = ge::classic::kQ2GrenadeBounce;
 constexpr const char* kHandBounce = "weapons/hgrenb1a.wav";
 constexpr const char* kFuse = "weapons/hgrenc1b.wav";  // the hand grenade's fuse lit
 // The loops a shot or a player carries, by `SqLoop` (porting note: q2-render-fx.md § Entity
@@ -778,7 +780,9 @@ sh::Vec3f muzzle_aim(Q2Server& s, int slot, sh::Vec3f from, sh::Vec3f forward) {
 // the burst, at most 13.5; none in deathmatch or with `g_machinegun_norecoil` 1.
 float machinegun_climb(const Q2Server& s, int slot) {
   if (deathmatch(s) || s.cvars.find("g_machinegun_norecoil")->integer() != 0) return 0;
-  return 1.5f * static_cast<float>(std::clamp(s.players[slot].hand.held_shots - 1, 0, 9));
+  return ge::classic::kQ2MachineClimb *
+         static_cast<float>(
+             std::clamp(s.players[slot].hand.held_shots - 1, 0, ge::classic::kQ2MachineClimbMost));
 }
 
 // A player's bolt, rocket or BFG ball flying from `start` along `forward` at `speed`: the first
@@ -795,8 +799,9 @@ void offer_dodge(Q2Server& s, int slot, sh::Vec3f start, sh::Vec3f forward, floa
 // A missile from `start` along the axes; the hand grenade's `speed` and `fuse` are its throw's.
 // The phalanx's `splash` is its ball's own (the first ball's ×4 under the quad, the second's not).
 void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f start,
-            const sh::ViewAxes& ax, int damage, int quad, int weapon, float speed = 600,
-            double fuse = 2.5, int splash = 0) {
+            const sh::ViewAxes& ax, int damage, int quad, int weapon,
+            float speed = ge::classic::kQ2GrenadeSpeed, double fuse = ge::classic::kQ2GrenadeFuse,
+            int splash = 0) {
   const Line reach = shoot_line(s, origin, start, 1u << slot);
   Q2Missile* m = new_missile(s);
   if (m == nullptr) return;
@@ -810,28 +815,31 @@ void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f star
   m->fired_z = origin.z;
   switch (kind) {
     case SqShot::bolt: {  // a hyperblaster's glows on its 7th and 10th frames, else plain
-      m->velocity = ax.forward * 1000;
-      m->dies_at = s.level_time + 2;
+      m->velocity = ax.forward * ge::classic::kQ2BoltSpeed;
+      m->dies_at = s.level_time + ge::classic::kQ2BoltLife;
       const int f = s.players[slot].hand.frame;
       if (weapon == int(SqWeapon::hyperblaster)) m->effects = f == 6 || f == 9 ? 64 : 0;
       break;
     }
     case SqShot::grenade:
     case SqShot::hand_grenade: {
-      const float up = 200 + crandom(s) * 10;  // the draws in a fixed order (above)
-      const float across = crandom(s) * 10;
+      // The draws in a fixed order (above).
+      const float up = ge::classic::kQ2GrenadeLift + crandom(s) * ge::classic::kQ2GrenadeScatter;
+      const float across = crandom(s) * ge::classic::kQ2GrenadeScatter;
       m->velocity = ax.forward * speed + ax.up * up + ax.right * across;
       m->dies_at = s.level_time + fuse;
       m->radius_damage = damage;
-      m->radius = kind == SqShot::grenade ? 160.0f : 165.0f;  // the quad does not widen it
+      m->radius = kind == SqShot::grenade  // the quad does not widen it
+                      ? ge::classic::kQ2GrenadeRadius
+                      : ge::classic::kQ2HandGrenadeRadius;
       break;
     }
     case SqShot::rocket:
-      m->velocity = ax.forward * 650;
-      m->dies_at = s.level_time + 8000.0 / 650.0;
-      m->damage = damage + ge::core::int_in(s.rng, 0, 20) * quad;
-      m->radius_damage = 120 * quad;
-      m->radius = 120;
+      m->velocity = ax.forward * ge::classic::kQ2RocketSpeed;
+      m->dies_at = s.level_time + 8000.0 / double(ge::classic::kQ2RocketSpeed);
+      m->damage = damage + ge::core::int_in(s.rng, 0, ge::classic::kQ2RocketExtra) * quad;
+      m->radius_damage = ge::classic::kQ2RocketSplash * quad;
+      m->radius = ge::classic::kQ2RocketRadius;
       break;
     case SqShot::ripper:  // bounces off every wall until its life ends
       m->velocity = ax.forward * 500;
@@ -847,10 +855,10 @@ void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f star
       reckoning_trap_launch(s, *m, ax.forward, ax.right, ax.up, speed);
       break;
     default:  // the BFG's ball
-      m->velocity = ax.forward * 400;
+      m->velocity = ax.forward * ge::classic::kQ2BfgSpeed;
       m->dies_at = s.level_time + 20;
-      m->radius_damage = 200 * quad;
-      m->radius = 100;
+      m->radius_damage = ge::classic::kQ2BfgSplash * quad;
+      m->radius = ge::classic::kQ2BfgRadius;
       break;
   }
   // The aim help's lead (a thrown grenade falls; the rest fly straight).
@@ -1012,37 +1020,45 @@ void fire(Q2Server& s, int slot, int shots) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
         const bool fix = s.cvars.find("aimfix")->integer() != 0;
-        for (const float turn : {-5.0f, 5.0f}) {
+        for (const float turn : {-ge::classic::kQ2SuperTurn, ge::classic::kQ2SuperTurn}) {
           sh::ViewAxes half = sh::angle_vectors(p.view_angles + sh::Vec3f{0, turn, 0});
           half.forward = sh::aim_bend_dir(half.forward, view_forward, along);
           // aimfix: each half from the gun on its own turned axes, onto its own point.
           const sh::Vec3f from =
               fix ? eye + half.forward * r.forward + half.right * r.right : start;
           half.forward = muzzle_aim(s, slot, from, half.forward);
-          for (int i = 0; i < 10; i++)
-            bullet(s, slot, origin, from, half, 1000, 500, damage, kick, w);
+          for (int i = 0; i < ge::classic::kQ2SuperHalfPellets; i++)
+            bullet(s, slot, origin, from, half, ge::classic::kQ2SuperSpreadH,
+                   ge::classic::kQ2SuperSpreadV, damage, kick, w);
         }
       } else {
-        for (int i = 0; i < 12; i++) bullet(s, slot, origin, start, ax, 500, 500, damage, kick, w);
+        for (int i = 0; i < ge::classic::kQ2ShotgunPellets; i++)
+          bullet(s, slot, origin, start, ax, ge::classic::kQ2ShotgunSpreadH,
+                 ge::classic::kQ2ShotgunSpreadV, damage, kick, w);
       }
       return;
     case SqShot::bullet:
       for (int i = 0; i < shots; i++) {
         sh::Vec3f from = start;
         if (w == int(SqWeapon::chaingun)) {
-          const float across = 7 + crandom(s) * 4;  // the draws in a fixed order (above)
-          const float up = crandom(s) * 4;
+          // The draws in a fixed order (above).
+          const float across =
+              ge::classic::kQ2ChainAcross + crandom(s) * ge::classic::kQ2ChainJitter;
+          const float up = crandom(s) * ge::classic::kQ2ChainJitter;
           from = eye + along * r.forward + ax.right * across + ax.up * up;
           sh::ViewAxes own = ax;  // aimfix: each bullet from its own start onto the eye's point
           own.forward = muzzle_aim(s, slot, from, along);
-          bullet(s, slot, origin, from, own, 300, 500, damage, kick, w);
+          bullet(s, slot, origin, from, own, ge::classic::kQ2BulletSpreadH,
+                 ge::classic::kQ2BulletSpreadV, damage, kick, w);
           continue;
         }
-        bullet(s, slot, origin, from, ax, 300, 500, damage, kick, w);
+        bullet(s, slot, origin, from, ax, ge::classic::kQ2BulletSpreadH,
+               ge::classic::kQ2BulletSpreadV, damage, kick, w);
       }
       return;
     case SqShot::rail:
-      rail(s, slot, start, ax, damage, (dm ? 200 : 250) * quad, w);
+      rail(s, slot, start, ax, damage,
+           (dm ? ge::classic::kQ2RailKickDm : ge::classic::kQ2RailKickSp) * quad, w);
       return;
     case SqShot::ripper: {  // the yaw turned by up to a degree either way
       sh::ViewAxes turned = sh::angle_vectors(
@@ -1488,10 +1504,12 @@ void fight_missiles(Q2Server& s) {
     for (int i = 0; i < sh::kMaxClients; i++) {
       if (i == m.owner || !fightable(s, i)) continue;
       const sh::Vec3f c = centre_of(s.players[i]);
-      if (sh::length(c - m.origin) > 256) continue;
+      if (sh::length(c - m.origin) > ge::classic::kQ2BfgLaserReach) continue;
       if (shoot_line(s, m.origin, c, owner).player != i) continue;
       const BlowHow how(s, kSqHowLaser);
-      hurt(s, i, m.owner, c - m.origin, deathmatch(s) ? 5 : 10, 0, true, m.weapon);
+      hurt(s, i, m.owner, c - m.origin,
+           deathmatch(s) ? ge::classic::kQ2BfgLaserDm : ge::classic::kQ2BfgLaserSp, 0, true,
+           m.weapon);
     }
     for (size_t e = 0; e < s.entities.size(); e++) {  // and every monster but the hornet
       const Q2Entity& t = s.entities[e];

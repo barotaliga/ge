@@ -456,6 +456,10 @@ bool listen_lobby(Listen& l, std::string_view line);
 bool listen_say(Listen& l, const std::string& line);
 // True when the window's own game runs Quake II's rules (server/q2_server.hpp).
 bool listen_is_q2(const Listen& l);
+// True when the window's own game fires Quake II's weapons whole (classic remix's `cr_items q2` on
+// the classic rules, rules/common_q2_arms.cpp): their hits, blasts and trails are drawn as Quake
+// II's.
+bool listen_q2_arms(const Listen& l);
 // The rules draw their own screens (a scoreboard, an inventory): the window draws none of its own.
 bool listen_own_screens(const Listen& l);
 // A console line the window does not know, given to the rules of a game whose client passes its

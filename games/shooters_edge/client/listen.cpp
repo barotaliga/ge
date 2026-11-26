@@ -136,6 +136,8 @@ bool arena_effect(std::span<const uint8_t> b, Effect& e) {
 // are; an explosion into `explosions`), any other by its name, for the files' effect of it.
 void take_named(Listen& l, const sv::NetEvent& ev) {
   if ((ev.to & 1u) == 0) return;
+  // Quake II's look for its hits and blasts: its game, or its weapons fired whole by ours.
+  const bool q2_look = listen_is_q2(l) || listen_q2_arms(l);
   // Quake II's gun flashes (q2_flash_fx.hpp): a player's shot is its sounds and the flash at his
   // gun (his own: the sounds alone); a monster's flash line plays its gun's sound beside the look.
   const bool player_flash = ev.text == "q2_flash";
@@ -253,7 +255,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                      name == "te_explosion1_big" || name == "te_explosion1_np";
   if (blast) {
     l.explosions.push_back(ev.origin);
-    if (const int code = q2_blast_code(name); code > 0 && listen_is_q2(l)) {
+    if (const int code = q2_blast_code(name); code > 0 && q2_look) {
       l.explosion_codes.resize(l.explosions.size());  // its ball, light and specks
       l.explosion_codes.back() = static_cast<uint8_t>(code);
       if (code >= 35) pack_sound(code, ev.origin);  // Ground Zero's: the client's own sound
@@ -269,7 +271,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                                            kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
-      if (listen_is_q2(l)) {  // our rules' plain blast in Quake II: a rocket's
+      if (q2_look) {  // our rules' plain blast in Quake II: a rocket's
         l.explosion_codes.resize(l.explosions.size());
         l.explosion_codes.back() = 7;
       }
@@ -280,7 +282,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     for (float c : {ev.origin.x, ev.origin.y, ev.origin.z})
       sv::encode(b, sv::WriteKind::coord, c, "");
     if (Effect classic; arena_effect(b, classic)) {
-      if (const Q2Puff* puff = listen_is_q2(l) ? q2_puff(name) : nullptr) {  // Quake II's specks
+      if (const Q2Puff* puff = q2_look ? q2_puff(name) : nullptr) {  // Quake II's specks
         classic.q2_specks = puff->count;
         classic.colour = puff->colour;
         classic.code = puff->code;  // its smoke and flash (q2_model_fx.hpp) by the kind byte
@@ -1323,6 +1325,14 @@ bool listen_lobby(Listen& l, std::string_view line) {
 
 bool listen_is_q2(const Listen& l) { return l.rules != nullptr && sv::q2_of(*l.rules) != nullptr; }
 
+bool listen_q2_arms(const Listen& l) {
+  if (l.rules == nullptr || listen_is_q2(l)) return false;
+  for (const std::string& line : l.opt.arsenal)
+    if (line.starts_with("set arsenal_weapon") && line.find("q2_") != std::string::npos)
+      return true;
+  return false;
+}
+
 bool listen_own_screens(const Listen& l) {
   return l.rules != nullptr && l.rules->calls != nullptr && l.rules->calls->own_screens;
 }
@@ -1516,7 +1526,7 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
     o.grenade = r.shot == sv::WorldShot::grenade;
     o.bolt = r.shot == sv::WorldShot::bolt;
     o.bfg = r.shot == sv::WorldShot::ball;
-    o.streak = o.bolt && (r.effects & 8) != 0 && listen_is_q2(l);
+    o.streak = o.bolt && (r.effects & 8) != 0 && (listen_is_q2(l) || listen_q2_arms(l));
     out.push_back(o);
   }
 }

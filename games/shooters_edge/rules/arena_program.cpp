@@ -7,9 +7,12 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include "shooters_edge/rules/arena.hpp"
 
+#include <array>
+#include <cstddef>
 #include <iterator>
 
 #include "shooters_edge/rules/arena_decl.hpp"
+#include "shooters_edge/rules/q2_arm_strings.hpp"
 
 namespace shooters_edge::server {
 
@@ -31,14 +34,22 @@ constexpr se_rules_def_v1 kFields[] = {SE_COMMON_FIELDS(SE_X) SE_ARENA_FIELDS(SE
 #define SE_X(name, text) text,
 // Every entry is its own literal (the list is long and alike, which the comma check misreads).
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
-constexpr const char* kStrings[] = {SE_RULES_STRINGS(SE_X)};
+constexpr const char* kOwnStrings[] = {SE_RULES_STRINGS(SE_X)};
 #undef SE_X
+// The rules' strings, then Quake II's weapons' (q2_arm_strings.hpp).
+constexpr auto kStrings = [] {
+  std::array<const char*, ar::kStringCount + rules::kQ2ArmStringCount> a{};
+  size_t n = 0;
+  for (const char* s : kOwnStrings) a[n++] = s;
+  for (const char* s : rules::kQ2ArmStrings) a[n++] = s;
+  return a;
+}();
 #define SE_X(name, qc_name) {qc_name, &run<&ar::name>, 0, nullptr},
 constexpr se_rules_function_v1 kFunctions[] = {SE_COMMON_FUNCTIONS(SE_X) SE_ARENA_FUNCTIONS(SE_X)};
 #undef SE_X
 
 static_assert(std::size(kGlobals) == ar::kGlobalCount && std::size(kFields) == ar::kFieldCount &&
-              std::size(kStrings) == ar::kStringCount &&
+              std::size(kOwnStrings) == ar::kStringCount &&
               std::size(kFunctions) == ar::kFunctionCount);
 
 }  // namespace
@@ -52,7 +63,7 @@ const se_rules_v1& arena_rules() {
                                 static_cast<uint32_t>(std::size(kGlobals)),
                                 kFields,
                                 static_cast<uint32_t>(std::size(kFields)),
-                                kStrings,
+                                kStrings.data(),
                                 static_cast<uint32_t>(std::size(kStrings)),
                                 kFunctions,
                                 static_cast<uint32_t>(std::size(kFunctions))};

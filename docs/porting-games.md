@@ -382,6 +382,11 @@ the skill's lessons before the first edit.
   1/32 short of a plane, so a move's slide over them must push off a plane met twice (Quake II's
   slide does; Quake's does on brushes only), or a player sticks on a sloped face. A remix part is the
   other game's real logic (what it does, its numbers, effects and sounds), never a reskin.
+- A weapon swapped in is the other game's whole: its hand (frames, refire, the held-fire runs),
+  shots, damage, knockback, effects and samples. Lift the weapon's logic to `plugins/classic`
+  first (`q2_arms.hpp`), make its own rules step it from there, then have the played rules step
+  the same code; the swapped rows name only the slot, the ammunition that stands for its own and
+  the files. A weapon's own sounds are never swapped by `cr_sounds`.
 - Each part of a match is one `cr_` switch naming whose part it is, chosen apart from the others:
   items never change the sounds (`cr_sounds` does), the HUD follows the weapons in use, and the
   figures and sounds are swapped on the client, so they hold over any server or mod.

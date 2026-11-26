@@ -4,13 +4,13 @@
 //
 // - **A weapon row** (`WeaponRow`): its slot (the number key, 1..8, and the order the best-weapon
 //   choice prefers); how it fires (`Fire`: a cut in front, pellets, a spike, a bouncing grenade,
-//   a rocket, a beam); the ammunition it spends and how much a shot; how often it fires; its
-//   pellets, the damage of each, their spread; its reach or its missile's speed; a missile's life
-//   (a grenade's fuse); the splash (a blast's radius damage; for a beam, what a discharge in
-//   water does per cell); and by the content's names its view model, its fire sound, its
-//   missile's model, the sound its shot makes where it lands (a cut on a wall, a grenade's
-//   bounce) and its blast's sound; the model it lies on a map as and the ammunition that comes
-//   with it. "-" is none.
+//   a rocket, a beam; or one of Quake II's weapons whole, `q2_*`); the ammunition it spends and how
+//   much a shot; how often it fires; its pellets, the damage of each, their spread; its reach or
+//   its missile's speed; a missile's life (a grenade's fuse); the splash (a blast's radius damage;
+//   for a beam, what a discharge in water does per cell); and by the content's names its view
+//   model, its fire sound, its missile's model, the sound its shot makes where it lands (a cut on a
+//   wall, a grenade's bounce) and its blast's sound; the model it lies on a map as and the
+//   ammunition that comes with it. "-" is none.
 // - **An armour row** (`ArmourRow`): its slot (1..3: the map's three armour items, weakest
 //   first), the share of a blow it takes, its amount, its pickup's model, skin and sound.
 // - **Another game's looks** (`ItemLook`, classic remix): the model and pickup sound another game
@@ -38,8 +38,31 @@
 
 namespace shooters_edge::profiles {
 
-// How a weapon fires: the program's own code for each, the row's numbers in it.
-enum class Fire : uint8_t { melee, pellets, spike, grenade, rocket, beam };
+// How a weapon fires: the program's own code for each, the row's numbers in it; or one of Quake
+// II's weapons whole (`q2_*`: classic remix's `cr_items q2`), which the program fires by Quake II's
+// own hand and shots (plugins/classic/q2_arms.hpp), the row giving only the ammunition it takes
+// and its models and sounds.
+enum class Fire : uint8_t {
+  melee,
+  pellets,
+  spike,
+  grenade,
+  rocket,
+  beam,
+  q2_blaster,
+  q2_shotgun,
+  q2_super_shotgun,
+  q2_machinegun,
+  q2_chaingun,
+  q2_grenade_launcher,
+  q2_rocket_launcher,
+  q2_hyperblaster,
+  q2_railgun,
+  q2_bfg,
+};
+// The first of Quake II's (their order classic/q2_arms.hpp's `Q2ArmId`'s).
+inline constexpr Fire kFireQ2First = Fire::q2_blaster;
+constexpr bool fire_is_q2(Fire f) { return f >= kFireQ2First; }
 // The ammunition a weapon spends.
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -119,8 +142,22 @@ inline constexpr ArmourRow kQ1Armour[] = {
 };
 inline constexpr Arsenal kQ1Arsenal{kQ1Weapons, kQ1Armour};
 
-inline constexpr std::string_view kFireWords[] = {"melee",   "pellets", "spike",
-                                                  "grenade", "rocket",  "beam"};
+inline constexpr std::string_view kFireWords[] = {"melee",
+                                                  "pellets",
+                                                  "spike",
+                                                  "grenade",
+                                                  "rocket",
+                                                  "beam",
+                                                  "q2_blaster",
+                                                  "q2_shotgun",
+                                                  "q2_super_shotgun",
+                                                  "q2_machinegun",
+                                                  "q2_chaingun",
+                                                  "q2_grenade_launcher",
+                                                  "q2_rocket_launcher",
+                                                  "q2_hyperblaster",
+                                                  "q2_railgun",
+                                                  "q2_bfg"};
 inline constexpr std::string_view kAmmoWords[] = {"none", "shells", "nails", "rockets", "cells"};
 
 // A number as the shortest text that reads back as the same float ("0.04", "2.5", "120").

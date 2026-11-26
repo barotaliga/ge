@@ -23,6 +23,7 @@
 #include "shooter/client.hpp"
 #include "shooters_edge/net/qw_record.hpp"
 #include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 
 namespace shooters_edge::net {
 
@@ -296,6 +297,11 @@ ge::classic::WeaponState weapon_state(const sv::RulesWorld& w, int slot, int fra
   ws.ping_ms = w.clients[slot].ping_ms;
   for (int i = 0; i < 4; i++) ws.ammo[i] = static_cast<int>(n.ammo[i]);
   ws.frame = frame;
+  // Quake II's weapon whole in the hand (classic remix's `cr_items q2`): Quake II's hand, which
+  // Quake's prediction would get wrong, so the drawn state is the server's.
+  const auto view = static_cast<size_t>(n.weapon_model);
+  if (view < w.models.size() && shooters_edge::profiles::held_frames(w.models[view]) != nullptr)
+    ws.flags = ge::classic::kWeaponFlagsOff;
   return ws;
 }
 
