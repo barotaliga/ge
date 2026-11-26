@@ -190,6 +190,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // a share of their own size; the smoke's puffs keep theirs. Bigger reads where a shot lands with
   // every enhancement off. Either look.
   double particle_scale = 1;
+  // r_scale: the size the 3D picture is drawn at against the window's, 0.25..1; under 1 it is
+  // drawn smaller, then smoothed over time and upscaled to the window (the HUD stays sharp).
+  // Either look.
+  double render_scale = 1;
   // scr_centertime: how long a centre message stays on the screen, s.
   double centre_time = 2;
   // gl_polyblend: 0 the view never tinted (below).
