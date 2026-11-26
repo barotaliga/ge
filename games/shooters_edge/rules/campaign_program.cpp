@@ -16,6 +16,7 @@
 
 #include "shooters_edge/rules/campaign_decl.hpp"
 #include "shooters_edge/rules/campaign_q2.hpp"
+#include "shooters_edge/rules/q2_arm_strings.hpp"
 
 namespace shooters_edge::server {
 
@@ -58,14 +59,16 @@ constexpr se_rules_def_v1 kFields[] = {SE_COMMON_FIELDS(SE_X) SE_CAMPAIGN_FIELDS
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 constexpr const char* kOwnStrings[] = {SE_RULES_STRINGS(SE_X)};
 #undef SE_X
-// The rules' strings, then Quake II's monsters' (campaign_q2.hpp).
+// The rules' strings, then Quake II's monsters' (campaign_q2.hpp), then Quake II's weapons'
+// (q2_arm_strings.hpp).
 constexpr auto kStrings = [] {
-  std::array<const char*, cp::kStringCount + cp::kSqStringCount> a{};
+  std::array<const char*, cp::kStringCount + cp::kSqStringCount + rules::kQ2ArmStringCount> a{};
   size_t n = 0;
   for (const char* s : kOwnStrings) a[n++] = s;
   for (int k = 0; k < cp::kSqRunCount; k++)
     for (int w = 0; w < cp::kSqWords; w++) a[n++] = cp::sq_word(k, w);
   for (const char* s : cp::kSqShared) a[n++] = s;
+  for (const char* s : rules::kQ2ArmStrings) a[n++] = s;
   return a;
 }();
 #define SE_X(name, qc_name) {qc_name, &run<&cp::name>, 0, nullptr},

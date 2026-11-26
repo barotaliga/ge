@@ -17,8 +17,9 @@
 //   base voice, `player/male/<file>`, which a `*` name is looked up as.
 //
 // The client hears every sound by this table while classic remix is on (client/remix.hpp's
-// `heard_game`), so `cr_items` alone never changes a sound: the other game's weapons fire with
-// the played game's shots until `cr_sounds` names the other game.
+// `heard_game`), but a weapon's own sounds (`SoundMatch::weapon`: its shots, blasts, bounces and
+// hits) are never swapped: a weapon `cr_items` swaps in is its game's whole, its sounds too, and
+// a weapon of the played game keeps its own.
 //
 // ge:summary Classic remix's sounds: Quake's and Quake II's multiplayer sounds paired
 // ge:keywords remix classic-remix cr_sounds sound-swap heard_as sound-match multiplayer-sounds
@@ -40,35 +41,38 @@ struct SoundMatch {
   std::string_view classic;  // "": Quake makes no such sound
   std::string_view q2;
   std::string_view what;  // the part both play, for the lab and the docs
+  // A weapon's own sound (its shot, its blast, its bounce, its hit): it stays the weapon's,
+  // whatever `cr_sounds` names, since a weapon swapped in fires as its own game's whole.
+  bool weapon = false;
 };
 
 inline constexpr SoundMatch kSoundMatches[] = {
     // The weapons' shots, slot by slot as the arsenals pair them (remix_arsenal.hpp).
-    {"weapons/ax1.wav", "weapons/blastf1a.wav", "first slot's swing or shot"},
-    {"weapons/guncock.wav", "weapons/shotgf1b.wav", "shotgun"},
-    {"weapons/shotgn2.wav", "weapons/sshotf1b.wav", "double-barrelled shotgun"},
-    {"weapons/rocket1i.wav", "weapons/machgf1b.wav", "nailgun or machinegun"},
-    {"weapons/spike2.wav", "weapons/machgf2b.wav", "super nailgun or chaingun"},
-    {"weapons/grenade.wav", "weapons/grenlf1a.wav", "grenade launcher"},
-    {"weapons/sgun1.wav", "weapons/rocklf1a.wav", "rocket launcher"},
-    {"weapons/lhit.wav", "weapons/railgf1a.wav", "lightning gun or railgun"},
-    {"weapons/lstart.wav", "weapons/railgf1a.wav", "lightning gun's start"},
-    {"weapons/lhit.wav", "weapons/hyprbf1a.wav", "hyperblaster"},
-    {"weapons/lhit.wav", "weapons/bfg__f1y.wav", "BFG"},
-    {"weapons/grenade.wav", "weapons/hgrent1a.wav", "hand grenade's throw"},
-    {"weapons/rocket1i.wav", "weapons/machgf3b.wav", "machinegun, third shot"},
-    {"weapons/rocket1i.wav", "weapons/machgf4b.wav", "machinegun, fourth shot"},
-    {"weapons/rocket1i.wav", "weapons/machgf5b.wav", "machinegun, fifth shot"},
+    {"weapons/ax1.wav", "weapons/blastf1a.wav", "first slot's swing or shot", true},
+    {"weapons/guncock.wav", "weapons/shotgf1b.wav", "shotgun", true},
+    {"weapons/shotgn2.wav", "weapons/sshotf1b.wav", "double-barrelled shotgun", true},
+    {"weapons/rocket1i.wav", "weapons/machgf1b.wav", "nailgun or machinegun", true},
+    {"weapons/spike2.wav", "weapons/machgf2b.wav", "super nailgun or chaingun", true},
+    {"weapons/grenade.wav", "weapons/grenlf1a.wav", "grenade launcher", true},
+    {"weapons/sgun1.wav", "weapons/rocklf1a.wav", "rocket launcher", true},
+    {"weapons/lhit.wav", "weapons/railgf1a.wav", "lightning gun or railgun", true},
+    {"weapons/lstart.wav", "weapons/railgf1a.wav", "lightning gun's start", true},
+    {"weapons/lhit.wav", "weapons/hyprbf1a.wav", "hyperblaster", true},
+    {"weapons/lhit.wav", "weapons/bfg__f1y.wav", "BFG", true},
+    {"weapons/grenade.wav", "weapons/hgrent1a.wav", "hand grenade's throw", true},
+    {"weapons/rocket1i.wav", "weapons/machgf3b.wav", "machinegun, third shot", true},
+    {"weapons/rocket1i.wav", "weapons/machgf4b.wav", "machinegun, fourth shot", true},
+    {"weapons/rocket1i.wav", "weapons/machgf5b.wav", "machinegun, fifth shot", true},
     // What the shots do.
-    {"weapons/r_exp3.wav", "weapons/rocklx1a.wav", "rocket's blast"},
-    {"weapons/r_exp3.wav", "weapons/grenlx1a.wav", "grenade's blast"},
-    {"weapons/bounce.wav", "weapons/grenlb1b.wav", "grenade's bounce"},
-    {"weapons/bounce.wav", "weapons/hgrenb1a.wav", "hand grenade's bounce"},
-    {"weapons/bounce.wav", "weapons/hgrenb2a.wav", "hand grenade's second bounce"},
-    {"weapons/ric1.wav", "world/ric1.wav", "ricochet"},
-    {"weapons/ric2.wav", "world/ric2.wav", "ricochet"},
-    {"weapons/ric3.wav", "world/ric3.wav", "ricochet"},
-    {"weapons/tink1.wav", "world/ric1.wav", "nail on a wall"},
+    {"weapons/r_exp3.wav", "weapons/rocklx1a.wav", "rocket's blast", true},
+    {"weapons/r_exp3.wav", "weapons/grenlx1a.wav", "grenade's blast", true},
+    {"weapons/bounce.wav", "weapons/grenlb1b.wav", "grenade's bounce", true},
+    {"weapons/bounce.wav", "weapons/hgrenb1a.wav", "hand grenade's bounce", true},
+    {"weapons/bounce.wav", "weapons/hgrenb2a.wav", "hand grenade's second bounce", true},
+    {"weapons/ric1.wav", "world/ric1.wav", "ricochet", true},
+    {"weapons/ric2.wav", "world/ric2.wav", "ricochet", true},
+    {"weapons/ric3.wav", "world/ric3.wav", "ricochet", true},
+    {"weapons/tink1.wav", "world/ric1.wav", "nail on a wall", true},
     // The items.
     {"weapons/pkup.wav", "misc/w_pkup.wav", "weapon picked up"},
     {"weapons/lock4.wav", "misc/am_pkup.wav", "ammunition picked up"},
@@ -139,11 +143,13 @@ constexpr int sound_column(std::string_view game) {
 }
 
 // The sound `name` (as either game names it, any case) heard as `game`'s: that game's name by the
-// first row whose other column names it, "" when that game makes no such sound, else `name`.
+// first row whose other column names it, "" when that game makes no such sound, else `name`. A
+// weapon's own sound is heard as it is named: the weapon that fired it is its game's whole.
 constexpr std::string_view heard_as(std::string_view name, std::string_view game) {
   const int to = sound_column(game);
   if (to < 0 || name.empty()) return name;
   for (const SoundMatch& m : kSoundMatches) {
+    if (m.weapon) continue;
     const std::string_view cols[2] = {m.classic, m.q2};
     for (int c = 0; c < 2; c++) {
       if (c == to || cols[c].empty()) continue;

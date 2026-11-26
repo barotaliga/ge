@@ -32,6 +32,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "classic/q2_arms.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 
@@ -138,33 +139,61 @@ struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): 
   Q2Pack pack = Q2Pack::base;
 };
 
+// A base game's weapon's row: its numbers the shared hand's (classic/q2_arms.hpp), so these
+// rules and another game's wearing Quake II's weapons fire the same weapon.
+constexpr SqWeaponRow sq_base_row(ge::classic::Q2ArmId id, const char* item, const char* view,
+                                  const char* sound, SqAmmo ammo, SqShot shot) {
+  const ge::classic::Q2Arm& a = ge::classic::q2_arm(id);
+  return {a.name,
+          item,
+          view,
+          sound,
+          ammo,
+          a.per_shot,
+          a.frames.last_activate,
+          a.frames.last_fire,
+          a.frames.last_idle,
+          a.frames.last_deactivate,
+          a.frames.fire_from,
+          a.frames.fire_to,
+          shot,
+          a.damage_dm,
+          a.damage_sp,
+          a.kick,
+          a.forward,
+          a.right};
+}
+
 inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
-    {"Blaster", nullptr, "models/weapons/v_blast/tris.md2", "weapons/blastf1a.wav", SqAmmo::none, 0,
-     4, 8, 52, 55, 5, 5, SqShot::bolt, 15, 10, 1, 24, 8},
-    {"Shotgun", "weapon_shotgun", "models/weapons/v_shotg/tris.md2", "weapons/shotgf1b.wav",
-     SqAmmo::shells, 1, 7, 18, 36, 39, 8, 8, SqShot::pellets, 4, 4, 8, 8, 8},
-    {"Super Shotgun", "weapon_supershotgun", "models/weapons/v_shotg2/tris.md2",
-     "weapons/sshotf1b.wav", SqAmmo::shells, 2, 6, 17, 57, 61, 7, 7, SqShot::pellets, 6, 6, 12, 8,
-     8},
-    {"Machinegun", "weapon_machinegun", "models/weapons/v_machn/tris.md2", "weapons/machgf1b.wav",
-     SqAmmo::bullets, 1, 3, 5, 45, 49, 4, 5, SqShot::bullet, 8, 8, 2, 8, 8},
-    {"Chaingun", "weapon_chaingun", "models/weapons/v_chain/tris.md2", "weapons/machgf2b.wav",
-     SqAmmo::bullets, 1, 4, 31, 61, 64, 5, 21, SqShot::bullet, 6, 8, 2, 8, 7},
-    {"Grenade Launcher", "weapon_grenadelauncher", "models/weapons/v_launch/tris.md2",
-     "weapons/grenlf1a.wav", SqAmmo::grenades, 1, 5, 16, 59, 64, 6, 6, SqShot::grenade, 120, 120, 0,
-     8, 8},
-    {"Rocket Launcher", "weapon_rocketlauncher", "models/weapons/v_rocket/tris.md2",
-     "weapons/rocklf1a.wav", SqAmmo::rockets, 1, 4, 12, 50, 54, 5, 5, SqShot::rocket, 100, 100, 0,
-     8, 8},
-    {"HyperBlaster", "weapon_hyperblaster", "models/weapons/v_hyperb/tris.md2",
-     "weapons/hyprbf1a.wav", SqAmmo::cells, 1, 5, 20, 49, 53, 6, 11, SqShot::bolt, 15, 20, 1, 24,
-     8},
-    {"Railgun", "weapon_railgun", "models/weapons/v_rail/tris.md2", "weapons/railgf1a.wav",
-     SqAmmo::slugs, 1, 3, 18, 56, 61, 4, 4, SqShot::rail, 100, 150, 200, 0, 7},
-    {"BFG10K", "weapon_bfg", "models/weapons/v_bfg/tris.md2", "weapons/bfg__f1y.wav", SqAmmo::cells,
-     50, 8, 32, 55, 58, 17, 17, SqShot::bfg, 200, 500, 0, 8, 8},
-    {"Grenades", "ammo_grenades", "models/weapons/v_handgr/tris.md2", "weapons/hgrent1a.wav",
-     SqAmmo::grenades, 1, 0, 15, 48, 48, 11, 12, SqShot::hand_grenade, 125, 125, 0, 8, 8},
+    sq_base_row(ge::classic::Q2ArmId::blaster, nullptr, "models/weapons/v_blast/tris.md2",
+                "weapons/blastf1a.wav", SqAmmo::none, SqShot::bolt),
+    sq_base_row(ge::classic::Q2ArmId::shotgun, "weapon_shotgun", "models/weapons/v_shotg/tris.md2",
+                "weapons/shotgf1b.wav", SqAmmo::shells, SqShot::pellets),
+    sq_base_row(ge::classic::Q2ArmId::super_shotgun, "weapon_supershotgun",
+                "models/weapons/v_shotg2/tris.md2", "weapons/sshotf1b.wav", SqAmmo::shells,
+                SqShot::pellets),
+    sq_base_row(ge::classic::Q2ArmId::machinegun, "weapon_machinegun",
+                "models/weapons/v_machn/tris.md2", "weapons/machgf1b.wav", SqAmmo::bullets,
+                SqShot::bullet),
+    sq_base_row(ge::classic::Q2ArmId::chaingun, "weapon_chaingun",
+                "models/weapons/v_chain/tris.md2", "weapons/machgf2b.wav", SqAmmo::bullets,
+                SqShot::bullet),
+    sq_base_row(ge::classic::Q2ArmId::grenade_launcher, "weapon_grenadelauncher",
+                "models/weapons/v_launch/tris.md2", "weapons/grenlf1a.wav", SqAmmo::grenades,
+                SqShot::grenade),
+    sq_base_row(ge::classic::Q2ArmId::rocket_launcher, "weapon_rocketlauncher",
+                "models/weapons/v_rocket/tris.md2", "weapons/rocklf1a.wav", SqAmmo::rockets,
+                SqShot::rocket),
+    sq_base_row(ge::classic::Q2ArmId::hyperblaster, "weapon_hyperblaster",
+                "models/weapons/v_hyperb/tris.md2", "weapons/hyprbf1a.wav", SqAmmo::cells,
+                SqShot::bolt),
+    sq_base_row(ge::classic::Q2ArmId::railgun, "weapon_railgun", "models/weapons/v_rail/tris.md2",
+                "weapons/railgf1a.wav", SqAmmo::slugs, SqShot::rail),
+    sq_base_row(ge::classic::Q2ArmId::bfg, "weapon_bfg", "models/weapons/v_bfg/tris.md2",
+                "weapons/bfg__f1y.wav", SqAmmo::cells, SqShot::bfg),
+    sq_base_row(ge::classic::Q2ArmId::hand_grenade, "ammo_grenades",
+                "models/weapons/v_handgr/tris.md2", "weapons/hgrent1a.wav", SqAmmo::grenades,
+                SqShot::hand_grenade),
     // The Reckoning's (porting note: q2-reckoning-rules.md §§ 1 to 5). The phalanx takes its mag
     // slug with the second ball (a pull's), the trap steps as the hand grenade does.
     {"Ionripper", "weapon_boomer", "models/weapons/v_boomer/tris.md2", "weapons/rippfire.wav",
@@ -193,6 +222,15 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
     {"Tesla", "ammo_tesla", "models/weapons/v_tesla/tris.md2", "weapons/hgrent1a.wav",
      SqAmmo::tesla, 1, 0, 8, 32, 32, 1, 2, SqShot::tesla, 3, 3, 8, 0, -4, Q2Pack::ground_zero},
 };
+
+// A row's runs of frames and how weapon `w`'s fire frames fire, as the shared hand steps them.
+constexpr ge::classic::Q2ArmFrames sq_runs(const SqWeaponRow& r) {
+  return {r.last_activate, r.last_fire, r.last_idle, r.last_deactivate, r.fire_from, r.fire_to};
+}
+constexpr ge::classic::Q2Held sq_held_fire(int w) {
+  return w >= 0 && w < ge::classic::kQ2ArmCount ? ge::classic::kQ2Arms[w].held
+                                                : ge::classic::Q2Held::once;
+}
 
 // The pack each shot kind belongs to, by `SqShot` (its missile model registered only under it).
 inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {
