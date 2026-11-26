@@ -782,7 +782,10 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
       const bool riding =
           f.bot.pilot.pilot.mode == sb::PilotMode::ride && self.waterlevel == 0 &&
           (carried || (f.bot.pilot.pilot.set.under_plat && (ed.flags & sh::kFlagOnGround) != 0));
-      if (!escaping && !was_diving && !riding &&
+      // Nor halfway up a ladder, where no node is near either: walked to the nearest
+      // he pressed back off the rungs, fell and climbed again for good (The Reckoning's xsewer1).
+      const bool climbing = f.bot.pilot.pilot.climbing;
+      if (!escaping && !was_diving && !riding && !climbing &&
           ((pool && (f.dry_pockets || swim)) || sb::nav_nearest(g, self.origin) < 0)) {
         f.lost++;
         // The nearest few by distance; the first of them in a clear line is walked or swum at (out
