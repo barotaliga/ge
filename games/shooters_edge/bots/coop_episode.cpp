@@ -413,16 +413,17 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       if (frames_out != nullptr) {
         const sv::WorldEntity& f = after.world.entities[1];
         const sh::MoveCmd& lc = recent[0].cmds[2];  // the leader's command this frame
-        std::fprintf(frames_out,
-                     "%s %d %016llx %a %a %a %a %a %a %d v %a %a %a fl %d cmd %d %a %a %d %d %d %d\n",
-                     c.map.name.c_str(), frame, static_cast<unsigned long long>(h),
-                     static_cast<double>(f.origin.x), static_cast<double>(f.origin.y),
-                     static_cast<double>(f.origin.z), static_cast<double>(f.view_angles.x),
-                     static_cast<double>(f.view_angles.y), static_cast<double>(f.health),
-                     after.sv.num_edicts, static_cast<double>(f.velocity.x),
-                     static_cast<double>(f.velocity.y), static_cast<double>(f.velocity.z), f.flags,
-                     lc.msec, static_cast<double>(lc.angles.x), static_cast<double>(lc.angles.y),
-                     lc.forward, lc.side, lc.up, lc.buttons);
+        std::fprintf(
+            frames_out,
+            "%s %d %016llx %a %a %a %a %a %a %d v %a %a %a fl %d cmd %d %a %a %d %d %d %d\n",
+            c.map.name.c_str(), frame, static_cast<unsigned long long>(h),
+            static_cast<double>(f.origin.x), static_cast<double>(f.origin.y),
+            static_cast<double>(f.origin.z), static_cast<double>(f.view_angles.x),
+            static_cast<double>(f.view_angles.y), static_cast<double>(f.health),
+            after.sv.num_edicts, static_cast<double>(f.velocity.x),
+            static_cast<double>(f.velocity.y), static_cast<double>(f.velocity.z), f.flags, lc.msec,
+            static_cast<double>(lc.angles.x), static_cast<double>(lc.angles.y), lc.forward, lc.side,
+            lc.up, lc.buttons);
       }
       if (opt.census && frame % 6 == 0) census_look(census, em, c.server, false);
       const sv::WorldEntity& L = after.world.entities[1];
