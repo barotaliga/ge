@@ -646,6 +646,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // The last command's finger with the launcher carried (FingerWhy), -1 without it: what a
   // runner samples beside its own view of the match (net/qw_team.cpp, 18b).
   int32_t finger_last = -1;
+  int32_t finger_now = -1;  // every live command's finger by its reason (FingerWhy), any weapon
   int32_t held_number = 0;  // the weapon up on the last command, by its number (0: none)
   int32_t press = 0;
   ge::core::Rng press_rng{1};

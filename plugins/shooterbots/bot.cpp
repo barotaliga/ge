@@ -505,6 +505,8 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // On a ladder the view is the climb's: turned off its face (to aim, or to a spot watched) he
   // stops climbing and slides along its foot (base2's trench held him there for good).
   if (b.pilot.pilot.climbing) fresh = false;
+  // A jump lined up, run at and flown is the pilot's view: a spot watched waits (`leaping_mode`).
+  if (leaping_mode(b.pilot.pilot.mode)) b.look = false;
   double want[2];
   bool back_stroke = false;  // (`paceback`) the view back to the way by the hand's own stroke
   if (fresh) {

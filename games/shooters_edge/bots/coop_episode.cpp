@@ -417,7 +417,7 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         std::fprintf(
             frames_out,
             "%s %d %016llx %a %a %a %a %a %a %d v %a %a %a fl %d cmd %d %a %a %d %d %d %d fight %s "
-            "pilot %s %zu/%zu | %s\n",
+            "finger %s weapon %d target %d at %.0f pilot %s %zu/%zu | %s\n",
             c.map.name.c_str(), frame, static_cast<unsigned long long>(h),
             static_cast<double>(f.origin.x), static_cast<double>(f.origin.y),
             static_cast<double>(f.origin.z), static_cast<double>(f.view_angles.x),
@@ -425,8 +425,13 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
             after.sv.num_edicts, static_cast<double>(f.velocity.x),
             static_cast<double>(f.velocity.y), static_cast<double>(f.velocity.z), f.flags, lc.msec,
             static_cast<double>(lc.angles.x), static_cast<double>(lc.angles.y), lc.forward, lc.side,
-            lc.up, lc.buttons, sb::fight_mode_name(m.players[0].mode), sb::pilot_mode_name(lp.mode),
-            lp.k, lp.route.size(), lp.because != nullptr ? lp.because : "");
+            lc.up, lc.buttons, sb::fight_mode_name(m.players[0].mode),
+            m.players[0].finger_now >= 0
+                ? sb::kFingerWhyNames[static_cast<size_t>(m.players[0].finger_now)]
+                : "-",
+            m.players[0].held_number, m.players[0].bot.target,
+            static_cast<double>(m.players[0].bot.aim_dist), sb::pilot_mode_name(lp.mode), lp.k,
+            lp.route.size(), lp.because != nullptr ? lp.because : "");
       }
       if (opt.census && frame % 6 == 0) census_look(census, em, c.server, false);
       const sv::WorldEntity& L = after.world.entities[1];
