@@ -1366,12 +1366,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                 gg.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
             if (kl.mover != l.mover) continue;
             const Vec3f o = gg.nodes[static_cast<size_t>(kl.to)].origin;
-            Vec3f lo = n.origin, hi = n.origin;
-            for (int i = 0; i < 3; i++) {
-              if (o[i] < lo[i]) lo[i] = o[i];
-              if (o[i] > hi[i]) hi[i] = o[i];
-            }
-            if (boxes_meet(lo + kPlayerMins, hi + kPlayerMaxs, now_m->absmin, now_m->absmax))
+            if (leaf_in_way(n.origin, o, flies(kl.kind), now_m->absmin, now_m->absmax))
               p.cut.push_back({static_cast<int32_t>(na), kl.to, kl.kind, kl.time_s});
           }
         }
