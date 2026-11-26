@@ -95,7 +95,7 @@ int16_t ammo_icon(hud::Weapon w) {
 // the grenade launcher; The Reckoning's ion ripper the beam, its phalanx the rocket launcher, its
 // trap the grenade launcher; Ground Zero's chainfist the shotgun (as the blaster), its ETF rifle
 // the nailgun, its prox launcher and tesla the grenade launcher, its plasma beam and disruptor the
-// beam.
+// beam. Quake's own eight, fired whole (server/q2_quake_arms.hpp), are themselves.
 constexpr hud::Weapon kWorn[server::kSqWeaponCount] = {
     hud::Weapon::shotgun,         hud::Weapon::double_shotgun,   hud::Weapon::double_shotgun,
     hud::Weapon::nailgun,         hud::Weapon::heavy_nailgun,    hud::Weapon::grenade_launcher,
@@ -103,7 +103,10 @@ constexpr hud::Weapon kWorn[server::kSqWeaponCount] = {
     hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher, hud::Weapon::beam_gun,
     hud::Weapon::rocket_launcher, hud::Weapon::grenade_launcher, hud::Weapon::shotgun,
     hud::Weapon::nailgun,         hud::Weapon::grenade_launcher, hud::Weapon::beam_gun,
-    hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher};
+    hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher, hud::Weapon::melee,
+    hud::Weapon::shotgun,         hud::Weapon::double_shotgun,   hud::Weapon::nailgun,
+    hud::Weapon::heavy_nailgun,   hud::Weapon::grenade_launcher, hud::Weapon::rocket_launcher,
+    hud::Weapon::beam_gun};
 
 }  // namespace
 
@@ -132,6 +135,7 @@ hud::Status q2_joined_status(const DemoState& s, double t) {
       gun > 0 && static_cast<size_t>(gun) < s.models.size() ? s.models[size_t(gun)] : "";
   for (int k = 0; k < server::kSqWeaponCount; k++) {
     const server::SqWeaponRow& r = server::kSqWeapons[size_t(k)];
+    if (r.quake) continue;  // Quake's eight are never on Quake II's keys
     if (held == r.view_model) h.keyed.in_hand = k + 1;
     const int have = r.ammo == SqAmmo::none || !known ? -1 : count(ammo_item(r.ammo));
     h.keyed.ammo[static_cast<size_t>(k) + 1] = have;
@@ -167,14 +171,15 @@ hud::Status worn_status(const server::Q2Server& sq, double t) {
   s.ammo = {ammo(SqAmmo::shells), ammo(SqAmmo::bullets),
             ammo(held == SqAmmo::grenades ? SqAmmo::grenades : SqAmmo::rockets),
             ammo(held == SqAmmo::slugs ? SqAmmo::slugs : SqAmmo::cells)};
-  for (int k = 0; k < server::kSqWeaponCount; k++)
-    if (server::sq_holds(b, k))
+  for (int k = 0; k < server::kSqWeaponCount; k++)  // the melee weapon has no place on the bar
+    if (server::sq_holds(b, k) && kWorn[k] != hud::Weapon::melee)
       s.owned = static_cast<uint8_t>(s.owned | (1u << (static_cast<int>(kWorn[k]) - 1)));
   s.weapon = kWorn[w];
-  // Quake II's own weapon keys (key k + 1 asks for weapon k): the quick weapon and the groups.
-  s.keyed.set = true;
+  // Quake II's own weapon keys (key k + 1 asks for weapon k): the quick weapon and the groups;
+  // with Quake's weapons fired whole, Quake's own eight keys (unset).
+  s.keyed.set = !b.quake;
   s.keyed.in_hand = w + 1;
-  for (int k = 0; k < server::kSqWeaponCount; k++) {
+  for (int k = 0; k < server::kSqWeaponCount && !b.quake; k++) {
     const server::SqWeaponRow& r = server::kSqWeapons[size_t(k)];
     const int have = r.ammo == SqAmmo::none ? -1 : ammo(r.ammo);
     s.keyed.ammo[static_cast<size_t>(k) + 1] = have;

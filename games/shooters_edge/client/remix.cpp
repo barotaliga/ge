@@ -152,8 +152,9 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose menu is drawn under classic remix: its pictures, titles and cursor, "
-                      "and the letters the menu, the console and the status bar's counts are "
-                      "written in. The pages and their settings stay the played game's.",
+                      "the console's background, and the letters the menu, the console and the "
+                      "status bar's counts are written in. The pages and their settings stay the "
+                      "played game's.",
               .kind = ge::console::CvarKind::text,
               .values = kWhoseValues},
              &out->menu);

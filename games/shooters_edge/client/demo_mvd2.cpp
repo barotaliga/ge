@@ -562,6 +562,10 @@ struct Mvd2ToQ2 final : ConvertStream {
     const std::string& model = r.level.config_strings[cs];
     for (int k = 0; k < server::kSqWeaponCount; k++) {
       if (model != server::kSqWeapons[k].view_model) continue;
+      if (server::kSqWeapons[k].quake) {  // Quake's own: the axe none, the rest by their order
+        const int q = k - server::kSqQuakeFirst;
+        return q == 0 ? 0 : 1 << (q - 1);
+      }
       switch (server::kSqWeapons[k].shot) {
         case server::SqShot::pellets:
           return std::string(server::kSqWeapons[k].name).find("Super") == 0 ? 2 : 1;
@@ -590,7 +594,14 @@ struct Mvd2ToQ2 final : ConvertStream {
         case server::SqShot::nuke:
           return 16;
         case server::SqShot::flechette:  // Ground Zero's: the nailguns' and the beam gun's
+        case server::SqShot::q1_spike:
           return 4;
+        case server::SqShot::q1_super_spike:
+          return 8;
+        case server::SqShot::q1_grenade:
+          return 16;
+        case server::SqShot::q1_rocket:
+          return 32;
         case server::SqShot::tracker:
         case server::SqShot::heat_beam:
           return 64;

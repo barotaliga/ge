@@ -17,6 +17,7 @@ are each game's [`rules.md`](rules.md).
 | Classic enhance | `plugins/classicenhance/weapons.hpp` | The pack's held weapons as view models: the form, the skin, the floor's light (`ce_weapons`) |
 | Shell | `games/shooters_edge/view/hand.hpp` | The hand: the switch, the shot's kick and flash, the cvars; a classic row placed at the eye where its files author it (`Hand::at_eye`) |
 | Shell | `games/shooters_edge/client/held.cpp` (`step_q2_arms_held`) | Quake II's weapons fired whole by the classic rules (remix): the view model on the frame the rules' hand is on, every frame kept |
+| Classic plugin | `plugins/classic/q1_arms.hpp` (`q1_view_frame`) | Quake's view models' fire runs (frame 0 stands still; the nailguns and the beam loop while held), for Quake II's rules wearing Quake's weapons (remix) |
 | Shell | `games/shooters_edge/client/held.hpp` | Which set (`load_held_set`: the loaded game's own, else Shooter's Edge's), which weapon, a shot, the look, the stride; driven from a recording or a joined server (`step_demo_held`) |
 | Shell | `games/shooters_edge/view/weapons.hpp`, `content/models/view/` | Shooter's Edge's OWN set, built in Blender (`held-weapons` skill), for its own content only |
 

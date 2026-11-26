@@ -14,9 +14,12 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
+#include "classic/q1_arms.hpp"
 #include "shooters_edge/rules/variant.hpp"
 
 namespace shooters_edge::server::rules::SE_RULES_NS {
+
+namespace gc = ge::classic;
 
 namespace {
 
@@ -483,14 +486,14 @@ namespace {
 void quake_blade(A& q) {
   const int32_t me = q.self();
   q.makevectors(q.v(me, q.L.f.v_angle));
-  const Vec3 from = q.v(me, q.L.f.origin) + Vec3{0, 0, 16};
-  q.traceline(from, from + q.v_forward() * 64, kLagged, me);
+  const Vec3 from = q.v(me, q.L.f.origin) + Vec3{0, 0, gc::kQ1EyeLift};
+  q.traceline(from, from + q.v_forward() * gc::kQ1AxeReach, kLagged, me);
   if (q.gf(q.L.g.trace_fraction) == 1) return;
   const int32_t hit = q.gi(q.L.g.trace_ent);
   if (on(q.f(hit, q.L.f.takedamage))) {
     q.set_i(hit, f_deathtype, q.s(s_cut_down));
     const float dm = q.deathmatch();
-    damage(q, hit, me, me, ((dm == 4) | (dm == 5)) ? 75.0f : 20.0f);
+    damage(q, hit, me, me, ((dm == 4) | (dm == 5)) ? 75.0f : gc::kQ1AxeDamage);
     effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 1);
   } else {
     weapon_sound(q, me, kWBlade, 13);
@@ -508,7 +511,7 @@ void quake_pellets(A& q, float pellets, float across, float up) {
     const float r1 = crandom(q);
     const float r2 = crandom(q);
     const Vec3 dir = q.v_forward() + q.v_right() * (r1 * across) + q.v_up() * (r2 * up);
-    q.traceline(from, from + dir * 2048, kLagged, me);
+    q.traceline(from, from + dir * gc::kQ1PelletReach, kLagged, me);
     if (q.gf(q.L.g.trace_fraction) == 1) continue;
     const int32_t hit = q.gi(q.L.g.trace_ent);
     if (!on(q.f(hit, q.L.f.takedamage))) {
@@ -522,7 +525,7 @@ void quake_pellets(A& q, float pellets, float across, float up) {
       q.set_i(struck, f_deathtype, q.s(s_shot));
       summed = 0;
     }
-    summed = summed + 4;
+    summed = summed + gc::kQ1PelletDamage;
   }
   if (summed > 0) damage(q, struck, me, me, summed);
 }
@@ -531,8 +534,8 @@ void quake_pellets(A& q, float pellets, float across, float up) {
 // centre line and two side lines, 30 to each thing they meet once.
 void quake_arc(A& q) {
   const int32_t me = q.self();
-  const Vec3 from = q.v(me, q.L.f.origin) + Vec3{0, 0, 16};
-  q.traceline(from, from + q.v_forward() * 600, 1, me);
+  const Vec3 from = q.v(me, q.L.f.origin) + Vec3{0, 0, gc::kQ1EyeLift};
+  q.traceline(from, from + q.v_forward() * gc::kQ1BeamReach, 1, me);
   const Vec3 end = q.gv(q.L.g.trace_endpos);
   effect_beam(q, from, end);
   const Vec3 to = end + q.v_forward() * 4;
@@ -552,7 +555,7 @@ void quake_arc(A& q) {
     met[line] = hit;
     effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 1);
     q.set_i(hit, f_deathtype, q.s(s_shafted));
-    damage(q, hit, me, me, 30);
+    damage(q, hit, me, me, gc::kQ1BeamDamage);
   }
 }
 
@@ -566,7 +569,8 @@ void quake_discharge(A& q, float w) {
     damage(q, me, me, me, 4000);
     return;
   }
-  radius_damage(q, me, me, 35 * ammo_for(q, w), q.world(), q.s(s_electrocuted));
+  radius_damage(q, me, me, gc::kQ1DischargePerCell * ammo_for(q, w), q.world(),
+                q.s(s_electrocuted));
   ammo_spend(q, w, ammo_for(q, w));
 }
 
@@ -601,26 +605,26 @@ void quake_weapon_frame(A& q) {
   quake_quad_heard(q);
   if (w == kWBlade) {
     weapon_sound(q, me, w, 11);
-    q.set_f(me, f_blade_at, q.time() + 0.2f);
+    q.set_f(me, f_blade_at, q.time() + gc::kQ1AxeDelay);
   } else if ((w == kWScatter) | ((w == kWDouble) & single)) {
     ammo_spend(q, w, 1);
     weapon_sound(q, me, kWScatter, 11);
-    quake_pellets(q, 6, 0.04f, 0.04f);
+    quake_pellets(q, gc::kQ1ShotgunPellets, gc::kQ1ShotgunAcross, gc::kQ1ShotgunUp);
   } else if (w == kWDouble) {
     ammo_spend(q, w, 2);
     weapon_sound(q, me, w, 11);
-    quake_pellets(q, 14, 0.14f, 0.08f);
+    quake_pellets(q, gc::kQ1SuperPellets, gc::kQ1SuperAcross, gc::kQ1SuperUp);
   } else if ((w == kWSpiker) | (w == kWHeavySpiker)) {
     const bool heavy = (w == kWHeavySpiker) & !single;
     ammo_spend(q, w, heavy ? 2.0f : 1.0f);
     weapon_sound(q, me, heavy ? w : kWSpiker, 11);
     const int32_t m = launch_weapon(q, heavy ? w : kWSpiker, kMovetypeFlymissile);
     q.set_i(m, q.L.f.classname, q.s(s_spike));
-    q.set_f(m, f_dmg, heavy ? 18.0f : 9.0f);
+    q.set_f(m, f_dmg, heavy ? gc::kQ1SuperSpikeDamage : gc::kQ1SpikeDamage);
     q.set_i(m, q.L.f.touch, q.fn(fn_spike_touch));
-    Vec3 at = q.v(me, q.L.f.origin) + Vec3{0, 0, 16};
+    Vec3 at = q.v(me, q.L.f.origin) + Vec3{0, 0, gc::kQ1EyeLift};
     if (!heavy) {  // the spiker's barrels, right then left
-      const float side = q.f(me, f_nail_side) == 0 ? 4.0f : -4.0f;
+      const float side = q.f(me, f_nail_side) == 0 ? gc::kQ1NailSide : -gc::kQ1NailSide;
       q.set_f(me, f_nail_side, q.f(me, f_nail_side) == 0 ? 1.0f : 0.0f);
       at = at + q.v_right() * side;
     }
@@ -634,13 +638,14 @@ void quake_weapon_frame(A& q) {
     }
     weapon_sound(q, me, w, 11);
     const int32_t m = fire_grenade(q, w);
-    Vec3 v = q.v_forward() * 600;
+    Vec3 v = q.v_forward() * gc::kQ1GrenadeSpeed;
     if (q.v(me, q.L.f.v_angle).x != 0) {
       const float r1 = crandom(q);
       const float r2 = crandom(q);
-      v = v + q.v_up() * 200 + q.v_right() * (r1 * 10) + q.v_up() * (r2 * 10);
+      v = v + q.v_up() * gc::kQ1GrenadeLift + q.v_right() * (r1 * gc::kQ1GrenadeScatter) +
+          q.v_up() * (r2 * gc::kQ1GrenadeScatter);
     } else {
-      v.z = 200;
+      v.z = gc::kQ1GrenadeLift;
     }
     q.set_v(m, q.L.f.velocity, v);
     q.set_v(m, q.L.f.angles, q.vectoangles(v));
@@ -648,7 +653,8 @@ void quake_weapon_frame(A& q) {
     ammo_spend(q, w, 1);
     weapon_sound(q, me, w, 11);
     const int32_t m = fire_rocket(q, w);
-    q.setorigin(m, q.v(me, q.L.f.origin) + q.v_forward() * 8 + Vec3{0, 0, 16});
+    q.setorigin(m, q.v(me, q.L.f.origin) + q.v_forward() * gc::kQ1RocketForward +
+                       Vec3{0, 0, gc::kQ1EyeLift});
   } else if (w == kWArc) {
     if (q.f(me, f_beam_held) == 0) {
       q.sound(me, kChanAuto, q.s(s_lstart_wav), 1, kAttnNorm);
@@ -660,7 +666,7 @@ void quake_weapon_frame(A& q) {
       ammo_spend(q, w, 1);
       if (q.time() >= q.f(me, f_beam_next)) {
         q.sound(me, kChanWeapon, q.s(s_lhit_wav), 1, kAttnNorm);
-        q.set_f(me, f_beam_next, q.time() + 0.6f);
+        q.set_f(me, f_beam_next, q.time() + gc::kQ1BeamSoundEvery);
       }
       quake_arc(q);
     }
