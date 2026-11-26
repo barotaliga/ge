@@ -32,6 +32,13 @@ bool loaded(const Stats& st, const BotWeapon& w) {
   return (st.items & w.bit) != 0 && ammo_of(st, w.ammo) >= w.cost;
 }
 
+float loaded_reach(const Stats& st) {
+  float reach = 0;
+  for (const BotWeapon& w : st.arsenal->weapons)
+    if (loaded(st, w)) reach = std::max(reach, w.range);
+  return reach;
+}
+
 double weapon_score(const BotWeapon& w, float d) {
   switch (w.curve) {
     case WeaponCurve::blade:

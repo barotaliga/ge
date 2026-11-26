@@ -63,6 +63,8 @@ using namespace fighter_parts;
 constexpr float kRetreatBelow = 50;        // health plus armour's protection: weak under this
 constexpr float kStrongAgain = 80;         // and strong again at this
 constexpr double kChase_s = 3;             // a contact lost this long ago is still chased
+constexpr float kBladeReach = 200;         // a reach under this is a blade's (`outreach`)
+constexpr double kOutReach_s = 5;          // a foe in sight past it this long: not fought
 constexpr double kModeBeat_s = 0.5;        // a person's beat: a mode held this long (`beat`)
 constexpr double kShotWait_s = 0.15;       // a rocket jump's shot waits this long for the jump key
 constexpr float kUnlockShot = 900;         // a goal item's shot button fired at from within this
@@ -895,7 +897,17 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
   const bool cornered =
       seen_now &&
       dist(eye, at_of(c->seen)) < (f.temper == sb::Temper::coward ? kCowardCornered : kCornered);
-  const bool engage = c && (cornered || sb::takes_fight(f.temper, f.edge, mine, theirs));
+  // (`outreach`) A blade alone loaded, and the foe in sight kept past its reach for kOutReach_s:
+  // not a fight it can make (e1m4: a monster across the pit held with the axe for nine minutes).
+  const bool blade_only = sb::loaded_reach(st) < kBladeReach;
+  if (!blade_only || !seen_now || dist(eye, at_of(c->seen)) <= kBladeReach)
+    f.unreached_at = -1;
+  else if (f.unreached_at < 0)
+    f.unreached_at = t;
+  const bool unreached = f.unreached_at >= 0 && t - f.unreached_at > kOutReach_s;
+  if (unreached) f.stats.out_reach++;
+  const bool engage =
+      c && !unreached && (cornered || sb::takes_fight(f.temper, f.edge, mine, theirs));
   // (`itemfirst`) A key item of its own to have: its goal a key item there, or back within its run
   // and kItemDueSpare_s, and the enemy not heard firing the launcher or the arc (a key item he
   // would drop is worth the fight). Experts leave a fight to time an item: no chase, and the
