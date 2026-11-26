@@ -1126,3 +1126,18 @@ TEST(classic_game_the_stats_words_answer_and_are_not_bad_commands) {
   CHECK_MSG(!bad_stats, all);
   CHECK_MSG(bad_other, all);  // an unknown word is still refused
 }
+
+// With no lobby, `team <name>` keeps Quake's meaning on our server: the player's team in his user
+// info (teamplay's teams, team chat), never a bad command; `team` alone says it.
+TEST(classic_game_team_with_no_lobby_sets_the_players_team) {
+  Session r;
+  run_session(r, arena(), 700, "", -1, {{500, "team blue"}, {560, "team"}});
+  std::string all;
+  for (const std::string& p : r.client.prints) all += p;
+  CHECK_MSG(all.find("Bad user command: team") == std::string::npos, all);
+  CHECK_MSG(all.find("\"team\" is \"blue\"") != std::string::npos, all);
+  bool blue = false;
+  for (const std::string& info : r.client.userinfos)
+    blue |= ge::classic::protocol::info_get(info, "team") == "blue";
+  CHECK(blue);
+}

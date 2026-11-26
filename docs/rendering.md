@@ -230,8 +230,10 @@ The order, with what each stage is for:
    sits in front of or behind it; both rows run empty with no water in view. With the eye
    under a body, `water.below` draws the surface seen from under it of every body the eye is
    under (Snell's window, the world above bent through it, total internal reflection past it;
-   a flooded passage's far pool too, the depth test keeping the nearest) into targets of its own, and
-   `water.under` redraws the picture as seen through the water, the underside laid in where the
+   a flooded passage's far pool too, the depth test keeping the nearest) into targets of its own,
+   `water.shafts` marches the sun's shafts through the water at a quarter of the pixels (they
+   were most of the view's cost at every pixel: 15 ms of a 21 ms frame at 2560x1440 on the M3
+   Max), and `water.under` redraws the picture as seen through the water, the underside laid in where the
    eye's ray meets it first (`render/underwater.hpp`). A game that draws its world again for the
    water (a classic map's `bsp.views`: a planar mirror in the pool's plane, the view up from under
    it; `brush/app/bsp_views.hpp`) encodes it before these and hands it in (`WaterViews`).

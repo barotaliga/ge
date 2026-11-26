@@ -33,6 +33,8 @@ struct Under {
 // The body the eye is in, its waves: the caustics and the shafts read the real surface.
 @group(1) @binding(5) var<uniform> body: WaterBody;
 @group(1) @binding(6) var<storage, read> waves: array<Wave>;
+// The shafts marched at a quarter of the pixels ("water.shafts", `fs_shafts`), read by `fs_main`.
+@group(2) @binding(0) var shafts_tex: texture_2d<f32>;
 
 #include "render/wgsl/water_body.wgsl"
 
@@ -203,15 +205,21 @@ fn light_shafts(ray: vec3f, path: f32, pixel: vec2f, t: f32, px_angle: f32) -> v
                      0.618034 * frame.time.y);
   let step = reach / 16.0;
   var sum = vec3f(0.0);
-  for (var k = 0; k < 16; k++) {
-    let along = (f32(k) + jitter) * step;
-    let p = frame.eye.xyz + ray * along;
-    let depth = level_over(p.xz) - p.y;
-    if (depth <= 0.0) {
-      continue;
+  if (u32(under.lit.w) > 1u) {
+    // Under several tops the surface over a step is weighed between them (`level_over`): each
+    // step's net summed on its own (`caustic_at`).
+    for (var k = 0; k < 16; k++) {
+      let along = (f32(k) + jitter) * step;
+      let p = frame.eye.xyz + ray * along;
+      let depth = level_over(p.xz) - p.y;
+      if (depth <= 0.0) {
+        continue;
+      }
+      let focus = caustic_at(p.xz, depth, down, t, 4.0, along * px_angle) - 1.0;
+      sum += focus * exp(-under.c.rgb * under.fog.x * (along + depth / max(-down.y, 0.2))) * step;
     }
-    let focus = caustic_at(p.xz, depth, down, t, 4.0, along * px_angle) - 1.0;
-    sum += focus * exp(-under.c.rgb * under.fog.x * (along + depth / max(-down.y, 0.2))) * step;
+  } else {
+    sum = shafts_under_one_top(ray, down, jitter, step, t, px_angle);
   }
   // Henyey-Greenstein, g 0.8: a water's particles scatter mostly forward.
   let g = 0.8;
@@ -222,6 +230,76 @@ fn light_shafts(ray: vec3f, path: f32, pixel: vec2f, t: f32, px_angle: f32) -> v
   // About a quarter of a clear water's attenuation is scattering, and of what it scatters into the
   // shafts' pattern (over the mean the veil carries) the eye takes about two thirds.
   return sun * 0.15 * under.c.rgb * phase * sum;
+}
+
+// The shafts' sixteen steps under one level surface: `caustic_at`'s net at each, the waves read
+// once for eight steps rather than once a step. Under a level surface the point where the sun's
+// ray through a step crossed it moves along a line as the steps go out, so each wave's phase
+// grows by the same angle a step: its sine is turned on from the first step's (two products and
+// a sum) instead of taken again, and cos 2 phase is 1 - 2 sin^2 phase. The same net, at about a
+// sixth of the work (the gpu-underwater lab's cost.no-shafts against cost.all).
+fn shafts_under_one_top(ray: vec3f, down: vec3f, jitter: f32, step: f32, t: f32,
+                        px_angle: f32) -> vec3f {
+  let level = under.info.x;
+  let dy = min(down.y, -0.2);
+  let lean = down.xz / dy;
+  // Where the sun's ray through step k crossed the surface: first + k * per_step.
+  let first = frame.eye.xz + ray.xz * (jitter * step) +
+              lean * (level - frame.eye.y - ray.y * jitter * step);
+  let per_step = (ray.xz - lean * ray.y) * step;
+  let total = waves_drawn();
+  let detail0 = u32(body.info.z);
+  let detail1 = u32(body.info.z + body.info.w);
+  var sum = vec3f(0.0);
+  for (var part = 0; part < 2; part++) {
+    var blur: array<f32, 8>;
+    var gust: array<f32, 8>;
+    var h: array<vec3f, 8>;
+    let k0 = f32(part * 8);
+    for (var j = 0; j < 8; j++) {
+      let along = (k0 + f32(j) + jitter) * step;
+      let depth = level - (frame.eye.y + ray.y * along);
+      let along_down = max(depth, 0.0) / -dy;
+      blur[j] = max(4.0 * (0.007 * along_down + 0.003), along * px_angle);
+      gust[j] = gust_at(first + per_step * (k0 + f32(j)), t);
+      h[j] = vec3f(0.0);
+    }
+    let at = first + per_step * k0;
+    for (var i = 0u; i < total; i++) {
+      let w = waves[i];
+      let k = w.more.y;
+      let length_ = 6.2831853 / k;
+      let a0 = w.dir.z * body.info.y;
+      let detail = i >= detail0 && i < detail1;
+      let shape = vec3f(w.dir.x * w.dir.x, w.dir.x * w.dir.y, w.dir.y * w.dir.y);
+      let phi = dot(w.dir.xy, at) - w.dir.w * t + w.more.x;
+      let turn = dot(w.dir.xy, per_step);
+      var sp = sin(phi);
+      var cp = cos(phi);
+      let st = sin(turn);
+      let ct = cos(turn);
+      for (var j = 0; j < 8; j++) {
+        let keep = smoothstep(2.0 * blur[j], 4.0 * blur[j], length_);
+        let a = a0 * select(1.0, gust[j], detail);
+        h[j] += keep * a * (2.0 * k * a * (1.0 - 2.0 * sp * sp) - sp) * shape;
+        let next = sp * ct + cp * st;
+        cp = cp * ct - sp * st;
+        sp = next;
+      }
+    }
+    for (var j = 0; j < 8; j++) {
+      let along = (k0 + f32(j) + jitter) * step;
+      let depth = level - (frame.eye.y + ray.y * along);
+      if (depth <= 0.0) {
+        continue;
+      }
+      let s = 0.25 * depth / -dy;
+      let det = (1.0 + s * h[j].x) * (1.0 + s * h[j].z) - s * s * h[j].y * h[j].y;
+      let focus = clamp(1.0 / max(abs(det), 0.2), 0.2, 5.0) - 1.0;
+      sum += focus * exp(-under.c.rgb * under.fog.x * (along + depth / max(-down.y, 0.2))) * step;
+    }
+  }
+  return sum;
 }
 
 // The room's light round the water, as a face of the room's albedo lit by it: the body's own
@@ -244,6 +322,40 @@ fn room_light() -> vec3f {
     }
   }
   return sum / 20.0;
+}
+
+// THE SHAFTS' PASS: half the frame's width and half its height, each pixel the shafts along the
+// ray `fs_main` sends through it (the mask's magnification and the wobble), out to the scene or
+// the surface first met; `fs_main` reads them filtered. The step's footprint stays the frame's
+// pixel's, so the net is as soft as when every pixel marched it.
+@fragment
+fn fs_shafts(in: VertexOut) -> @location(0) vec4f {
+  let t = frame.time.x;
+  let uv0 = in.position.xy * 2.0 * frame.size.zw;
+  let fwd = normalize(view_ray(frame, vec2f(0.5, 0.5)));
+  let edge = view_ray(frame, vec2f(0.5, 0.0));
+  let tan_half = length(edge / dot(edge, fwd) - fwd);
+  var uv = (uv0 - 0.5) / under.look.x + 0.5;
+  let w = 6.2831853 * under.look.z * t;
+  uv += under.look.y * vec2f(sin(uv.y * 23.0 + w), cos(uv.x * 17.0 + 1.3 * w));
+  uv = clamp(uv, vec2f(0.0), vec2f(1.0));
+  let ray = normalize(view_ray(frame, uv));
+  let dist = scene_distance(uv);
+  var path = dist;
+  if (under.look.w > 0.5) {
+    let at = clamp(vec2i(uv * frame.size.xy), vec2i(0), vec2i(frame.size.xy) - vec2i(1));
+    let b = textureLoad(below, at, 0);
+    if (b.a > 0.0 && b.a < dist) {
+      path = b.a;
+    } else if (b.a <= 0.0 && under.surface.w < 0.5 && ray.y > 1e-4 &&
+               max(under.info.y, 0.0) / ray.y < dist) {
+      path = max(under.info.y, 0.0) / ray.y;
+    }
+  }
+  if (body.sun.x <= 0.0 || frame.sun.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  return vec4f(light_shafts(ray, path, in.position.xy, t, 2.0 * tan_half / frame.size.y), 1.0);
 }
 
 @fragment
@@ -352,7 +464,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   var colour = seen * tr + veil * (1.0 - tr);
   if (under.lit.z > 0.0 && body.sun.x > 0.0 && frame.sun.y > 0.0) {
     // The water between the shafts darker, never by more than a third.
-    colour = max(colour + under.lit.z * light_shafts(ray, path, in.position.xy, t, 2.0 * tan_half / frame.size.y), 0.67 * colour);
+    let shafts = textureSampleLevel(shafts_tex, linear_clamp, uv0, 0.0).rgb;
+    colour = max(colour + under.lit.z * shafts, 0.67 * colour);
   }
   // The specks, lit by the light in the water, each fogged over its own distance.
   if (under.motes.x > 0.0) {

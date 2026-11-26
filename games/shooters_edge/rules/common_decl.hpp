@@ -680,6 +680,14 @@ namespace pg = ge::progs;
   X(the_thing_at_the,                                                                              \
     "The thing at the bottom of the world is gone, torn apart from the inside.\n\nThe four runes " \
     "go quiet. The way home is open.")                                                             \
+  X(misc_teleporttrain_class, "misc_teleporttrain")                                                \
+  X(style_pulse, "abcdefghijklmlkjihgfedcb")                                                       \
+  X(style_b, "b")                                                                                  \
+  X(style_c, "c")                                                                                  \
+  X(style_e, "e")                                                                                  \
+  X(style_g, "g")                                                                                  \
+  X(style_i, "i")                                                                                  \
+  X(style_k, "k")                                                                                  \
   X(boss2_pop2_wav, "boss2/pop2.wav")                                                              \
   X(boss2_death_wav, "boss2/death.wav")                                                            \
   X(oldone_mdl, "progs/oldone.mdl")                                                                \

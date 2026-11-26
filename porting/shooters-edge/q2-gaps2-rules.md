@@ -124,6 +124,11 @@ name (ours does this). This release adds three repairs:
 Ours [ours]: none of the three; players 2 to 4 without a matching spot stand on the start, and
 since ours has no spawn telefrag (R8) they stand inside each other.
 
+Since (2026-11-26, our design, not the release's): a start with fewer than three co-op spots
+within 550 units gets spots made beside it, a clear straight walk from it over a floor, behind
+it first, so players 2 to 4 never land on the start and kill player 1 by their arrival (R8
+landed). The base campaign's only such start in use is cool1's `power2a`.
+
 **R7 (1, coop) Over the network, a co-op player's carried state is lost at every level change.**
 [ours, derived from our code; confirm with a test] When the level changes, the network server
 (`net/q2_net_server.cpp`) re-seats each client on its `begin` by calling the rules' connect,
