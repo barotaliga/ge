@@ -6,7 +6,8 @@
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
-// ge:keywords r_scale render-scale r_particles scr_centertime centre-message r_powershells r_itempulse power-shells
+// ge:keywords r_scale render-scale
+// ge:keywords r_particles scr_centertime centre-message r_powershells r_itempulse power-shells
 // ge:skill classic shooter render
 // ge:test tests/classic_look_test.cpp
 #include "classic/app/look.hpp"
