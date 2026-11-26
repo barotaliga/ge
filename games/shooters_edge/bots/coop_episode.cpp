@@ -127,7 +127,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
         sb::traits_of(skill, sb::Temper::balanced), kHz,
         opt.seed + 31u * static_cast<uint32_t>(k) + static_cast<uint32_t>(c.history.size()),
-        first_arsenal());
+        opt.arsenal != nullptr ? *opt.arsenal : first_arsenal());
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;

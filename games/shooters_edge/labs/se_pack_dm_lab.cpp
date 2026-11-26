@@ -31,6 +31,7 @@
 #include "pack_mod.hpp"
 #include "progs/file.hpp"
 #include "shooterbots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pack_fight.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_team.hpp"
@@ -130,6 +131,10 @@ void run(gl::Lab& lab) {
     o.map = lab.arg("map");
     o.registered = ge::vfs::pak_find(maps.pak, "gfx/pop.lmp") != nullptr;
     o.wide_models = true;
+    // The pack's own guns known, or Quake's alone (`--arsenal=base`: the before of a change to
+    // them).
+    o.arsenal =
+        lab.arg("arsenal") == "base" ? &fb::first_arsenal() : &fb::arsenal_for_mod(lab.arg("mod"));
   }
   o.load = &load;
   o.load_ctx = &maps;
@@ -161,13 +166,14 @@ void run(gl::Lab& lab) {
                  {"seed", lab.arg("seed")}};
   const double secs = r.frames / 72.0;
 
-  gl::LabTable t{"each bot", {"bot", "aim", "frags", "deaths", "items taken", "shots"}, {}};
+  gl::LabTable t{
+      "each bot", {"bot", "aim", "frags", "deaths", "items taken", "shots", "switches"}, {}};
   double frags = 0;
   int took = 0;
   for (const fb::FightPlayer& p : r.players) {
     t.rows.push_back({p.name, sb::aim_skill_name(p.skill), to_fixed(p.frags, 0),
                       std::to_string(p.deaths), std::to_string(p.took),
-                      std::to_string(p.stats.shots)});
+                      std::to_string(p.stats.shots), std::to_string(p.stats.switches)});
     frags += p.frags;
     took += p.took;
   }
@@ -175,6 +181,50 @@ void run(gl::Lab& lab) {
   gl::LabTable items{"the items taken, by class", {"class", "taken"}, {}};
   for (const auto& [name, n] : pr.taken) items.rows.push_back({name, std::to_string(n)});
   lab.table(items);
+  // The deaths by the gun the victim held, and how many cost it a frag (its own shot, or the
+  // world): a gun the bots handle badly shows as deaths in its own hand.
+  {
+    const fb::BotArsenal& names = fb::arsenal_for_mod(lab.arg("mod"));
+    std::vector<std::pair<int32_t, std::pair<int, int>>> by;
+    int own = 0;
+    for (const fb::FightDeath& d : r.deaths) {
+      auto it =
+          std::find_if(by.begin(), by.end(), [&](const auto& e) { return e.first == d.weapon; });
+      if (it == by.end()) it = by.insert(by.end(), {d.weapon, {0, 0}});
+      it->second.first++;
+      it->second.second += d.own ? 1 : 0;
+      own += d.own ? 1 : 0;
+    }
+    gl::LabTable g{"the deaths, by the gun in the victim's hand", {"gun", "deaths", "its own"}, {}};
+    for (const auto& [bit, n] : by) {
+      const fb::BotWeapon* w = fb::weapon_row(names, bit);
+      g.rows.push_back({w != nullptr ? w->name : "bit " + std::to_string(bit),
+                        std::to_string(n.first), std::to_string(n.second)});
+    }
+    lab.table(g);
+    lab.metric("dm.own_deaths", own, "count");
+    // Where the deaths that cost a frag fell, by 256-unit cell: a trap or a pit the bots walk
+    // into shows as one cell holding many.
+    std::vector<std::pair<std::pair<int, int>, std::pair<int, sh::Vec3f>>> cells;
+    for (const fb::FightDeath& d : r.deaths) {
+      if (!d.own) continue;
+      const std::pair<int, int> c{static_cast<int>(std::floor(d.at.x / 256)),
+                                  static_cast<int>(std::floor(d.at.y / 256))};
+      auto it =
+          std::find_if(cells.begin(), cells.end(), [&](const auto& e) { return e.first == c; });
+      if (it == cells.end()) it = cells.insert(cells.end(), {c, {0, d.at}});
+      it->second.first++;
+    }
+    std::sort(cells.begin(), cells.end(),
+              [](const auto& a, const auto& b) { return a.second.first > b.second.first; });
+    gl::LabTable w{"the deaths that cost a frag, by place", {"near", "deaths"}, {}};
+    for (size_t i = 0; i < cells.size() && i < 6; i++) {
+      const sh::Vec3f a = cells[i].second.second;
+      w.rows.push_back({to_fixed(a.x, 0) + " " + to_fixed(a.y, 0) + " " + to_fixed(a.z, 0),
+                        std::to_string(cells[i].second.first)});
+    }
+    lab.table(w);
+  }
   lab.metric("dm.seconds", secs, "s");
   lab.metric("dm.frags", frags, "count");
   lab.metric("dm.deaths", static_cast<double>(r.deaths.size()), "count");
@@ -228,6 +278,7 @@ void run(gl::Lab& lab) {
     const gl::Rgba c = kPlayer[static_cast<size_t>(d.victim) % 4];
     gl::draw_line(p, px(d.at.x) - 5, py(d.at.y) - 5, px(d.at.x) + 5, py(d.at.y) + 5, c, 2);
     gl::draw_line(p, px(d.at.x) - 5, py(d.at.y) + 5, px(d.at.x) + 5, py(d.at.y) - 5, c, 2);
+    if (d.own) gl::draw_ring(p, px(d.at.x), py(d.at.y), 8, c);  // a frag lost with it
   }
   int x = 8;
   for (size_t b = 0; b < r.players.size(); b++) {
@@ -267,6 +318,7 @@ const gl::LabSpec kSpec{
         {"fraglimit", "0", "the program's frag limit (0: none)"},
         {"seconds", "120", "the match's length at most, s"},
         {"seed", "1", "the server's and the fighters' seed"},
+        {"arsenal", "pack", "pack: the bots know the pack's own guns; base: Quake's alone"},
     },
     "--seconds=20",
     run,

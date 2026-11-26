@@ -8,6 +8,8 @@
 // ge:test tests/shooters_edge_q2_nav_test.cpp
 #pragma once
 
+#include <string_view>
+
 #include "shooterbots/bot_arsenal.hpp"
 #include "shooters_edge/server/q2_pack.hpp"
 
@@ -20,5 +22,13 @@ using namespace ge::shooterbots;  // NOLINT(google-build-using-namespace): the p
 // mission pack's own weapons, ammunitions and items on top (its maps lay them down).
 const BotArsenal& first_arsenal();
 const BotArsenal& q2_arsenal(server::Q2Pack pack = server::Q2Pack::base);
+// Scourge of Armagon's: Quake's and the pack's laser cannon, Mjolnir and proximity gun.
+const BotArsenal& hipnotic_arsenal();
+// Dissolution of Eternity's: Quake's (the blade renumbered) and the pack's lava spikers, multi
+// launchers and plasma gun, read off the program's true ammunition.
+const BotArsenal& rogue_arsenal();
+// The arsenal of the mission pack in game folder `mod` (any case: `hipnotic`, `rogue`), else
+// Quake's own.
+const BotArsenal& arsenal_for_mod(std::string_view mod);
 
 }  // namespace shooters_edge::bots
