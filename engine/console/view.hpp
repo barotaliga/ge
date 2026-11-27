@@ -331,12 +331,12 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   void submit();
   // Whether `line`'s first word names a command, alias or setting (con_chat 2).
   bool names_something(std::string_view line) const;
-  bool accept();             // the selected or top suggestion into the input line; false: none
-  void tab();                // our Tab: the one match or the row chosen taken, else the shared part
+  bool accept();  // the selected or top suggestion into the input line; false: none
+  void tab();     // our Tab: the one match or the row chosen taken, else the shared part
   std::vector<Suggestion> matches() const;  // every suggestion, uncapped (con_suggest cuts)
   std::string shared() const;               // the part every match starts with
-  void tab_list();           // list_mode's Tab (above)
-  std::string tab_asked_;    // the line the last Tab asked about (list_threshold)
+  void tab_list();                          // list_mode's Tab (above)
+  std::string tab_asked_;                   // the line the last Tab asked about (list_threshold)
   std::string head() const;  // the first word being typed, or "" when no suggestion applies
   // The cvar whose value is being typed ("<name> <part>", a cvar with a few values), its choices,
   // the part typed and where it starts; false when the line is not one.

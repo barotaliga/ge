@@ -738,8 +738,9 @@ std::string ConsoleView::hint() const {
   const size_t typed = input_.size() - std::min(input_.size(), suggest_at());
   // What Tab adds: the selected row's rest, else the rest every match shares.
   const std::string name =
-      selected_ >= 0 ? s[static_cast<size_t>(std::min<int>(selected_, static_cast<int>(s.size()) - 1))].name
-                     : shared();
+      selected_ >= 0
+          ? s[static_cast<size_t>(std::min<int>(selected_, static_cast<int>(s.size()) - 1))].name
+          : shared();
   return name.size() > typed ? name.substr(typed) : "";
 }
 

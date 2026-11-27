@@ -374,7 +374,7 @@ TEST(suggestions_rank_by_use_then_length) {
   CHECK(s.size() == 3 && s[0].name == "sv_delay" && s[1].name == "sv_demotxt");
   CHECK(s[0].kind == Suggestion::Kind::cvar && s[0].detail == "5");
   CHECK(v.hint().empty());  // all three share only "sv_de": Tab would add nothing
-  v.key(EditKey::enter);  // nothing selected: the line runs as typed (and fails, unknown)
+  v.key(EditKey::enter);    // nothing selected: the line runs as typed (and fails, unknown)
   for (int i = 0; i < 2; ++i) {
     v.type("/sv_deathmatch 1");
     v.key(EditKey::enter);
