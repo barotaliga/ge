@@ -318,14 +318,15 @@ struct DemoState {
   int64_t bonuses = 0;
   // Multiview: the match server's start markers read (its stuffed `//ktx matchstart`).
   int64_t match_starts = 0;
-  sh::Vec3f velocity;  // client: the recording's player's, units/s (`velocity_read`)
+  sh::Vec3f velocity;  // client and single: the recording's player's, units/s (`velocity_read`)
   // Client, under weapon prediction: the player's weapon state from his last player state
   // (`known` false when the server sent none); the client runs it forward (net/qw_weapon.hpp).
   ge::classic::WeaponState own_weapon;
   // Client: the shots the weapon prediction fired for the player so far, and the weapon frame the
   // last one started on (the axe's swing); the window's hand fires on each (client/held.cpp).
   int own_shots = 0, own_shot_frame = 0;
-  bool velocity_read = false;  // client: the player's velocity came in his last player state
+  // Client: the player's velocity came in his last player state; single: in the clientdata.
+  bool velocity_read = false;
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
   // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
   uint8_t q2_trouble = 0;
