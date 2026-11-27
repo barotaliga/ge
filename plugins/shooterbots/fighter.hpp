@@ -343,11 +343,12 @@ struct FighterStats {
   int64_t outmatched = 0;         // commands spent turned from a fight it believed it loses
   int64_t out_reach = 0;          // and of them, a blade's reach short of a foe kept in sight
   int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
-  int64_t kept_off = 0;     // commands backing off a monster that bites (BotArsenal::keep_off)
-  int64_t ledge_kept = 0;   // a fight's keys given up for the route's at a ledge (`ledge_guard`)
-  int64_t dodging = 0;      // commands spent stepping across an enemy's line (dodge.hpp)
-  int64_t brink = 0;        // commands whose keys the brink changed (shooterbots/brink.hpp)
-  int64_t dodge_turns = 0;  // and the times it turned the step back
+  int64_t kept_off = 0;        // commands backing off a monster that bites (BotArsenal::keep_off)
+  int64_t ledge_kept = 0;      // a fight's keys given up for the route's at a ledge (`ledge_guard`)
+  int64_t climbs_yielded = 0;  // climbs out of the water given up for the aim a while
+  int64_t dodging = 0;         // commands spent stepping across an enemy's line (dodge.hpp)
+  int64_t brink = 0;           // commands whose keys the brink changed (shooterbots/brink.hpp)
+  int64_t dodge_turns = 0;     // and the times it turned the step back
   // The press (`press`, footwork.hpp): commands it was weighed in a fight, those pressed on at him
   // and back, and those held off by his nearness or a step not clear.
   int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;
@@ -484,28 +485,30 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sb::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
-  double held = 0;              // in the mode this long (worked out when it changes)
-  double mode_at = 0;           // server time it entered the mode
-  double heard_t = -1;          // the server time whose sounds were last taken in
-  double quad_glow_t = -1e9;    // (`quadseen`) when the quad's glow was last seen or called
-  double spam_fired = -1e9;     // its last rocket at a spot
-  double poke_until = -1e9;     // a novice on a button until then (buttons.hpp)
-  double poke_seen_t = -1e9;    // (`pokelook`) the button last in sight
-  bool poke_looked = false;     // and the poke's look set this command
-  double unlock_seen_t = -1e9;  // (`unlocklook`) the goal item's shot button last in sight
-  bool unlock_looked = false;   // and its look set this command
-  double next_poke = 0;         // and his next whim
-  double next_think = 0;        // server time of the next choice
-  double ready_at = 0;          // the held weapon ready again (fighter_command: its rhythm)
-  double impulse_at = -1;       // when the last impulse went
-  double reach_at = -1;         // when `reach` was worked out (-1: never)
-  int32_t reach_from = -1;      // and the node it was worked out from (where it stood)
-  double said_at = -1e9;        // its last team message
-  double called_at = -1e9;      // its last enemy callout
-  double under_since = -1;      // when its head last went under the water (-1: not under)
-  double dive_wet_since = -1;   // when the dive under way went into the water (-1: none)
-  double breathe_until = -1;    // up for air (water.hpp): at the surface until then (-1: rising)
-  double bore_until = -1e9;     // its own rocket at its feet for the quad's carrier (packs.hpp)
+  double held = 0;               // in the mode this long (worked out when it changes)
+  double mode_at = 0;            // server time it entered the mode
+  double heard_t = -1;           // the server time whose sounds were last taken in
+  double quad_glow_t = -1e9;     // (`quadseen`) when the quad's glow was last seen or called
+  double spam_fired = -1e9;      // its last rocket at a spot
+  double poke_until = -1e9;      // a novice on a button until then (buttons.hpp)
+  double poke_seen_t = -1e9;     // (`pokelook`) the button last in sight
+  bool poke_looked = false;      // and the poke's look set this command
+  double unlock_seen_t = -1e9;   // (`unlocklook`) the goal item's shot button last in sight
+  bool unlock_looked = false;    // and its look set this command
+  double next_poke = 0;          // and his next whim
+  double next_think = 0;         // server time of the next choice
+  double ready_at = 0;           // the held weapon ready again (fighter_command: its rhythm)
+  double impulse_at = -1;        // when the last impulse went
+  double reach_at = -1;          // when `reach` was worked out (-1: never)
+  double climb_since = -1;       // when `climb_out` began its try at the edge (-1: none)
+  double climb_rest_until = -1;  // and the view the aim's again till then (the edge held)
+  int32_t reach_from = -1;       // and the node it was worked out from (where it stood)
+  double said_at = -1e9;         // its last team message
+  double called_at = -1e9;       // its last enemy callout
+  double under_since = -1;       // when its head last went under the water (-1: not under)
+  double dive_wet_since = -1;    // when the dive under way went into the water (-1: none)
+  double breathe_until = -1;     // up for air (water.hpp): at the surface until then (-1: rising)
+  double bore_until = -1e9;      // its own rocket at its feet for the quad's carrier (packs.hpp)
   double bored_at = -1e9;
   double pack_call_until = -1e9;  // a pack's call pending until then (packs.hpp)
   // Its own last shot (packs.hpp): when, and when the blast was heard nearest its line after it
@@ -758,5 +761,14 @@ constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate t
 bool blast_bursts_near(const Fighter& f, const ge::shooterbots::BotView& s, int me,
                        sh::Vec3f angles, float reach);
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int slot, int msec);
+
+// A climb out of the water he fights in, held at the edge (a hover sat on hangar1's lip over the
+// spot, out of the shot's line while the view is on the edge, lived through ten minutes of climbs),
+// is tried kClimbOutTry_s, then the view is the aim's for kClimbOutRest_s.
+constexpr double kClimbOutTry_s = 3;
+constexpr double kClimbOutRest_s = 1.5;
+// Whether the climb has the view at `t`, on its clock: `since` the try began (-1: none) and
+// `rest_until` the aim's turn ends; a try run out starts the rest and counts in `yielded`.
+bool climb_turn(double& since, double& rest_until, double t, int64_t& yielded);
 
 }  // namespace ge::shooterbots

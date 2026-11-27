@@ -924,8 +924,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
               int me, double t) {
   const sb::NavGraph& g = nav.graph;
   const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
-  // At a button of the plan: pressed (or shot) by the fighter's own hands.
-  if (w.step >= 0 && w.kind == WayKind::button) {
+  // At a button of the plan: pressed (or shot) by the fighter's own hands, while a gun he goes
+  // for has the plan's say too (hangar1's secret wall, beside him, held his way to the gun past it
+  // shut for six minutes: the hands only ever pressed a button the plan was going to).
+  if (w.step >= 0 && w.steps[static_cast<size_t>(w.step)].kind == WayKind::button &&
+      (w.kind == WayKind::button || w.kind == WayKind::arm)) {
     const WayStep& st = w.steps[static_cast<size_t>(w.step)];
     const ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
     if (bs.node >= 0 && dist(g.nodes[static_cast<size_t>(bs.node)].origin, self) < kButtonClose &&
@@ -992,8 +995,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       if (now && !st.done) w.stats.steps_done++;
       st.done = now;
       // One that blows the place up, pressed, is let go of at once: the poke's hold on it kept him
-      // at biggun's for 3 s of the 22 he has to get out.
-      if (st.dooms && st.done && f.poke == st.button) f.poke_until = t;
+      // at biggun's for 3 s of the 22 he has to get out. So is one shot open: the hold kept him
+      // still before hangar1's secret wall through the 3 s it stood open, and it shut on him.
+      if ((st.dooms || way_shot_door(f, bs.ent)) && st.done && f.poke == st.button)
+        f.poke_until = t;
       continue;
     }
     const bool again = st.kind == WayKind::trigger && w.complete && st.opens && !st.doors.empty();
@@ -1231,8 +1236,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   const auto round_trip = [&](int32_t n) {
     return n >= 0 && (w.back_here[static_cast<size_t>(n)] || w.back_exit[static_cast<size_t>(n)]);
   };
+  // A button pressed that blows the place up (`dooms`, pressed last): nothing is left but the exit
+  // (below), and no work holds a one-way way to it back: biggun's exit lies past a drop, and the
+  // strips the countdown arms, left as work, kept it out of reach until the base blew.
+  bool doomed = false;
+  for (const WayStep& st : w.steps) doomed = doomed || (st.dooms && st.done);
   bool strict_work = false;
-  for (size_t n = 0; n < g.nodes.size() && !strict_work && !w.complete; n++)
+  for (size_t n = 0; n < g.nodes.size() && !strict_work && !w.complete && !doomed; n++)
     strict_work = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n) &&
                   round_trip(static_cast<int32_t>(n));
   // A car's button (base1's: the car drops him to the exit) is a way out like the exit itself.
@@ -1244,7 +1254,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     return false;
   };
   for (const WayStep& st : w.steps)
-    strict_work = strict_work || (!st.done && !st.ever && st.kind != WayKind::exit &&
+    strict_work = strict_work || (!doomed && !st.done && !st.ever && st.kind != WayKind::exit &&
                                   !(w.complete && carries(st)) && t >= st.left_until &&
                                   st.node >= 0 && w.search.reached(st.node) && round_trip(st.node));
   const auto reach = [&](int32_t n) {
@@ -1364,11 +1374,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   }
   // A button pressed that blows the place up (`dooms`, pressed last): nothing is left but the exit,
   // the monsters too (biggun's base: he went after one and then a trigger, and was in it at 22 s).
-  for (const WayStep& st : w.steps)
-    if (st.dooms && st.done) {
-      left_to_do = false;
-      prey = -1;
-    }
+  // Nor a step that opens no door: the triggers its countdown arms (biggun's two strips, armed by
+  // the button, drop crates and set off blasts) took him away from the way out until it blew.
+  if (doomed) {
+    left_to_do = false;
+    prey = -1;
+  }
   // The exit; else the nearest step not done; else the nearest place not seen.
   int pick = -1;
   double best = 0;
@@ -1469,7 +1480,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (way_exit(st) || st.done || t < st.left_until || st.node < 0 || !reach(st.node) ||
-          (st.keyed && !key_held) || (left_to_do && carries(st)) || (w.complete && held_step(st)))
+          (st.keyed && !key_held) || (left_to_do && carries(st)) || (w.complete && held_step(st)) ||
+          (doomed && !st.opens))
         continue;
       bool covered = false;
       for (const int c : st.covers)
@@ -1679,7 +1691,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       } else {
         WayStep& st = w.steps[static_cast<size_t>(pick)];
         st.left_until = ++st.tries >= kWayTries ? kWayForever : t + kWayRetry_s;
-        if (st.tries >= kWayTries) w.stats.given_up++;
+        if (st.tries >= kWayTries) {
+          w.stats.given_up++;
+          st.given_from = from;
+        }
         if (w.log) say_way(w, f, g, s, me, self, st.node, "stood still: left");
         pick = -1;
       }
@@ -1745,6 +1760,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     st.left_until = t + kWayRetry_s;  // left for a while
     if (w.complete && ++st.tries >= kWayTries) {
       st.left_until = kWayForever;  // and for good
+      st.given_from = from;
       w.stats.given_up++;
     }
     if (w.log) say_way(w, f, g, s, me, self, st.node, "left");
@@ -1821,6 +1837,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         if (st.left_until > t && st.left_until < kWayForever) {
           st.left_until = -1;
           any = true;
+        } else if (way_forgive(st, g, from)) {
+          any = true;
+          w.stats.forgiven_steps++;
         }
       for (double& until : w.prey_left)
         if (until > t && until < kWayForever) {

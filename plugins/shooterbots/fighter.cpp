@@ -1260,10 +1260,25 @@ bool mate_in_line(const Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f
   return false;
 }
 
+}  // namespace
+
+bool climb_turn(double& since, double& rest_until, double t, int64_t& yielded) {
+  if (t < rest_until) return false;
+  if (since < 0) since = t;
+  if (t - since <= kClimbOutTry_s) return true;
+  since = -1;
+  rest_until = t + kClimbOutRest_s;
+  yielded++;
+  return false;
+}
+
+namespace {
+
 // Whether the route's next node climbs out of the water he is chest deep in while he fights (a
 // land node over him, near): then the keys of the field's own way out (`swim_out`), the view level
 // on the edge so the move's water jump takes him over it.
-bool climb_out(Fighter& f, const ge::shooterbots::BotView& s, int me, int msec, sh::MoveCmd& cmd) {
+bool climb_out(Fighter& f, const ge::shooterbots::BotView& s, int me, double t, int msec,
+               sh::MoveCmd& cmd) {
   const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   const sb::Pilot& p = f.bot.pilot.pilot;
   // Only while he fights: the view on the enemy keeps him off the edge (the swim's own keys climb
@@ -1271,12 +1286,20 @@ bool climb_out(Fighter& f, const ge::shooterbots::BotView& s, int me, int msec, 
   bool fights = false;
   if (f.bot.aiming)
     for (const sb::Contact& c : f.bot.senses.contacts) fights |= c.ent == f.bot.target && c.visible;
-  if (!fights || self.waterlevel < 2 || p.g == nullptr || p.k + 1 >= p.route.size()) return false;
+  if (!fights || self.waterlevel < 2 || p.g == nullptr || p.k + 1 >= p.route.size()) {
+    f.climb_since = -1;
+    return false;
+  }
   const sb::NavNode& to = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])];
   const float dx = to.origin.x - self.origin.x, dy = to.origin.y - self.origin.y;
   if (to.swim || to.origin.z < self.origin.z + kClimbOutUp ||
-      dx * dx + dy * dy > kClimbOutNear * kClimbOutNear)
+      dx * dx + dy * dy > kClimbOutNear * kClimbOutNear) {
+    f.climb_since = -1;
     return false;
+  }
+  // Held at the edge: the aim has the view a while (what holds the edge may be what he fights:
+  // hangar1's hover, sat on the lip over him, lived through ten minutes of climbs never shot).
+  if (!climb_turn(f.climb_since, f.climb_rest_until, t, f.stats.climbs_yielded)) return false;
   sh::MoveState ms;
   ms.origin = self.origin;
   ms.waterlevel = self.waterlevel;
@@ -1664,7 +1687,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
       f.bot.set_by = "swimaim";
       f.stats.swim_fights++;
     }
-  } else if (!dead && climb_out(f, s, me, msec, cmd)) {
+  } else if (!dead && climb_out(f, s, me, t, msec, cmd)) {
     // Out of the water the route's way, with no swim of the field's left to do: faced square to
     // the edge whatever he fights (e3m5's pool under the bars held him four minutes with his
     // view on a monster and the water jump never taken).

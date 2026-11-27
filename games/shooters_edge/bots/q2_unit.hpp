@@ -33,6 +33,7 @@
 #include "shooterbots/aim.hpp"
 #include "shooterbots/party.hpp"
 #include "shooterbots/way_through.hpp"
+#include "shooters_edge/bots/arrival_gear.hpp"
 #include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -68,6 +69,11 @@ struct UnitOptions {
   // are HELPERS beside him, as a hosted co-op game's `addbot helper`: leashed to him by
   // kPartyLeash, the exit his (party.hpp).
   bool beside = false;
+  // GEAR ON ARRIVAL (arrival_gear.hpp): the maps a playthrough plays before `first`, in order.
+  // Each one's pickups are taken and its monsters paid for out of the ammunition on a scratch
+  // server, and he enters `first` with that body. Empty: the new game's.
+  std::vector<std::string> before;
+  void* gear_ctx = nullptr;  // the loader's context for `before` (null: `load_ctx`)
 };
 
 struct UnitMap {
@@ -105,6 +111,8 @@ struct UnitMap {
 struct UnitReport {
   bool ok = false;
   std::string error;
+  std::vector<GearLeg> gear;  // each map of `before`: what it gave and cost
+  std::string arrived;        // his gear as he entered `first` (q2_gear_text)
   std::vector<UnitMap> maps;
   bool unit_done = false;  // an exit out of the unit was taken
   std::string out_to;      // and where it led

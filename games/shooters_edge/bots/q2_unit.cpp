@@ -255,6 +255,14 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   // He takes a turned view as his own (the start spot's angle, a teleport's), as the window's
   // player does: else the spot's turn stays added to every view he sends, and his moves and shots
   // go that much off the way he means.
+  // Gear on arrival, worked out first: the loader keeps only the map it read last.
+  sv::SqBody gear;
+  if (!opt.before.empty() &&
+      !q2_arrival_body(opt.load, opt.gear_ctx != nullptr ? opt.gear_ctx : opt.load_ctx, opt.pack,
+                       opt.game_skill, opt.before, gear, r.gear, r.error)) {
+    r.error = "run_q2_unit: gear on arrival: " + r.error;
+    return r;
+  }
   sv::Q2ServerOptions so;
   so.clients_take_view = true;
   so.pack = opt.pack;
@@ -278,6 +286,13 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   const int n = 1 + static_cast<int>(opt.partners.size());
   std::vector<sh::Packet> packets(static_cast<size_t>(n));
   sv::Q2Server* q = sv::q2_of(rules);
+  if (!opt.before.empty()) {  // he arrives with it, his best weapon in hand
+    sv::Q2Player& p = q->players[0];
+    p.body = gear;
+    p.health = static_cast<float>(gear.health);
+    sv::sq_choose(p.hand, p.body, sv::sq_best_weapon(p.body));
+    r.arrived = q2_gear_text(p.body, opt.pack);
+  }
   uint64_t h = 1469598103934665603ull;
   uint32_t sequence = 0;
   // The maps played before this one: on the first, the one `first` names after its `$` (a start
