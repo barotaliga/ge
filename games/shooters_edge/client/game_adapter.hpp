@@ -111,6 +111,10 @@ struct GameModes {
 
 struct GameAdapter {
   const profiles::GameProfile* game = nullptr;  // the rows the calls read
+  // How the game's entities pitch: true, positive tips the nose down for every model (Quake II's
+  // rockets, bolts and figures); false, a vertex-animated model's pitch tips it up (Quake's), so
+  // it is reversed when drawn (WorldModels::alias_pitch_up).
+  bool pitch_down = false;
   // The mod folders beside the base folder under `basedir`, by name.
   std::vector<ModFolder> (*list_mods)(const GameAdapter& self,
                                       const std::string& basedir) = nullptr;

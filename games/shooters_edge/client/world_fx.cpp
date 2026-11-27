@@ -439,12 +439,13 @@ void warp_dust(const Warp& w, const fx::Dust& d, double was, double age, uint32_
   fx::dust_off(d, warp_shown(w, std::max(was, 0.0)), warp_shown(w, age), seed, out);
 }
 
-fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entity) {
+fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entity,
+                     bool pitch_up) {
   fx::Dust d;
   const ge::camera::Vec3 at = engine_point(origin);
   put(at, d.at);
   const float ang[3] = {angles.x, angles.y, angles.z};
-  models::rotation_of(ang, true, d.rotation);
+  models::rotation_of(ang, pitch_up, d.rotation);
   const double yaw = double(angles.y) * 3.14159265358979323846 / 180;
   const ge::camera::Vec3 ahead = engine_point(
       {origin.x + float(64 * std::cos(yaw)), origin.y + float(64 * std::sin(yaw)), origin.z});
@@ -1255,6 +1256,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   out.has_self = false;
   // A player as the window places him (the local player's own too, never drawn).
   const auto placed_of = [&](int e) { return l.placed_of ? l.placed_of(e) : Placed{}; };
+  const bool pitch_up = s.models == nullptr || s.models->alias_pitch_up;
   // The local player, as the world would place him: unseen in his own eyes, his shadow still his.
   if (own > 0 && !l.me.dead) {
     out.self = placed_of(own);
@@ -1285,7 +1287,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       g.figure = g.drawn ? was->second : placed_of(w.entity);
       g.figure.origin = w.at;
       if (s.models == nullptr || !body_triangles(*s.models, g.figure, t, g.skin)) g.skin.clear();
-      g.dust = player_dust(w.at, g.figure.angles, w.entity);
+      g.dust = player_dust(w.at, g.figure.angles, w.entity, pitch_up);
     }
     s.seen.clear();
     for (Placed& m : out.models) {
@@ -1293,7 +1295,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       s.seen[m.entity] = m;
       const double shown = arrival_shown(s.warps, m.entity, t);
       if (shown >= 1) continue;
-      m.warp = player_dust(m.origin, m.angles, m.entity).warp;
+      m.warp = player_dust(m.origin, m.angles, m.entity, pitch_up).warp;
       m.warp.shown = float(shown);
     }
     out.held_shown = 1;  // his own weapon is never warped: he fights on at once
@@ -1318,7 +1320,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         if (w.entity == own) continue;
         // Onto his body as it stands now.
         const Placed m = placed_of(w.entity);
-        fx::Dust d = player_dust(m.origin, m.angles, w.entity);
+        fx::Dust d = player_dust(m.origin, m.angles, w.entity, pitch_up);
         if (s.models != nullptr && body_triangles(*s.models, m, t, s.skin)) d.skin = s.skin;
         warp_dust(w, d, was, age, s.seed++, &out.births);
         continue;

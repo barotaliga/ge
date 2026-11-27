@@ -308,6 +308,9 @@ using models::SkinChoice;
 
 struct WorldModels {
   std::vector<ModelKind> kinds;    // by modelindex
+  // A vertex-animated model's pitch tips its nose up (Quake's entities), so it is drawn reversed;
+  // false for a game whose every entity pitches nose-down (Quake II: GameAdapter::pitch_down).
+  bool alias_pitch_up = true;
   std::vector<uint32_t> brush_of;  // by modelindex: the map's own brush model ("*N": N), or 0
   uint32_t brushes = 0;            // the map's brush models, the world's [0] among them
   ge::render::Morph morph;
@@ -372,6 +375,7 @@ uint32_t worn_slot(ge::gpu::Device& d, WorldModels& m, uint32_t file);
 // cache, no GPU), for `create_models` to upload.
 struct ModelsRead {
   std::vector<ModelKind> kinds;
+  bool alias_pitch_up = true;  // WorldModels's, from the game's adapter (GameAdapter::pitch_down)
   std::vector<uint32_t> brush_of;
   uint32_t brushes = 0;
   std::vector<ge::render::MorphModel> morphs;

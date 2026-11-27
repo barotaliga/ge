@@ -738,6 +738,7 @@ Placed hologram_of(const Placed& item, const ge::classicenhance::HologramLook& h
 ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette,
                        const br::Map& map, const ModelLoad& load, const GameAdapter& game) {
   ModelsRead m;
+  m.alias_pitch_up = !game.pitch_down;
   std::vector<gr::MorphModel>& morphs = m.morphs;
   // The skins with enhanced copies: the morph model, its pack's own skin, the copy and its scale.
   struct Enhanced {
@@ -973,6 +974,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
 void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldModels& m,
                    const wgpu::BindGroupLayout& frame, ModelsRead read) {
   m.kinds = std::move(read.kinds);
+  m.alias_pitch_up = read.alias_pitch_up;
   m.brush_of = std::move(read.brush_of);
   m.brushes = read.brushes;
   m.probe = std::move(read.probe);
@@ -1095,7 +1097,7 @@ bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double
   to_world(p.origin, w);
   const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
   float q[4];
-  models::rotation_of(ang, true, q);
+  models::rotation_of(ang, m.alias_pitch_up, q);
   const double x = q[0], y = q[1], z = q[2], s = q[3];
   double best = -1e30;
   for (size_t i = 0; i + 2 < body.size(); i += 3) {
@@ -1202,7 +1204,7 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
     if (!body_triangles(m, p, view.time_s, body)) return;
     const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
     float q[4];
-    models::rotation_of(ang, true, q);
+    models::rotation_of(ang, m.alias_pitch_up, q);
     const double x = q[0], y = q[1], z = q[2], s = q[3];
     const size_t first = out.size();
     for (size_t i = 0; i + 2 < body.size(); i += 3) {
@@ -1454,7 +1456,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       ang[2] = 180;
       ang[1] = float(std::fmod(t * kSqSpinDegPerS + p.angles.y, 360.0));
     }
-    models::rotation_of(ang, k.is == ModelKind::Is::alias, g.now.rotation);
+    models::rotation_of(ang, k.is == ModelKind::Is::alias && m.alias_pitch_up, g.now.rotation);
     g.now.frame_a = frame_a;
     g.now.frame_b = frame_b;
     g.now.blend = blend;
