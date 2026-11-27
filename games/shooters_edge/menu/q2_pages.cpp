@@ -452,11 +452,11 @@ constexpr Entry kQ2[] = {
     spin("remix", "cr_sounds", "sounds", kRemixWhose),
     spin("remix", "cr_menu", "menu", kRemixWhose),
     spin("remix", "cr_over_mods", "over mods", kRemixOnOff),
-    slide("remix", "cr_strong_min", "strong at least", 0, 8, 1),
-    slide("remix", "cr_strong_share", "strong at most", 0, 1, 0.1),
-    slide("remix", "cr_strong_same", "same strong", 0, 8, 1),
-    slide("remix", "cr_weak_same", "same weak", 0, 16, 1),
-    slide("remix", "cr_pool_radius", "gather within", 0, 512, 32),
+    slide("remix", "cr_items_strong_min", "strong at least", 0, 8, 1),
+    slide("remix", "cr_items_strong_share", "strong at most", 0, 1, 0.1),
+    slide("remix", "cr_items_strong_same", "same strong", 0, 8, 1),
+    slide("remix", "cr_items_weak_same", "same weak", 0, 16, 1),
+    slide("remix", "cr_items_pool_radius", "gather within", 0, 512, 32),
     back("remix"),
 };
 

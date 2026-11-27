@@ -75,8 +75,9 @@ struct RemixSettings {
   bool over_mods = false;  // cr_over_mods: the swaps above set over a mod's own too
   std::string monsters;    // cr_monsters: the same for a campaign map's monsters
   std::string menu;        // cr_menu: the same for the menu's pictures and its letters
-  profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
-  bool expansions = true;          // cr_expansions: the mission packs' maps and items taken too
+  profiles::RemixBalance
+      balance;             // cr_items_strong_min, cr_items_strong_share, cr_items_pool_radius
+  bool expansions = true;  // cr_expansions: the mission packs' maps and items taken too
 };
 
 // The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
@@ -137,7 +138,10 @@ struct RemixReport {
   int strong_by_role = 0;          // strong weapons the role table alone gave
   int strong = 0;                  // strong weapons after the balance
   int pooled = 0;                  // small pickups added into pools
-  int laid = 0;                    // the pools' pickups laid down again
+  int laid = 0;                    // the pools' pickups laid down again, stacked ones too
+  int pool_dropped = 0;            // pool pickups whose spot was left empty
+  int pool_total = 0;              // what the pools held (health and armour points)
+  int pool_laid = 0;               // what was laid down for them
   int to_ammo = 0;                 // weak weapons past `weak_same` laid down as their ammo
   std::vector<std::string> notes;  // each balance step, for the lab and the console's log
 };
