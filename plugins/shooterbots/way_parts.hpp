@@ -5,6 +5,7 @@
 // ge:summary The way through's shared parts: boxes, edicts, open links, the searches past bars
 // ge:keywords way_parts touches crosses shut_crossings link_open reach_past reach_back
 // ge:keywords locked_moved is_wall is_lift say_way name_linked_doors way_idle idle hopeful
+// ge:keywords way_forgive given-up forgiven
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp tests/shooterbots_way_parts_test.cpp
 #pragma once
@@ -32,6 +33,12 @@ float dist(sh::Vec3f a, sh::Vec3f b);
 // left running from an earlier idle spell lifted every door the first moment city1's bot dropped
 // off its graph, and he ran to a secret door shut till its button.
 double way_idle(double since, bool busy, double t);
+
+// (`complete`) Whether a step given up for good (`kWayForever`) is given one more try now, from
+// node `from`: once only, and only from kWayGivenFar or more from where it was given up (a wall
+// left twice from the pool under it while the climb out failed is tried again from the floor
+// beside it). Gives the try (left_until -1, one try short of giving up) when it says yes.
+bool way_forgive(WayStep& st, const NavGraph& g, int32_t from);
 
 sh::Vec3f origin_of(const char* org);
 

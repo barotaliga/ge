@@ -28,6 +28,18 @@ namespace ge::shooterbots::way_parts {
 
 double way_idle(double since, bool busy, double t) { return busy ? -1 : since < 0 ? t : since; }
 
+bool way_forgive(WayStep& st, const NavGraph& g, int32_t from) {
+  const auto in = [&](int32_t n) { return n >= 0 && static_cast<size_t>(n) < g.nodes.size(); };
+  if (st.forgiven || st.left_until < kWayForever || !in(st.given_from) || !in(from)) return false;
+  if (dist(g.nodes[static_cast<size_t>(from)].origin,
+           g.nodes[static_cast<size_t>(st.given_from)].origin) < kWayGivenFar)
+    return false;
+  st.forgiven = true;
+  st.left_until = -1;
+  st.tries = kWayTries - 1;
+  return true;
+}
+
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
