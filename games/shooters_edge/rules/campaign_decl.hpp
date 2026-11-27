@@ -94,6 +94,7 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_run_step, kTypeFloat)    \
   X(sq_impact, kTypeFloat)      \
   X(sq_impact_at, kTypeVector)  \
+  X(sq_health, kTypeFloat)      \
   X(coop_taken, kTypeFloat)
 
 // QUAKE II'S MONSTERS the campaign runs (classic remix, campaign_q2.hpp): each kind's
@@ -400,6 +401,7 @@ bool sq_runs(A& q, int32_t e);
 bool sq_choose(A& q);
 bool sq_sees(A& q, int32_t foe);
 bool sq_hurt_by_monster(A& q, int32_t attacker);
+void sq_take_pain(A& q);
 void sq_found(A& q);
 void sq_chase(A& q);
 void sq_trail_frame(A& q);

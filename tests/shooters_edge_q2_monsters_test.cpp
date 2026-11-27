@@ -26,6 +26,7 @@
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
+#include "shooters_edge/server/q2_monster_pain_rules.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -106,6 +107,24 @@ Pairs guard(const char* origin, const char* angle) {
 constexpr int kSecond = 77;  // host ticks of 13 ms in a second
 
 }  // namespace
+
+// The pain table read by any rules: a kind's cries each once, and the rule on the caller's draws.
+TEST(the_pain_table_lists_each_cry_once_and_picks_on_the_callers_draws) {
+  using shooters_edge::server::q2_pain::cry;
+  CHECK(std::string_view(cry("monster_floater", 0)) == "floater/fltpain1.wav");
+  CHECK(std::string_view(cry("monster_floater", 1)) == "floater/fltpain2.wav");
+  CHECK(cry("monster_floater", 2) == nullptr);  // the second twice, listed once
+  CHECK(cry("monster_nobody", 0) == nullptr);
+  std::vector<double> draws{0.5};
+  size_t used = 0;
+  const auto roll = [&] { return draws[used++]; };
+  // The tank: a blow of 20 shrugged off (0.5 is under 0.8), its wait spent, no draw after.
+  auto c = shooters_edge::server::q2_pain::pain("monster_tank", 20, 1, 0, 0, 0, false, false, roll);
+  CHECK(c.spent && c.run.none() && c.sound == nullptr && used == 1);
+  // A blow of 40: past the shrug, the band up to 60, its one run and cry with no draw.
+  c = shooters_edge::server::q2_pain::pain("monster_tank", 40, 1, 0, 0, 0, false, false, roll);
+  CHECK(c.run.first == 201 && std::string_view(c.sound) == "tank/tnkpain2.wav" && used == 1);
+}
 
 TEST(monsters_are_not_spawned_in_deathmatch) {
   auto h = open_hall({guard("0 0 24", "180")}, "1");

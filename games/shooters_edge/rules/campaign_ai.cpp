@@ -375,7 +375,7 @@ void monster_run(A& q) {
 
 // BEING HURT. By anything but itself or its enemy, it turns on the attacker, unless he is of its
 // own kind (riflemen excepted); a player turned from is remembered. Then the kind's pain, at the
-// hardest skill no more than every 5 s.
+// hardest skill no more than every 5 s; Quake II's monsters take theirs by their own table.
 void monster_hurt(A& q) {
   const int32_t me = q.self();
   const int32_t a = q.ge(g_damage_attacker);
@@ -391,6 +391,10 @@ void monster_hurt(A& q) {
       q.set_i(me, q.L.f.enemy, a);
       found_target(q);
     }
+  }
+  if (sq_runs(q, me)) {  // Quake II's monster: Quake II's pains as data, its own wait
+    sq_take_pain(q);
+    return;
   }
   if (q.time() < q.f(me, f_pain_finished)) return;
   if (q.cvar(q.s(s_skill)) >= 3) q.set_f(me, f_pain_finished, q.time() + q1_mind::kPainEveryHard);
