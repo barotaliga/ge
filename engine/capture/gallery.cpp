@@ -276,6 +276,11 @@ bool Gallery::remove_selected() {
   return true;
 }
 
+std::string Gallery::reveal_target() const {
+  const GalleryEntry* e = current();
+  return e != nullptr ? e->path : dir_;
+}
+
 GalleryAction Gallery::input(const GalleryInput& in) {
   if (mode_ == GalleryMode::confirm) {
     if (in.accept) {
@@ -290,6 +295,7 @@ GalleryAction Gallery::input(const GalleryInput& in) {
     }
     return GalleryAction::none;
   }
+  if (in.reveal) return GalleryAction::reveal;
   if (in.del && current() != nullptr) {
     before_confirm_ = mode_;
     mode_ = GalleryMode::confirm;

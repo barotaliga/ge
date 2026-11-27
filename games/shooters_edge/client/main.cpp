@@ -85,7 +85,9 @@
 #include "net/voice_codec.hpp"
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
+#include "platform/menu_keys.hpp"
 #include "platform/pacing.hpp"
+#include "platform/reveal.hpp"
 #include "platform/window.hpp"
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
@@ -352,7 +354,8 @@ int run_main(int argc, char** argv) {
       "shooters_edge", &shot_settings);
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
-  game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
+  ge::platform::add_reveal_command(console);  // the screenshots page's SHOW IN FINDER
+  game_menu.set_screenshots(shots.dir());     // OPTIONS > SCREENSHOTS looks through them
   game_menu.servers().set_query(shooters_edge::net::qw_query());         // JOIN A GAME
   game_menu.servers().set_routes(shooters_edge::net::qw_route_query());  // sb_findroutes
   game_menu.servers().set_cache_dir(
@@ -1186,15 +1189,8 @@ int run_main(int argc, char** argv) {
       using ge::platform::Key;
       ge::ui::MenuInput mi;
       if (!con_keys.held && was_open) {
-        mi.up = input.tapped(Key::up) || input.tapped(Key::w);
-        mi.down = input.tapped(Key::down) || input.tapped(Key::s);
-        mi.left = input.tapped(Key::left) || input.tapped(Key::a);
-        mi.right = input.tapped(Key::right) || input.tapped(Key::d);
-        mi.accept = input.tapped(Key::enter) || input.tapped(Key::space);
-        mi.back = input.tapped(Key::escape);
-        mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
-        mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
-        mi.letter = input.tapped_letter("efmnpy");  // the browser's filters, the quit box's Y and N
+        // the browser's filters, the quit box's Y and N, the screenshots page's O (show in Finder)
+        ge::platform::menu_keys(input, "efmnopy", mi);
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;
