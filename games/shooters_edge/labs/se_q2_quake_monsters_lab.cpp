@@ -4,7 +4,8 @@
 // it notices him, when its first attack lands, how often it hits him in 20 s, and his health at its
 // lowest. Facing away 600 off while he fires the other way for a second: whether it heard him (one
 // of Quake II's walks to the noise; one of Quake's hears nothing). Facing him while he fires the
-// blaster at it: how often it flinches. And how long it slid sideways round him. Every number is deterministic.
+// blaster at it: how often it flinches. And how long it slid sideways round him. Every number is
+// deterministic.
 //
 // ge:summary Lab: Quake's monsters under Quake II's rules, each kind's notice, hits and hearing
 // ge:keywords lab q2 cr_monsters remix quake-monsters q1-mind se-q2-quake-monsters hearing pain
@@ -92,10 +93,10 @@ constexpr const char* kKinds[] = {"monster_army",   "monster_dog",         "mons
 void run(gl::Lab& lab) {
   const std::string skill = lab.arg("skill");
   const int seconds = static_cast<int>(lab.arg_num("seconds"));
-  gl::LabTable t{
-      "each of Quake's kinds alone with the player under Quake II's rules",
-      {"kind", "noticed (s)", "first hit (s)", "hits", "lowest health", "heard", "flinches", "slid (s)"},
-      {}};
+  gl::LabTable t{"each of Quake's kinds alone with the player under Quake II's rules",
+                 {"kind", "noticed (s)", "first hit (s)", "hits", "lowest health", "heard",
+                  "flinches", "slid (s)"},
+                 {}};
   int total_hits = 0, heard_any = 0, total_flinches = 0;
   for (const char* kind : kKinds) {
     std::string error;
@@ -157,7 +158,8 @@ void run(gl::Lab& lab) {
     t.rows.push_back({kind, secs(noticed), secs(first), std::to_string(hits),
                       std::to_string(static_cast<int>(lowest)), heard ? "yes" : "no",
                       std::to_string(flinches), secs(float(sliding) / float(kSecond))});
-    lab.metric(std::string("quake_monsters.") + kind + ".slid", float(sliding) / float(kSecond), "s");
+    lab.metric(std::string("quake_monsters.") + kind + ".slid", float(sliding) / float(kSecond),
+               "s");
     lab.metric(std::string("quake_monsters.") + kind + ".flinches", flinches, "count");
     lab.metric(std::string("quake_monsters.") + kind + ".hits", hits, "count");
     lab.metric(std::string("quake_monsters.") + kind + ".first_hit", first, "s");
