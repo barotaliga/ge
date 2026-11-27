@@ -1301,8 +1301,8 @@ int run_main(int argc, char** argv) {
                             tap(Key::f5), tap(Key::f6), tap(Key::enter)};
       cl::lobby_keys(listen, k, to_server);
     }
-    const bool captured = mouse.held;
-    const bool playing = !(con_keys.held || !captured || was_open);
+    const bool captured = mouse.held;  // a recipe (-recipes) plays with the pointer free too
+    const bool playing = !(con_keys.held || (!captured && !args.recipes) || was_open);
     const ge::input::InputState& played = playing ? held : idle;
     // The mouse's buttons and wheel to the game's binds (the keyboard's went with the console's
     // keys above); the moves let go while the menu or the console has the keys.
