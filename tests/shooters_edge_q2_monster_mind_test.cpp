@@ -3,7 +3,7 @@
 // monsters at work are held by shooters_edge_q2_monsters_test.cpp and the campaign's by
 // shooters_edge_campaign_rules_test.cpp.
 //
-// ge:summary Tests Quake II's monster mind: sight, attacks, picks, loops, fights, chase, side steps, ducks
+// ge:summary Tests Quake II's monster mind: sight, attacks, picks, loops, fights, chase, ducks
 // ge:keywords q2 monster-mind test attack-chance pick-ranged sight infighting leap-test
 // ge:keywords dodge duck run-and-shoot side-step side_point
 // ge:skill testing shooter
