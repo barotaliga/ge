@@ -918,6 +918,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.sinks.size(); k++)
       if (w.sinks[k] == ent)
         return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.sinks_at[k]) >= 1;
+    // A door that starts open is open where it spawned (hip2m2's arena, shut by its trigger and
+    // opened again by a button beyond it: taken as done while shut, he stayed shut in for good).
+    for (const WayThrough::Closer& c : w.closers)
+      if (c.door == ent) return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, c.spawn) < 1;
     return true;  // no door of the plan's
   };
   for (WayStep& st : w.steps) {
