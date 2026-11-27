@@ -9,6 +9,10 @@
 //   takes them as its rules (client/remix_dedicated.hpp). A relative folder starts from the
 //   program's own folder (the one holding the app on a Mac), never the folder it was started in,
 //   so `fs_basedir_q1 quake` is the `quake` folder beside the game wherever it is started from.
+// - **The player's own files** (`own_files`): saves, screenshots and recordings are kept under the
+//   game folder played, in the data folder; `fs_artifacts_basedir 1` keeps them under the same game
+//   folder in the game's install instead (`fs_basedir_<id>`, relative from the program's folder),
+//   so a copy of the game beside the program carries them. Read when a game opens.
 // - **Read before the game opens** (`read_base_game`): the series config's lines and the command
 //   line's `+set` words, so the window and its CLI know which install to open before any config
 //   runs.
@@ -19,7 +23,7 @@
 //
 // ge:summary The game played and each classic game's install as settings, and their editions
 // ge:keywords installs select-game fs_basegame fs_basedir base-game bind_base_game read_base_game
-// ge:keywords game-played edition shareware
+// ge:keywords game-played edition shareware fs_artifacts_basedir own_files player-files
 // ge:keywords registered full-game game_rows mission-pack packs_of pack-row
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
@@ -40,6 +44,9 @@ namespace shooters_edge::client {
 
 // The setting that names the game played.
 inline constexpr std::string_view kBaseGame = "fs_basegame";
+// The setting that keeps the player's own files (saves, screenshots, recordings) in each game's
+// install, `fs_basedir_<id>`, instead of the data folder.
+inline constexpr std::string_view kArtifactsBasedir = "fs_artifacts_basedir";
 // The setting that names the install of the game `id` (a content profile's id): `fs_basedir_<id>`.
 std::string basedir_setting(std::string_view id);
 
@@ -51,10 +58,18 @@ struct BaseGame {
   // The folder a relative `fs_basedir_<id>` starts from: the program's own (`placed_folder`: the
   // one holding the app on a Mac); "" the folder the game runs in.
   std::string from;
+  // `fs_artifacts_basedir`: the player's own files in the install (`own_files`), not the data
+  // folder.
+  bool artifacts = false;
   BaseGame();
   // The install of game `id` ("" none, or an id no profile has), `~` and a relative path resolved
   // (`resolve_basedir`).
   std::string dir(std::string_view id) const;
+  // The folder the player's own files of game `id` go in, `folder` the game folder played over
+  // `basedir`: `<install>/<folder>` with `artifacts` and an install set, else `<basedir>/<folder>`
+  // (the copy in the data folder, or Shooter's Edge's own folder there).
+  std::string own_files(std::string_view id, const std::string& basedir,
+                        const std::string& folder) const;
 };
 
 // A `fs_basedir_<id>` value as a folder: `~` the home folder, a relative path from `from` (the

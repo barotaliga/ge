@@ -11,6 +11,7 @@
 // ge:summary Tests the game folder a player loads: the install checked, kept, its programs
 // ge:keywords test shooters-edge game-folder load-game check_game_folder game_of fs_basegame
 // ge:keywords fs_basedir read_base_game bind_base_game base_game_asked
+// ge:keywords fs_artifacts_basedir own_files own_game_folder
 // ge:keywords choose_folder load_programs campaign_commands coopgame addbot new_game
 // ge:skill shooter classicenhance testing
 #include <filesystem>
@@ -25,6 +26,7 @@
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
 #include "shooters_edge/client/coop_party.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -109,21 +111,25 @@ TEST(the_game_opens_from_the_install_its_setting_names) {
   base.game = q1;
   base.dirs[q1] = root.string();
   cl::Args a;
-  cl::choose_folder(a, base);
+  cl::choose_folder(a, base, "own");
   CHECK(!a.ask_install && fs::equivalent(a.basedir, root));
   CHECK(a.game == kMulti && a.profile == q1);
   // -game given: kept as it is.
   cl::Args named;
   named.game = "mod";
   named.game_set = true;
-  cl::choose_folder(named, base);
+  cl::choose_folder(named, base, "own");
   CHECK(fs::equivalent(named.basedir, root) && named.game == "mod");
   // fs_basegame "": Shooter's Edge's own game, whatever installs are set.
   cl::BaseGame own = base;
   own.game.clear();
   cl::Args b;
-  cl::choose_folder(b, own);
-  CHECK(!b.ask_install && b.basedir == ".");
+  cl::choose_folder(b, own, "own");
+  CHECK(!b.ask_install && b.basedir == "own");
+  // Its own folder is the data folder's se/, beside the classic games' q1/ and q2/: its saves,
+  // screenshots and recordings are never written in the folder the game was started in.
+  CHECK(fs::path(cl::own_game_folder("data")) == fs::path("data") / "se");
+  CHECK(cl::own_game_folder("") == ".");
 }
 
 TEST(a_game_whose_install_is_unset_gone_or_unknown_is_asked_for_or_passed_over) {
@@ -133,18 +139,18 @@ TEST(a_game_whose_install_is_unset_gone_or_unknown_is_asked_for_or_passed_over) 
   base.game = q1;
   base.dirs[q1] = (fresh("gone") / "nothing").string();
   cl::Args a;
-  cl::choose_folder(a, base);
+  cl::choose_folder(a, base, "own");
   CHECK(a.ask_install && a.profile == q1);
   // Not set at all: asked for.
   base.dirs[q1].clear();
   cl::Args b;
-  cl::choose_folder(b, base);
+  cl::choose_folder(b, base, "own");
   CHECK(b.ask_install);
   // A game this build does not know: Shooter's Edge's own game, nothing asked.
   base.game = "no-such-game";
   cl::Args c;
-  cl::choose_folder(c, base);
-  CHECK(!c.ask_install && c.basedir == ".");
+  cl::choose_folder(c, base, "own");
+  CHECK(!c.ask_install && c.basedir == "own");
 }
 
 TEST(a_relative_install_starts_from_the_programs_folder) {
@@ -157,6 +163,41 @@ TEST(a_relative_install_starts_from_the_programs_folder) {
   base.from = "/games/se";
   base.dirs["q1"] = "id";
   CHECK(fs::path(base.dir("q1")) == fs::path("/games/se/id"));
+}
+
+TEST(the_players_files_go_in_the_data_folder_or_with_fs_artifacts_basedir_in_the_install) {
+  cl::BaseGame base;
+  base.from = "/games/se";
+  base.dirs["q1"] = "quake";
+  // 0, the default: under the game folder played (the copy in the data folder).
+  CHECK(!base.artifacts);
+  CHECK(fs::path(base.own_files("q1", "/data/q1", "id1")) == fs::path("/data/q1/id1"));
+  // 1: under the same game folder in the install, a relative one from the program's folder.
+  base = cl::read_base_game(std::string_view("seta fs_artifacts_basedir \"1\"\n"),
+                            {"+set", "fs_basedir_q1", "quake"});
+  base.from = "/games/se";
+  CHECK(base.artifacts);
+  CHECK(fs::path(base.own_files("q1", "/data/q1", "id1")) == fs::path("/games/se/quake/id1"));
+  // A game with no install set, and Shooter's Edge's own game: the data folder still.
+  CHECK(fs::path(base.own_files("q2", "/data/q2", "baseq2")) == fs::path("/data/q2/baseq2"));
+  CHECK(fs::path(base.own_files("", "/data/se", "id1")) == fs::path("/data/se/id1"));
+  // The command line turns it off again; the saves follow the folder they are given.
+  base = cl::read_base_game(std::string_view("fs_artifacts_basedir 1\n"),
+                            {"+set", "fs_artifacts_basedir", "0"});
+  CHECK(!base.artifacts);
+  cl::SearchPath files;
+  files.folder = fresh("own-game").string();
+  files.own = fresh("own-files").string();
+  const std::string text = "5\nthe hall\n";
+  std::string error;
+  CHECK_MSG(cl::write_save(files, "s1",
+                           {reinterpret_cast<const uint8_t*>(text.data()), text.size()}, error),
+            error);
+  CHECK(fs::is_regular_file(fs::path(files.own) / "saves" / "s1.save"));
+  CHECK(!fs::exists(fs::path(files.folder) / "saves"));
+  std::vector<uint8_t> back;
+  CHECK_MSG(cl::read_save(files, "s1", back, error), error);
+  CHECK(std::string(back.begin(), back.end()) == text);
 }
 
 TEST(the_settings_are_read_from_the_config_then_the_command_line) {

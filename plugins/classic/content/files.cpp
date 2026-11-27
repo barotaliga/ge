@@ -379,15 +379,17 @@ fs::path save_file(const SearchPath& path, const std::string& name, bool classic
     error = "\"" + name + "\" can't be a save's name: use 1 to 64 letters, digits, _ or -";
     return {};
   }
-  if (path.folder.empty()) {
+  const std::string own = own_folder(path);
+  if (own.empty()) {
     error = "There is no game folder to keep saves in (pick the game's folder first).";
     return {};
   }
-  return classic ? fs::path(path.folder) / (name + ".sav")
-                 : fs::path(path.folder) / "saves" / (name + ".save");
+  return classic ? fs::path(own) / (name + ".sav") : fs::path(own) / "saves" / (name + ".save");
 }
 
 }  // namespace
+
+std::string own_folder(const SearchPath& path) { return path.own.empty() ? path.folder : path.own; }
 
 bool write_save(const SearchPath& path, const std::string& name, std::span<const uint8_t> bytes,
                 std::string& error, bool classic) {

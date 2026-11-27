@@ -28,11 +28,10 @@
 // `in_mouse_release` frees it); ESCAPE opens the main menu (menu/game_menu.hpp: drawn in the pack's
 // own pictures when the packs carry them, the rows the game cannot do yet dimmed), and ESCAPE again
 // goes back out of it; the key under ESCAPE drops the console, where `map <name>` changes the map,
-// `sv <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load
-// <name>` keep and bring back a single-player game (`<game folder>/saves/<name>.save`, or the
-// classic `<name>.sav`), and the settings (the look in app/look.hpp, the weapon in view/hand.hpp,
-// the window's `vid_` cvars) are kept in `<game folder>/settings/config.cfg` (`-config <f>`).
-// A Quake II unit's movie and the game's last picture play over the window (cinematic.hpp).
+// `sv <line>` is a line for the server's console (`sv timelimit 10`) and `save <name>` and `load
+// <name>` keep and bring back a single-player game, in the player's own folder
+// (client/installs.hpp's `own_files`) as the settings are in theirs (client/settings.hpp). Quake
+// II's unit movie and the game's last picture play over the window (cinematic.hpp).
 //
 // THE LOBBY: its own screen over the title's night until F4 joins the warmup (lobby_console).
 //
@@ -46,9 +45,8 @@
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
 // ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark title
 // ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
-// ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
+// ge:keywords escape vid_fullscreen offscreen vid_display vid_displays lobby scores-key cinematic
 // ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds f12
-// ge:keywords cinematic
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <chrono>
@@ -339,10 +337,11 @@ int run_main(int argc, char** argv) {
   const std::string copy_first =  // copied once the window is up, with its bar (take_in.hpp)
       cl::take_in_basedir(&base, data_root, cl::played_live(args));
   const auto installs = cl::installs_near({placed});  // `games`
-  cl::choose_folder(args, copy_first.empty() ? base : cl::BaseGame{});
+  cl::choose_folder(args, copy_first.empty() ? base : cl::BaseGame{},
+                    cl::own_game_folder(data_root));  // Shooter's Edge's own: <data folder>/se
   const cl::BaseGame chosen = cl::bind_base_game(console.cvars(), &base);  // set again below
-  // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
-  // The install's configs in its own order, its folders on `exec`'s path (install_configs.hpp).
+  // The player's settings (client/settings.hpp), then the install's configs in its own order, its
+  // folders on `exec`'s path (install_configs.hpp).
   const auto content_row = [&]() -> const ge::classicenhance::Profile& {
     const ge::classicenhance::Profile* c = ge::classicenhance::find_profile(args.profile);
     return c != nullptr ? *c : ge::classicenhance::q1_profile();
@@ -350,12 +349,11 @@ int run_main(int argc, char** argv) {
   console.set_search_path(cl::config_dirs(args.basedir, args.game, content_row()));
   // A session's own config (`-config <file>`): read and saved there, the player's left alone.
   if (!session.config.empty()) console.set_config_file(session.config);
-  // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
-  // recordings, saves/ and settings/; made before the + lines so `+screenshot` takes the first.
+  // The player's saves, recordings and F12's screenshots (engine/capture/screenshot.hpp): under the
+  // game folder, or its install (installs.hpp); made before the + lines for `+screenshot`.
+  const std::string own_files = base.own_files(args.profile, args.basedir, args.game);
   ge::capture::ScreenshotSettings shot_settings;  // scr_format, scr_quality, scr_chroma
-  ge::capture::Screenshots shots(
-      (cl::settings_dir(args.basedir, args.game).parent_path() / "screenshots").string(),
-      "shooters_edge", &shot_settings);
+  ge::capture::Screenshots shots(own_files + "/screenshots", "shooters_edge", &shot_settings);
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   ge::platform::add_reveal_command(console);  // the screenshots page's SHOW IN FINDER
@@ -450,6 +448,7 @@ int run_main(int argc, char** argv) {
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
   const bool opened = cl::open_game_dir(args.basedir, args.game, files, error,
                                         sp::content_of(sp::game_or_quake(args.profile)));
+  files.own = own_files;
   if (!opened) {
     if (!next_map.empty() && next_map != "arena") {
       out::error("shooters_edge: the game folder did not open: " + error +
@@ -1024,8 +1023,7 @@ int run_main(int argc, char** argv) {
       con_view.set_full(true);
       switch_step("Opening " + std::filesystem::path(basedir).filename().string() + "...");
     }
-    // Whichever game the install is: its rows and its adapter from here on.
-    std::string root;
+    std::string root;  // whichever game the install is: its rows and adapter from here on
     const ge::classicenhance::Profile* content = cl::install_of(basedir, &root, &error);
     if (content == nullptr) return false;
     cl::SearchPath fresh;
@@ -1042,6 +1040,8 @@ int run_main(int argc, char** argv) {
     args.basedir = basedir;
     args.profile = std::string(content->id);
     args.game = game_folder;
+    files.own = base.own_files(args.profile, basedir, args.game);  // saves, recordings, pictures
+    game_menu.set_screenshots(shots.set_dir(files.own + "/screenshots"));
     places.locs = {};
     places.map.clear();
     places.game_dir = std::filesystem::path(basedir) / args.game;
