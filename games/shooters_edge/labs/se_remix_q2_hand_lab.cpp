@@ -53,7 +53,6 @@ namespace sh = ge::shooter;
 
 const gl::Rgba kPaper{246, 244, 238, 255};
 const gl::Rgba kInk{30, 30, 34, 255};
-const gl::Rgba kFaint{120, 120, 120, 255};
 const gl::Rgba kFloor{150, 140, 120, 255};
 const gl::Rgba kBefore{40, 96, 150, 255};
 const gl::Rgba kNow{150, 82, 40, 255};
@@ -357,7 +356,8 @@ void run(gl::Lab& lab) {
            pic);
   lab.table({"pickups", {"pickup", "before", "now"}, table});
   int lifted = 0;
-  for (const Pickup& p : is) lifted += p.origin_z == 15 ? 1 : 0;
+  for (const Pickup& p : is)  // 15 up, over the floor's 1/32 gap the drop leaves
+    lifted += p.origin_z > 15 - 0.1 && p.origin_z < 15 + 0.1 ? 1 : 0;
   lab.metric("pickups-standing", lifted, "of " + std::to_string(is.size()));
 }
 
