@@ -7,6 +7,7 @@
 //
 // ge:summary Tests: trace_move's hulls, boxes, skips, the missile cube and the position test
 // ge:keywords test trace trace_move clip_to_entity hull-choice passent owner missile monster
+// ge:keywords traced_by_brush modelindex use-after-free
 // ge:skill shooter testing
 #include <cmath>
 
@@ -169,4 +170,24 @@ TEST(on_the_single_player_clock_a_start_in_a_box_wins_and_a_stuck_sweep_ends_at_
     CHECK(stuck.allsolid);
     CHECK(stuck.endpos.x == (sp ? 10 : 0));
   }
+}
+
+// A brush solid whose model index names no brush model (past the end of the server's models, or
+// the none at [0]: a program that made a model in its own file solid as a brush) is met as its
+// box, never read past the models. Seen as a crash as a campaign started on e4m1.
+TEST(a_brush_solid_naming_no_brush_model_is_met_as_its_box) {
+  Bench b;
+  b.start();
+  const int e =
+      b.spawn_box({100, 0, 32}, {-16, -16, -16}, {16, 16, 16}, sh::kSolidBsp, sh::kMovetypeNone);
+  for (const int mi : {static_cast<int>(b.sv.models.size()) + 40, 0}) {
+    b.ent(e).modelindex = mi;
+    CHECK(!sh::traced_by_brush(b.sv, b.ent(e)));
+    const sh::HullTrace tr =
+        sh::trace_move(b.sv, {0, 0, 32}, kZero, kZero, {200, 0, 32}, sh::kTraceNormal, -1);
+    CHECK(tr.ent == e);
+    CHECK(near(tr.endpos.x, 84));
+  }
+  b.ent(e).modelindex = 1;  // the world's: traced by its hulls
+  CHECK(sh::traced_by_brush(b.sv, b.ent(e)));
 }

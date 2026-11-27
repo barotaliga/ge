@@ -47,6 +47,27 @@ bool nav_harm_near(const NavGraph& g, Vec3f p, float reach) {
   return false;
 }
 
+bool nav_hurt_at(const NavGraph& g, Vec3f p) {
+  if (g.hurt.size() != g.nodes.size() || g.set.spacing <= 0 || g.cols == 0) return false;
+  const int32_t ci = static_cast<int32_t>((p.x - g.lo.x) / g.set.spacing);
+  const int32_t cj = static_cast<int32_t>((p.y - g.lo.y) / g.set.spacing);
+  for (int32_t i = ci - 1; i <= ci + 1; i++) {
+    if (i < 0 || i >= g.cols) continue;
+    for (int32_t j = cj - 1; j <= cj + 1; j++) {
+      if (j < 0 || j >= g.rows) continue;
+      const size_t c =
+          static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
+      for (int32_t k = 0; k < g.col_n[c]; k++) {
+        const auto n = static_cast<size_t>(g.col_first[c]) + static_cast<size_t>(k);
+        if (!g.hurt[n]) continue;
+        const Vec3f o = g.nodes[n].origin;
+        if (o.z > p.z - 32 && o.z < p.z + 32 && across(o, p) <= 24) return true;
+      }
+    }
+  }
+  return false;
+}
+
 int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach) {
   if (harm.size() != g.nodes.size()) return 0;
   g.harm.assign(harm.begin(), harm.end());
