@@ -191,6 +191,18 @@ TEST(classic_rules_take_q2s_armour_and_health_by_q2s_rules) {
 
   cl::Listen l;
   if (!start(l)) return;
+  // Quake II's armour stands 15 units over the floor (and the floor's 1/32 gap), its box lowered as
+  // far.
+  int lifted = 0;
+  for (int e = 1; e < l.server->sv.num_edicts; e++) {
+    const sh::Edict& ed = l.server->sv.edicts[size_t(e)];
+    if (ed.free || cl::string_field_named(l, e, "model").find("items/armor/") == std::string::npos)
+      continue;
+    lifted++;
+    CHECK_MSG(ed.mins.z == -15 && ed.origin.z > 15 - 0.1f && ed.origin.z < 15 + 0.1f,
+              std::to_string(ed.origin.z));
+  }
+  CHECK_MSG(lifted == 2, std::to_string(lifted));
   for (int i = 0; i < 120; i++) cl::listen_frame(l, {});  // spawned on the armour: taken
   const float shells = field(l, "ammo_shells");           // the spawn's 25 and Quake II's box of 10
   CHECK_MSG(shells == 35, std::to_string(shells));
@@ -210,7 +222,7 @@ TEST(classic_rules_carry_q2s_ammunition_to_q2s_limits) {
   if (worn == nullptr) return;
   CHECK(worn->arsenal.weapons[6].ammo_most == gc::kQ2MostRockets);
   CHECK(worn->arsenal.weapons[7].ammo_most == gc::kQ2MostSlugs);
-  CHECK(pf::weapon_text(worn->arsenal.weapons[6]).ends_with(" 5 50"));
+  CHECK(pf::weapon_text(worn->arsenal.weapons[6]).ends_with(" 5 50 15"));  // then its lift
   CHECK(pf::weapon_text(pf::kQ1Arsenal.weapons[6]).ends_with(" 5"));  // Quake's own: no limit word
 
   cl::Listen l;

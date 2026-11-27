@@ -179,10 +179,14 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   const bool free_feet = pm == sb::PilotMode::walk || pm == sb::PilotMode::strafe ||
                          pm == sb::PilotMode::hop || pm == sb::PilotMode::idle ||
                          pm == sb::PilotMode::arrived || pm == sb::PilotMode::wait;
+  // Nor on a jump's run at its start (the nav proved it, over lava or not): the run at a jump over
+  // a lava pit let go of W short of the start, and stood there for 50 s (Ground Zero's rmine1).
+  const bool at_jump = onground && pm == sb::PilotMode::jump;
   const KeysNear near{f.bot.pilot.world, p.g, origin};
-  press_keys(
-      f.keys, f.features, cmd, velocity, onground, curve,
-      (onground || free_feet || !sb::air_carries(p.g->move)) && !p.brink_free ? &near : nullptr);
+  press_keys(f.keys, f.features, cmd, velocity, onground, curve,
+             (onground || free_feet || !sb::air_carries(p.g->move)) && !p.brink_free && !at_jump
+                 ? &near
+                 : nullptr);
 }
 
 void press_keys(KeyHand& keys, const sb::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,

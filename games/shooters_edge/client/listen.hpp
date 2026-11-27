@@ -62,6 +62,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -91,6 +92,8 @@ namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
+
+struct RemixFiles;  // remix.hpp
 
 inline constexpr int kMostFrames = 8;             // server frames a wall frame may run
 inline constexpr size_t kMostListenSounds = 256;  // sounds kept for the window between its plays
@@ -230,6 +233,14 @@ struct ListenOptions {
   // A campaign in coop is served to others on `port` (or `transport`) through this door
   // (net/qw_coop.hpp's `qw_coop()`); null: a coop game is the window's alone.
   const CampaignDoor* door = nullptr;
+  // Classic remix's files and choices (remix.hpp), or null: a campaign's own change of map (a
+  // level's exit, the start map's skill gates) reads the next map through it, so its monsters are
+  // `cr_monsters`'s as a map the console asked for is (outlives the listen).
+  const RemixFiles* remix = nullptr;
+  // Called before a campaign's own change of map reads the next one: the window takes the cr_
+  // settings changed during the map here (remix.hpp's `remix_waits`), as it does before a map
+  // the console asked for. Null: nothing to take.
+  std::function<void()> before_map;
   // A mod's compiled module (GameContent's `module`) that plays a match in place of the program;
   // null or empty: the program (outlives the listen).
   const std::vector<uint8_t>* module = nullptr;
@@ -561,6 +572,8 @@ bool model_shown(const Listen& l, int entity);
 
 // A float field of an entity by its name in the progs (0 when the progs has no such field).
 float field_named(const Listen& l, int entity, const char* name);
+// The string field `name` of `entity` (empty when the program has none).
+std::string_view string_field_named(const Listen& l, int entity, const char* name);
 // A vector field by name into `out`; false (and `out` untouched) when the program has none.
 bool vector_field_named(const Listen& l, int entity, const char* name, float out[3]);
 // Sets that field (nothing when the progs has no such field): a lab hands the player its weapons.

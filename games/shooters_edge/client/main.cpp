@@ -97,6 +97,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/corners.hpp"
+#include "shooters_edge/client/crash_note.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/demo_check.hpp"
 #include "shooters_edge/client/demo_eyes.hpp"
@@ -640,6 +641,7 @@ int run_main(int argc, char** argv) {
   if (next_map.empty() && !attract_at_start && !remote.active) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
+  listen_opt.remix = &remix;  // a campaign's own map changes read through it (cr_monsters)
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
     listen_opt.player = n->value;
   cl::take_console_settings(listen_opt, listen.opt);  // the lobby, sv_port, sv_hostname, sv_login
@@ -740,11 +742,13 @@ int run_main(int argc, char** argv) {
   cl::ServerRemix told;  // a server's or a demo's remix, not the player's own (remix.hpp)
   const auto remix_now = [&]() -> const auto& { return told.of(remix_settings); };
   // `cr_items` (remix.hpp's `worn_arsenal`): the other game's things worn, from the next map.
-  const auto remix_wear = [&] {  // true: the remix is worn as its settings say
+  // `reopened`: the files opened again forget what was worn, so it is put on again even when the
+  // parts compare the same (a demo recorded without a remix: everything back to the game's own).
+  const auto remix_wear = [&](bool reopened) {  // true: the remix is worn as its settings say
     remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
     const bool dressed = cl::remix_dress(remix, remix_now(), args.profile);
     listen.opt.remix_info = cl::remix_info_lines(remix);  // told to everyone who joins
-    if (!dressed) return true;
+    if (!dressed && !reopened) return true;
     cl::worn_hud_reset(worn_hud, remix);       // read again from the files now open
     pictures_enhanced = !picture.ce.pictures;  // the pictures read again (cr_menu)
     cl::wear_lines(listen.opt, remix, game_content.arsenal);
@@ -757,6 +761,7 @@ int run_main(int argc, char** argv) {
   };
   std::pair<bool, bool> remix_open{false, true};  // cr_enabled and cr_expansions as opened
   std::string remix_for;
+  std::string remix_off;                     // why the remix is off though cr_enabled is on
   cl::RemixParts remix_items{};              // remix.hpp's `remix_parts`
   const auto remix_sync = [&]() -> bool {    // false: the loader is busy, in step next frame
     remix.balance = remix_settings.balance;  // the next map read weighs by them
@@ -765,15 +770,20 @@ int run_main(int argc, char** argv) {
     if (same_files && cl::remix_parts(remix_now()) == remix_items) return true;
     if (cl::busy(loader)) return false;  // its threads may read the other game's files: next frame
     remix_items = cl::remix_parts(remix_now());
-    if (same_files) return remix_wear();
+    // A cr_ setting changed while the remix is off takes nothing: the console says why.
+    if (same_files && !remix.state.on) return console.print(cl::remix_off_line(remix_off)), true;
+    if (same_files) return remix_wear(false);
     remix_open = open;
     remix_for = args.basedir;
     if (const std::string said =
             cl::open_remix_for(remix, remix_now(), prefs, args.profile, args.basedir, args.game);
         !said.empty())
-      console.print(said);
-    return remix_wear();
+      console.print(said), remix_off = remix.state.on ? "" : said;
+    return remix_wear(true);
   };
+  // A campaign's own change of map (a level's exit, the start map's skill gates) takes the cr_
+  // settings changed during the map before it reads the next one, as the console's `map` does.
+  listen.opt.before_map = [&] { remix_sync(); };
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;
   const auto pull = [](float* out, int frames, void* user) {
@@ -1982,17 +1992,9 @@ int main(int argc, char** argv) {
   try {
     return run_main(argc, argv);
   } catch (const std::exception& e) {
-    std::fprintf(stderr,
-                 "shooters_edge: stopped by an uncaught exception: %s. This is a bug: run the same "
-                 "command under lldb or gdb with a breakpoint on __cxa_throw to see where it "
-                 "was thrown.\n",
-                 e.what());
+    cl::say_crash(std::string("an uncaught exception: ") + e.what());
   } catch (...) {
-    std::fprintf(
-        stderr,
-        "shooters_edge: stopped by an uncaught exception that is not a std::exception. This "
-        "is a bug: run the same command under lldb or gdb with a breakpoint on "
-        "__cxa_throw to see where it was thrown.\n");
+    cl::say_crash("an uncaught exception that is not a std::exception");
   }
   return 1;
 }
