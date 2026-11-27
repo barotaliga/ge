@@ -429,6 +429,20 @@ void run(gl::Lab& lab) {
     con_view.key(ck::EditKey::down);
     lab.metric("suggest.history-back", con_view.input() == "/con_s" ? 1 : 0, "bool", det);
     con_view.key(ck::EditKey::escape);
+    con_view.type("/con_n");
+    con_view.key(ck::EditKey::tab);  // three match: the part they share, the list kept
+    lab.metric("suggest.tab-shared", con_view.input() == "/con_notify" ? 1 : 0, "bool", det);
+    shot("suggest-tab", "SUGGESTIONS: TAB TO THE SHARED PART",
+         "/con_n typed and Tab pressed: three settings match, so Tab completes to what they all "
+         "start with and keeps the list open to walk with the arrows.",
+         "/con_notify on the line, its three settings still listed under it", draw_con);
+    con_view.key(ck::EditKey::tab);  // nothing more shared: into the list
+    con_view.key(ck::EditKey::down);
+    shot("suggest-tab-down", "SUGGESTIONS: TAB, THEN DOWN",
+         "Tab again adds nothing more, so it steps into the list; Down walks on to the second "
+         "row, and Tab or Enter takes it.",
+         "the second row lit; its rest drawn dim after /con_notify", draw_con);
+    con_view.key(ck::EditKey::escape);
     con_view.set_open(false);
     for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
     menu.show(host, "demos");

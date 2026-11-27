@@ -456,7 +456,7 @@ void notice(Q2Server& s, Q2Monster& m) {
   const Q2Entity& e = body(s, m);
   bool heard = q1_mind::runs(kind(m));  // one of Quake's hears nothing
   for (int pass = 0; pass < 2 && !heard; pass++) {
-    if (pass == 1 && (m.ambush || m.enemy != -1)) break;
+    if (pass == 1 && !q2_mind::hears_impact(m.ambush, m.enemy != -1)) break;
     for (int i = 0; i < sh::kMaxClients; i++) {
       if (!targetable(s, i)) continue;
       const Q2Player& p = s.players[i];
