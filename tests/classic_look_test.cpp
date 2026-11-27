@@ -155,12 +155,32 @@ TEST(the_upscale_sharpen_is_on_only_under_r_scale_1) {
   namespace look = ge::classic::look;
   look::Picture p;
   CHECK(look::upscale_sharpen(p) == 0);
-  p.render_scale = 0.75;
+  p.render_scale = 0.5;
+  CHECK(look::upscale_sharpen(p) == 0);  // crisp squares (r_scale_smooth 0): never sharpened
+  p.scale_smooth = true;
   CHECK(look::upscale_sharpen(p) == 0.5);
   p.scale_sharpen = 3;
   CHECK(look::upscale_sharpen(p) == 1);
   p.scale_sharpen = 0;
   CHECK(look::upscale_sharpen(p) == 0);
+  p.render_scale = 0.75;  // drawn at the window's size: nothing upscaled
+  CHECK(look::upscale_sharpen(p) == 0);
+}
+
+// r_scale draws at whole ratios only, the nearest of 1, 0.5 and 0.25 by ratio.
+TEST(r_scale_draws_at_whole_ratios_only) {
+  namespace look = ge::classic::look;
+  look::Picture p;
+  for (const auto& [asked, drawn] : {std::pair{1.0, 1.0},
+                                     {0.75, 1.0},
+                                     {0.7, 0.5},
+                                     {0.5, 0.5},
+                                     {0.36, 0.5},
+                                     {0.35, 0.25},
+                                     {0.25, 0.25}}) {
+    p.render_scale = asked;
+    CHECK(look::render_step(p) == drawn);
+  }
 }
 
 TEST(quake_iis_picture_switches_reach_the_world_and_another_games_change_nothing) {
