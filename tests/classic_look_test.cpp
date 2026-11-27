@@ -149,6 +149,20 @@ TEST(the_classic_look_is_shown_as_worked_out_and_neither_has_the_toe) {
   CHECK(o.classic_light == 1 && o.classic_lift == 0);
 }
 
+// The sharpen after the upscale is on only while r_scale is under 1, at r_scale_sharpen's strength
+// held to 0..1; at r_scale 1 it is 0, which the post pass skips (the picture as it was).
+TEST(the_upscale_sharpen_is_on_only_under_r_scale_1) {
+  namespace look = ge::classic::look;
+  look::Picture p;
+  CHECK(look::upscale_sharpen(p) == 0);
+  p.render_scale = 0.75;
+  CHECK(look::upscale_sharpen(p) == 0.5);
+  p.scale_sharpen = 3;
+  CHECK(look::upscale_sharpen(p) == 1);
+  p.scale_sharpen = 0;
+  CHECK(look::upscale_sharpen(p) == 0);
+}
+
 TEST(quake_iis_picture_switches_reach_the_world_and_another_games_change_nothing) {
   // Another game's defaults: the sky drawn and smoothed, the textures as painted, the renderer's
   // own four taps, every speck its own size.
