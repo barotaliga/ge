@@ -114,6 +114,19 @@ int32_t missile(A& q, int model, float speed, float dmg, float lob) {
   return monster_missile(q, shared(q, model), speed, dmg, lob);
 }
 
+// A grenade at the enemy, lobbed, `dmg` on its blast 2.5 s on or on what it strikes.
+int32_t grenade(A& q, float speed, float dmg) {
+  const int32_t g = missile(q, kSqGrenade, speed, 0, 200);
+  q.set_f(g, q.L.f.movetype, kMovetypeBounce);
+  q.set_v(g, q.L.f.avelocity, {300, 300, 300});
+  q.set_f(g, f_dmg, dmg);
+  q.set_i(g, f_deathtype, q.s(s_blown_up_by_a_grenade));
+  q.set_i(g, q.L.f.touch, q.fn(fn_sq_grenade_touch));
+  q.set_i(g, q.L.f.think, q.fn(fn_sq_blast));
+  q.set_f(g, q.L.f.nextthink, q.time() + 2.5f);
+  return g;
+}
+
 void shoot(A& q, int run, const roster::Attack& a, bool blow) {
   const int32_t me = q.self();
   const int32_t enemy = q.i(me, q.L.f.enemy);
@@ -135,17 +148,9 @@ void shoot(A& q, int run, const roster::Attack& a, bool blow) {
       fire_pellets(q, a.fire == Fire::pellets ? static_cast<float>(a.count) : 1, points(q, a),
                    a.h / 8192);
       break;
-    case Fire::grenade: {
-      const int32_t g = missile(q, kSqGrenade, a.speed, 0, 200);
-      q.set_f(g, q.L.f.movetype, kMovetypeBounce);
-      q.set_v(g, q.L.f.avelocity, {300, 300, 300});
-      q.set_f(g, f_dmg, points(q, a));
-      q.set_i(g, f_deathtype, q.s(s_blown_up_by_a_grenade));
-      q.set_i(g, q.L.f.touch, q.fn(fn_sq_grenade_touch));
-      q.set_i(g, q.L.f.think, q.fn(fn_sq_blast));
-      q.set_f(g, q.L.f.nextthink, q.time() + 2.5f);
+    case Fire::grenade:
+      grenade(q, a.speed, points(q, a));
       break;
-    }
     case Fire::rockets:
     case Fire::bfg: {
       const int32_t r = missile(q, kSqRocket, a.speed > 0 ? a.speed : 500, 0, 0);
@@ -209,6 +214,67 @@ void start_attack(A& q, int slot) {
   anim_begin(q, frames);
   begin_loop(q, attack_of(kind_of(run), slot), true);
   sq_attack_step(q);
+}
+
+// THE DUCK: the kind's row (null for a kind that never ducks), and its box lowered or put back.
+const roster::Duck* duck_row(int run) {
+  for (const roster::Duck& d : roster::kDucks)
+    if (std::string_view(d.classname) == kSqRuns[run].classname) return &d;
+  return nullptr;
+}
+
+bool soldier(int run) {
+  return std::string_view(kSqRuns[run].classname).starts_with("monster_soldier");
+}
+
+void duck_box(A& q, int run, bool low) {
+  const roster::Kind& k = kind_of(run);
+  const float drop = low ? q2_mind::kDuckDrop : 0;
+  q.setsize(q.self(), {k.mins.x, k.mins.y, k.mins.z}, {k.maxs.x, k.maxs.y, k.maxs.z - drop});
+}
+
+// The duck over: the box back if it is still low, and the run again next think.
+void duck_done(A& q, int run) {
+  const int32_t me = q.self();
+  if (on(q.f(me, f_sq_ducked))) duck_box(q, run, false);
+  q.set_f(me, f_sq_duck_frame, 0);
+  q.set_f(me, f_sq_ducked, 0);
+  q.set_f(me, f_sq_duck_still, 0);
+  think_again(q, fn_monster_run);
+}
+
+// A shot offered to the monster (self) from player `shooter`, `dist` along its line at `speed`:
+// from in front, one in four ducked, a soldier's held past its arrival and at times shot from.
+void dodge(A& q, int32_t shooter, float dist, float speed) {
+  const int32_t me = q.self();
+  const int run = run_of(q, me);
+  if ((duck_row(run) == nullptr) | (q.f(me, q.L.f.health) <= 0) | (q.f(me, q.L.f.deadflag) != 0))
+    return;
+  const Vec3 to = q.normalize(q.v(shooter, q.L.f.origin) - q.v(me, q.L.f.origin));
+  q.makevectors({0, q.v(me, q.L.f.angles).y, 0});
+  const Vec3 f = q.v_forward();
+  if (to.x * f.x + to.y * f.y + to.z * f.z <= q2_mind::kInFront) return;
+  const double eta = q2_mind::dodge_eta(dist, kind_of(run).maxs.x, speed);
+  if (!q2_mind::dodges(roll_of(q))) return;
+  if (q.i(me, q.L.f.enemy) == 0) {  // found silently: no sight call, no shot on the run
+    const int32_t call = q.i(me, q.L.f.noise);
+    q.set_i(me, q.L.f.enemy, shooter);
+    q.set_i(me, q.L.f.noise, q.s(s_empty));
+    found_target(q);
+    q.set_self(me);
+    q.set_i(me, q.L.f.noise, call);
+  }
+  const q2_mind::DuckPlan p =
+      q2_mind::duck_plan(soldier(run), kSqRuns[run].classname == std::string_view("monster_brain"),
+                         skill_of(q), q.time(), eta, roll_of(q));
+  if (p.hold >= 0) q.set_f(me, f_sq_duck_hold, static_cast<float>(p.hold));
+  if ((q.f(me, f_sq_duck_frame) > 0) & (on(q.f(me, f_sq_duck_shoot)) == p.shoots))
+    return;                         // goes on
+  q.set_f(me, f_sq_duck_frame, 1);  // its first frame (frames are kept one up: 0 is none)
+  q.set_f(me, f_sq_duck_still, 0);
+  q.set_f(me, f_sq_duck_shoot, p.shoots ? 1 : 0);
+  q.set_i(me, q.L.f.think, q.fn(fn_sq_duck));  // an attack or a flinch cut short
+  q.set_f(me, q.L.f.nextthink, q.time());
 }
 
 // THE TRAIL: 8 marks, chained by `sq_goal` from the global `sq_trail`; a mark's place, its time
@@ -323,6 +389,9 @@ void raise(A& q, int32_t c) {
   q.setorigin(c, q.v(c, q.L.f.origin));
   q.add_to(q.L.g.total_monsters, 1);
   q.set_i(c, q.L.f.enemy, q.i(me, q.L.f.enemy));
+  q.set_f(c, f_sq_duck_frame, 0);  // up again out of no duck and no shot on the run
+  q.set_f(c, f_sq_ducked, 0);
+  q.set_f(c, f_sq_run_step, 0);
   q.set_i(c, q.L.f.think, q.fn(fn_monster_run));
   q.set_f(c, q.L.f.nextthink, q.time() + 0.1f);
 }
@@ -524,8 +593,10 @@ void sq_attack_step(A& q) {
 // Pain: its cry and its flinch, no more than every 3 s.
 void sq_pain(A& q) {
   const int32_t me = q.self();
+  if (on(q.f(me, f_sq_ducked))) return;  // ducked: no pain
   hold_pain(q, 3);
   q.sound(me, kChanVoice, word(q, run_of(q, me), kSqPain), 1, kAttnNorm);
+  if (q.f(me, f_sq_duck_frame) > 0) return;  // going down: the duck goes on
   anim_begin(q, q.v(me, f_fr_pain));
   sq_flinch(q);
 }
@@ -579,6 +650,13 @@ void sq_found(A& q) {
   q.set_f(me, f_sq_search, 0);
   q.set_f(me, f_sq_trail_time, q.time());
   q.set_f(me, f_sq_sound, 0);
+  // A soldier finding him 500 or more off, above the easiest skill, fires on the run half the
+  // time; not when found silently (by a dodge).
+  const int run = run_of(q, me);
+  if (q.is(q.i(me, q.L.f.noise), "")) return;
+  if (q2_mind::runs_and_shoots(soldier(run), skill_of(q), distance_to(q, q.i(me, q.L.f.enemy)),
+                               roll_of(q)))
+    q.set_f(me, f_sq_run_step, 1);  // its first step (kept one up: 0 is none)
 }
 
 // HEARING, Quake II's: with no enemy, a player's shot of the last fifth of a second within 1000
@@ -722,6 +800,118 @@ void sq_trail_frame(A& q) {
     q.set_v(m, q.L.f.angles, {0, q.vectoyaw(last - q.v(newest, q.L.f.origin)), 0});
     q.set_g(g_sq_trail_head, static_cast<float>((head + 1) % q2_mind::kTrailMarks));
   }
+}
+
+// DODGING: a player's bolt, rocket or nail just launched (`missile`, self its shooter) offered to
+// the first of Quake II's monsters on its line, as Quake II's dodge offers it (an easiest skill's
+// one in four). Nothing is drawn on a map with none of them. The firer's view axes are kept.
+void sq_offer_dodge(A& q, int32_t missile) {
+  const int32_t shooter = q.self();
+  if ((q.ge(g_sq_trail) == 0) | on(q.deathmatch()) | !q.is(q.i(shooter, q.L.f.classname), "player"))
+    return;
+  if (!q2_mind::dodge_offered(skill_of(q), roll_of(q))) return;
+  const Vec3 fwd = q.v_forward(), right = q.gv(q.L.g.v_right), up = q.gv(q.L.g.v_up);
+  const Vec3 v = q.v(missile, q.L.f.velocity);
+  const Vec3 from = eye_of(q, shooter);
+  q.traceline(from, from + q.normalize(v) * 8192, 0, shooter);
+  const int32_t hit = q.gi(q.L.g.trace_ent);
+  if ((hit != 0) && sq_runs(q, hit)) {
+    const float dist = q.vlen(q.gv(q.L.g.trace_endpos) - q.v(missile, q.L.f.origin));
+    q.set_self(hit);
+    dodge(q, shooter, dist, q.vlen(v));
+    q.set_self(shooter);
+  }
+  q.set_gv(q.L.g.v_forward, fwd);
+  q.set_gv(q.L.g.v_right, right);
+  q.set_gv(q.L.g.v_up, up);
+}
+
+// One 0.1 s frame of a dodge's duck: the frame shown and, new, its step, the box down (held low a
+// second, the brain's hold its own) and the duck that shoots firing (a gunner above skill 1 throws
+// a grenade ahead half the time), the box up; then the next frame, the same while held, or the run.
+void sq_duck(A& q) {
+  think_again(q, fn_sq_duck);
+  const int32_t me = q.self();
+  const int run = run_of(q, me);
+  const bool shoots = on(q.f(me, f_sq_duck_shoot));
+  const roster::Duck* d = shoots ? &roster::kDuckShoot : duck_row(run);
+  const int f = static_cast<int>(q.f(me, f_sq_duck_frame)) - 1;
+  if ((d == nullptr) | (f < 0)) {
+    duck_done(q, run);
+    return;
+  }
+  q.set_f(me, q.L.f.frame, static_cast<float>(d->first + f));
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  const bool foe = (enemy != 0) && (q.f(enemy, q.L.f.health) > 0);
+  if (shoots && foe) face_enemy(q);
+  if (!on(q.f(me, f_sq_duck_still))) {
+    const float walk = static_cast<float>(d->steps[f]) * d->scale;
+    if (walk != 0) q.walkmove(q.v(me, q.L.f.angles).y, walk);
+    if (f == d->down) {
+      const bool was = on(q.f(me, f_sq_ducked));
+      if (!was) {
+        q.set_f(me, f_sq_ducked, 1);
+        duck_box(q, run, true);
+        if (kSqRuns[run].classname != std::string_view("monster_brain"))
+          q.set_f(me, f_sq_duck_hold, q.time() + static_cast<float>(q2_mind::kDuckLow));
+      }
+      if (shoots && (enemy != 0)) shoot(q, run, attack_of(kind_of(run), 2), false);
+      if (!was && (kSqRuns[run].classname == std::string_view("monster_gunner")) &&
+          (skill_of(q) >= 2) && (q.random() > 0.5f)) {  // a grenade straight ahead, unaimed
+        const int32_t g = grenade(q, 600, 50);
+        q.makevectors({0, q.v(me, q.L.f.angles).y, 0});
+        q.set_v(g, q.L.f.velocity, q.v_forward() * 600 + Vec3{0, 0, 200});
+      }
+    }
+    if ((f == d->up) && on(q.f(me, f_sq_ducked))) {
+      q.set_f(me, f_sq_ducked, 0);
+      duck_box(q, run, false);
+    }
+  }
+  const int next = q2_mind::duck_next(*d, f, shoots, q.time(), q.f(me, f_sq_duck_hold));
+  q.set_f(me, f_sq_duck_still, next == f ? 1 : 0);  // held low: shown again, still
+  if (next < 0) {
+    duck_done(q, run);
+    return;
+  }
+  q.set_f(me, f_sq_duck_frame, static_cast<float>(next + 1));
+}
+
+// One 0.1 s frame of a soldier's shot on the run: at him facing him, the shot at its fourth step,
+// round again at skill 3 while he is 500 or more off; then the run.
+void sq_run_shoot(A& q) {
+  const int32_t me = q.self();
+  const int run = run_of(q, me);
+  const int at = static_cast<int>(q.f(me, f_sq_run_step)) - 1;
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  if ((at < 0) | (enemy == 0) || (q.f(enemy, q.L.f.health) <= 0)) {
+    q.set_f(me, f_sq_run_step, 0);
+    think_again(q, fn_monster_run);
+    return;
+  }
+  think_again(q, fn_sq_run_shoot);
+  q.set_f(me, q.L.f.frame, static_cast<float>(q2_mind::kRunShootFirst + at));
+  ai_charge(q, q.f(me, f_run_step));
+  if (at == q2_mind::kRunShootFires) shoot(q, run, attack_of(kind_of(run), 2), false);
+  const int next =
+      q2_mind::run_shoot_next(at, skill_of(q), q.f(enemy, q.L.f.health) > 0, distance_to(q, enemy));
+  q.set_f(me, f_sq_run_step, static_cast<float>(next + 1));
+  if (next < 0) think_again(q, fn_monster_run);
+}
+
+// What goes before Quake II's monster's run: a duck it is in, or its shot on the run. True when one
+// took the frame.
+bool sq_busy(A& q) {
+  const int32_t me = q.self();
+  if (q.f(me, f_sq_duck_frame) > 0) {
+    sq_duck(q);
+    return true;
+  }
+  if (q.f(me, f_sq_run_step) > 0) {
+    sq_run_shoot(q);
+    return true;
+  }
+  return false;
 }
 
 #define SE_SQ_SPAWN(name, i)                                      \

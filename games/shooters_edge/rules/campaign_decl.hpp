@@ -84,6 +84,12 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_trail_last, kTypeVector) \
   X(sq_sound, kTypeFloat)       \
   X(sq_sound_at, kTypeVector)   \
+  X(sq_duck_frame, kTypeFloat)  \
+  X(sq_duck_hold, kTypeFloat)   \
+  X(sq_duck_shoot, kTypeFloat)  \
+  X(sq_ducked, kTypeFloat)      \
+  X(sq_duck_still, kTypeFloat)  \
+  X(sq_run_step, kTypeFloat)    \
   X(coop_taken, kTypeFloat)
 
 // QUAKE II'S MONSTERS the campaign runs (classic remix, campaign_q2.hpp): each kind's
@@ -117,7 +123,9 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_rocket_touch, "sq_rocket_touch")               \
   X(sq_leap_touch, "sq_leap_touch")                   \
   X(sq_medic_check, "sq_medic_check")                 \
-  X(sq_check, "sq_check")
+  X(sq_check, "sq_check")                             \
+  X(sq_duck, "sq_duck")                               \
+  X(sq_run_shoot, "sq_run_shoot")
 
 // THE CAMPAIGN'S OWN FUNCTIONS by name: the hooks, the map's things, every think, touch, use and
 // `th_` a rule stores (the C++ `main_hook` is the program's `main`). `use_targets` is shared but
@@ -393,6 +401,8 @@ void sq_chase(A& q);
 void sq_trail_frame(A& q);
 bool sq_hear(A& q);
 bool sq_to_sound(A& q);
+void sq_offer_dodge(A& q, int32_t missile);
+bool sq_busy(A& q);
 // campaign_monsters
 void leap_off(A& q, float fwd, float up, Fn touch);
 void ai_precache(A& q);

@@ -66,6 +66,7 @@ void ai_walk(A& q, float dist) {
 
 void ai_run(A& q, float dist) {
   const int32_t me = q.self();
+  if (sq_runs(q, me) && sq_busy(q)) return;  // Quake II's monster: a duck or a shot on the run
   const int32_t enemy = q.i(me, q.L.f.enemy);
   if ((q.f(enemy, q.L.f.health) <= 0) | (q.f(enemy, q.L.f.takedamage) == 0)) {
     lost_enemy(q);

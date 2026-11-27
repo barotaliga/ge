@@ -32,6 +32,7 @@
 #include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
+#include "shooters_edge/server/q2_monster_mind.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_quake_arms.hpp"
@@ -791,7 +792,7 @@ float machinegun_climb(const Q2Server& s, int slot) {
 // only one shot in four is offered; there are no monsters in deathmatch.
 void offer_dodge(Q2Server& s, int slot, sh::Vec3f start, sh::Vec3f forward, float speed) {
   if (deathmatch(s) || s.monsters.empty()) return;
-  if (skill(s) == 0 && ge::core::next(s.rng) > 0.25) return;
+  if (!q2_mind::dodge_offered(skill(s), [&s] { return ge::core::next(s.rng); })) return;
   const Line l = shoot_line(s, start, start + forward * 8192, 1u << slot);
   if (l.player >= 0 || l.mover < 0 || monster_index(s, l.mover) < 0) return;
   monster_dodge(s, l.mover, slot, sh::length(l.end - start), speed, l.end);

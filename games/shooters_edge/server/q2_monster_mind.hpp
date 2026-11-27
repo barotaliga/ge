@@ -37,11 +37,22 @@
 //   its last look, facing the way he went; 20 s past a search's start it makes one move straight
 //   at him. The trail is 8 marks: a player's place at the last frame is marked once his eye no
 //   longer sees the newest mark.
+// - **Dodging**: a player's bolt, rocket or BFG ball (at the easiest skill only one in four is
+//   offered) whose line meets it first, from a shooter in front of it, is dodged one time in four.
+//   A soldier above the easiest skill holds its duck to 0.3 s past the shot's arrival and shoots
+//   from it a third of the time at skill 1, two thirds above; the brain holds to 0.5 s past.
+// - **Ducking**: the duck's frames a step each; at its down frame the box drops 32 and it is held
+//   low a second (the brain's hold its own); the duck that shoots fires there and goes round again
+//   from its loop frame while 0.4 s of the hold remains; at its up frame the box comes back.
+// - **The shot on the run**: a soldier finding a foe 500 or more off above the easiest skill runs
+//   at him firing half the time: 14 frames, the shot at the fourth, at skill 3 round again from the
+//   third while he lives 500 or more off.
 //
 // ge:summary Quake II's monsters' decisions as any rules run them: sight, attack, pick, loop, fight
 // ge:keywords q2 monster-mind monster-ai cr_monsters remix real-ai attack-chance pick-ranged
 // ge:keywords sight in-front infighting leap-test attack-loop q2_attack_chance
 // ge:keywords chase pursue last-sighting player-trail trail-marks next-mark
+// ge:keywords dodge duck duck-shoot run-and-shoot
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_q2_monster_mind_test.cpp
 #pragma once
@@ -299,6 +310,80 @@ void pursue(M& m, W& w) {
   m.trail_time = w.mark_time(i);
   w.face(w.mark_yaw(i));
   w.correct();
+}
+
+// ---- Dodging, ducking and the shot on the run ----
+
+inline constexpr double kDodgeOffered = 0.25;  // at the easiest skill, the share of shots offered
+inline constexpr double kDodgeChance = 0.25;   // an offered shot dodged
+inline constexpr double kDuckPast = 0.3;       // s a soldier's duck is held past the shot's arrival
+inline constexpr double kBrainDuckPast = 0.5;  // the brain's
+inline constexpr double kDuckLow = 1;          // s held low from the down frame (but the brain)
+inline constexpr double kDuckShootAgain = 0.4;  // s of the hold left to go round again
+inline constexpr float kDuckDrop = 32;          // the box's top lowered while down
+inline constexpr int kRunShootFirst = 109;      // the shot on the run's first frame
+inline constexpr int kRunShootFires = 3;        // its step that fires
+inline constexpr int kRunShootLast = 13;        // its last step
+inline constexpr int kRunShootAgain = 2;        // the step it goes round again from
+inline constexpr double kRunShootChance = 0.5;
+
+// Whether a player's shot is offered to the monster its line meets: always but at skill 0, where
+// one in four is (a draw only there).
+template <class Roll>
+bool dodge_offered(int skill, Roll&& roll) {
+  return skill != 0 || !(roll() > kDodgeOffered);
+}
+
+// The time an offered shot takes to reach it: `dist` along its line less the monster's half width,
+// at `speed`.
+constexpr double dodge_eta(float dist, float half_width, float speed) {
+  return static_cast<double>(dist - half_width) / static_cast<double>(speed);
+}
+
+// Whether it dodges an offered shot from in front (one draw).
+template <class Roll>
+bool dodges(Roll&& roll) {
+  return !(roll() > kDodgeChance);
+}
+
+// How a dodge ducks: whether it shoots from the duck, and the hold (-1: the one it had is kept).
+struct DuckPlan {
+  bool shoots = false;
+  double hold = -1;
+};
+template <class Roll>
+DuckPlan duck_plan(bool soldier, bool brain, int skill, double now, double eta, Roll&& roll) {
+  DuckPlan p;
+  if (soldier && skill >= 1) {
+    p.hold = now + eta + kDuckPast;
+    p.shoots = roll() <= (skill == 1 ? 0.33 : 0.66);
+  }
+  if (brain) p.hold = now + eta + kBrainDuckPast;
+  return p;
+}
+
+// The duck's frame after its frame `f` (counted from 0): `f` again while held low (its held frame,
+// the hold not over); for the duck that shoots, its down frame again from the loop frame while
+// 0.4 s of the hold remains; -1 when it is done.
+constexpr int duck_next(const roster::Duck& d, int f, bool shoots, double now, double hold) {
+  if (f == d.held && now + 0.001 < hold) return f;
+  int next = f + 1;
+  if (shoots && f == roster::kDuckShootLoop && now + kDuckShootAgain + 0.001 < hold) next = d.down;
+  return next >= d.frames ? -1 : next;
+}
+
+// Whether a soldier that has just found a foe `dist` off fires on the run (a draw only when the
+// rest holds).
+template <class Roll>
+bool runs_and_shoots(bool soldier, int skill, float dist, Roll&& roll) {
+  return soldier && skill >= 1 && dist >= kNear && roll() < kRunShootChance;
+}
+
+// The shot on the run's step after `at`: the next, or from its last, at skill 3, round again while
+// the foe lives `dist` 500 or more off; -1 when it is done.
+constexpr int run_shoot_next(int at, int skill, bool foe_alive, float dist) {
+  if (at < kRunShootLast) return at + 1;
+  return skill == 3 && foe_alive && dist >= kNear ? kRunShootAgain : -1;
 }
 
 }  // namespace shooters_edge::server::q2_mind

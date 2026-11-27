@@ -203,6 +203,9 @@ int32_t missile(A& q, float w, int a, float mtype, float spd, float life) {
   q.set_f(m, q.L.f.weapon, w);
   q.set_f(m, f_q2_arm, static_cast<float>(a));
   missile_now(q, m);
+#if defined(SE_RULES_CAMPAIGN)
+  if (mtype == kMovetypeFlymissile) sq_offer_dodge(q, m);  // a bolt or a rocket: the dodge
+#endif
   return m;
 }
 
