@@ -20,6 +20,7 @@
 #include "core/output.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_native.hpp"
@@ -239,6 +240,10 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
     }
   }
   out.rules_campaign = out.campaign == nullptr && game.rules_campaign;
+  out.own_campaign = {};
+  if (out.campaign != nullptr && game.id == "q1" &&
+      !shooters_edge::server::campaign_mod(out.own_campaign, error))
+    return false;
   const ge::classicenhance::Profile& content = profiles::content_of(game);
   std::vector<uint8_t> store;
   out.registered = !find_file(files, content.full_game, store).empty();
@@ -405,6 +410,17 @@ void save_commands(ge::console::Console& con, Listen& listen, const SearchPath& 
 
 }  // namespace
 
+namespace {
+
+// Which program a campaign runs follows classic remix (listen.hpp's `campaign_program`): the
+// game's two, taken into the options the campaign keeps.
+void take_campaign_programs(ListenOptions& o, const GameContent& content) {
+  o.pack_campaign = content.campaign;
+  o.own_campaign = content.own_campaign.functions.empty() ? nullptr : &content.own_campaign;
+}
+
+}  // namespace
+
 void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
                        const GameContent& content, std::string& next_map, std::string& load_ask) {
   using CArgs = ge::console::Args;
@@ -467,10 +483,13 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
                std::string& error) {
   if (content.campaign != nullptr && wants_campaign(listen.opt)) {
+    take_campaign_programs(listen.opt, content);
     if (listen.campaign_host && !listen.opt.new_game)
       return listen_change(listen, std::move(map), error);
     listen.opt.new_game = false;
-    return listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
+    const ge::progs::Progs* own = campaign_program(listen.opt);
+    const ge::progs::Progs& program = own != nullptr ? *own : *content.campaign;
+    return listen_campaign(listen, program, std::move(map), listen.opt, error);
   }
   // A new game on rules that keep their own campaign starts their server afresh (its settings
   // are the new game's); else a level change keeps it (net/qw_game.hpp).
@@ -519,6 +538,7 @@ std::string load_save_asked(Listen& listen, const GameContent& content, const Se
 bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
                      const std::string& name, std::string& error) {
   std::vector<uint8_t> bytes;
+  take_campaign_programs(listen.opt, content);
   ListenOptions lo = listen.opt;
   lo.console.emplace_back("deathmatch 0");
   std::string base = name;
@@ -530,11 +550,15 @@ bool load_asked_save(Listen& listen, const GameContent& content, const SearchPat
   if (!bytes.empty() && !classic && content.campaign == nullptr && content.rules_campaign)
     return listen_load_q2(listen, lo, bytes, name, error);  // Quake II's own save
   if (bytes.empty() || content.campaign == nullptr) return false;
+  // The program the campaign runs now (classic remix's `remix_campaign`), so a save made on it
+  // reads back on it.
+  const ge::progs::Progs* now = campaign_program(listen.opt);
+  const ge::progs::Progs& program = now != nullptr ? *now : *content.campaign;
   if (classic)
     return listen_load_text(
-        listen, *content.campaign, lo,
+        listen, program, lo,
         std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()), name, error);
-  return listen_load(listen, *content.campaign, lo, bytes, name, error);
+  return listen_load(listen, program, lo, bytes, name, error);
 }
 
 void add_path_command(ge::console::Console& con, const SearchPath& files) {

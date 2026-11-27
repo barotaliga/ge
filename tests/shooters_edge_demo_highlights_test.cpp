@@ -3,14 +3,15 @@
 // (demo_write.hpp's `highlight_match`) scanned into its kills with the right killers, weapons,
 // rocket flights, air, gibs, stacks and telefrags; the highlights found for the watched player and
 // for another; the timeline's seek forward and back landing on the straight read; the playback's
-// keys, skips, jumps, speeds and pause; the console's clock and `demo_jump`. The scan also keeps
+// keys, skips, jumps, speeds and pause; the effects' clock held with the demo; the console's clock
+// and `demo_jump`. The scan also keeps
 // where killer and victim stood and every rocket's flight with its shooter (the `se-kills` lab's
 // input).
 //
 // ge:summary Tests: a demo's kills and highlights found, the timeline's seek, the playback controls
 // ge:keywords test demo highlights scan kills multi-kill long-shot air-kill annihilation telefrag
 // ge:keywords streak seek timeline playback skip jump speed pause parse_clock flights shooter
-// ge:keywords demo_jump demo_snapshots cl_demosnaps seek-snapshot
+// ge:keywords demo_jump demo_snapshots cl_demosnaps seek-snapshot playback_fx_step fx_t freeze
 // ge:skill shooter replay testing
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #include <algorithm>
@@ -485,4 +486,17 @@ TEST(mvd_autotrack_follows_the_plan_and_your_own_pick_turns_it_off) {
   CHECK(p.plan_state == 1 && followed);
   con.run_now("demo_track 1");
   CHECK(p.autotrack == 0 && t.demo.track == 1);
+}
+
+// The effects' clock runs with the demo at its speed and stands while it is held; a game joined or
+// a timed run keeps the wall's.
+TEST(the_effects_clock_runs_with_the_demo_and_stands_while_it_is_held) {
+  cl::DemoPlayback p;
+  CHECK(cl::playback_fx_step(p, true, 0.1) == 0.1);
+  p.speed = 2;
+  CHECK(cl::playback_fx_step(p, true, 0.1) == 0.2);
+  p.paused = true;
+  CHECK(cl::playback_fx_step(p, true, 0.1) == 0);
+  CHECK(std::abs(p.fx_t - 0.3) < 1e-12);
+  CHECK(cl::playback_fx_step(p, false, 0.1) == 0.1);  // not the demo's clock: the wall's
 }

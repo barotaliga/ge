@@ -60,6 +60,10 @@
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "viewmodel/held.hpp"
 
+namespace ge::progs {
+struct Progs;
+}
+
 namespace shooters_edge::client {
 
 struct GameAdapter;
@@ -211,7 +215,22 @@ struct RemixFiles {
     worn = nullptr, looks = nullptr, figure = nullptr, physics = nullptr, heard = {};
     menu = {}, charset = {};
   }
+  // True while a base game's campaign needs the engine's own campaign rules: they wear the other
+  // game's weapons by the arsenal's rows (`cr_items`) and run its monsters (`cr_monsters`), where
+  // the packs' own program fires its own weapons and has no spawn for the other game's monsters
+  // (a map of them would stand empty). A mod's rules and a mission pack's program keep their own.
+  bool wants_own_campaign() const {
+    return state.on && !mod_rules && pack.empty() &&
+           (worn != nullptr || (!monsters.empty() && monsters != played));
+  }
 };
+
+// The program a campaign's next map runs: `own` (the engine's own campaign rules) while `r`
+// `wants_own_campaign` and they are there, else `pack` (the packs' program NEW GAME runs).
+inline const ge::progs::Progs* remix_campaign(const RemixFiles* r, const ge::progs::Progs* pack,
+                                              const ge::progs::Progs* own) {
+  return r != nullptr && own != nullptr && pack != nullptr && r->wants_own_campaign() ? own : pack;
+}
 
 // What the played game's rules wear while `r` is on (`worn_arsenal`, `worn_looks`) and the
 // players' figure (`worn_figure`) and physics (`worn_physics`) set in `r`; true when it changed.

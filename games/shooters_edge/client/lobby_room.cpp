@@ -105,6 +105,14 @@ void room_enter(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map) {
 }
 
 void room_packets(Room& r, const sv::RulesRunner& s, int msec, std::vector<sh::Packet>& out) {
+  if (bots::bot_seats_land(r.seats, s) && !r.seats.gone.empty()) {  // a map no bot can walk
+    r.lobby.said.push_back("the bots leave: " + r.seats.gone_why);
+    for (const int i : r.seats.gone) {
+      s.drop(i);
+      sv::lobby_leave(r.lobby, i, s->sv.time);
+    }
+    r.seats.gone.clear();
+  }
   bots::bot_seats_packets(r.seats, s, msec, out);
 }
 

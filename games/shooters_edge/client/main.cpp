@@ -637,9 +637,8 @@ int run_main(int argc, char** argv) {
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
-  // No map asked for: the title. A classic game plays its recordings (`menu_attract`) under the
-  // loading console, the menu up only where none can play; a measured run (timedemo, --frames)
-  // loads its map first; -tv watches and `+connect` joins, with no recording or map of our own.
+  // No map: the title, a classic game's recordings (`menu_attract`) under the console, or the menu
+  // where none play; a measured run (timedemo, --frames) loads its map; -tv and `+connect` join.
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
   bool on_title = next_map.empty() && !measured && args.tv.empty() && !remote.active;
   bool menu_at_start = on_title;
@@ -647,7 +646,8 @@ int run_main(int argc, char** argv) {
   if (next_map.empty() && !attract_at_start && !remote.active) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
-  listen_opt.remix = &remix;  // a campaign's own map changes read through it (cr_monsters)
+  listen_opt.remix = &remix;          // a campaign's own map changes read through it (cr_monsters)
+  listen_opt.bots_background = true;  // no frame waits for the bots' nav (bots/bot_seats.hpp)
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
     listen_opt.player = n->value;
   cl::take_console_settings(listen_opt, listen.opt);  // the lobby, sv_port, sv_hostname, sv_login
@@ -982,13 +982,18 @@ int run_main(int argc, char** argv) {
   std::vector<uint8_t> fx_palette;
   ge::particles::Book fx_book;
   bool fx_palette_read = false;
-  const auto read_fx_files = [&] {
-    cl::read_fx_palette(files, fx_palette);
-    fx_book = {};
-    std::vector<std::string> faults;
-    cl::load_effects(files, fx_book, faults);
-    for (const std::string& f : faults) console.print("particles: " + f);
-    fx_palette_read = true;
+  const auto ready_fx = [&](cl::FxState& s) {  // read once a folder, and handed to `s`
+    if (!fx_palette_read) {
+      cl::read_fx_palette(files, fx_palette);
+      fx_book = {};
+      std::vector<std::string> faults;
+      cl::load_effects(files, fx_book, faults);
+      for (const std::string& f : faults) console.print("particles: " + f);
+      fx_palette_read = true;
+      s.palette.clear();
+    }
+    if (s.palette.empty()) s.palette = fx_palette;
+    s.book = &fx_book;
   };
   // LOAD GAME's folder, `import` or the settings (client/game_folder.hpp): the install opened in
   // place of the one playing (the old world and servers let go first), its first map started where
@@ -1725,28 +1730,27 @@ int run_main(int argc, char** argv) {
         target = bench_off.view;
       }
       // Its entities, other players and effects (its explosions, trails, hits, beams).
-      if (!fx_palette_read) {
-        read_fx_files();
-        bench_fx_state.palette.clear();
-      }
-      if (bench_fx_state.palette.empty()) bench_fx_state.palette = fx_palette;
-      bench_fx_state.book = &fx_book;
+      ready_fx(bench_fx_state);
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = slm::watch_fx(live_map, cl::fx_switches(picture));
-      cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
+      const double fx_dt =  // the demo's own clock: it stands while the demo is held
+          cl::playback_fx_step(playback, !drawn_remote && bench.paced && !tv_watch.on, wall);
+      const double fx_t = playback.fx_t;
+      cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, fx_t, fx_dt,
+                       bench_fx);
       // See-through liquids on a joined server where its `watervis` allows; a demo always may.
       bench_fx.see_through = !drawn_remote || shooters_edge::look::watervis_allowed(ds.serverinfo);
       // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       in_hand.recording = !drawn_remote;  // r_viewmodellastfired plays back alone
-      auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, fx_t, fx_dt);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
-      cl::held_cases(bench_fx_state.cases, held_fire, hand, bench_fx_state.on.shells, t);
+      cl::held_cases(bench_fx_state.cases, held_fire, hand, bench_fx_state.on.shells, fx_t);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 || own_behind > 0
                       ? nullptr
                       : &hand;
-      cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
+      cl::draw_world(*device, *world, view, bench_fx, gun, fx_dt, overlay, target);
       ge::render::gpu_watch_frame(gpu_debug.watch, cl::world_stats(*world), wall, console);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1890,12 +1894,7 @@ int run_main(int argc, char** argv) {
         behind_movers(listen.map ? &listen.map->spec.models : nullptr));
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
-    if (!fx_palette_read) {
-      read_fx_files();
-      fx_state.palette.clear();
-    }
-    if (fx_state.palette.empty()) fx_state.palette = fx_palette;
-    fx_state.book = &fx_book;
+    ready_fx(fx_state);
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
     if (behind > cl::kOwnFigureUnits && fx.has_self) {  // fading as a wall pushes the camera in

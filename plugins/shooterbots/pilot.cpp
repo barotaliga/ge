@@ -1247,18 +1247,28 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const NavMover* in = mover_of(g.movers, l.mover);
       const NavMover* crush = over_him(p, s, kCrushNear);
       if (crush != nullptr) in = crush;
-      if (in != nullptr && !moving_platform(*in) &&
+      // A moving platform that rises and falls (boss1's pillar up to the boss) is waited for
+      // clear of its whole way too: standing at the shaft's rim, his box over its edge, it rose
+      // under that edge, lifted him into the lintel and stalled on him for good.
+      Vec3f way_lo, way_hi;
+      const bool lift =
+          in != nullptr && crush == nullptr && moving_platform(*in) && rises(*in, way_lo, way_hi);
+      if (in != nullptr && crush == nullptr && !lift) {
+        way_lo = in->absmin;
+        way_hi = {in->absmax.x, in->absmax.y, in->absmax.z + in->travel.z};
+      } else if (crush != nullptr) {
+        way_lo = in->absmin;
+        way_hi = in->absmax;
+      }
+      if (in != nullptr && (!moving_platform(*in) || lift) &&
           (crush != nullptr ||
            boxes_meet(s.origin + kPlayerMins - Vec3f{kClear, kClear, 0},
-                      s.origin + kPlayerMaxs + Vec3f{kClear, kClear, 0}, in->absmin,
-                      Vec3f{in->absmax.x, in->absmax.y, in->absmax.z + in->travel.z}))) {
+                      s.origin + kPlayerMaxs + Vec3f{kClear, kClear, 0}, way_lo, way_hi))) {
         const float clear = crush != nullptr ? kCrushNear : kClear;
-        const Vec3f mid{(in->absmin.x + in->absmax.x) * 0.5f, (in->absmin.y + in->absmax.y) * 0.5f,
-                        s.origin.z};
+        const Vec3f mid{(way_lo.x + way_hi.x) * 0.5f, (way_lo.y + way_hi.y) * 0.5f, s.origin.z};
         Vec3f away{s.origin.x - mid.x, s.origin.y - mid.y, 0};
         // Straight out of the box's nearer side.
-        const float hx = (in->absmax.x - in->absmin.x) * 0.5f,
-                    hy = (in->absmax.y - in->absmin.y) * 0.5f;
+        const float hx = (way_hi.x - way_lo.x) * 0.5f, hy = (way_hi.y - way_lo.y) * 0.5f;
         const float ox = (away.x < 0 ? -away.x : away.x) - hx,
                     oy = (away.y < 0 ? -away.y : away.y) - hy;
         if (ox > oy)
@@ -1278,10 +1288,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
               continue;
             const Vec3f d = c.origin - s.origin;
             if (d.z > kStepHeight || d.z < -kStepHeight) continue;
-            if (c.origin.x + kPlayerMaxs.x > in->absmin.x - clear &&
-                c.origin.x + kPlayerMins.x < in->absmax.x + clear &&
-                c.origin.y + kPlayerMaxs.y > in->absmin.y - clear &&
-                c.origin.y + kPlayerMins.y < in->absmax.y + clear)
+            if (c.origin.x + kPlayerMaxs.x > way_lo.x - clear &&
+                c.origin.x + kPlayerMins.x < way_hi.x + clear &&
+                c.origin.y + kPlayerMaxs.y > way_lo.y - clear &&
+                c.origin.y + kPlayerMins.y < way_hi.y + clear)
               continue;
             const float dd = d.x * d.x + d.y * d.y;
             if (dd >= best) continue;
@@ -1310,10 +1320,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           // coming down on him, too: the nearest node off it lay past one of the legs bunk1's
           // floor stands on, which the world's trace does not hold, and he was pinned there.)
           const Vec3f sides[4] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
-          const float gaps[4] = {in->absmax.x - (s.origin.x + kPlayerMins.x),
-                                 (s.origin.x + kPlayerMaxs.x) - in->absmin.x,
-                                 in->absmax.y - (s.origin.y + kPlayerMins.y),
-                                 (s.origin.y + kPlayerMaxs.y) - in->absmin.y};
+          const float gaps[4] = {
+              way_hi.x - (s.origin.x + kPlayerMins.x), (s.origin.x + kPlayerMaxs.x) - way_lo.x,
+              way_hi.y - (s.origin.y + kPlayerMins.y), (s.origin.y + kPlayerMaxs.y) - way_lo.y};
           float best = 1e30f;
           for (int i = 0; i < 4; i++) {
             const float go = gaps[i] + kClear;
