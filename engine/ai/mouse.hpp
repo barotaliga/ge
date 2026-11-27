@@ -16,7 +16,10 @@
 //    the hand LIFTS: the
 //    view stops for `lift_s` while it goes back across (to `back` of its reach on the other
 //    side), and SETS DOWN off by about `setdown_cm` in each direction (a degree or two), which the
-//    eye then corrects.
+//    eye then corrects. Up and down the pad (`reach_y_cm`) the hand stops at its edge, and a
+//    stroke still wanting more lifts it the same way, set down `back` of that reach the other
+//    side (a look far up and then far down, a hatch shot over the head before a rocket jump at
+//    the feet, would otherwise leave the view short of the shot for good).
 // 4. THE ARC. A right hand turns about the wrist and the elbow, which lie behind it and off to its
 //    right, so a drag right runs down and a drag left up (`tilt`: centimetres down a centimetre
 //    right), and both ends of a long drag bend down (`bow_cm`: the arc's radius). The planner aims
@@ -131,6 +134,7 @@ class Mouse {
   double phase_x_ = 0, phase_y_ = 0;
   double lift_left_ = 0;  // s of a lift still to go
   int lift_side_ = 0;     // the side the hand was carried to before the lift
+  int lift_y_ = 0;        // the edge (up 1, down -1) a lift from the pad's top or foot left
   int lift_after_ = 0;    // a stroke runs to the pad's edge on this side: lift once it is done
   double want_x_ = 0, want_y_ = 0, rate_x_ = 0, rate_y_ = 0;
   bool seen_ = false;

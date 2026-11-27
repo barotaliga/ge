@@ -31,7 +31,10 @@ void way_shot_triggers(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
 // relays and their killtargets, removes a named push faster than he moves (`kCurrentFast`:
 // hangar1's duct, a 500 units/s current into a turning fan, ends when its power box is shot) as a
 // shot button of the fighter's, with the push's box (`ButtonSpot::calm_lo`, `calm_hi`): shot from
-// the nearest node within kWayShotTriggerFrom that sees it.
+// the nearest node within kWayShotTriggerFrom that sees it. So is each such breakable that lids a
+// way (`ButtonSpot::lid`): no thicker than kLidThick, with a link climbing through it (xship's
+// hatch over the pod he starts in, rocket-jumped into for the whole map).
+constexpr float kLidThick = 16;      // a breakable this thin or less lids a way, units
 constexpr float kCurrentFast = 400;  // a push this fast (units/s) is not swum or walked against
 // The model ("*N") of the push faster than kCurrentFast that a breakable firing `target` removes
 // (a relay's killtarget, through relays), or null.
