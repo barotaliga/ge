@@ -3,9 +3,9 @@
 // monsters at work are held by shooters_edge_q2_monsters_test.cpp and the campaign's by
 // shooters_edge_campaign_rules_test.cpp.
 //
-// ge:summary Tests Quake II's monster mind: sight, attacks, picks, loops, fights, chase, ducks
+// ge:summary Tests Quake II's monster mind: sight, attacks, picks, loops, fights, chase, side steps, ducks
 // ge:keywords q2 monster-mind test attack-chance pick-ranged sight infighting leap-test
-// ge:keywords dodge duck run-and-shoot
+// ge:keywords dodge duck run-and-shoot side-step side_point
 // ge:skill testing shooter
 #include <string_view>
 #include <vector>
@@ -221,6 +221,43 @@ struct Field {  // a line: the monster at `at`, marks at 100, 200, 300
   void face(float yaw) { faced = yaw; }
   void correct() {}
 };
+
+struct P {  // a point in the plan
+  float x = 0, y = 0, z = 0;
+  P operator+(P o) const { return {x + o.x, y + o.y, z + o.z}; }
+  P operator-(P o) const { return {x - o.x, y - o.y, z - o.z}; }
+  P operator*(float k) const { return {x * k, y * k, z * k}; }
+};
+
+struct Block {  // its way along +x blocked half way; the left (+y) and right (-y) by these
+  float ahead = 0.5f, left = 1, right = 0.3f;
+  int swept = 0;
+  float sweep(P to) {
+    swept++;
+    return to.y > 0 ? left : to.y < 0 ? right : ahead;
+  }
+  static float length(P v) { return v.x; }  // along +x only, here
+  static void axes(P, P& forward, P& right) {
+    forward = {1, 0, 0};
+    right = {0, -1, 0};
+  }
+};
+
+TEST(a_blocked_goal_is_stepped_round_on_the_clearer_side_held_to_half_its_reach) {
+  P side;
+  Block w;
+  CHECK(q2_mind::side_point(P{}, P{100, 0, 40}, w, side));  // half way: points 75 on, 16 aside
+  CHECK(side.x == 75 && side.y == 16 && side.z == 0);       // the left, clear, at its own height
+  CHECK(w.swept == 3);
+  w = {0.5f, 0.8f, 0.9f};
+  CHECK(q2_mind::side_point(P{}, P{100, 0, 0}, w, side));  // the right farther: held to half
+  CHECK(side.x == 75 * 0.45f && side.y == -16 * 0.45f);
+  w = {0.5f, 0.6f, 0.6f};  // neither gets as far as the way ahead (2/3 of its way)
+  CHECK(!q2_mind::side_point(P{}, P{100, 0, 0}, w, side));
+  w = {1, 0, 0};
+  CHECK(!q2_mind::side_point(P{}, P{100, 0, 0}, w, side));  // clear: no step
+  CHECK(w.swept == 1);
+}
 
 TEST(where_a_shot_lands_is_heard_only_with_no_enemy_and_no_ambush) {
   CHECK(q2_mind::hears_impact(false, false));

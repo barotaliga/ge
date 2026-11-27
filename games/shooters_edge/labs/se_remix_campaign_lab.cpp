@@ -11,14 +11,15 @@
 //
 // `--fire=<rank>` gives him that weapon of Quake's (7 the rocket launcher) and from `--fire-at` he
 // fires it at the nearest of Quake II's monsters hunting him in his sight: their dodges, ducks and
-// shots on the run are counted.
+// shots on the run are counted. The side steps they take round what blocks their way are counted
+// either way.
 //
 // Needs the player's own installs (`--game=<folder>/id1`, `--remix=<folder holding baseq2>`); with
 // none (the smoke run) it notes that and passes.
 //
 // ge:summary Lab: cr_monsters through a campaign's own level change, then the first lift ridden
 // ge:keywords lab se-remix-campaign cr_monsters remix campaign changelevel skill-gate lift
-// ge:keywords before_map level-change monsters-swapped exception crash
+// ge:keywords before_map level-change monsters-swapped exception crash side-step
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_remix_test.cpp
 #include <algorithm>
@@ -192,7 +193,7 @@ void run(gl::Lab& lab) {
   std::string thrown;
   Eyes eyes;
   int q2 = 0, q1 = 0, lift_dz = 0, frames_run = 0, deaths = 0, hits = 0, hunting = 0, trailing = 0,
-      lost = 0, heard = 0, dodges = 0, ducking = 0, run_shots = 0, fired = 0;
+      lost = 0, side_steps = 0, heard = 0, dodges = 0, ducking = 0, run_shots = 0, fired = 0;
   float lowest_hp = 100, first_hit = -1, nearest = -1;
   try {
     std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(files, lab.arg("map"), &remix, error);
@@ -267,7 +268,7 @@ void run(gl::Lab& lab) {
           *ge::progs::entity_field(s->q.vm, 1, mv::field_of(progs, ammo)) =
               ge::progs::as_word(100.0f);
       }
-      std::vector<int> was_ducking, was_running;
+      std::vector<int> was_ducking, was_running, was_stepping;
       for (int i = 0; i < frames && rules_of(l) != nullptr; i++, frames_run++) {
         sh::MoveCmd cmd;
         const float t0 = float(i) * float(sv::kCampaignStep);
@@ -350,6 +351,7 @@ void run(gl::Lab& lab) {
           }
           return std::pair{n, now_in};
         };
+        side_steps += begun("sq_side_step", was_stepping).first;
         const auto [ducks_begun, ducks_now] = begun("sq_duck_frame", was_ducking);
         dodges += ducks_begun;
         ducking = std::max(ducking, ducks_now);
@@ -380,12 +382,13 @@ void run(gl::Lab& lab) {
                                           std::to_string(deaths) + " time(s); hit " +
                                           std::to_string(hits) + " times, first after " +
                                           std::to_string(first_hit).substr(0, 4) + " s"});
-      t.rows.push_back({"the monsters", std::to_string(hunting) +
-                                            " hunting at the end, the nearest " +
-                                            std::to_string(int(nearest)) + " units off; " +
-                                            std::to_string(trailing) + " on his trail at most, " +
-                                            std::to_string(lost) + " after where they lost him, " +
-                                            std::to_string(heard) + " to a noise"});
+      t.rows.push_back(
+          {"the monsters", std::to_string(hunting) + " hunting at the end, the nearest " +
+                               std::to_string(int(nearest)) + " units off; " +
+                               std::to_string(trailing) + " on his trail at most, " +
+                               std::to_string(lost) + " after where they lost him, " +
+                               std::to_string(side_steps) + " side steps round a block, " +
+                               std::to_string(heard) + " to a noise"});
       t.rows.push_back({"dodging", std::to_string(fired) + " frames he fired; " +
                                        std::to_string(dodges) + " ducks begun, " +
                                        std::to_string(ducking) + " ducking at once at most; " +
@@ -411,6 +414,7 @@ void run(gl::Lab& lab) {
   lab.metric("remix_campaign.nearest_hunter", nearest, "units");
   lab.metric("remix_campaign.on_trail_most", trailing, "count");
   lab.metric("remix_campaign.lost_most", lost, "count");
+  lab.metric("remix_campaign.side_steps", side_steps, "count");
   lab.metric("remix_campaign.heard_most", heard, "count");
   lab.metric("remix_campaign.fired_frames", fired, "frames");
   lab.metric("remix_campaign.dodges", dodges, "count");

@@ -5,7 +5,8 @@
 // a hound on a path walks it corner to corner. The kinds that fight up close and in the air: a
 // swordsman and a brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down
 // by a big one and gets up again whole, and only its whole health in one blow ends it; a flyer
-// keeps its height and spits at the player. Quake II's guard hears where a shot lands. The big and
+// keeps its height and spits at the player. Quake II's guard hears where a shot lands and steps
+// aside round what blocks its way to where it last saw the player. The big and
 // late kinds: each counts at spawn and hurts a player in front of it, the giant takes half of a
 // blast, and a spawn bursts when it dies. The bosses: the lava boss rises when used, throws, and
 // falls to three strikes; arriving inside the final boss kills it and ends the game; a teleport
@@ -15,7 +16,7 @@
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
 // ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
 // ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
-// ge:keywords teleport-train event-lightning animation-frames death-frames impact-heard
+// ge:keywords teleport-train event-lightning animation-frames death-frames impact-heard side-step
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <string>
@@ -106,6 +107,43 @@ TEST(a_q2_guard_hears_where_a_shot_lands_unless_in_ambush) {
     if (!ambush) CHECK(g.named(guard, "sq_sound_at_x") == -220);
     CHECK(g.s().q.faults == 0);
   }
+}
+
+// Quake II's guard (classic remix) that has lost its foe, a rifleman standing in its way to where
+// it last saw him: it steps aside to the clearer side first, the sighting kept for after.
+TEST(a_q2_guard_blocked_on_its_way_to_the_last_sighting_steps_aside) {
+  Game g(R"({
+"classname" "monster_soldier_light"
+"origin" "-100 0 24"
+"angle" "180"
+}
+{
+"classname" "monster_army"
+"origin" "-260 28 24"
+"angle" "90"
+"spawnflags" "1"
+}
+)");
+  const int guard = g.find("monster_soldier_light");
+  CHECK(guard > 0 && g.find("monster_army") > 0);
+  // It sees the player past the rifleman; then he is gone from sight.
+  for (int i = 0; i < kFrames * 3 && g.entity_of(guard, g.f().enemy) != 1; i++)
+    CHECK_MSG(g.frame(), g.error);
+  CHECK(g.entity_of(guard, g.f().enemy) == 1);
+  CHECK(g.named(guard, "sq_side_step") == 0);
+  for (int i = 0; i < kFrames && g.named(guard, "sq_side_step") == 0; i++) {
+    g.set(1, g.f().view_ofs + 2, -4000);  // his eye under the floor: out of every sight
+    CHECK_MSG(g.frame(), g.error);
+  }
+  CHECK(g.named(guard, "sq_side_step") == 1);
+  CHECK(g.named(guard, "sq_real_goal_x") < -400);  // where it saw him, kept
+  const int goal = g.entity_of(guard, g.f().goalentity);
+  CHECK(goal > 0);
+  if (goal > 0) {
+    CHECK(g.field(goal, g.f().origin + 1) < 0);  // the left, away from the rifleman
+    CHECK(g.field(goal, g.f().origin) > -400);   // short of the sighting
+  }
+  CHECK(g.s().q.faults == 0);
 }
 
 TEST(a_death_counts_and_fires_the_monsters_targets) {
