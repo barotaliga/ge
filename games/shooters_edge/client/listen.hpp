@@ -143,6 +143,8 @@ struct ListenHost {
   // a map change after the remix changed starts the match afresh, its items the remix's new ones.
   std::vector<std::string> worn, worn_over, worn_info;
   bool lobby = false;
+  // The bots' nav built on a thread of its own (bots/bot_seats.hpp's `background`): the window's.
+  bool bots_background = false;
   sv::LobbySettings lobby_settings;
   std::string player = "player";  // slot 0, the window's own player: a local seat
   float speedjump = 0;            // pm_speedjump on each map's server (the easy jump allowed)
@@ -237,6 +239,11 @@ struct ListenOptions {
   // level's exit, the start map's skill gates) reads the next map through it, so its monsters are
   // `cr_monsters`'s as a map the console asked for is (outlives the listen).
   const RemixFiles* remix = nullptr;
+  // The game's campaign programs (GameContent's `campaign` and `own_campaign`), or null: which one
+  // a campaign's map runs is classic remix's `remix_campaign` (`campaign_program`), taken at NEW
+  // GAME and at each change of map (they outlive the listen).
+  const ge::progs::Progs* pack_campaign = nullptr;
+  const ge::progs::Progs* own_campaign = nullptr;
   // Called before a campaign's own change of map reads the next one: the window takes the cr_
   // settings changed during the map here (remix.hpp's `remix_waits`), as it does before a map
   // the console asked for. Null: nothing to take.
@@ -275,6 +282,9 @@ struct ListenOptions {
   // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
   // countdown, then the map restarted for the match. Off: the match starts with the map.
   bool lobby = false;
+  // The bots' nav built on a thread of its own, so adding a bot or a map change with bots in never
+  // holds a frame while it builds (the window's; off, a run is the same frame by frame: tests).
+  bool bots_background = false;
   // A match relays its players' voices (`sv_voip 1`), the window's player among them
   // (`listen_mic`, `Listen::voices`).
   bool voice = true;
@@ -474,6 +484,11 @@ bool listen_is_q2(const Listen& l);
 // the classic rules, rules/common_q2_arms.cpp): their hits, blasts and trails are drawn as Quake
 // II's.
 bool listen_q2_arms(const Listen& l);
+
+// The program a campaign's next map runs: the engine's own campaign rules while classic remix
+// wears what the packs' program cannot run (remix.hpp's `remix_campaign`), else the packs'; null
+// when the options name no campaign programs (the one running stays).
+const ge::progs::Progs* campaign_program(const ListenOptions& o);
 // The rules draw their own screens (a scoreboard, an inventory): the window draws none of its own.
 bool listen_own_screens(const Listen& l);
 // A console line the window does not know, given to the rules of a game whose client passes its

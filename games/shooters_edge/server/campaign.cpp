@@ -103,6 +103,7 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   QcServer& s = *made;
   c.server = qc_runner(std::move(made));
   for (const auto& [k, v] : c.settings) set(s, k, v);
+  for (const std::string& line : c.opt.every_map) c.server.console(line);
   set(s, "registered", c.opt.registered ? "1" : "0");
   if (s.cvars.find("coop")->on()) set(s, "deathmatch", "0");
   round_skill(s);

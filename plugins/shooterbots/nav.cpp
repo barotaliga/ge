@@ -1682,21 +1682,41 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
     nav_add_links(g, extra);
     grow_marks(g, main);
   }
-  // Outward: the nodes the main part reaches that reach none of it back.
+  // Outward: the nodes the main part reaches that reach none of it back, in rounds. A pocket is a
+  // group of stuck nodes joined by links either way, so a way out of its lower end leaves its upper
+  // end stuck still (xship's landing bay, part of the one pocket with the decks it falls to); each
+  // round reckons again what is stuck and bridges what is left, until a round adds nothing. A group
+  // tried and not bridged is not tried again (`failed`, by its root).
   {
-    const std::vector<uint8_t> back = reaching(g, main);
-    std::vector<uint8_t> stuck(g.nodes.size());
-    for (size_t n = 0; n < stuck.size(); n++) stuck[n] = main[n] && !back[n] && !avoided(n) ? 1 : 0;
-    // `back` within the main part: the land a way out lands on.
-    std::vector<uint8_t> land(g.nodes.size());
-    for (size_t n = 0; n < land.size(); n++) land[n] = main[n] && back[n] ? 1 : 0;
-    const std::vector<int32_t> group = pockets_of(g, stuck);
-    std::vector<NavExtraLink> extra;
-    for (size_t r = 0; r < group.size(); r++)
-      if (group[r] == static_cast<int32_t>(r) &&
-          bridge(group, static_cast<int32_t>(r), land, false, false, extra))
-        out.bridged_out++;
-    nav_add_links(g, extra);
+    const std::vector<uint8_t> core = nav_core(g, main);
+    std::vector<uint8_t> failed(g.nodes.size(), 0);
+    for (int round = 0; round < 8; round++) {
+      // Reckoned from the main part's core: every node of the main part reaches the main part
+      // itself, a pit dropped into as well.
+      const std::vector<uint8_t> back = reaching(g, core);
+      std::vector<uint8_t> stuck(g.nodes.size());
+      for (size_t n = 0; n < stuck.size(); n++)
+        stuck[n] = main[n] && !back[n] && !avoided(n) ? 1 : 0;
+      // `back` within the main part: the land a way out lands on.
+      std::vector<uint8_t> land(g.nodes.size());
+      for (size_t n = 0; n < land.size(); n++) land[n] = main[n] && back[n] ? 1 : 0;
+      const std::vector<int32_t> group = pockets_of(g, stuck);
+      std::vector<NavExtraLink> extra;
+      // On foot first; a dry pit with no way up on foot, by a rocket jump out onto land with a way
+      // back (xship's landing bay, 96 under the ledges round it: fallen into, he stood there to the
+      // end of the map).
+      landing_back = &land;
+      for (size_t r = 0; r < group.size(); r++) {
+        if (group[r] != static_cast<int32_t>(r) || failed[r]) continue;
+        if (bridge(group, static_cast<int32_t>(r), land, false, false, extra) ||
+            (set.rockets && bridge(group, static_cast<int32_t>(r), land, false, true, extra)))
+          out.bridged_out++;
+        else
+          failed[r] = 1;
+      }
+      if (extra.empty()) break;
+      nav_add_links(g, extra);
+    }
   }
   return out;
 }

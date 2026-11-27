@@ -57,6 +57,10 @@ struct CampaignOptions {
   void* load_ctx = nullptr;
   bool registered = false;            // the content is the full game (the packs carry gfx/pop.lmp)
   std::vector<std::string> settings;  // console lines run before the first map (skill 2, coop 1)
+  // Console lines run on every map's server after the settings it carried: the window's own that
+  // may change during a game (the weapon and armour rows classic remix's `cr_items` wears), so a
+  // change reaches the next map rather than the carried value standing.
+  std::vector<std::string> every_map;
   EpisodeOrder episodes;  // the episodes in order (campaign_episodes.hpp); empty: none kept
   // Every brush model's bounds a unit wider on each side, as a pack's program sizes its movers by
   // (a door's travel, a plat's drop, a train's place, a trigger's reach). The window sets it for

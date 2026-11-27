@@ -637,9 +637,8 @@ int run_main(int argc, char** argv) {
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
-  // No map asked for: the title. A classic game plays its recordings (`menu_attract`) under the
-  // loading console, the menu up only where none can play; a measured run (timedemo, --frames)
-  // loads its map first; -tv watches and `+connect` joins, with no recording or map of our own.
+  // No map: the title, a classic game's recordings (`menu_attract`) under the console, or the menu
+  // where none play; a measured run (timedemo, --frames) loads its map; -tv and `+connect` join.
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
   bool on_title = next_map.empty() && !measured && args.tv.empty() && !remote.active;
   bool menu_at_start = on_title;
@@ -647,7 +646,8 @@ int run_main(int argc, char** argv) {
   if (next_map.empty() && !attract_at_start && !remote.active) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
-  listen_opt.remix = &remix;  // a campaign's own map changes read through it (cr_monsters)
+  listen_opt.remix = &remix;          // a campaign's own map changes read through it (cr_monsters)
+  listen_opt.bots_background = true;  // no frame waits for the bots' nav (bots/bot_seats.hpp)
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
     listen_opt.player = n->value;
   cl::take_console_settings(listen_opt, listen.opt);  // the lobby, sv_port, sv_hostname, sv_login
