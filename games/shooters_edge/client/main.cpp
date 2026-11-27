@@ -901,7 +901,7 @@ int run_main(int argc, char** argv) {
   const auto start_attract = [&] {
     const std::string list = cl::attract_list(game_menu.attract(), args.basedir, args.game,
                                               content_row(), adapter.game->attract);
-    const std::vector<std::string> words = ge::console::tokenize(list);
+    const std::vector<std::string> words = cl::attract_words(list, files, adapter);
     if (words.empty() || cl::archive_paths(files).empty() || remote.active) return false;
     bench_ask = words[attract_next++ % words.size()];
     play_ask = true;
