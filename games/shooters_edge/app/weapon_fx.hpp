@@ -235,8 +235,10 @@ int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 //   faintly glowing line circling it (`rail_coil_look`), both held a moment and fading over
 //   kRailFadeS, a soft blue light along the line lighting the room round it (`rail_lights`),
 //   and a pale vapour that rises where the slug burnt the air (`ion_trail`);
-// - the BOLTS (blaster, hyperblaster) in the modern look: a streak of two plasma strands wound
-//   round each other riding each bolt (`plasma_look`), shedding sparks (`plasma_sheds`);
+// - the BOLTS (blaster, hyperblaster) in the modern look: the classic bolt kept, a short yellow
+//   streak in an orange sheath riding it (`plasma_look`, held to a few times the eye's white so
+//   it stays yellow, never a white ball), and the classic's line of specks as soft glowing beads
+//   that hang, drift and dim to orange (`plasma_sheds`, one each kBoltSpeckM);
 // - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`; Ground Zero's green bolt's
 //   in green); the BFG's burst: a green
 //   ball of specks (`bfg_burst`) under the engine's blast.
@@ -250,7 +252,8 @@ inline constexpr double kRailFadeS = 1.0;
 inline constexpr int kRailLights = 8;
 inline constexpr double kRailLightEveryM = 2.5, kRailLightM = 3, kRailLightLevel = 0.8;
 inline constexpr double kPlasmaFadeS = 0.08;  // a bolt's streak fading once it stops
-inline constexpr double kPlasmaTailM = 0.9;   // the streak behind a bolt
+inline constexpr double kPlasmaTailM = 0.6;   // the streak behind a bolt
+inline constexpr double kBoltSpeckM = 0.15;   // the bolt's trail: a bead each this far
 // The light riding a glowing shot at `at`: `rgb` at `level`, reaching `radius_m`, on `entity` (so
 // the shot's own model is not lit by it).
 Light shot_glow(const double at[3], const float rgb[3], double radius_m, double level, int entity);

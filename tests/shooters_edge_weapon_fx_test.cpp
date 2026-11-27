@@ -397,3 +397,21 @@ TEST(quake_twos_rail_trail_beams_take_its_colour_width_and_fade) {
   const gr::BeamLook spiral = fx::q2_rail_trail_look(0.05f, 0.075f, red, 0);
   CHECK(spiral.braid_m == 0.075f && spiral.twist > 0 && spiral.release_s > 0);
 }
+
+TEST(a_bolt_trails_soft_orange_specks_and_its_streak_stays_yellow) {
+  const double from[3] = {0, 0, 0}, to[3] = {0, 0, 1.5};
+  fx::Particles specks;
+  fx::plasma_sheds(from, to, 7, &specks);
+  // A speck each kBoltSpeckM, a glow at the bolt and at most one wisp of haze.
+  const auto beads = static_cast<size_t>(1.5 / fx::kBoltSpeckM);
+  CHECK(specks.size() >= beads + 1 && specks.size() <= beads + 2);
+  for (const auto& p : specks) {
+    CHECK(p.glow == 1);                                      // soft and round, never a square
+    CHECK(p.kelvin < 0 && p.kelvin >= -1.6f);                // shining, but a few whites at most
+    CHECK(p.tint[0] >= p.tint[1] && p.tint[1] > p.tint[2]);  // yellow to orange, never white
+  }
+  // The streak riding it: held to a few times the eye's white, yellow in an orange sheath.
+  const gr::BeamLook& l = fx::plasma_look();
+  CHECK(l.core_keys > 0 && l.core_keys < 2 && l.glow_keys > 0 && l.glow_keys < 1);
+  CHECK(l.core_rgb[2] < 0.3f && l.glow_rgb[1] < 0.5f && l.filaments == 1);
+}
