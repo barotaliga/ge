@@ -190,12 +190,16 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // a share of their own size; the smoke's puffs keep theirs. Bigger reads where a shot lands with
   // every enhancement off. Either look.
   double particle_scale = 1;
-  // r_scale: the size the 3D picture is drawn at against the window's, 0.25..1; under 1 it is
-  // drawn smaller, then smoothed over time and upscaled to the window (the HUD stays sharp).
-  // Either look.
+  // r_scale: the size the 3D picture is drawn at against the window's: 1, 0.5 or 0.25 (any other
+  // value is taken to the nearest of them, render_step); under 1 it is drawn smaller and
+  // upscaled to the window (the HUD stays sharp). Whole ratios only, so every drawn pixel covers
+  // whole window pixels (2x2 or 4x4). Either look.
   double render_scale = 1;
-  // r_scale_sharpen: how much the upscaled picture is sharpened by its contrast (the post pass's
-  // CAS), 0..1, while r_scale is under 1; at r_scale 1 nothing is sharpened. Either look.
+  // r_scale_smooth: under r_scale 1, 0 shows each drawn pixel as a crisp square of the window's
+  // (the default); 1 smooths the picture over time (TAA-U) and sharpens it (r_scale_sharpen).
+  bool scale_smooth = false;
+  // r_scale_sharpen: how much the smoothed upscale is sharpened by its contrast (the post pass's
+  // CAS), 0..1, while r_scale is under 1 and r_scale_smooth is on; else nothing is. Either look.
   double scale_sharpen = 0.5;
   // scr_centertime: how long a centre message stays on the screen, s.
   double centre_time = 2;
@@ -349,8 +353,12 @@ constexpr bool far_land_at(Stop skies) { return skies == Stop::high; }
 double effects_glow(Look look, const Picture& picture = {});
 // The post pass's settings in `look`.
 ge::render::PostSettings post_settings(Look look, const Picture& picture = {});
-// The sharpen's strength this frame: r_scale_sharpen while r_scale is under 1, else 0 (off). A
-// window that upscales compiles the sharpen into its post pass and sets this strength live.
+// The share of the window a side the 3D picture is drawn at: r_scale taken to the nearest of 1,
+// 0.5 and 0.25 (the halfway points by ratio, 0.71 and 0.35).
+double render_step(const Picture& picture);
+// The sharpen's strength this frame: r_scale_sharpen while the picture is upscaled smoothed
+// (r_scale under 1, r_scale_smooth 1), else 0 (off). A window that upscales compiles the sharpen
+// into its post pass and sets this strength live.
 double upscale_sharpen(const Picture& picture);
 // The maps' light's scale over the default (`light_intensity` x `light_modulate` / 2): 1 at the
 // defaults.

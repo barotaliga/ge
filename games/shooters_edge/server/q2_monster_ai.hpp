@@ -25,9 +25,9 @@ using q2_mind::kMelee;
 using q2_mind::kMid;
 using q2_mind::kNear;
 constexpr float kStepUp = 18;  // the highest step a walker climbs
+using q2_mind::kHear;          // a noise's reach
 using q2_mind::kInFront;
 using q2_mind::kPainEvery;
-constexpr float kHear = 1000;  // a noise's reach
 constexpr int32_t kMonsterMask =
     sh::kSqSolid | sh::kSqWindow | sh::kSqMonster | 0x20000;  // + monster clip
 constexpr int32_t kOpaque = sh::kSqSolid | sh::kSqSlime | sh::kSqLava;
@@ -50,6 +50,10 @@ int kind_of(const Q2Server& s, std::string_view classname);
 bool deathmatch(const Q2Server& s);
 int skill(const Q2Server& s);
 double random01(Q2Server& s);
+// The world's draw as the shared mind takes it (q2_monster_mind.hpp).
+inline auto draw(Q2Server& s) {
+  return [&s] { return random01(s); };
+}
 float crandom(Q2Server& s);
 sh::Vec3f unpack(const int32_t v[3]);
 void event(Q2Server& s, NetEvent ev);

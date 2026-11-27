@@ -92,7 +92,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .fallback = "0",
               .flags = kServerSetting,
               .help = "Whether classic remix is on: one classic game played with another's maps "
-                      "and items. It needs two classic games loaded as full games.",
+                      "and items, which needs two classic games loaded as full games.",
               .kind = ge::console::CvarKind::boolean,
               .values = "0: each game plays with its own maps and items alone (the default); 1: "
                         "the other full game's maps load too, and cr_items may swap the items"},
@@ -125,7 +125,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .fallback = "",
               .flags = kServerSetting,
               .help = "Whose sounds a match is heard with under classic remix: the shots, blasts, "
-                      "pickups and the players' jumps, pain and deaths. The items keep the "
+                      "pickups and the players' jumps, pain and deaths, the items keeping the "
                       "played game's sounds unless this names another game.",
               .kind = ge::console::CvarKind::text,
               .values = kWhoseValues},
@@ -133,9 +133,9 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
   cvars.bind({.name = "cr_over_mods",
               .fallback = "0",
               .flags = kServerSetting,
-              .help = "Whether classic remix's choices hold over a mod's own rules too: with it "
-                      "on, cr_physics moves the players as it names even while a mod plays. A "
-                      "mod's weapons stay its own.",
+              .help = "Whether classic remix's choices hold over a mod's own rules too, so "
+                      "cr_physics moves the players as it names even while a mod plays (a mod's "
+                      "weapons stay its own).",
               .kind = ge::console::CvarKind::boolean,
               .values = "0: a mod keeps its own physics (the default); 1: cr_physics is set over "
                         "the mod's"},
@@ -176,7 +176,8 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = 8,
-              .values = "0: as the item table gives them; 1: one at least (the default); more"},
+              .values = "0: as the item table gives them; 1: one at least (the default); N: that "
+                        "many at least"},
              &out->balance.strong_min);
   cvars.bind({.name = "cr_strong_share",
               .fallback = "0.4",
@@ -186,7 +187,8 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::number,
               .min = 0,
               .max = 1,
-              .values = "0 to 1: 0.4 the default (two strong of five weapons); 1 no limit"},
+              .values = "0: none strong; 0.4: two strong of five weapons (the default); 1: no "
+                        "limit"},
              &out->balance.strong_share);
   cvars.bind({.name = "cr_strong_same",
               .fallback = "2",
@@ -216,7 +218,8 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::number,
               .min = 0,
               .max = 1024,
-              .values = "units; 0 gathers none (each laid down alone), 160 the default"},
+              .values = "0: gathers none, each laid down alone; 160: within 160 units (the "
+                        "default); N: within that many units"},
              &out->balance.pool_radius);
 }
 

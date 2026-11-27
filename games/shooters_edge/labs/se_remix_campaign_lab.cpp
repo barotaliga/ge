@@ -9,6 +9,10 @@
 // `--take=0` is the window before the fix: the campaign's own change of map read the next map
 // without the cr_ settings changed during the last one, so Quake's monsters stood in it.
 //
+// `--fire=<rank>` gives him that weapon of Quake's (7 the rocket launcher) and from `--fire-at` he
+// fires it at the nearest of Quake II's monsters hunting him in his sight: their dodges, ducks and
+// shots on the run are counted.
+//
 // Needs the player's own installs (`--game=<folder>/id1`, `--remix=<folder holding baseq2>`); with
 // none (the smoke run) it notes that and passes.
 //
@@ -17,6 +21,8 @@
 // ge:keywords before_map level-change monsters-swapped exception crash
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_remix_test.cpp
+#include <algorithm>
+#include <cstdio>
 #include <exception>
 #include <map>
 #include <memory>
@@ -24,7 +30,9 @@
 #include <vector>
 
 #include "campaign_movers.hpp"
+#include "core/libm/libm.hpp"
 #include "lab/lab.hpp"
+#include "shooter/trace.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
@@ -89,6 +97,30 @@ int find(sv::QcServer& s, const mv::Fields& f, int target_ofs, const std::string
   return -1;
 }
 
+// The points of a walk ("x,y,z;x,y,z").
+std::vector<sh::Vec3f> points_of(const std::string& text) {
+  std::vector<sh::Vec3f> out;
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = std::min(text.find(';', at), text.size());
+    sh::Vec3f p{};
+    if (std::sscanf(text.substr(at, end - at).c_str(), "%f,%f,%f", &p.x, &p.y, &p.z) == 3)
+      out.push_back(p);
+    at = end + 1;
+  }
+  return out;
+}
+
+// Where a walk through `pts` is after `dist` units (its last point once it is over).
+sh::Vec3f along(const std::vector<sh::Vec3f>& pts, float dist) {
+  for (size_t i = 1; i < pts.size(); i++) {
+    const float leg = sh::length(pts[i] - pts[i - 1]);
+    if (dist <= leg) return pts[i - 1] + (pts[i] - pts[i - 1]) * (leg > 0 ? dist / leg : 0.0f);
+    dist -= leg;
+  }
+  return pts.back();
+}
+
 void stand(sv::QcServer& s, sh::Vec3f at) {
   sh::Edict& me = s.sv.edicts[1];
   me.origin = {at.x, at.y, at.z};
@@ -108,8 +140,8 @@ struct Eyes {
   cl::FxFrame out;
   double t = 0;
 };
-void frame(cl::Listen& l, Eyes& e) {
-  cl::listen_frame(l, {});
+void frame(cl::Listen& l, Eyes& e, sh::MoveCmd cmd = {}) {
+  cl::listen_frame(l, cmd);  // the view and an impulse are the listen's own (`l.view`, `l.impulse`)
   e.t += 1.0 / 72;
   if (l.server == nullptr) return;
   cl::frame_view(l, e.shown, 1, e.t, 1.0 / 72);
@@ -159,8 +191,9 @@ void run(gl::Lab& lab) {
   gl::LabTable t{"the campaign with cr_monsters set during the start map", {"step", "what"}, {}};
   std::string thrown;
   Eyes eyes;
-  int q2 = 0, q1 = 0, lift_dz = 0, frames_run = 0, deaths = 0, hits = 0, hunting = 0;
-  float lowest_hp = 100, first_hit = -1;
+  int q2 = 0, q1 = 0, lift_dz = 0, frames_run = 0, deaths = 0, hits = 0, hunting = 0, trailing = 0,
+      lost = 0, heard = 0, dodges = 0, ducking = 0, run_shots = 0, fired = 0;
+  float lowest_hp = 100, first_hit = -1, nearest = -1;
   try {
     std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(files, lab.arg("map"), &remix, error);
     if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
@@ -220,9 +253,58 @@ void run(gl::Lab& lab) {
       float me_low = me0;
       bool alive = true;
       float last_hp = s->sv.edicts[1].health;
+      const std::vector<sh::Vec3f> walk = points_of(lab.arg("walk"));
+      const auto walk_after = static_cast<float>(lab.arg_num("walk-after"));
+      const auto shot_at = static_cast<float>(lab.arg_num("shot-at"));
+      const auto fire = static_cast<int>(lab.arg_num("fire"));
+      const auto fire_at = static_cast<float>(lab.arg_num("fire-at"));
+      if (fire > 0) {  // the weapon given, loaded
+        const int items = mv::field_of(progs, "items");
+        auto* it = ge::progs::entity_field(s->q.vm, 1, items);
+        const float bit = fire == 7 ? 32.0f : fire == 5 ? 8.0f : 4.0f;  // its item: rockets, nails
+        *it = ge::progs::as_word(ge::progs::as_float(*it) + bit);
+        for (const char* ammo : {"ammo_rockets", "ammo_nails"})
+          *ge::progs::entity_field(s->q.vm, 1, mv::field_of(progs, ammo)) =
+              ge::progs::as_word(100.0f);
+      }
+      std::vector<int> was_ducking, was_running;
       for (int i = 0; i < frames && rules_of(l) != nullptr; i++, frames_run++) {
-        frame(l, eyes);
+        sh::MoveCmd cmd;
+        const float t0 = float(i) * float(sv::kCampaignStep);
+        if (fire > 0 && alive && t0 >= fire_at) {  // at the nearest of Quake II's hunting him
+          if (t0 < fire_at + 0.05f) l.impulse = fire;
+          const int enemy = mv::field_of(progs, "enemy");
+          const sh::Vec3f eye = s->sv.edicts[1].origin + sh::Vec3f{0, 0, 22};
+          float best = -1;
+          sh::Vec3f aim{};
+          for (int e = 2; e < s->sv.num_edicts; e++) {
+            const sh::Edict& ed = s->sv.edicts[size_t(e)];
+            if (ed.free || ed.health <= 0 || mv::word_at(*s, e, enemy) == 0) continue;
+            const std::string cn = mv::string_at(*s, e, f.classname);
+            if (!pf::is_matched_monster(cn) || pf::monster_as(cn, "q2") != cn) continue;
+            const sh::Vec3f d = ed.origin - eye;
+            const sh::HullTrace line = sh::trace_move(s->sv, eye, {0, 0, 0}, {0, 0, 0}, ed.origin,
+                                                      sh::kTraceNoMonsters, 1);
+            if (line.fraction < 1) continue;  // out of his sight
+            if (best < 0 || sh::length(d) < best) {
+              best = sh::length(d);
+              aim = d;
+            }
+          }
+          if (best > 0) {
+            namespace lm = ge::core::libm;
+            const double flat = sh::length(sh::Vec3f{aim.x, aim.y, 0});
+            l.view.y = float(lm::atan2(aim.y, aim.x) * 180 / 3.14159265358979);
+            l.view.x = float(-lm::atan2(aim.z, flat) * 180 / 3.14159265358979);
+            cmd.buttons = sh::kButtonAttack;
+            fired++;
+          }
+        }
+        frame(l, eyes, cmd);
         s = rules_of(l);
+        const float now = float(i + 1) * float(sv::kCampaignStep);
+        if (s != nullptr && alive && !walk.empty() && now >= walk_after)  // he walks away
+          stand(*s, along(walk, (now - walk_after) * 300.0f));
         if (s != nullptr && lift < s->sv.num_edicts)
           lowest = std::min(lowest, s->sv.edicts[size_t(lift)].origin.z);
         if (s != nullptr) me_low = std::min(me_low, s->sv.edicts[1].origin.z);
@@ -236,6 +318,45 @@ void run(gl::Lab& lab) {
         if (hp <= 0 && alive) deaths++;
         alive = hp > 0;
         if (alive) lowest_hp = std::min(lowest_hp, hp);
+        // A shot's noise, as firing makes it (the player's `show_hostile` a second on).
+        if (shot_at >= 0 && now >= shot_at && now < shot_at + float(sv::kCampaignStep) * 1.5f) {
+          const int hostile = mv::field_of(progs, "show_hostile");
+          const int time = mv::global_of(progs, "time");
+          if (hostile >= 0 && time >= 0)
+            *ge::progs::entity_field(s->q.vm, 1, hostile) =
+                ge::progs::as_word(ge::progs::as_float(s->q.vm.globals[size_t(time)]) + 1.0f);
+        }
+        // Quake II's monsters that lost him, that follow his trail and that go to a noise, this
+        // frame (the fields are theirs alone).
+        const auto count = [&](const char* field) {
+          const int ofs = mv::field_of(progs, field);
+          int n = 0;
+          for (int e = 2; ofs >= 0 && e < s->sv.num_edicts; e++)
+            if (!s->sv.edicts[size_t(e)].free && s->sv.edicts[size_t(e)].health > 0 &&
+                mv::word_at(*s, e, ofs) != 0)
+              n++;
+          return n;
+        };
+        // Dodges begun and shots on the run begun this frame, and the most ducking at once.
+        const auto begun = [&](const char* field, std::vector<int>& was) {
+          const int ofs = mv::field_of(progs, field);
+          was.resize(size_t(s->sv.num_edicts), 0);
+          int n = 0, now_in = 0;
+          for (int e = 2; ofs >= 0 && e < s->sv.num_edicts; e++) {
+            const bool in = !s->sv.edicts[size_t(e)].free && mv::word_at(*s, e, ofs) != 0;
+            if (in && was[size_t(e)] == 0) n++;
+            now_in += in ? 1 : 0;
+            was[size_t(e)] = in ? 1 : 0;
+          }
+          return std::pair{n, now_in};
+        };
+        const auto [ducks_begun, ducks_now] = begun("sq_duck_frame", was_ducking);
+        dodges += ducks_begun;
+        ducking = std::max(ducking, ducks_now);
+        run_shots += begun("sq_run_step", was_running).first;
+        trailing = std::max(trailing, count("sq_on_trail"));
+        lost = std::max(lost, count("sq_lost"));
+        heard = std::max(heard, count("sq_sound"));
       }
       lift_dz = static_cast<int>(lowest - z0);
       // The monsters on the hunt at the end: an enemy of their own (the world's is none).
@@ -244,8 +365,12 @@ void run(gl::Lab& lab) {
         for (int e = 2; e < s->sv.num_edicts; e++)
           if (!s->sv.edicts[size_t(e)].free && s->sv.edicts[size_t(e)].health > 0 &&
               mv::string_at(*s, e, f.classname).rfind("monster_", 0) == 0 &&
-              mv::word_at(*s, e, enemy) != 0)
+              mv::word_at(*s, e, enemy) != 0) {
             hunting++;
+            const sh::Vec3f d = s->sv.edicts[size_t(e)].origin - s->sv.edicts[1].origin;
+            const float dist = sh::length(d);
+            if (nearest < 0 || dist < nearest) nearest = dist;
+          }
       }
       t.rows.push_back({"lift ridden", "down " + std::to_string(-lift_dz) + " units, the map run " +
                                            std::to_string(frames_run) + " frames after"});
@@ -255,7 +380,16 @@ void run(gl::Lab& lab) {
                                           std::to_string(deaths) + " time(s); hit " +
                                           std::to_string(hits) + " times, first after " +
                                           std::to_string(first_hit).substr(0, 4) + " s"});
-      t.rows.push_back({"the monsters", std::to_string(hunting) + " hunting at the end"});
+      t.rows.push_back({"the monsters", std::to_string(hunting) +
+                                            " hunting at the end, the nearest " +
+                                            std::to_string(int(nearest)) + " units off; " +
+                                            std::to_string(trailing) + " on his trail at most, " +
+                                            std::to_string(lost) + " after where they lost him, " +
+                                            std::to_string(heard) + " to a noise"});
+      t.rows.push_back({"dodging", std::to_string(fired) + " frames he fired; " +
+                                       std::to_string(dodges) + " ducks begun, " +
+                                       std::to_string(ducking) + " ducking at once at most; " +
+                                       std::to_string(run_shots) + " shots on the run"});
     }
   } catch (const std::exception& e) {
     thrown = e.what();
@@ -274,6 +408,14 @@ void run(gl::Lab& lab) {
   lab.metric("remix_campaign.hits_taken", hits, "count");
   lab.metric("remix_campaign.first_hit", first_hit, "s");
   lab.metric("remix_campaign.monsters_hunting", hunting, "count");
+  lab.metric("remix_campaign.nearest_hunter", nearest, "units");
+  lab.metric("remix_campaign.on_trail_most", trailing, "count");
+  lab.metric("remix_campaign.lost_most", lost, "count");
+  lab.metric("remix_campaign.heard_most", heard, "count");
+  lab.metric("remix_campaign.fired_frames", fired, "frames");
+  lab.metric("remix_campaign.dodges", dodges, "count");
+  lab.metric("remix_campaign.ducking_most", ducking, "count");
+  lab.metric("remix_campaign.run_shots", run_shots, "count");
   if (!thrown.empty())
     lab.fail("se-remix-campaign: the game threw " + thrown,
              "next: run under gdb with `catch throw` to see where");
@@ -298,6 +440,13 @@ const gl::LabSpec kSpec{
         {"take", "1", "1: the window takes the settings before the next map (0: before the fix)"},
         {"button", "t1", "the target of the button that moves the first lift"},
         {"seconds", "20", "how long the map runs once the lift is set off, s"},
+        {"walk", "",
+         "points the player walks through once the lift is down (x,y,z;x,y,z), at 300 units/s"},
+        {"walk-after", "4", "seconds after the button before the walk starts"},
+        {"shot-at", "-1", "seconds after the button the player makes a shot's noise (-1 none)"},
+        {"fire", "0",
+         "a weapon of Quake's by its rank the player fires (7 rockets, 4 nails; 0 none)"},
+        {"fire-at", "2", "seconds after the button the player starts firing at them"},
     },
     "",
     run,

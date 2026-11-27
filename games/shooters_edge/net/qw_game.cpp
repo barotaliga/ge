@@ -40,6 +40,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/client/q2_party.hpp"
+#include "shooters_edge/client/remix_dedicated.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
 #include "shooters_edge/net/qw_cheats.hpp"
@@ -96,9 +97,13 @@ struct Game {
   ServerConfig cfg;
   gs::ServerConfig settings;  // what the server was opened with: every map is made from it
   cl::SearchPath files;       // the game folder the maps are read from (empty: the arena only)
-  int changes = 0;            // maps changed to
-  std::string failed;         // why the last change did not happen ("": it did)
-  std::string held_map;       // the next map, while the intermission keeps the scores up
+  // Classic remix on a dedicated server (client/remix_dedicated.hpp): the other game's files the
+  // maps are read through while the cr_ rules turn it on, and the console's line about it.
+  cl::RemixFiles remix;
+  std::string remix_said;
+  int changes = 0;       // maps changed to
+  std::string failed;    // why the last change did not happen ("": it did)
+  std::string held_map;  // the next map, while the intermission keeps the scores up
   // The lobby and the bots (sv_lobby, sv_bots; null: neither). Without sv_lobby it stays in its
   // match: the bots play every map as it comes.
   std::unique_ptr<cl::Room> room;
@@ -247,6 +252,7 @@ const std::vector<gs::GameRule>& all_rules() {
       out.push_back({table[i].name, table[i].help, nullptr, table[i].values});
     for (const gs::GameRule& r : endpoint_rules()) out.push_back(r);
     out.insert(out.end(), std::begin(gs::kOvertimeRules), std::end(gs::kOvertimeRules));
+    for (const gs::GameRule& r : cl::remix_rules()) out.push_back(r);  // the server's remix
     // The rest of what every classic mod's runner registers (server/rules_runner.hpp), so a
     // server.cfg may set them and the check knows them. Not `hostname`, which is the core's
     // sv_hostname by another name, nor `sv_progs`, which only a test match reads.
@@ -297,12 +303,13 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
               std::shared_ptr<cl::LoadedMap> supplied = nullptr,
               const sv::RulesRunner* carry_from = nullptr) {
   const gs::ServerConfig& c = g.settings;
+  std::string said;  // classic remix's line for another game's map
   if (supplied)
     map = std::move(supplied);
   else if (g.host != nullptr && g.map && g.map->name == name)
     map = g.map;
   else
-    map = cl::load_named_map(g.files, name, error);
+    map = cl::load_remixed_map(g.files, name, &g.remix, error, &said);  // remix off: the game's own
   if (!map) return false;
   const float speedjump = g.host != nullptr ? g.host->speedjump : 0.0f;  // pm_speedjump
   // A map of the family that carries brushes runs on the rules that trace them (Quake II's),
@@ -369,6 +376,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     if (g.cfg.gamedir != decltype(g.cfg){}.gamedir)
       rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
     for (const std::string& line : g.info_lines) rules.console(line);
+    for (const std::string& line : cl::server_remix_lines(g.remix)) rules.console(line);
   }
   // The C++ mods it runs, for a browser and a hub to show (docs/mods.md § Distribution).
   if (const std::string mods = qw_mods_info(g.packages); !mods.empty())
@@ -382,7 +390,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
     if (rule == "sv_maxrate" && !g.module.empty() && !value.empty() && value != "0")
       rules.console("sv_maxrate \"" + value + "\"");
-    if (value.empty() || is_endpoint_rule(rule)) continue;
+    if (value.empty() || is_endpoint_rule(rule) || cl::is_remix_rule(rule)) continue;
     if (rule == "dmflags" && !brushes) continue;  // Quake II's alone
     sh::ServerSettings check;
     if (sh::find_setting(rule) && !sh::set_setting(check, rule, value, error)) {
@@ -415,6 +423,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     return false;
   }
   if (map->from_file) sv::use_map_sets(*rules, map->bsp);
+  if (!said.empty()) rules->console.push_back(said);
   return true;
 }
 
@@ -573,6 +582,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       return nullptr;
     }
     if (!mod.empty()) g->cfg.gamedir = mod;  // serverdata names it: a client mounts the mod too
+    g->remix_said = cl::open_server_remix(g->remix, c.rules, "q1", c.root, folder,
+                                          !g->module.empty() || !g->native_library.empty());
     if (!cl::archive_paths(g->files).empty()) {
       const profiles::GameProfile& game = profiles::q1_game();
       g->info_lines = profiles::item_name_lines(game.tables.names);
@@ -582,6 +593,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     }
   }
   if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
+  if (!g->remix_said.empty()) g->rules->console.push_back(g->remix_said);
   if (!open_room(*g, error)) return nullptr;
   g->vote.settings = gs::vote_settings(c);
   g->timeout.settings = gs::timeout_settings(c);
@@ -757,7 +769,7 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
                 "pm_speedjump, sv_rjump, speedjump <player> on, aimhelp <player> on...).";
     return false;
   }
-  if (is_endpoint_rule(rule)) {
+  if (is_endpoint_rule(rule) || cl::is_remix_rule(rule)) {
     out.error = rule + " is set when the server starts, so it can't be voted on";
     return false;
   }

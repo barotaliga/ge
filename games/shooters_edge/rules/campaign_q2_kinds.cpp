@@ -2,8 +2,11 @@
 // campaign_q2.hpp spawned with the roster's health, box, speeds and attacks, Quake II's
 // model, frames and sounds. They decide by Quake II's mind (server/q2_monster_mind.hpp, the same
 // code Quake II's own rules decide by): whom they see, when they attack and with which attack,
-// whether an attack goes on, the mutant's leap and whom they turn on when another monster hurts
-// them; the campaign's states carry the rest (the chase, pain and death, campaign_ai.cpp). An
+// whether an attack goes on, the mutant's leap, whom they turn on when another monster hurts them,
+// and the chase: with its foe out of sight it goes to where it last saw him, then follows the
+// players' trail (8 marks the frame drops, `sq_trail_frame`), toward a goal of its own (`sq_goal`,
+// a mark the campaign's step heads for round what blocks it). The campaign's states carry the rest
+// (pain and death, campaign_ai.cpp). An
 // attack is the roster's: a wind-up, shots on a loop `every` s apart, another loop at its odds
 // while the enemy is in sight, then the recovery; the shots are the campaign's own kinds of harm
 // (bolts, pellets, bullets, blows, grenades, rockets, a rail, a drain, a zap, a leap). A medic
@@ -111,6 +114,19 @@ int32_t missile(A& q, int model, float speed, float dmg, float lob) {
   return monster_missile(q, shared(q, model), speed, dmg, lob);
 }
 
+// A grenade at the enemy, lobbed, `dmg` on its blast 2.5 s on or on what it strikes.
+int32_t grenade(A& q, float speed, float dmg) {
+  const int32_t g = missile(q, kSqGrenade, speed, 0, 200);
+  q.set_f(g, q.L.f.movetype, kMovetypeBounce);
+  q.set_v(g, q.L.f.avelocity, {300, 300, 300});
+  q.set_f(g, f_dmg, dmg);
+  q.set_i(g, f_deathtype, q.s(s_blown_up_by_a_grenade));
+  q.set_i(g, q.L.f.touch, q.fn(fn_sq_grenade_touch));
+  q.set_i(g, q.L.f.think, q.fn(fn_sq_blast));
+  q.set_f(g, q.L.f.nextthink, q.time() + 2.5f);
+  return g;
+}
+
 void shoot(A& q, int run, const roster::Attack& a, bool blow) {
   const int32_t me = q.self();
   const int32_t enemy = q.i(me, q.L.f.enemy);
@@ -132,17 +148,9 @@ void shoot(A& q, int run, const roster::Attack& a, bool blow) {
       fire_pellets(q, a.fire == Fire::pellets ? static_cast<float>(a.count) : 1, points(q, a),
                    a.h / 8192);
       break;
-    case Fire::grenade: {
-      const int32_t g = missile(q, kSqGrenade, a.speed, 0, 200);
-      q.set_f(g, q.L.f.movetype, kMovetypeBounce);
-      q.set_v(g, q.L.f.avelocity, {300, 300, 300});
-      q.set_f(g, f_dmg, points(q, a));
-      q.set_i(g, f_deathtype, q.s(s_blown_up_by_a_grenade));
-      q.set_i(g, q.L.f.touch, q.fn(fn_sq_grenade_touch));
-      q.set_i(g, q.L.f.think, q.fn(fn_sq_blast));
-      q.set_f(g, q.L.f.nextthink, q.time() + 2.5f);
+    case Fire::grenade:
+      grenade(q, a.speed, points(q, a));
       break;
-    }
     case Fire::rockets:
     case Fire::bfg: {
       const int32_t r = missile(q, kSqRocket, a.speed > 0 ? a.speed : 500, 0, 0);
@@ -208,9 +216,120 @@ void start_attack(A& q, int slot) {
   sq_attack_step(q);
 }
 
+// THE DUCK: the kind's row (null for a kind that never ducks), and its box lowered or put back.
+const roster::Duck* duck_row(int run) {
+  for (const roster::Duck& d : roster::kDucks)
+    if (std::string_view(d.classname) == kSqRuns[run].classname) return &d;
+  return nullptr;
+}
+
+bool soldier(int run) {
+  return std::string_view(kSqRuns[run].classname).starts_with("monster_soldier");
+}
+
+void duck_box(A& q, int run, bool low) {
+  const roster::Kind& k = kind_of(run);
+  const float drop = low ? q2_mind::kDuckDrop : 0;
+  q.setsize(q.self(), {k.mins.x, k.mins.y, k.mins.z}, {k.maxs.x, k.maxs.y, k.maxs.z - drop});
+}
+
+// The duck over: the box back if it is still low, and the run again next think.
+void duck_done(A& q, int run) {
+  const int32_t me = q.self();
+  if (on(q.f(me, f_sq_ducked))) duck_box(q, run, false);
+  q.set_f(me, f_sq_duck_frame, 0);
+  q.set_f(me, f_sq_ducked, 0);
+  q.set_f(me, f_sq_duck_still, 0);
+  think_again(q, fn_monster_run);
+}
+
+// A shot offered to the monster (self) from player `shooter`, `dist` along its line at `speed`:
+// from in front, one in four ducked, a soldier's held past its arrival and at times shot from.
+void dodge(A& q, int32_t shooter, float dist, float speed) {
+  const int32_t me = q.self();
+  const int run = run_of(q, me);
+  if ((duck_row(run) == nullptr) | (q.f(me, q.L.f.health) <= 0) | (q.f(me, q.L.f.deadflag) != 0))
+    return;
+  const Vec3 to = q.normalize(q.v(shooter, q.L.f.origin) - q.v(me, q.L.f.origin));
+  q.makevectors({0, q.v(me, q.L.f.angles).y, 0});
+  const Vec3 f = q.v_forward();
+  if (to.x * f.x + to.y * f.y + to.z * f.z <= q2_mind::kInFront) return;
+  const double eta = q2_mind::dodge_eta(dist, kind_of(run).maxs.x, speed);
+  if (!q2_mind::dodges(roll_of(q))) return;
+  if (q.i(me, q.L.f.enemy) == 0) {  // found silently: no sight call, no shot on the run
+    const int32_t call = q.i(me, q.L.f.noise);
+    q.set_i(me, q.L.f.enemy, shooter);
+    q.set_i(me, q.L.f.noise, q.s(s_empty));
+    found_target(q);
+    q.set_self(me);
+    q.set_i(me, q.L.f.noise, call);
+  }
+  const q2_mind::DuckPlan p =
+      q2_mind::duck_plan(soldier(run), kSqRuns[run].classname == std::string_view("monster_brain"),
+                         skill_of(q), q.time(), eta, roll_of(q));
+  if (p.hold >= 0) q.set_f(me, f_sq_duck_hold, static_cast<float>(p.hold));
+  if ((q.f(me, f_sq_duck_frame) > 0) & (on(q.f(me, f_sq_duck_shoot)) == p.shoots))
+    return;                         // goes on
+  q.set_f(me, f_sq_duck_frame, 1);  // its first frame (frames are kept one up: 0 is none)
+  q.set_f(me, f_sq_duck_still, 0);
+  q.set_f(me, f_sq_duck_shoot, p.shoots ? 1 : 0);
+  q.set_i(me, q.L.f.think, q.fn(fn_sq_duck));  // an attack or a flinch cut short
+  q.set_f(me, q.L.f.nextthink, q.time());
+}
+
+// THE TRAIL: 8 marks, chained by `sq_goal` from the global `sq_trail`; a mark's place, its time
+// (`sq_trail_time`) and the way he went (its yaw). Made with the first of Quake II's monsters.
+int32_t mark(A& q, int i) {
+  int32_t m = q.ge(g_sq_trail);
+  for (int n = 0; n < i && m != 0; n++) m = q.i(m, f_sq_goal);
+  return m;
+}
+
+int32_t new_mark(A& q) {
+  const int32_t m = q.spawn();
+  q.set_i(m, q.L.f.classname, q.s(s_empty));
+  q.set_f(m, q.L.f.solid, kSolidNot);
+  q.set_f(m, q.L.f.movetype, kMovetypeNone);
+  q.setsize(m, {0, 0, 0}, {0, 0, 0});
+  return m;
+}
+
+void make_trail(A& q) {
+  if (q.ge(g_sq_trail) != 0) return;
+  int32_t next = 0;
+  for (int i = 0; i < q2_mind::kTrailMarks; i++) {
+    const int32_t m = new_mark(q);
+    q.set_i(m, f_sq_goal, next);
+    next = m;
+  }
+  q.set_ge(g_sq_trail, next);
+  q.set_g(g_sq_trail_head, 0);
+}
+
+// The chase's state as Quake II's mind reads it, from the monster's fields and back.
+struct ChaseState {
+  bool lost = false, on_trail = false, side_step = false;
+  Vec3 goal{}, real_goal{};
+  double search_time = 0, trail_time = 0;
+};
+
+ChaseState chase_of(A& q, int32_t me) {
+  ChaseState c;
+  c.lost = on(q.f(me, f_sq_lost));
+  c.on_trail = on(q.f(me, f_sq_on_trail));
+  const int32_t g = q.i(me, f_sq_goal);
+  c.goal = g != 0 ? q.v(g, q.L.f.origin) : q.v(me, f_sq_last_sight);
+  c.search_time = q.f(me, f_sq_search);
+  c.trail_time = q.f(me, f_sq_trail_time);
+  return c;
+}
+
 // The kind's spawn: its numbers, model, frames and sounds, over the campaign's minds.
 void spawn(A& q, int run) {
   if (no_monsters_here(q)) return;
+  const int32_t self = q.self();
+  make_trail(q);
+  q.set_self(self);
   const roster::Kind& k = kind_of(run);
   for (int w = kSqSight; w < kSqWords; w++) q.precache_sound(word(q, run, w));
   for (int w = kSqLaser; w <= kSqHead; w++) q.precache_model(shared(q, w));
@@ -270,6 +389,9 @@ void raise(A& q, int32_t c) {
   q.setorigin(c, q.v(c, q.L.f.origin));
   q.add_to(q.L.g.total_monsters, 1);
   q.set_i(c, q.L.f.enemy, q.i(me, q.L.f.enemy));
+  q.set_f(c, f_sq_duck_frame, 0);  // up again out of no duck and no shot on the run
+  q.set_f(c, f_sq_ducked, 0);
+  q.set_f(c, f_sq_run_step, 0);
   q.set_i(c, q.L.f.think, q.fn(fn_monster_run));
   q.set_f(c, q.L.f.nextthink, q.time() + 0.1f);
 }
@@ -471,8 +593,10 @@ void sq_attack_step(A& q) {
 // Pain: its cry and its flinch, no more than every 3 s.
 void sq_pain(A& q) {
   const int32_t me = q.self();
+  if (on(q.f(me, f_sq_ducked))) return;  // ducked: no pain
   hold_pain(q, 3);
   q.sound(me, kChanVoice, word(q, run_of(q, me), kSqPain), 1, kAttnNorm);
+  if (q.f(me, f_sq_duck_frame) > 0) return;  // going down: the duck goes on
   anim_begin(q, q.v(me, f_fr_pain));
   sq_flinch(q);
 }
@@ -515,6 +639,279 @@ void sq_leap_touch(A& q) {
     damage(q, other, me, me, q.f(me, f_dmg));
   }
   q.set_i(me, q.L.f.touch, 0);
+}
+
+// Found a foe: the chase starts from where he is now.
+void sq_found(A& q) {
+  const int32_t me = q.self();
+  q.set_v(me, f_sq_last_sight, q.v(q.i(me, q.L.f.enemy), q.L.f.origin));
+  q.set_f(me, f_sq_lost, 0);
+  q.set_f(me, f_sq_on_trail, 0);
+  q.set_f(me, f_sq_search, 0);
+  q.set_f(me, f_sq_trail_time, q.time());
+  q.set_f(me, f_sq_sound, 0);
+  // A soldier finding him 500 or more off, above the easiest skill, fires on the run half the
+  // time; not when found silently (by a dodge).
+  const int run = run_of(q, me);
+  if (q.is(q.i(me, q.L.f.noise), "")) return;
+  if (q2_mind::runs_and_shoots(soldier(run), skill_of(q), distance_to(q, q.i(me, q.L.f.enemy)),
+                               roll_of(q)))
+    q.set_f(me, f_sq_run_step, 1);  // its first step (kept one up: 0 is none)
+}
+
+// HEARING, Quake II's: with no enemy, a player's shot of the last fifth of a second within 1000
+// units that it may hear (in its sight's set of places; an ambusher must see where it was) turns it
+// to the noise and sends it there, its first shot a second off. True when it heard one now or goes
+// to one already.
+bool sq_hear(A& q) {
+  const int32_t me = q.self();
+  if (q.i(me, q.L.f.enemy) != 0) return false;
+  const bool ambush = band(q.f(me, q.L.f.spawnflags), kSpawnAmbush) != 0;
+  const int32_t near = ambush ? 0 : q.checkclient();
+  for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+       p = q.find(p, q.L.f.classname, q.s(s_player))) {
+    if ((q.f(p, q.L.f.health) <= 0) || on(band(q.f(p, q.L.f.flags), kFlNotarget))) continue;
+    if (q.f(p, f_show_hostile) < q.time() + 0.8f) continue;  // no shot this fifth of a second
+    const Vec3 at = q.v(p, q.L.f.origin);
+    if (q.vlen(at - q.v(me, q.L.f.origin)) > q2_mind::kHear) continue;
+    if (ambush) {
+      q.traceline(eye_of(q, me), at, 1, me);
+      if (q.gf(q.L.g.trace_fraction) < 1) continue;
+    } else if (near != p) {
+      continue;
+    }
+    q.set_f(me, f_sq_sound, q.time());
+    q.set_v(me, f_sq_sound_at, at);
+    q.set_f(me, q.L.f.ideal_yaw, q.vectoyaw(at - q.v(me, q.L.f.origin)));
+    q.set_f(me, f_attack_finished, q.time() + static_cast<float>(q2_mind::kFirstWait));
+    return true;
+  }
+  return q.f(me, f_sq_sound) > 0;
+}
+
+// A step toward the noise it heard: within 64 units it stands facing it, and 5 s on forgets it
+// (back to its path, or to stand). False when it heard none.
+bool sq_to_sound(A& q) {
+  const int32_t me = q.self();
+  const float heard = q.f(me, f_sq_sound);
+  if (heard <= 0) return false;
+  const Vec3 to = q.v(me, f_sq_sound_at) - q.v(me, q.L.f.origin);
+  if (q.vlen({to.x, to.y, 0}) <= q2_mind::kSoundNear) {
+    q.set_f(me, q.L.f.ideal_yaw, q.vectoyaw(to));
+    q.changeyaw();
+    if (q.time() <= heard + static_cast<float>(q2_mind::kSoundForget)) return true;
+    q.set_f(me, f_sq_sound, 0);
+    if (q.i(me, f_movetarget) != 0) {
+      q.set_i(me, q.L.f.goalentity, q.i(me, f_movetarget));
+      return false;
+    }
+    q.set_f(me, f_pausetime, q.time() + kForever);
+    run_field(q, me, f_th_stand);
+    return true;
+  }
+  int32_t g = q.i(me, f_sq_goal);
+  if (g == 0) {
+    g = new_mark(q);
+    q.set_i(me, f_sq_goal, g);
+  }
+  q.setorigin(g, q.v(me, f_sq_sound_at));
+  q.set_i(me, q.L.f.goalentity, g);
+  q.movetogoal(q.f(me, f_run_step));
+  return true;
+}
+
+// A frame of the hunt: in a clear line it goes at him (and keeps where it saw him); out of sight,
+// Quake II's chase (q2_monster_mind.hpp's `pursue`) sets its goal: the last sighting, the trail's
+// marks after its last look, one move at him 20 s on. The campaign's step makes for the goal.
+void sq_chase(A& q) {
+  const int32_t me = q.self();
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  if (clear_to(q, enemy)) {
+    q.set_v(me, f_sq_last_sight, q.v(enemy, q.L.f.origin));
+    q.set_f(me, f_sq_trail_time, q.time());
+    q.set_f(me, f_sq_lost, 0);
+    q.set_f(me, f_sq_on_trail, 0);
+    q.set_i(me, q.L.f.goalentity, enemy);
+    return;
+  }
+  ChaseState c = chase_of(q, me);
+  struct World {
+    A& q;
+    int32_t me, enemy;
+    double now() const { return q.time(); }
+    Vec3 last_sight() const { return q.v(me, f_sq_last_sight); }
+    Vec3 foe_at() const { return q.v(enemy, q.L.f.origin); }
+    bool far_from(Vec3 goal) const {
+      const Vec3 d = goal - q.v(me, q.L.f.origin);
+      return q.vlen({d.x, d.y, 0}) > q.f(me, f_run_step) + 1;
+    }
+    int next_mark(bool first) const {
+      double times[q2_mind::kTrailMarks];
+      for (int i = 0; i < q2_mind::kTrailMarks; i++) times[i] = q.f(mark(q, i), f_sq_trail_time);
+      return q2_mind::next_mark(times, static_cast<int>(q.g(g_sq_trail_head)),
+                                q.f(me, f_sq_trail_time), first, [&](int i) {
+                                  q.traceline(eye_of(q, me), q.v(mark(q, i), q.L.f.origin), 1, me);
+                                  return q.gf(q.L.g.trace_fraction) >= 1;
+                                });
+    }
+    Vec3 mark_at(int i) const { return q.v(mark(q, i), q.L.f.origin); }
+    double mark_time(int i) const { return q.f(mark(q, i), f_sq_trail_time); }
+    float mark_yaw(int i) const { return q.v(mark(q, i), q.L.f.angles).y; }
+    void face(float yaw) const {
+      Vec3 a = q.v(me, q.L.f.angles);
+      a.y = yaw;
+      q.set_v(me, q.L.f.angles, a);
+      q.set_f(me, q.L.f.ideal_yaw, yaw);
+    }
+    void correct() const {}  // the campaign's step finds its own way round what blocks it
+  } w{q, me, enemy};
+  q2_mind::pursue(c, w);
+  q.set_f(me, f_sq_lost, c.lost ? 1.0f : 0.0f);
+  q.set_f(me, f_sq_on_trail, c.on_trail ? 1.0f : 0.0f);
+  q.set_f(me, f_sq_search, static_cast<float>(c.search_time));
+  q.set_f(me, f_sq_trail_time, static_cast<float>(c.trail_time));
+  int32_t g = q.i(me, f_sq_goal);
+  if (g == 0) {
+    g = new_mark(q);
+    q.set_i(me, f_sq_goal, g);
+  }
+  q.setorigin(g, c.goal);
+  q.set_i(me, q.L.f.goalentity, g);
+}
+
+// The players' trail, each frame while Quake II's monsters are about: a mark where a player stood
+// last frame once his eye no longer sees the newest mark.
+void sq_trail_frame(A& q) {
+  if (q.ge(g_sq_trail) == 0) return;
+  for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+       p = q.find(p, q.L.f.classname, q.s(s_player))) {
+    if (q.f(p, q.L.f.health) <= 0) continue;
+    const Vec3 at = q.v(p, q.L.f.origin);
+    const Vec3 last = q.v(p, f_sq_trail_last);
+    q.set_v(p, f_sq_trail_last, at);
+    if ((last.x == 0) & (last.y == 0) & (last.z == 0)) continue;  // new: no mark yet
+    const int head = static_cast<int>(q.g(g_sq_trail_head));
+    const int32_t newest = mark(q, q2_mind::newest_mark(head));
+    q.traceline(eye_of(q, p), q.v(newest, q.L.f.origin), 1, p);
+    if (q.gf(q.L.g.trace_fraction) >= 1) continue;
+    const int32_t m = mark(q, head);
+    q.setorigin(m, last);
+    q.set_f(m, f_sq_trail_time, q.time());
+    q.set_v(m, q.L.f.angles, {0, q.vectoyaw(last - q.v(newest, q.L.f.origin)), 0});
+    q.set_g(g_sq_trail_head, static_cast<float>((head + 1) % q2_mind::kTrailMarks));
+  }
+}
+
+// DODGING: a player's bolt, rocket or nail just launched (`missile`, self its shooter) offered to
+// the first of Quake II's monsters on its line, as Quake II's dodge offers it (an easiest skill's
+// one in four). Nothing is drawn on a map with none of them. The firer's view axes are kept.
+void sq_offer_dodge(A& q, int32_t missile) {
+  const int32_t shooter = q.self();
+  if ((q.ge(g_sq_trail) == 0) | on(q.deathmatch()) | !q.is(q.i(shooter, q.L.f.classname), "player"))
+    return;
+  if (!q2_mind::dodge_offered(skill_of(q), roll_of(q))) return;
+  const Vec3 fwd = q.v_forward(), right = q.gv(q.L.g.v_right), up = q.gv(q.L.g.v_up);
+  const Vec3 v = q.v(missile, q.L.f.velocity);
+  const Vec3 from = eye_of(q, shooter);
+  q.traceline(from, from + q.normalize(v) * 8192, 0, shooter);
+  const int32_t hit = q.gi(q.L.g.trace_ent);
+  if ((hit != 0) && sq_runs(q, hit)) {
+    const float dist = q.vlen(q.gv(q.L.g.trace_endpos) - q.v(missile, q.L.f.origin));
+    q.set_self(hit);
+    dodge(q, shooter, dist, q.vlen(v));
+    q.set_self(shooter);
+  }
+  q.set_gv(q.L.g.v_forward, fwd);
+  q.set_gv(q.L.g.v_right, right);
+  q.set_gv(q.L.g.v_up, up);
+}
+
+// One 0.1 s frame of a dodge's duck: the frame shown and, new, its step, the box down (held low a
+// second, the brain's hold its own) and the duck that shoots firing (a gunner above skill 1 throws
+// a grenade ahead half the time), the box up; then the next frame, the same while held, or the run.
+void sq_duck(A& q) {
+  think_again(q, fn_sq_duck);
+  const int32_t me = q.self();
+  const int run = run_of(q, me);
+  const bool shoots = on(q.f(me, f_sq_duck_shoot));
+  const roster::Duck* d = shoots ? &roster::kDuckShoot : duck_row(run);
+  const int f = static_cast<int>(q.f(me, f_sq_duck_frame)) - 1;
+  if ((d == nullptr) | (f < 0)) {
+    duck_done(q, run);
+    return;
+  }
+  q.set_f(me, q.L.f.frame, static_cast<float>(d->first + f));
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  const bool foe = (enemy != 0) && (q.f(enemy, q.L.f.health) > 0);
+  if (shoots && foe) face_enemy(q);
+  if (!on(q.f(me, f_sq_duck_still))) {
+    const float walk = static_cast<float>(d->steps[f]) * d->scale;
+    if (walk != 0) q.walkmove(q.v(me, q.L.f.angles).y, walk);
+    if (f == d->down) {
+      const bool was = on(q.f(me, f_sq_ducked));
+      if (!was) {
+        q.set_f(me, f_sq_ducked, 1);
+        duck_box(q, run, true);
+        if (kSqRuns[run].classname != std::string_view("monster_brain"))
+          q.set_f(me, f_sq_duck_hold, q.time() + static_cast<float>(q2_mind::kDuckLow));
+      }
+      if (shoots && (enemy != 0)) shoot(q, run, attack_of(kind_of(run), 2), false);
+      if (!was && (kSqRuns[run].classname == std::string_view("monster_gunner")) &&
+          (skill_of(q) >= 2) && (q.random() > 0.5f)) {  // a grenade straight ahead, unaimed
+        const int32_t g = grenade(q, 600, 50);
+        q.makevectors({0, q.v(me, q.L.f.angles).y, 0});
+        q.set_v(g, q.L.f.velocity, q.v_forward() * 600 + Vec3{0, 0, 200});
+      }
+    }
+    if ((f == d->up) && on(q.f(me, f_sq_ducked))) {
+      q.set_f(me, f_sq_ducked, 0);
+      duck_box(q, run, false);
+    }
+  }
+  const int next = q2_mind::duck_next(*d, f, shoots, q.time(), q.f(me, f_sq_duck_hold));
+  q.set_f(me, f_sq_duck_still, next == f ? 1 : 0);  // held low: shown again, still
+  if (next < 0) {
+    duck_done(q, run);
+    return;
+  }
+  q.set_f(me, f_sq_duck_frame, static_cast<float>(next + 1));
+}
+
+// One 0.1 s frame of a soldier's shot on the run: at him facing him, the shot at its fourth step,
+// round again at skill 3 while he is 500 or more off; then the run.
+void sq_run_shoot(A& q) {
+  const int32_t me = q.self();
+  const int run = run_of(q, me);
+  const int at = static_cast<int>(q.f(me, f_sq_run_step)) - 1;
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  if ((at < 0) | (enemy == 0) || (q.f(enemy, q.L.f.health) <= 0)) {
+    q.set_f(me, f_sq_run_step, 0);
+    think_again(q, fn_monster_run);
+    return;
+  }
+  think_again(q, fn_sq_run_shoot);
+  q.set_f(me, q.L.f.frame, static_cast<float>(q2_mind::kRunShootFirst + at));
+  ai_charge(q, q.f(me, f_run_step));
+  if (at == q2_mind::kRunShootFires) shoot(q, run, attack_of(kind_of(run), 2), false);
+  const int next =
+      q2_mind::run_shoot_next(at, skill_of(q), q.f(enemy, q.L.f.health) > 0, distance_to(q, enemy));
+  q.set_f(me, f_sq_run_step, static_cast<float>(next + 1));
+  if (next < 0) think_again(q, fn_monster_run);
+}
+
+// What goes before Quake II's monster's run: a duck it is in, or its shot on the run. True when one
+// took the frame.
+bool sq_busy(A& q) {
+  const int32_t me = q.self();
+  if (q.f(me, f_sq_duck_frame) > 0) {
+    sq_duck(q);
+    return true;
+  }
+  if (q.f(me, f_sq_run_step) > 0) {
+    sq_run_shoot(q);
+    return true;
+  }
+  return false;
 }
 
 #define SE_SQ_SPAWN(name, i)                                      \

@@ -67,6 +67,21 @@ build/debug/sesv -classic q2 --root=<install> --map=q2dm1 --port=27910
 unmodified client of Quake II joins it. Its levels go round `sv_maprotation` after `sv_map`
 when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.
 
+Classic remix plays on a dedicated server too (`games/shooters_edge/client/remix_dedicated.hpp`):
+the window's `cr_` settings are the server's rules, and `cr_basedir` names the other full game's
+install, which the window finds in the installs it keeps:
+
+```
+build/debug/sesv --root=<quake> --map=q2dm1 +set cr_enabled 1 +set cr_items q2 \
+  +set cr_basedir <quake2>
+build/debug/sesv -classic q2 --root=<quake2> --map=dm6 +set cr_enabled 1 +set cr_items q1 \
+  +set cr_basedir <quake>
+```
+
+The server reads the other game's maps through it, wears its things, and tells the remix in
+its server info, so our client joining plays the same remix. The cr_ rules are read when the
+server starts and are never voted on.
+
 The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
 pack is not read yet. `ge server cfg [<prefix>]` (M53d) builds the game's dedicated binary and
 prints its own `--explain`.

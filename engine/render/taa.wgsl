@@ -4,7 +4,7 @@
 
 struct TaaParams {
   output: vec4f,  // width, height, 1/width, 1/height
-  blend: vec4f,   // the new frame's share (1: no history), the clip box's gamma
+  blend: vec4f,   // the new frame's share (1: no history), the clip box's gamma, blocks (1)
 }
 
 @group(1) @binding(0) var<uniform> taa: TaaParams;
@@ -72,6 +72,11 @@ fn resolve(@builtin(global_invocation_id) id: vec3u) {
   let uv = (vec2f(id.xy) + 0.5) * taa.output.zw;
   let render = vec2i(frame.size.xy);
   let rp = uv * frame.size.xy;  // the output pixel's centre in unjittered render pixels
+  if (taa.blend.z > 0.0) {  // BLOCKS: the render pixel this one lies in, as it is
+    let p = clamp(vec2i(floor(rp)), vec2i(0), vec2i(frame.size.xy) - 1);
+    textureStore(history_out, id.xy, vec4f(textureLoad(hdr, p, 0).rgb, 1.0));
+    return;
+  }
   let j = frame.jitter.xy;
   // Render pixel i's sample stands at i + 0.5 - j: the nearest is floor(rp + j).
   let centre = vec2i(floor(rp + j));
