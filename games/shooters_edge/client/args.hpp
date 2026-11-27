@@ -113,6 +113,10 @@ inline constexpr Flag kFlags[] = {
 };
 // Whether `word` is one of kFlags.
 bool known_flag(std::string_view word);
+
+// Whether the window is one a player sits at: no run that measures, records, writes and quits
+// (`-timedemo`, `-playdemo`, `-demovideo`, `-manual`, `--frames`, `-hidden`).
+bool played_live(const Args& a);
 // The flags for the reference manual (play/session_flags.hpp's -config and -logfile first).
 std::vector<ge::console::FlagDoc> flag_docs();
 // One line naming every flag, for a refused command line.

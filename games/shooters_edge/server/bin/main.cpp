@@ -18,11 +18,13 @@
 // ge:test tests/shooters_edge_qw_game_test.cpp
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "server/main.hpp"
+#include "server/process.hpp"
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/rules_manual.hpp"
@@ -39,6 +41,14 @@ std::string plus_value(int argc, char** argv, std::string_view name) {
     }
   }
   return out;
+}
+
+// `dir` as a folder: a relative one from the folder the program is in (`fs_basedir_<id>` reads as
+// in the window: client/installs.hpp), an absolute one as it is.
+std::string from_self(const std::string& dir, const char* argv0) {
+  const std::filesystem::path p(dir);
+  if (dir.empty() || p.is_absolute()) return dir;
+  return (std::filesystem::path(ge::server::self_dir(argv0)) / p).lexically_normal().string();
 }
 
 // Which classic game the server serves, as its number from 1 (`fs_basegame`: "" or q1 is 1, q2
@@ -59,6 +69,17 @@ int game_number(int argc, char** argv, std::vector<char*>& rest, std::vector<std
       owned.push_back(std::string("--mod=") + argv[++i]);
       continue;
     }
+    // A relative install (`+set fs_basedir_<id> <folder>`, the remix reads the other game's) from
+    // the program's folder, as the window reads it.
+    if ((std::strcmp(argv[i], "+set") == 0 || std::strcmp(argv[i], "+seta") == 0) && i + 2 < argc &&
+        std::strncmp(argv[i + 1], "fs_basedir_", 11) == 0) {
+      static std::vector<std::string> dirs;  // `rest` points into it
+      dirs.reserve(static_cast<size_t>(argc));
+      dirs.push_back(from_self(argv[i + 2], argv[0]));
+      rest.insert(rest.end(), {argv[i], argv[i + 1], dirs.back().data()});
+      i += 2;
+      continue;
+    }
     if (std::strcmp(argv[i], "--help") == 0) help = true;
     if (std::strncmp(argv[i], "--root=", 7) == 0) rooted = true;
     rest.push_back(argv[i]);
@@ -66,7 +87,7 @@ int game_number(int argc, char** argv, std::vector<char*>& rest, std::vector<std
   if (const std::string dir =
           plus_value(argc, argv, number == 2 ? "fs_basedir_q2" : "fs_basedir_q1");
       !rooted && !dir.empty())
-    owned.push_back("--root=" + dir);
+    owned.push_back("--root=" + from_self(dir, argv[0]));
   return number;
 }
 

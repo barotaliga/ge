@@ -371,12 +371,13 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   };
   // The window's saved settings: the series' one config, then the game's own file.
   const auto run_own = [&] {
-    if (!series.file.empty()) {
-      if (series.outside)
-        series.outside([&] { run_file(series.file); });
-      else
-        run_file(series.file);
-    }
+    const auto run_series = [&] {
+      for (const fs::path& f : series.files) run_file(f);
+    };
+    if (series.outside)
+      series.outside(run_series);
+    else
+      run_series();
     run_file(own);
   };
   counting(true);

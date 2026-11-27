@@ -156,6 +156,13 @@ struct ImportOptions {
   bool music = true;
   // Called before each file and track ("copying id1/pak0.pak"), for a progress line.
   std::function<void(const std::string&)> progress;
+  // Only a source taken in before and unchanged since is opened (nothing read or copied); any
+  // other is refused, for a caller that copies it later where it can show the copy going.
+  bool taken_only = false;
+  // Called as the take-in goes, for a progress bar: what it is doing in the player's words
+  // ("Copying Quake", "Taking Quake's music") and the share of it done, 0 to 1: the files by their
+  // bytes (every size is known before the first is copied), the music by its tracks.
+  std::function<void(const std::string& what, double share)> share;
   // Tells a first pack under another folder's name by its digest (a test's fixtures); empty: the
   // content profiles' own mission packs.
   PackIdentifier identify;
