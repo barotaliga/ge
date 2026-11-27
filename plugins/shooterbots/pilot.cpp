@@ -155,6 +155,7 @@ constexpr float kStraightTop =
 constexpr float kTryKin = 72;   // (`giveup`) a jump's run-ups counted together, ends this near
 constexpr int kRunUpTries = 4;  // a jump lined up for this many times and never made is given up
 constexpr float kClear = 4;     // a player waits this far clear of a mover's box, units
+constexpr double kTouch_s = 1;  // a door at its rest waited at this long is walked into, s
 constexpr float kPlatAtRest = 12;  // a plat this near its rest has not started up, units
 constexpr float kCrushSlow =
     60;  // running out from under a mover slower than this is held, units/s
@@ -1363,6 +1364,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.side = static_cast<float>(-core::libm::sin(rel));
         }
         because = "a mover in the way: stepping clear of it";
+      } else if (const NavMover* shut = mover_of(s.movers, l.mover);
+                 in != nullptr && shut != nullptr && !ridden(*in) && p.wait_s > kTouch_s &&
+                 shut->absmin.x == in->absmin.x && shut->absmin.y == in->absmin.y &&
+                 shut->absmin.z == in->absmin.z) {
+        // A door still at its rest a beat on: one with no field round it opens only to a touch
+        // (Quake's key doors: hip2m2's gold door, its key held, stood him in front of it for two
+        // minutes). Walked into; a door that opens to no touch is barred after the wait as ever.
+        w.forward = 1;
+        because = "a door at its rest: walked into for a touch";
       }
       const NavMover* rest = mover_of(g.movers, l.mover);
       const bool door = rest == nullptr || !ridden(*rest);
