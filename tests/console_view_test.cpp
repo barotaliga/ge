@@ -276,6 +276,55 @@ TEST(editing_and_history) {
   CHECK(v.input().empty());
 }
 
+// Down into the list, Up from its first row back to the typed line, typing on from there; Up on
+// the typed line and a recalled line walk the history; editing a recalled line lists again.
+TEST(arrows_leave_the_list_for_the_typed_line_and_the_history) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_bloom", .fallback = "0.04"});
+  c.cvars().add({.name = "r_taa", .fallback = "1"});
+  v.type("/r_b");
+  v.key(EditKey::down);
+  v.key(EditKey::enter);  // a cvar's name filled in, waiting for its value
+  v.type("0.1");
+  v.key(EditKey::enter);  // "/r_bloom 0.1" in the history
+  v.type("/r_");
+  v.key(EditKey::down);
+  CHECK(v.selected() == 0);
+  v.key(EditKey::up);  // out of the list: the typed line, as typed
+  CHECK(v.selected() == -1 && v.input() == "/r_");
+  v.type("t");  // typing goes on
+  CHECK(v.input() == "/r_t" && v.suggestions().size() == 1);
+  v.key(EditKey::down);
+  v.key(EditKey::down);
+  v.type("a");  // a key typed while a row is selected lets it go
+  CHECK(v.selected() == -1 && v.input() == "/r_ta");
+  v.key(EditKey::up);  // no row selected: the history
+  CHECK(v.input() == "/r_bloom 0.1" && v.suggestions().empty());
+  v.key(EditKey::down);  // back down to the line being typed, its list again
+  CHECK(v.input() == "/r_ta" && v.suggestions().size() == 1);
+  v.key(EditKey::up);
+  for (int i = 0; i < 4; ++i) v.key(EditKey::backspace);  // the recalled line edited: a list
+  CHECK(v.input() == "/r_bloom" && v.suggestions().size() == 1);
+  v.key(EditKey::down);
+  CHECK(v.selected() == 0);
+}
+
+// Under a game's own Tab (list_mode) a selected row is still what Tab takes.
+TEST(tab_takes_the_selected_row_under_a_games_own_tab) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_bloom", .fallback = "0.04"});
+  c.cvars().add({.name = "r_taa", .fallback = "1"});
+  v.list_mode = 1;
+  v.type("/r_");
+  v.key(EditKey::down);
+  v.key(EditKey::down);
+  const std::string second = v.suggestions()[1].name;
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/" + second + " ");
+}
+
 // con_history: only the newest typed lines are walked back through.
 TEST(con_history_keeps_the_newest_lines) {
   Console c;
@@ -341,7 +390,9 @@ TEST(arrows_select_and_enter_takes_the_selection) {
   v.key(EditKey::up);
   v.key(EditKey::up);
   CHECK(v.selected() == -1);
-  v.key(EditKey::up);  // past the top wraps to the bottom
+  v.key(EditKey::up);  // Up on the typed line: the history (none here), never the list's foot
+  CHECK(v.selected() == -1 && v.input() == "/r_");
+  for (int i = 0; i < 5; ++i) v.key(EditKey::down);  // Down stops at the last row
   CHECK(v.selected() == 2 && v.suggestions()[2].name == "r_bloom");
   v.key(EditKey::enter);
   CHECK(v.input() == "/r_bloom " && v.history().empty());  // waiting for the value
