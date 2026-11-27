@@ -65,12 +65,15 @@ TEST(a_packed_draw_carries_its_placement_lens_flags_and_light) {
   d.light.count = 1;
   d.light.lights[0] = {{0.1f, 0.2f, 0.3f}, {1, 2, 3}, 5, 0.05f};
   d.light.floor = 0.07f;
+  d.light.knee = 0.6f;
+  d.light.most = 1.2f;
   const GpuHeldDraw g = pack_held_draw(d, view, 1600, 900, 0.25);
   CHECK(g.now[3] == 0.13f && g.last[3] == 0.11f && g.now[0] == 1 && g.now[5] == 1);
   CHECK(near(g.lens[1], 1 / std::tan(0.45)) && near(g.lens[0], g.lens[1] * 900 / 1600));
   CHECK(near(g.lens[2], kHeldNearM) && near(g.lens[3], 0.4));
   CHECK(g.info[0] == 3 && g.info[1] == 4 && g.info[2] == 2 && g.info[3] == 2u);
   CHECK(g.mix[0] == 0.25f && g.mix[1] == 0.5f && g.mix[3] == 0.07f);
+  CHECK(g.tone[0] == 0.6f && g.tone[1] == 1.2f);
   CHECK(g.toward[3] == 1 && g.lights[0][2] == 0.3f && g.lights[0][3] == 5 && g.lights[0][6] == 3 &&
         g.lights[0][7] == 0.05f);
   // The basis: unit, square, forward along the look, and the lens ratio of the two lenses.

@@ -1256,8 +1256,8 @@ int run_main(int argc, char** argv) {
     }
     // The mouse is the look's whenever the window has the focus: a click on the window or on the
     // app's icon in the Dock takes it, no click in the window needed. Only what `in_mouse_release`
-    // names lets it go: the console by default, and a demo watched at its pace (its play bar); a
-    // menu keeps it and is driven by the keys unless the menu's bit is set.
+    // names lets it go: by default the console, a menu (its pointer hovers and clicks) and a demo
+    // watched at its pace (its play bar); without the menu's bit the keys drive the menu.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
     if (input.focus_gained) cl::team_event(console, "f_focusgained");

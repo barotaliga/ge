@@ -97,3 +97,25 @@ TEST(a_mirrored_gun_is_lit_from_the_side_it_is_seen_on) {
   vm::mirror_world_dir(view, way);
   CHECK(std::fabs(way[0] - std::sin(1.0)) < 1e-12 && std::fabs(way[2] - std::cos(1.0)) < 1e-12);
 }
+
+TEST(a_lamp_beside_the_gun_is_rolled_off_its_colour_kept) {
+  // Light past the knee eases toward `most` and never reaches it; the hue (the channels' ratios)
+  // and the highlight's share stay; under the knee, or with no roll-off set, nothing changes.
+  vm::Lighting l;
+  l.knee = 0.8f;
+  l.most = 1.6f;
+  float d[3] = {8.0f, 4.0f, 2.0f}, s[3] = {1.0f, 0.5f, 0.25f};
+  vm::tone_held(l, d, s);
+  CHECK(d[0] > l.knee && d[0] < l.most);
+  CHECK(std::fabs(d[1] / d[0] - 0.5f) < 1e-6f && std::fabs(d[2] / d[0] - 0.25f) < 1e-6f);
+  CHECK(std::fabs(s[0] / d[0] - 0.125f) < 1e-6f);
+  const float e = 8.0f - 0.8f;
+  CHECK(std::fabs(d[0] - (0.8f + e / (1 + e / 0.8f))) < 1e-5f);
+  float dim[3] = {0.5f, 0.6f, 0.7f}, none[3] = {0, 0, 0};
+  vm::tone_held(l, dim, none);
+  CHECK(dim[0] == 0.5f && dim[1] == 0.6f && dim[2] == 0.7f);
+  vm::Lighting off;  // knee and most 0: the light as it adds up
+  float bright[3] = {9, 9, 9};
+  vm::tone_held(off, bright, none);
+  CHECK(bright[0] == 9 && bright[1] == 9 && bright[2] == 9);
+}

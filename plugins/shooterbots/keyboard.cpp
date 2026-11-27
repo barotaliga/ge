@@ -13,6 +13,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooter/world.hpp"
 #include "shooterbots/traits.hpp"
 
 namespace sb = ge::shooterbots;
@@ -101,6 +102,10 @@ uint32_t keys_off_brink(const KeysNear& n, const sh::MoveCmd& cmd, sh::Vec3f vel
                         uint32_t want) {
   if (n.world == nullptr || n.g == nullptr || !sb::nav_harm_near(*n.g, n.origin, kBrinkNear))
     return want;
+  // Already in it (fallen in, knocked in): no brink left to keep off, every key a way out. Held
+  // off the brink there, a bot in e1m4's slime pit pressed nothing for the last ten minutes.
+  const int in = sh::water_contents(*n.world, {n.origin.x, n.origin.y, n.origin.z - 22});  // feet
+  if (in == sh::kContentsSlime || in == sh::kContentsLava) return want;
   const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
   const float fx = static_cast<float>(ge::core::libm::cos(yaw)),
               fy = static_cast<float>(ge::core::libm::sin(yaw));

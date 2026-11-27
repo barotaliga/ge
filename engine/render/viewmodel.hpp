@@ -118,10 +118,11 @@ struct GpuHeldDraw {
   float right[4];    // the view's right in the world (camera-relative); the lens ratio
   float up[4];       // and its up; the view's shift in NDC (FrameView::shift_y)
   float forward[4];  // and its forward; 1 - the opacity
+  float tone[4];     // the light's roll-off: knee, most (viewmodel::tone_held); 0; 0
   float lights[viewmodel::kHeldLights][8];  // at (view, m), range; rgb, radius
   float warp[16];                           // render/wgsl/warp.wgsl's Warp
 };
-static_assert(sizeof(GpuHeldDraw) == 560, "match viewmodel.wgsl's HeldDraw");
+static_assert(sizeof(GpuHeldDraw) == 576, "match viewmodel.wgsl's HeldDraw");
 
 // One draw packed for a frame seen through `view` on a `width` x `height` render.
 GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t width,

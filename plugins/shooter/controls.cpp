@@ -150,14 +150,14 @@ void add_control_cvars(console::Console& con, Controls& c) {
       &c.lookstrafe);
   con.cvars().bind(
       {.name = "in_mouse_release",
-       .fallback = "5",
+       .fallback = "7",
        .flags = console::kArchive,
        .help = "What frees the mouse while the window has the focus, as bits added together.",
        .kind = console::CvarKind::integer,
        .min = 0,
        .max = 7,
        .values = "0: never; 1: the console; 2: a menu, its pointer then hovering and clicking; 4: "
-                 "a demo's play bar; 0..7: the sum of those (5 the default)"},
+                 "a demo's play bar; 0..7: the sum of those (7 the default: all three)"},
       &c.mouse_release);
   con.cvars().bind({.name = "cl_yawspeed",
                     .fallback = "140",
