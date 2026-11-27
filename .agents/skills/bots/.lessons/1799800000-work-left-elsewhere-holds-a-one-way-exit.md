@@ -2,7 +2,7 @@
 title: Steps that cannot be done keep the exit and the next step out of reach
 date: 2026-11-27
 scope: plugins/shooterbots/way_through.cpp, plugins/shooterbots/fighter.cpp, plugins/shooterbots/way_parts.cpp
-concepts: [strict-work, round-trip, dooms, given-up, kWayForever, climb-out, poke, arm, hangar1, biggun]
+concepts: [strict-work, round-trip, dooms, given-up, way-forever, climb-out, poke, arm, hangar1, biggun]
 ---
 
 - `reach` only counts nodes he can come back from (`round_trip`) while any step is still open

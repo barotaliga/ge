@@ -975,7 +975,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       // One that blows the place up, pressed, is let go of at once: the poke's hold on it kept him
       // at biggun's for 3 s of the 22 he has to get out. So is one shot open: the hold kept him
       // still before hangar1's secret wall through the 3 s it stood open, and it shut on him.
-      if ((st.dooms || way_shot_door(f, bs.ent)) && st.done && f.poke == st.button) f.poke_until = t;
+      if ((st.dooms || way_shot_door(f, bs.ent)) && st.done && f.poke == st.button)
+        f.poke_until = t;
       continue;
     }
     const bool again = st.kind == WayKind::trigger && w.complete && st.opens && !st.doors.empty();
