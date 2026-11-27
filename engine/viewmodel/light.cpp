@@ -2,11 +2,12 @@
 // surface shaded by them, the probe and the floor.
 //
 // ge:summary The held weapon's light: lights ranked into the view, wrapped Lambert and Blinn
-// ge:keywords viewmodel light_held shade_held light_falloff world_to_view view_to_world
+// ge:keywords viewmodel light_held shade_held tone_held light_falloff world_to_view view_to_world
 // ge:skill render
 // ge:test tests/viewmodel_light_test.cpp
 #include "viewmodel/light.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -182,6 +183,19 @@ void shade_held(const Lighting& l, const float p[3], const float n[3], float dif
   }
   for (int k = 0; k < 3; ++k)
     if (diffuse[k] < l.floor) diffuse[k] = l.floor;
+  tone_held(l, diffuse, specular);
+}
+
+void tone_held(const Lighting& l, float diffuse[3], float specular[3]) {
+  if (!(l.most > l.knee)) return;
+  const float m = std::max(diffuse[0], std::max(diffuse[1], diffuse[2]));
+  if (!(m > l.knee)) return;
+  const float e = m - l.knee;
+  const float s = (l.knee + e / (1 + e / (l.most - l.knee))) / m;
+  for (int k = 0; k < 3; ++k) {
+    diffuse[k] *= s;
+    specular[k] *= s;
+  }
 }
 
 }  // namespace ge::viewmodel

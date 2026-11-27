@@ -201,7 +201,7 @@ TEST(a_buttons_doors_are_found_through_the_relays_it_fires) {
   CHECK(fb::button_fires(blocks, "").empty());
 }
 
-TEST(a_key_into_lava_is_not_pressed_with_brinkkeys) {
+TEST(a_key_into_lava_is_not_pressed_with_brinkkeys_but_one_out_of_it_is) {
   // A ledge (y 0 up, its top at z 0) over a pit of lava (y under 0): standing 30 from the edge
   // facing it, the wish forward. With `brinkkeys` W is never pressed (its step ends over the
   // lava); without it W goes down.
@@ -255,5 +255,25 @@ TEST(a_key_into_lava_is_not_pressed_with_brinkkeys) {
       CHECK_MSG(pressed == 0, "W pressed toward the lava " + std::to_string(pressed) + " commands");
     else
       CHECK_MSG(pressed > 20, "without brinkkeys W was pressed only " + std::to_string(pressed));
+  }
+  // Already in the lava, facing the ledge: no brink left to keep off, W pressed out (held off the
+  // brink there, a bot in e1m4's slime pit pressed nothing for ten minutes).
+  {
+    fb::KeyHand k;
+    fb::key_hand_init(k, 90, 3);
+    const sb::Features features = sb::features_all();
+    const fb::KeysNear in{&world, &g, {0, -300, -155}};  // afloat, the floor under it
+    CHECK_MSG(sb::nav_harm_near(g, in.origin, 192), "no harm near in the lava");
+    CHECK_MSG(sb::nav_falls_in_harm(world, in.origin, {0, -236, -155}), "no fall in harm ahead");
+    int pressed = 0;
+    for (int n = 0; n < 40; n++) {
+      sh::MoveCmd c;
+      c.msec = 13;
+      c.angles = {0, 90, 0};
+      c.forward = 320;
+      fb::press_keys(k, features, c, {}, false, sb::kNoCurveKeys, &in);
+      pressed += c.forward > 0;
+    }
+    CHECK_MSG(pressed > 20, "in the lava W was pressed only " + std::to_string(pressed));
   }
 }
