@@ -250,6 +250,10 @@ struct ServerRemix {
 bool remix_monsters(std::string_view text, std::string_view played, std::string_view to,
                     std::string& out, RemixReport* report, std::string& error);
 
+// The console's line when a cr_ setting changes while classic remix is off: `why` it is off though
+// cr_enabled is on (open_remix_for's answer), or "" when cr_enabled is off.
+std::string remix_off_line(const std::string& why);
+
 // The console's line when what the rules wear changes to `r`'s, in the game's words.
 std::string worn_line(const RemixFiles& r);
 
