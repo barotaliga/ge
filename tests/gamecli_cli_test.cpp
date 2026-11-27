@@ -57,8 +57,9 @@ void own_home(const fs::path& root) {
 // Every call names its own install and its own state and logs, never the machine's.
 int run(std::vector<std::string> args, std::string& out, const fs::path& root) {
   own_home(root);
-  args.insert(args.begin(), {"--basedir=" + root.string(), "--state=" + (root / "state").string(),
-                             "--logs=" + (root / "logs").string()});
+  args.insert(args.begin(),
+              {"--fs_basegame=q1", "--fs_basedir_q1=" + root.string(),
+               "--state=" + (root / "state").string(), "--logs=" + (root / "logs").string()});
   return gc::run(se(), args, out, (root / "bin").string());
 }
 

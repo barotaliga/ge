@@ -1,10 +1,10 @@
 // LAB `se-installs`: THE CLASSIC INSTALLS A PLAYER DROPS THE GAME BESIDE. A parent folder holding
 // classic installs (client/install_search.hpp) searched as the window searches the folder it was
 // placed in: each install found by its folder's name or by what it holds, its release told by its
-// packs' sizes, the one the window would play picked; then, for each, its configs run in the
-// install's own order (client/install_configs.hpp) on a console of its own, the files listed in the
-// order they ran; its search path opened with the bundled client's folder in it; and its start map
-// drawn from the player's start, with its place names counted (client/place_names.hpp).
+// packs' sizes (listed for `games`, never played on their own); then, for each, its configs run in
+// the install's own order (client/install_configs.hpp) on a console of its own, the files listed in
+// the order they ran; its search path opened with the bundled client's folder in it; and its start
+// map drawn from the player's start, with its place names counted (client/place_names.hpp).
 //
 // Without `--parent` the installs are our own: three folders written under the temporary folder
 // (Quake's shareware and registered packs, Quake II's demo, by their sizes alone, and a
@@ -97,13 +97,10 @@ void run(gl::Lab& lab) {
   const gl::Det det = own ? gl::Det::deterministic : gl::Det::measured;
   const std::vector<cl::FoundInstall> found = cl::installs_below(parent.string());
   lab.metric("installs", double(found.size()), "count", det);
-  const int pick = cl::pick_install(found, "");
-  gl::LabTable t{
-      "The installs found beside the game", {"#", "folder", "game", "release", "played"}, {}};
+  gl::LabTable t{"The installs found beside the game", {"#", "folder", "game", "release"}, {}};
   for (size_t i = 0; i < found.size(); ++i)
     t.rows.push_back({std::to_string(i + 1), fs::path(found[i].basedir).filename().string(),
-                      std::string(found[i].content->id), found[i].release,
-                      int(i) == pick ? "yes" : ""});
+                      std::string(found[i].content->id), found[i].release});
   lab.table(t, det);
   if (own && found.size() != std::size(cl::kKnownReleasePacks)) {
     lab.fail("the fixture's installs were not all found",

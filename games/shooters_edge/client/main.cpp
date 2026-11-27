@@ -7,20 +7,20 @@
 // rocket trails, explosions and their light, the screen's blend), the weapon in hand (held.hpp:
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
-//   se [-classic q1|q2] [-basedir <dir>] [-game <dir>] [-progs <file>] [-models <dir>] [-config f]
+//   se [-game <dir>] [-progs <file>] [-models <dir>] [-config f] [+set fs_basegame q1|q2]
 //                 [-timedemo <demo>] [-playdemo <demo>] [-tv <node>] [--frames=N] [--size=WxH]
 //                 [-hidden] (the window never shown: a run that draws and takes screenshots)
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [-logfile <file>] [+<command> ...]
 //
-// `-classic <id>` opens that game's kept install, else asks for it (client/install_ask.hpp);
-// `-basedir` holds the game folder (`id1`, `-game` a mod's over it); `~` is home. Else the game
-// loaded last; LOAD GAME or `basedir <folder>` loads another in place, enhanced in the background
-// (client/game_folder.hpp). `-progs` runs a mod's progs in place of the baseline mod, `-models`
-// names the held weapons' folder (by default the game's `content/models/view`). The other words are
-// console lines run at start (a `+` before each after the first): `map dm6` loads that map;
-// with none, the title (client/title.hpp) with the menu up, `start` (else the arena) loading behind
-// it. Every map loads behind the window, a spinner up (client/map_load.hpp).
+// `fs_basegame` names the game played and `fs_basedir_<id>` its install (client/installs.hpp),
+// else the window asks for it (client/install_ask.hpp); `-game` a mod's folder over it. SELECT
+// GAME, LOAD GAME, `import <folder>` or the settings load another in place, enhanced in the
+// background (client/game_folder.hpp). `-progs` runs a mod's progs in place of the baseline mod,
+// `-models` names the held weapons' folder (by default the game's `content/models/view`). The other
+// words are console lines run at start (a `+` before each after the first): `map dm6` loads that
+// map; with none, the title (client/title.hpp) with the menu up, `start` (else the arena) loading
+// behind it. Every map loads behind the window, a spinner up (client/map_load.hpp).
 //
 // THE KEYS are binds (controls.hpp: W A S D, SPACE jumps, the left button fires, SHIFT walks, 1..8
 // and the wheel the weapons, F12 a screenshot; OPTIONS ▸ CUSTOMIZE CONTROLS); TAB held shows the
@@ -317,8 +317,8 @@ int run_main(int argc, char** argv) {
   se::HudArt classic_art;
   // The HUD's feed is the one notify area: the console's own lines would show each twice.
   con_view.set_host_notify(true);
-  // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
-  // `id1`. Started inside an install (or above several: client/install_search.hpp), that one.
+  // The install (client/game_folder.hpp): fs_basegame's fs_basedir_<id>; multiplayer over `id1`.
+  // Installs around the game (client/install_search.hpp) are listed for `games`, never played.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   // The game CLI's account file (`account signin`): our client logs itself in by it on a server
   // whose master is the same (net/qw_remote.hpp § Logging in).
@@ -334,9 +334,14 @@ int run_main(int argc, char** argv) {
   const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs,
                                               cl::take_home_dir(&args.plus));
   cl::adopt_placed_settings(cl::placed_folder(ge::platform::app_dir()), data_root);
-  if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
-  std::vector<cl::FoundInstall> installs;  // the console's `games`
-  cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
+  // The series config (client/settings.hpp); in it the game played and its install, fs_basegame
+  const std::filesystem::path series = cl::series_settings_file(data_root);  // and fs_basedir_<id>
+  cl::BaseGame base = cl::read_base_game(series, args.plus);
+  if (base.dirs.count(base.game) && !cl::take_in_basedir(&base.dirs[base.game], data_root))
+    return 2;
+  const auto installs = cl::installs_near({cl::placed_folder(ge::platform::app_dir())});  // `games`
+  cl::choose_folder(args, base);
+  const cl::BaseGame chosen = cl::bind_base_game(console.cvars(), &base);  // set again below
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   // The install's configs in its own order, its folders on `exec`'s path (install_configs.hpp).
   const auto content_row = [&]() -> const ge::classicenhance::Profile& {
@@ -400,8 +405,6 @@ int run_main(int argc, char** argv) {
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   remote.stuff_file =
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
-  // One config for the series beside each game's own (client/settings.hpp).
-  const std::filesystem::path series = cl::series_settings_file(data_root);
   const auto save_settings = [&console, &series, &con_view] {
     cl::save_settings(console, series);
     con_view.save_history();  // the typed lines, beside the config
@@ -423,6 +426,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(ran.passed_over) +
                 " lines of the install's configs name settings this game does not have; "
                 "passed over");
+  std::string base_seen = cl::set_base_game(console.cvars(), chosen);  // last opened (installs.hpp)
   console.cvars().apply_latched();
 
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
@@ -606,7 +610,7 @@ int run_main(int argc, char** argv) {
   cl::RemixFiles remix;  // classic remix's other game's files (client/remix.hpp), opened below
   // SELECT GAME: the games added here, the one remix plays with marked (client/installs.hpp).
   game_menu.games().set_lister([&] {
-    return cl::game_rows(prefs, args.profile, game_menu.game(),
+    return cl::game_rows(base, args.profile, game_menu.game(),
                          remix.state.on ? remix.state.other : "", args.game);
   });
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
@@ -666,9 +670,9 @@ int run_main(int argc, char** argv) {
                                                                 sp::content_of(*adapter.game))) {
     game_menu.set_game(basedir);
     game_menu.servers().set_masters(shooters_edge::net::qw_install_masters(basedir));
-    // The game played is the one the next start opens, however it was picked (-basedir too).
-    cl::remember_game(prefs, basedir, sp::content_of(*adapter.game));
-    cl::remember_install(prefs, sp::content_of(*adapter.game).id, basedir);
+    // The game played is the one the next start opens (fs_basegame, fs_basedir_<id>).
+    cl::keep_base_game(console.cvars(), base, sp::content_of(*adapter.game).id, basedir,
+                       &base_seen);
     if (game_menu.auto_enhance() && !measured) {
       if (game_menu.enhance_game(false, &why))
         out::status("shooters_edge: enhancing " + basedir +
@@ -779,7 +783,7 @@ int run_main(int argc, char** argv) {
     remix_open = open;
     remix_for = args.basedir;
     if (const std::string said =
-            cl::open_remix_for(remix, remix_now(), prefs, args.profile, args.basedir, args.game);
+            cl::open_remix_for(remix, remix_now(), base, args.profile, args.basedir, args.game);
         !said.empty())
       console.print(said), remix_off = remix.state.on ? "" : said;
     return remix_wear(true);
@@ -988,10 +992,10 @@ int run_main(int argc, char** argv) {
     for (const std::string& f : faults) console.print("particles: " + f);
     fx_palette_read = true;
   };
-  // LOAD GAME's folder and `basedir` (client/game_folder.hpp): the install opened in place of the
-  // one playing (the old world and servers let go first), its first map started where the map
-  // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
-  // `pack_ask`: SELECT GAME's mission pack over it; `install_ask`: -classic <id>, none kept.
+  // LOAD GAME's folder, `import` or the settings (client/game_folder.hpp): the install opened in
+  // place of the one playing (the old world and servers let go first), its first map started where
+  // the map changes, enhanced in the background, kept. False, nothing changed, when it does not
+  // open. `pack_ask`: SELECT GAME's mission pack over it; `install_ask`: fs_basegame's, none set.
   std::string folder_ask, pack_ask;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
@@ -1074,8 +1078,7 @@ int run_main(int argc, char** argv) {
     game_menu.set_game(basedir);
     game_menu.servers().set_masters(shooters_edge::net::qw_install_masters(basedir));
     demo_places();
-    cl::remember_game(prefs, basedir, *content);
-    cl::remember_install(prefs, content->id, basedir);
+    cl::keep_base_game(console.cvars(), base, content->id, basedir, &base_seen);
     save_settings();  // the player's settings go on in the new folder
     out::status("shooters_edge: loaded " + basedir + " (" + files.folder + ")");
     if (std::string why; game_menu.auto_enhance() && !game_menu.enhance_game(true, &why))
@@ -1323,7 +1326,7 @@ int run_main(int argc, char** argv) {
         cl::resize_world(*device, *world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
       cl::resize_world(*device, *title, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
     }
-    // A game folder asked for: LOAD GAME's chooser answered, or the console's `basedir`.
+    // A game folder asked for: LOAD GAME's chooser answered, or the console's `import`.
     if (game_menu.take_load())
       ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
     // SELECT GAME: a game's install opened at once, or the folder chooser to find one.
@@ -1334,10 +1337,11 @@ int run_main(int argc, char** argv) {
     }
     if (std::string picked, why; ge::platform::folder_picked(*window, &picked, &why)) {
       if (!why.empty())
-        game_menu.load_refused(why + ". You can also type \"basedir <folder>\" in the console.");
+        game_menu.load_refused(why + ". You can also type \"import <folder>\" in the console.");
       folder_ask = picked;  // "" when the player cancelled
       if (!cl::answer_install(*window, install_ask, &folder_ask, &why)) game_menu.load_refused(why);
     }
+    cl::ask_base_game(base, &base_seen, &folder_ask, console);  // the settings set: installs.hpp
     if (!folder_ask.empty() && !bench.active) {
       const bool from_menu = game_menu.open();  // open_folder hides it
       switch_t = t;

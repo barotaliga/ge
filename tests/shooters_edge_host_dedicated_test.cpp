@@ -33,7 +33,8 @@ TEST(the_host_pages_rules_are_handed_over_as_a_cfg) {
   const ge::server::SpawnAsk ask =
       cl::dedicated_ask(h, "q2dm1", {{"fraglimit", "20"}, {"maxclients", "8"}});
   CHECK(ask.map == "q2dm1" && ask.root == "/games/install" && ask.state == "/prefs/cli");
-  CHECK(ask.extra.size() == 2 && ask.extra[0] == "-classic" && ask.extra[1] == "q2");
+  CHECK(ask.extra.size() == 3 && ask.extra[0] == "+set" && ask.extra[1] == "fs_basegame" &&
+        ask.extra[2] == "q2");
   CHECK_MSG(ask.cfg == "fraglimit \"20\"\nmaxclients \"8\"\n", ask.cfg);
   h.game = 1;
   CHECK(cl::dedicated_ask(h, "dm4", {}).extra.empty());

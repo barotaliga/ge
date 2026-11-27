@@ -217,7 +217,7 @@ void live(gl::Lab& lab, const std::string& server) {
     out.write(reinterpret_cast<const char*>(recording.bytes.data()),
               static_cast<std::streamsize>(recording.bytes.size()));
     lab.note("se-interop: the session recorded as a client demo at " + record_to +
-             " (watch it: shooters_edge -basedir <dir> -playdemo <file>)");
+             " (watch it: se +set fs_basegame q1 +set fs_basedir_q1 <dir> -playdemo <file>)");
   }
   gl::LabTable facts{"the session", {"what", "value"}, {}};
   facts.rows.push_back({"server", text});

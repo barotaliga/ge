@@ -2,11 +2,11 @@
 // commands (engine/gamecli) over this game's Spec, classic enhance's group (the install's packs),
 // and the rows only this game has:
 //
-// - THE PLACES are the window's own: the install it opens (`--basedir`, else Quake
-//   loaded last, kept in the platform's per-user folder, client/game_folder.hpp; `--classic=<id>`
-//   that game's kept install), the game folder over it (`--game`, else the multiplayer folder when
-//   the install has one), the player's settings in `<install>/<game folder>/settings/`
-//   (client/settings.hpp) and the masters the install's server lists name.
+// - THE PLACES are the window's own: the game `fs_basegame` picks and its install
+//   `fs_basedir_<id>`, read from the series config (client/installs.hpp) and set over it by
+//   `--fs_basegame=<id>` and `--fs_basedir_<id>=<dir>`, the game folder over it (`--game`, else
+//   the multiplayer folder when the install has one), the player's settings in `<install>/<game
+//   folder>/settings/` (client/settings.hpp) and the masters the install's server lists name.
 // - THE PROTOCOL is the classic one (net/qw_browse.hpp): the status query and the masters
 //   for the browser, the connectionless remote console.
 // - THE WINDOW joins with `+connect <address>` and hosts as HOST GAME's START does: `+sv_port`,
@@ -15,7 +15,7 @@
 // - ITS OWN ROWS: `demos` (the recordings in the game folder) and `demos play <name>`.
 //
 // ge:summary Shooter's Edge's player CLI: its Spec, places, protocol, launch words and demos
-// ge:keywords secli gamecli player-cli spec locate basedir game-folder join host
+// ge:keywords secli gamecli player-cli spec locate basedir fs-basegame game-folder join host
 // ge:keywords demos playdemo recordings mvd
 // ge:skill shooter agent-interface
 // ge:test tests/gamecli_cli_test.cpp

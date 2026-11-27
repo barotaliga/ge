@@ -1,11 +1,11 @@
 // THE CLASSIC INSTALLS AROUND THE GAME: Quake the window was started inside, and the
 // installs in the folder it was placed in, so a player who drops the game into an install (or
-// beside several) plays them with no folder to pick.
+// beside several) loads one with `games <n>` and no folder to pick.
 //
 // - **Started inside one** (`install_around`): the folder the game runs in, or the folder its
 //   executable was placed in, is an install the content profiles know, or lies inside one (its base
 //   folder, its multiplayer folder, the client's own folder beside them: up to `kInstallDepth`
-//   folders up). That install is played at once, ahead of the game loaded last.
+//   folders up).
 // - **Placed above several** (`installs_below`): the folders right under it named like a classic
 //   install, in any case (`kInstallNames`, in that order), then any other folder under it that is
 //   one; each checked as an install by its own folders (client/game_folder.hpp's `install_of`), so
@@ -16,14 +16,13 @@
 //   game. Sizes, not digests: a start reads no pack.
 // - **Its mission packs** (`release_of` too): a folder beside the base folder named after one of
 //   the game's packs, holding its first pack; `games` names them after the release.
-// - **Which is played** (`pick_install`): of the installs found, the game loaded last when it is
-//   one of them, else the first full game, else the first.
-//
-// The console's `games` lists the installs found and `games <n>` loads one (client/main.cpp).
+// - **Listed, never played on their own** (`installs_near`): the game played and its install are
+//   the settings `fs_basegame` and `fs_basedir_<id>` alone (client/installs.hpp); the console's
+//   `games` lists the installs found and `games <n>` loads one, which sets them.
 //
 // ge:summary The classic installs around the game: started inside one, placed above several
 // ge:keywords installs install-detection started-inside placed-above parent-folder nquake
-// ge:keywords install_around installs_below release_of pick_install known-release shareware
+// ge:keywords install_around installs_below release_of installs_near known-release shareware
 // ge:keywords registered demo full-game install-names games-command app-folder mission-pack
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_install_search_test.cpp
@@ -109,9 +108,10 @@ std::vector<FoundInstall> installs_below(const std::string& parent);
 // bundle when it runs from one (`<folder>/Game.app/Contents/MacOS`), else the executable's own.
 std::string placed_folder(const std::string& exe_dir);
 
-// Which of `found` is played: the one at `kept` (the game loaded last), else the first full game,
-// else the first; -1 when `found` is empty.
-int pick_install(const std::vector<FoundInstall>& found, const std::string& kept);
+// The installs around the game: the one the folder it runs in lies in, then each of `places`'s
+// (the folder its executable was placed in), each followed by those right under it; each install
+// once.
+std::vector<FoundInstall> installs_near(const std::vector<std::string>& places);
 
 // One line a found install, as `games` prints it: "1  Quake (registered)  <folder>", its packs
 // after the release ("(registered) with Scourge of Armagon").

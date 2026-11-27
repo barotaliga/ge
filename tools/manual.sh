@@ -4,7 +4,7 @@
 # from the programs' own registrations, never a hand-kept list:
 #
 #   1. sesv --manual=<file>              the dedicated server's console, once per game it serves
-#                                         (QuakeWorld, then Quake II with -classic q2), offline;
+#                                         (QuakeWorld, then Quake II with +set fs_basegame q2), offline;
 #   2. se -hidden -manual <file>         the window's console once everything is registered, every
 #                                         game's own layer loaded in turn (client/manual.hpp);
 #   3. ge manual <sources> --out=...     the sources merged into one searchable page with filters
@@ -40,7 +40,7 @@ trap 'rm -rf "${home}"' EXIT
 
 "${bin}/sesv" --offline --root="${home}" --manual="${src}/sesv-qw.txt"
 # No game's files needed: the server writes what its console registers even when no map opens.
-"${bin}/sesv" -classic q2 --offline --root="${home}" --manual="${src}/sesv-q2.txt" 2>/dev/null
+"${bin}/sesv" +set fs_basegame q2 --offline --root="${home}" --manual="${src}/sesv-q2.txt" 2>/dev/null
 game="${GE_MANUAL_GAME:-https://archive.org/download/quakeshareware/QUAKE_SW.zip}"
 "${bin}/classicenhance" setup "${game}" --basedir="${home}/game" --cache="${out}/cache" >/dev/null
 display=()
@@ -49,7 +49,7 @@ if [ -z "${DISPLAY:-}" ] && [ "$(uname -s)" = Linux ] && command -v xvfb-run >/d
 fi
 # No sound device: the console is all it reads.
 HOME="${home}" XDG_DATA_HOME="${home}" SDL_AUDIO_DRIVER=dummy ${display[@]+"${display[@]}"} "${bin}/se" -hidden \
-  -config "${home}/config.cfg" -classic q1 -basedir "${home}/game" -manual "${src}/se.txt"
+  -config "${home}/config.cfg" +set fs_basegame q1 +set fs_basedir_q1 "${home}/game" -manual "${src}/se.txt"
 
 version="$(cat VERSION 2>/dev/null || echo dev)"
 "${bin}/ge" manual "${src}/se.txt" "${src}/sesv-qw.txt" "${src}/sesv-q2.txt" --out="${out}/user-manual.html" \

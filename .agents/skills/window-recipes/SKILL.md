@@ -47,7 +47,7 @@ Arguments are cvars set before the recipe (`+set recipe_server host:port`), read
   10 s or more on a stock server (the map, the model checks, a match mod's greeting).
 - **Match the server's files.** A stock QuakeWorld server checks the map's checksum and drops a
   client whose map differs, saying "Map model file does not match". A rerelease install's maps
-  are not the originals: join with `-basedir` set to the server's own files.
+  are not the originals: join with the game's `fs_basedir_<id>` set to the server's own files (`--basedir=` here).
 - **A change on a public server is felt by its players.** `server-settings-change.cfg` is for a
   server of your own only; on a public one run the read-only `server-settings.cfg`.
 - **Local servers first.** A local stock server (a QuakeWorld server with its match mod, a Quake II

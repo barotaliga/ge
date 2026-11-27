@@ -245,7 +245,7 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   cl::SearchPath none = halls_files();
   cl::ListenRecorder r2;
   CHECK(!cl::record_open(r2, l, none, "m", s, error));
-  CHECK_MSG(error.find("-basedir") != std::string::npos, error);
+  CHECK_MSG(error.find("pick the game's folder") != std::string::npos, error);
   // The game folder's pack may still be open (Windows refuses to remove an open file): the
   // error_code form leaves the scratch folder for the next run's remove_all instead of throwing.
   std::error_code ec;

@@ -122,7 +122,7 @@ int run_bot_client(BotClientRun& r) {
                                         error, {bot_team.seats[0]->c.models, {}, {}});
       if (!bot_world)
         out::error("shooters_edge: the bots' map " + bot_team.map + " did not draw: " + error +
-                   "; next: the flat team view stands in; check the packs under -basedir");
+                   "; next: the flat team view stands in; check the packs under fs_basedir_q1");
       bot_world_map = bot_team.map;
       bot_cam.fitted = false;
     }

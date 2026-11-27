@@ -199,7 +199,7 @@ bool take_in_basedir(std::string* basedir, const std::string& root) {
   std::string taken, said, why;
   if (!take_in(expand_home(*basedir), root, &taken, &said, &why,
                [](const std::string& line) { out::info("shooters_edge: " + line); })) {
-    out::error("shooters_edge: -basedir " + *basedir + " was not copied into the data folder " +
+    out::error("shooters_edge: the install " + *basedir + " was not copied into the data folder " +
                root + ": " + why + "; next: give your game's folder, its disc or its disc image");
     return false;
   }
@@ -228,13 +228,6 @@ void add_take_in_commands(ge::console::Console& con, std::string* ask, const std
     };
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
-  con.add_command("basedir", "basedir <folder>: load your game's install (the folder holding id1)",
-                  [ask, basedir](Con& c, const CArgs& a) {
-                    if (a.size() < 2)
-                      c.print("basedir: " + *basedir + " (basedir <folder> loads another)");
-                    else
-                      *ask = expand_home(a.size() == 2 ? a[1] : a.rest(0));
-                  });
   con.add_command("import",
                   "import <folder or disc image>: copy your game into this game's data folder and "
                   "load it",

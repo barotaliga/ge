@@ -57,31 +57,57 @@ using ge::core::json_num;
 using ge::core::json_obj;
 using ge::core::json_str;
 
-// The window's choice of install and game folder, from the same flags and the same kept game.
+// The flags named for the window's settings: fs_basegame and each fs_basedir_<id>.
+std::vector<std::string> setting_flags() {
+  std::vector<std::string> out = {std::string(cl::kBaseGame)};
+  for (const auto& [id, dir] : cl::BaseGame().dirs) out.push_back(cl::basedir_setting(id));
+  return out;
+}
+
+// The series config the window keeps its settings in (client/settings.hpp).
+fs::path series_file(const gc::Ctx& ctx) {
+  return cl::series_settings_file(cl::data_root(cl::placed_folder(ctx.self_dir),
+                                                gc::prefs_dir("gameengine2", "shooters_edge")));
+}
+
+// The window's game and install (client/installs.hpp): its settings as the series config keeps
+// them, each flag named for a setting (`--fs_basegame=q2`, `--fs_basedir_q2=<dir>`) over them.
+cl::BaseGame base_game(const gc::Ctx& ctx) {
+  std::vector<std::string> plus;
+  for (const std::string& name : setting_flags())
+    if (ctx.has(name)) plus.insert(plus.end(), {"+set", name, ctx.flag(name)});
+  return cl::read_base_game(series_file(ctx), plus);
+}
+
+// The window's choice of install and game folder, as it chooses them (`--game` its `-game`). Where
+// the window would ask for the install (the folder holds no game it can play), the CLI still reads
+// the folder the setting names: its settings, recordings and server lists need no packs.
 cl::Args folders(const gc::Ctx& ctx) {
   cl::Args a;
-  if (ctx.has("basedir")) {
-    a.basedir = cl::expand_home(ctx.flag("basedir"));
-    a.basedir_set = true;
-  }
-  // `--classic=<id>`: that classic game's kept install, as the window's `-classic <id>`;
-  // `--game=<folder>` the game folder over it, as its `-game`.
-  if (ctx.has("classic")) {
-    const std::string id = ctx.flag("classic");
-    const auto& games = ge::classicenhance::kProfiles;
-    for (size_t i = 0; i < std::size(games); ++i)
-      if (games[i].id == id) a.game_number = static_cast<int>(i) + 1;
-  }
   if (ctx.has("game")) {
     a.game = ctx.flag("game");
     a.game_set = true;
   }
-  cl::choose_folder(a, gc::prefs_dir("gameengine2", "shooters_edge"));
+  const cl::BaseGame base = base_game(ctx);
+  cl::choose_folder(a, base);
+  if (const std::string named = base.dir(base.game); a.ask_install && !named.empty()) {
+    a.basedir = named;
+    if (!a.game_set) a.game = cl::game_of(named, *ge::classicenhance::find_profile(base.game));
+  }
   std::error_code ec;
   fs::path abs = fs::absolute(a.basedir, ec).lexically_normal();
   if (!ec && abs.filename().empty()) abs = abs.parent_path();  // "dir/" read as "dir"
   if (!ec) a.basedir = abs.string();
   return a;
+}
+
+// The window's words for the same game, install and game folder.
+std::vector<std::string> game_words(const gc::Ctx& ctx) {
+  const cl::Args a = folders(ctx);
+  const cl::BaseGame base = base_game(ctx);
+  std::vector<std::string> w = {"-game", a.game, "+set", std::string(cl::kBaseGame), base.game};
+  if (!base.game.empty()) w.insert(w.end(), {"+set", cl::basedir_setting(base.game), a.basedir});
+  return w;
 }
 
 // Every player setting the libraries without a window register, as the window registers them
@@ -119,32 +145,28 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
   }
   out.install = a.basedir;
   out.settings = cl::settings_dir(a.basedir, a.game).string();
-  out.series =
-      cl::series_settings_file(cl::data_root(cl::placed_folder(ctx.self_dir),
-                                             gc::prefs_dir("gameengine2", "shooters_edge")))
-          .string();
+  out.series = series_file(ctx).string();
   out.masters = shooters_edge::net::qw_install_masters(a.basedir);
   return true;
 }
 
 void join_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
-  const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+connect", address});
+  w = game_words(ctx);
+  w.insert(w.end(), {"+connect", address});
 }
 
 // A hub's Spectate link: the window joins as a spectator (the `spectator` setting it sends).
 void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
-  const cl::Args a = folders(ctx);
-  w.insert(w.end(),
-           {"-basedir", a.basedir, "-game", a.game, "+set", "spectator", "1", "+connect", address});
+  w = game_words(ctx);
+  w.insert(w.end(), {"+set", "spectator", "1", "+connect", address});
 }
 
 // A hub's Watch link ("Open in the game"): the window plays the TV node's live broadcast
 // (client/tv_live.hpp); a node carries one stream, so `stream` names nothing more.
 void tv_words(const gc::Ctx& ctx, const std::string& node, uint32_t /*stream*/,
               std::vector<std::string>& w) {
-  const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-tv", node});
+  w = game_words(ctx);
+  w.insert(w.end(), {"-tv", node});
 }
 
 // A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
@@ -175,16 +197,15 @@ bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::st
     error = "the demo cannot be written to " + out.string();
     return false;
   }
-  const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-playdemo", out.string()});
+  w = game_words(ctx);
+  w.insert(w.end(), {"-playdemo", out.string()});
   return true;
 }
 
 void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::string>& w) {
-  const cl::Args a = folders(ctx);
   // As HOST GAME's START does it: the server's lines (`sv <name> <value>`), then the map.
-  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+sv_port", std::to_string(ask.port),
-                     "+sv", "deathmatch", "1"});
+  w = game_words(ctx);
+  w.insert(w.end(), {"+sv_port", std::to_string(ask.port), "+sv", "deathmatch", "1"});
   if (ask.maxclients > 0) w.insert(w.end(), {"+sv", "maxclients", std::to_string(ask.maxclients)});
   const std::string map =
       ask.map.empty() ? std::string(ge::classicenhance::q1_profile().start_map) : ask.map;
@@ -262,7 +283,8 @@ int cmd_import(gc::Ctx& ctx) {
                 {"unchanged", ge::core::json_bool(r.unchanged)},
                 {"notes", json_arr(notes)}}),
       notes_text, words,
-      "se -basedir " + r.game_dir +
+      "se +set fs_basegame " + std::string(r.game->id) + " +set " +
+          cl::basedir_setting(r.game->id) + " " + r.game_dir +
           (r.packs.empty() ? std::string() : " -game " + std::string(r.packs[0]->folder)));
 }
 
@@ -295,14 +317,9 @@ int cmd_demos_play(gc::Ctx& ctx) {
     if (f.stem() == ctx.words[0] || f.filename() == ctx.words[0]) file = f;
   if (file.empty())
     return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
-  const std::vector<std::string> argv = {
-      ge::server::program_path(ctx.flag("bin", ctx.self_dir), "se"),
-      "-basedir",
-      a.basedir,
-      "-game",
-      a.game,
-      "-playdemo",
-      file.string()};
+  std::vector<std::string> argv = {ge::server::program_path(ctx.flag("bin", ctx.self_dir), "se")};
+  for (std::string& word : game_words(ctx)) argv.push_back(std::move(word));
+  argv.insert(argv.end(), {"-playdemo", file.string()});
   if (!fs::exists(argv[0]))
     return gc::refuse(ctx, 1, argv[0] + " is not there",
                       "build it, or pass --bin=<the folder holding se>");
@@ -563,12 +580,14 @@ gc::Spec make() {
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
   s.commands.push_back(mod_run_command());
   s.command_flags.push_back(mod_run_flags());
-  s.flags = {{"basedir", "<dir>", "Quake's install (default: the one loaded last)"},
-             {"classic", "q1|q2", "Quake or Quake II, from the install kept for it"},
+  s.flags = {{"fs_basegame", "q1|q2", "the game: Quake or Quake II (default: the window's)"},
+             {"fs_basedir_q1", "<dir>", "Quake's install (default: the window's)"},
+             {"fs_basedir_q2", "<dir>", "Quake II's install (default: the window's)"},
              {"game", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
-      "Shooter's Edge plays the player's own classic packs: `--basedir` is their install (the "
-      "game remembers the last one loaded, so it is rarely needed), and `content` says which game "
+      "Shooter's Edge plays the player's own classic packs: `--fs_basedir_q1` and "
+      "`--fs_basedir_q2` are their installs and `--fs_basegame` the game (the window's settings "
+      "by default, so they are rarely needed), and `content` says which game "
       "and release the packs are. Servers speak the classic protocol, so `servers` lists this "
       "game's servers and the classic ones already on the internet alike; a classic server's "
       "address is usually `host:27500`. The player's name is the setting `name`, the colours "

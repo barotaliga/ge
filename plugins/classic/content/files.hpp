@@ -1,8 +1,8 @@
 // A CLASSIC GAME'S FILES, for any shooter game that opens them: where a map, a palette or a picture
 // is found by its path in the game ("maps/dm6.bsp", "gfx/palette.lmp"), whichever classic game's
 // install it is (the content profile picks the base folder and the load order). The engine's search
-// path (engine/vfs/search.hpp) over Quake's folders under the base folder (`-basedir
-// <dir>`): the content profile's base folder first (`id1` for Quake,
+// path (engine/vfs/search.hpp) over Quake's folders under the base folder (the install
+// the game opens): the content profile's base folder first (`id1` for Quake,
 // classicenhance/profile.hpp), then the game folder
 // `-game` names over it when that is another (a mod), so a mod's file of the same path wins and
 // everything else comes from the base. Each folder's files rank as the game's own client ranks

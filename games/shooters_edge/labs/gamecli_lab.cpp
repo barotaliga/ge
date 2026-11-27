@@ -187,8 +187,8 @@ void run(gl::Lab& lab) {
       lines.push_back({shown(typed), true});
       std::vector<std::string> args = words;
       args.insert(args.begin(),
-                  {"--basedir=" + install.string(), "--state=" + state, "--logs=" + logs,
-                   "--settings=" + (scratch / "settings").string()});
+                  {"--fs_basegame=q1", "--fs_basedir_q1=" + install.string(), "--state=" + state,
+                   "--logs=" + logs, "--settings=" + (scratch / "settings").string()});
       std::string out;
       const int rc = ge::gamecli::run(shooters_edge::cli::spec(), args, out, ".");
       lab.metric("step" + std::to_string(++step) + ".exit", rc, "count");

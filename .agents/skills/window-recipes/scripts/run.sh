@@ -35,8 +35,8 @@ done
 root="$(git rev-parse --show-toplevel)"
 exe="$root/build/$preset/se"
 [[ -x "$exe" ]] || { echo "run.sh: no $exe; next: cmake --build --preset $preset --target se" >&2; exit 2; }
-args=(-classic "$game" -recipes)  # the recipe commands exist only with -recipes
-[[ -n "$basedir" ]] && args+=(-basedir "$basedir")
+args=(-recipes +set fs_basegame "$game")  # the recipe commands exist only with -recipes
+[[ -n "$basedir" ]] && args+=(+set "fs_basedir_$game" "$basedir")
 log="$(mktemp -t recipe.XXXXXX)"
 status=0
 if command -v timeout >/dev/null; then

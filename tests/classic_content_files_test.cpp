@@ -200,7 +200,7 @@ TEST(a_missing_game_folder_says_where_to_point) {
   std::string error;
   CHECK(!cl::open_game_dir((fs::temp_directory_path() / "ge_se_no_such").string(), "nope", sp,
                            error));
-  CHECK(error.find("-basedir") != std::string::npos);
+  CHECK(error.find("Point the game at the folder") != std::string::npos);
 }
 
 TEST(the_content_packs_key_the_cache_as_the_pipeline_does) {

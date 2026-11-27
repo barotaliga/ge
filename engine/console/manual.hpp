@@ -43,7 +43,7 @@ namespace ge::console {
 class Console;
 class Cvars;
 
-// One command-line flag a program takes, documented: the flag as typed ("-classic",
+// One command-line flag a program takes, documented: the flag as typed ("-game",
 // "--size=WxH"), its argument ("<id>", "" a switch) and what it does in a player's words.
 struct FlagDoc {
   std::string name;
