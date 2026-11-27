@@ -6,7 +6,9 @@
 //   profiles know (classicenhance/profile.hpp), the folder its install is in (`""` none). In the
 //   shell's layer, archived: the series config (client/settings.hpp) keeps them. Opening an
 //   install sets both; setting them in the console opens the game they name; a dedicated server
-//   takes them as its rules (client/remix_dedicated.hpp).
+//   takes them as its rules (client/remix_dedicated.hpp). A relative folder starts from the
+//   program's own folder (the one holding the app on a Mac), never the folder it was started in,
+//   so `fs_basedir_q1 quake` is the `quake` folder beside the game wherever it is started from.
 // - **Read before the game opens** (`read_base_game`): the series config's lines and the command
 //   line's `+set` words, so the window and its CLI know which install to open before any config
 //   runs.
@@ -46,10 +48,18 @@ struct BaseGame {
   std::string game;  // `fs_basegame`: "" Shooter's Edge's own, else a content profile's id
   // `fs_basedir_<id>` by profile id, every profile's present ("" no install).
   std::map<std::string, std::string, std::less<>> dirs;
+  // The folder a relative `fs_basedir_<id>` starts from: the program's own (`placed_folder`: the
+  // one holding the app on a Mac); "" the folder the game runs in.
+  std::string from;
   BaseGame();
-  // The install of game `id` ("" none, or an id no profile has).
+  // The install of game `id` ("" none, or an id no profile has), `~` and a relative path resolved
+  // (`resolve_basedir`).
   std::string dir(std::string_view id) const;
 };
+
+// A `fs_basedir_<id>` value as a folder: `~` the home folder, a relative path from `from` (the
+// program's folder), an absolute one as it is; "" stays "".
+std::string resolve_basedir(const std::string& value, const std::string& from);
 
 // Binds `fs_basegame` and every `fs_basedir_<id>` to `*out` (which outlives `cvars`), archived,
 // keeping the values `*out` holds; those values, for `set_base_game` once the configs have run (a
@@ -61,8 +71,9 @@ std::string set_base_game(ge::console::Cvars& cvars, const BaseGame& base);
 // The settings as `config` (a config's text: `name "value"` lines, `set`/`seta` before them or
 // not) and then the command line's `plus` words (`+set <name> <value>`) leave them.
 BaseGame read_base_game(std::string_view config, const std::vector<std::string>& plus);
-// The same with the config read from `file` (none when it is missing).
-BaseGame read_base_game(const std::filesystem::path& file, const std::vector<std::string>& plus);
+// The same with the configs read from `files` in turn (a missing one is none).
+BaseGame read_base_game(const std::vector<std::filesystem::path>& files,
+                        const std::vector<std::string>& plus);
 // The window opened game `id`'s install at `basedir`: both settings set to it in `cvars` (bound to
 // `base`), and `*seen` to what `base_game_asked` compares.
 void keep_base_game(ge::console::Cvars& cvars, const BaseGame& base, std::string_view id,

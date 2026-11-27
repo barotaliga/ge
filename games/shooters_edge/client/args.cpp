@@ -61,6 +61,11 @@ bool flag_like(std::string_view w) {
          std::isalpha(static_cast<unsigned char>(w[dashes])) != 0;
 }
 
+bool played_live(const Args& a) {
+  return a.timedemo.empty() && a.playdemo.empty() && a.demovideo.empty() && a.manual.empty() &&
+         a.frames == 0 && !a.hidden;
+}
+
 bool known_flag(std::string_view word) {
   for (const Flag& f : kFlags)
     for (const std::string_view n : {f.name, f.also}) {

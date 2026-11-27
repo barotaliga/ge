@@ -147,6 +147,18 @@ TEST(a_game_whose_install_is_unset_gone_or_unknown_is_asked_for_or_passed_over) 
   CHECK(!c.ask_install && c.basedir == ".");
 }
 
+TEST(a_relative_install_starts_from_the_programs_folder) {
+  CHECK(cl::resolve_basedir("", "/games/se").empty());
+  CHECK(fs::path(cl::resolve_basedir("quake", "/games/se")) == fs::path("/games/se/quake"));
+  CHECK(fs::path(cl::resolve_basedir("../quake", "/games/se")) == fs::path("/games/quake"));
+  const std::string absolute = fs::absolute("/q").string();
+  CHECK(cl::resolve_basedir(absolute, "/games/se") == absolute);
+  cl::BaseGame base;
+  base.from = "/games/se";
+  base.dirs["q1"] = "id";
+  CHECK(fs::path(base.dir("q1")) == fs::path("/games/se/id"));
+}
+
 TEST(the_settings_are_read_from_the_config_then_the_command_line) {
   const std::string config =
       "seta fs_basegame \"q1\"\nfs_basedir_q1 \"/games/Quake\"\n"
@@ -160,7 +172,8 @@ TEST(the_settings_are_read_from_the_config_then_the_command_line) {
   CHECK(base.game == "q2" && base.dir("q1") == "/q1");
   CHECK(base.dir("q3").empty());
   // No config file: the command line alone.
-  base = cl::read_base_game(fresh("no-config") / "config.cfg", {"+set", "fs_basegame", "q1"});
+  base = cl::read_base_game(std::vector<fs::path>{fresh("no-config") / "config.cfg"},
+                            {"+set", "fs_basegame", "q1"});
   CHECK(base.game == "q1" && base.dir("q1").empty());
 }
 

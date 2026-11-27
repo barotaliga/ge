@@ -148,7 +148,7 @@ plays, in the shell's layer and kept in the series config (`<data folder>/settin
 | Setting | Values | What it does |
 | --- | --- | --- |
 | `fs_basegame` | `""` (the default), `q1`, `q2` | The game played: `""` is Shooter's Edge's own, else that classic game from its install. Set in the console, it opens that game |
-| `fs_basedir_q1`, `fs_basedir_q2` | a folder, `""` (the default) | Where each classic game is installed: the folder holding `id1` or `baseq2`. SELECT GAME, LOAD GAME and `games <n>` set it |
+| `fs_basedir_q1`, `fs_basedir_q2` | a folder, `""` (the default) | Where each classic game is installed: the folder holding `id1` or `baseq2`. A relative folder starts from the program's own folder (the one holding the app on a Mac), never the folder it was started in. SELECT GAME, LOAD GAME and `games <n>` set it |
 
 They are read before any config runs (the series config, then the command line's `+set` words), so
 `se +set fs_basegame q2` plays Quake II from its `fs_basedir_q2`. With that empty, or its folder no
@@ -156,6 +156,19 @@ longer holding the game, the folder chooser asks for it. A dedicated server take
 (docs/servers.md), the CLI takes them as `--fs_basegame=<id>` and `--fs_basedir_<id>=<dir>`, and classic
 remix reads the other game's install from its own `fs_basedir_<id>`. There is nothing else: no
 folder detection picks a game, and no file beside the settings remembers one.
+
+**The configs, in order** (`client/settings.hpp`): the player's own,
+`<data folder>/settings/config.cfg`; then the program's own when there is one,
+`data/settings/config.cfg` beside the program (beside the app on a Mac), whose lines win and to
+which the settings are then written, so a copy of the game on a stick or in a shared folder keeps
+its own; then the command line's `+set` words.
+
+**Taking a game in** (`client/take_in.hpp`). An install named anywhere outside the data folder is
+copied into it first (`<data folder>/q1`, `<data folder>/q2`) and the copy is what opens; a folder
+holding no game is refused with what it lacks. The copy runs on its own thread with the console
+held down and a bar on its foot, as a map downloading is shown: "Copying Quake" by the share of
+the files' bytes, then "Taking Quake's music" by its tracks. A folder taken in before and unchanged
+since opens at once.
 
 **Dropped into an install, or beside several** (`client/install_search.hpp`). Started inside a
 classic install (the folder the game runs in, or the folder its executable or app was placed in,

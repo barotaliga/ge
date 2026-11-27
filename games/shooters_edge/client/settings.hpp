@@ -2,10 +2,13 @@
 // the console's binds and the menu take.
 //
 // - **Kept**: ONE CONFIG FOR THE SERIES, `<data folder>/settings/config.cfg`
-//   (`series_settings_file`): the binds and every setting in our names, which every classic game
-//   reads, a game's own spellings being synonyms of them (client/cvar_layers.hpp). Beside each
-//   game, `<game folder>/settings/config.cfg` (`settings_dir`, the console's first search
-//   directory) keeps only that game's own meanings of shared names (Quake II's `crosshair`).
+//   (`series_settings_file`), and over it the program's own when there is one,
+//   `data/settings/config.cfg` beside the program (`series_settings_files`): its lines run after
+//   and win, and the settings are written to it, so a game kept on a stick or in a shared folder
+//   carries its own settings. They hold the binds and every setting in our names, which every
+//   classic game reads, a game's own spellings being synonyms of them (client/cvar_layers.hpp).
+//   Beside each game, `<game folder>/settings/config.cfg` (`settings_dir`, the console's first
+//   search directory) keeps only that game's own meanings of shared names (Quake II's `crosshair`).
 //   Both are written (`save_settings`) when the menu closes, before another game is loaded and
 //   when the game quits, with the catalog of every setting beside the game's (`cvars.txt`,
 //   console/catalog.hpp), which the player's CLI (`secli settings`) describes and checks them by.
@@ -24,6 +27,7 @@
 // ge:summary The window's settings kept in config.cfg, the user info sent, the mouse on binds
 // ge:keywords settings config-cfg save_settings settings_dir user-info topcolor bottomcolor name
 // ge:keywords skin model player-model series-config one-config series_settings_file
+// ge:keywords series_settings_files local-config portable relative-config
 // ge:keywords cl_speedjump cl_speedjump_view easy-jump
 // ge:keywords mouse_to_binds keys_to_menu mouse1 mwheelup customize-controls
 // ge:skill console input
@@ -32,6 +36,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include "console/console.hpp"
 #include "input/state.hpp"
@@ -45,6 +50,12 @@ std::filesystem::path settings_dir(const std::string& basedir, const std::string
 // The series' one config: `<data folder>/settings/config.cfg`, every classic game's; empty with no
 // data folder (each game's file then holds everything).
 std::filesystem::path series_settings_file(const std::string& data_root);
+// The series config's files in the order they run: the player's (`series_settings_file`), then the
+// program's own beside it, `<placed>/data/settings/config.cfg` (`placed`: the folder the program
+// was placed in, the one holding the app on a Mac), when that exists and is another file; its
+// lines win. The last is the one the settings are written to.
+std::vector<std::filesystem::path> series_settings_files(const std::string& data_root,
+                                                         const std::string& placed);
 // The settings written; a line saying what failed when they cannot be. With `series`: the binds,
 // aliases and every setting but the loaded game's own there (in our names, the value each has
 // outside the game: console/cfg.hpp § SAVING ONE PART), and the game's own settings alone in the

@@ -329,18 +329,17 @@ int run_main(int argc, char** argv) {
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
         });
-  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp);
-  // `+set homedir <folder>` picks the folder.
-  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs,
-                                              cl::take_home_dir(&args.plus));
-  cl::adopt_placed_settings(cl::placed_folder(ge::platform::app_dir()), data_root);
-  // The series config (client/settings.hpp); in it the game played and its install, fs_basegame
-  const std::filesystem::path series = cl::series_settings_file(data_root);  // and fs_basedir_<id>
+  // A game pointed at is copied into the data folder (`+set homedir`) and played from there.
+  const std::string placed = cl::placed_folder(ge::platform::app_dir());  // relative paths' start
+  const std::string data_root = cl::data_root(placed, prefs, cl::take_home_dir(&args.plus));
+  // The series config, the program's own over the player's (client/settings.hpp); in it the game
+  const auto series = cl::series_settings_files(data_root, placed);  // played and its install
   cl::BaseGame base = cl::read_base_game(series, args.plus);
-  if (base.dirs.count(base.game) && !cl::take_in_basedir(&base.dirs[base.game], data_root))
-    return 2;
-  const auto installs = cl::installs_near({cl::placed_folder(ge::platform::app_dir())});  // `games`
-  cl::choose_folder(args, base);
+  base.from = placed;
+  const std::string copy_first =  // copied once the window is up, with its bar (take_in.hpp)
+      cl::take_in_basedir(&base, data_root, cl::played_live(args));
+  const auto installs = cl::installs_near({placed});  // `games`
+  cl::choose_folder(args, copy_first.empty() ? base : cl::BaseGame{});
   const cl::BaseGame chosen = cl::bind_base_game(console.cvars(), &base);  // set again below
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   // The install's configs in its own order, its folders on `exec`'s path (install_configs.hpp).
@@ -406,7 +405,7 @@ int run_main(int argc, char** argv) {
   remote.stuff_file =
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
   const auto save_settings = [&console, &series, &con_view] {
-    cl::save_settings(console, series);
+    cl::save_settings(console, series.empty() ? std::filesystem::path() : series.back());
     con_view.save_history();  // the typed lines, beside the config
   };
   const auto outside = [&](const std::function<void()>& run) {
@@ -885,9 +884,8 @@ int run_main(int argc, char** argv) {
   std::function<bool()> back_to_listen;  // below
   // `by_player`: the player stopped a played demo (Escape on a timedemo, or something else asked
   // for from the menu or the console over a paused one): not a failure.
-  // THE RECORDINGS BEHIND THE MENU (`menu_attract`): while the title is up in a classic game, its
-  // recordings play in turn behind the main menu, which leaves them playing; ESCAPE closes the
-  // menu to watch one. Anything else asked for (a map, a game joined, a demo picked) stops them.
+  // THE RECORDINGS BEHIND THE MENU (`menu_attract`): the title's, in turn, ESCAPE closing the menu
+  // to watch one; anything else asked for (a map, a game joined, a demo picked) stops them.
   bool attract = false;        // the demo playing is one of them
   bool attract_asked = false;  // one was asked for and has not started yet
   size_t attract_next = 0;     // the next one's place in the list
@@ -996,7 +994,8 @@ int run_main(int argc, char** argv) {
   // place of the one playing (the old world and servers let go first), its first map started where
   // the map changes, enhanced in the background, kept. False, nothing changed, when it does not
   // open. `pack_ask`: SELECT GAME's mission pack over it; `install_ask`: fs_basegame's, none set.
-  std::string folder_ask, pack_ask;
+  std::string folder_ask = copy_first, pack_ask;  // copy_in: the copy into the data folder
+  cl::TakeIn copy_in;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
                            &game_cvars.q2.remap_tracks);
@@ -1342,12 +1341,13 @@ int run_main(int argc, char** argv) {
       if (!cl::answer_install(*window, install_ask, &folder_ask, &why)) game_menu.load_refused(why);
     }
     cl::ask_base_game(base, &base_seen, &folder_ask, console);  // the settings set: installs.hpp
-    if (!folder_ask.empty() && !bench.active) {
-      const bool from_menu = game_menu.open();  // open_folder hides it
+    // A game pointed at is copied in on its own thread, its bar on the console (take_in.hpp).
+    if (!bench.active && copy_in.start(&folder_ask, data_root, game_menu.open())) game_menu.hide();
+    if (copy_in.finished(console, &folder_ask, &error)) {
+      const bool from_menu = copy_in.from_menu();  // open_folder hides it
       switch_t = t;
       std::string basedir;
-      if (!cl::take_in_ask(&folder_ask, data_root, &error,
-                           [&](const std::string& line) { console.print(line); })) {
+      if (folder_ask.empty()) {
         game_menu.load_refused(error);
       } else if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
         game_menu.load_refused(error);
@@ -1374,8 +1374,7 @@ int run_main(int argc, char** argv) {
       }
       folder_ask.clear();
     }
-    // A run of the enhancing ended: the world drawn again from what it wrote.
-    // A run that changed nothing (every stage up to date) leaves the world as it is.
+    // A run of the enhancing ended: the world drawn again from what it wrote (when it wrote any).
     if (game_menu.take_ended()) {
       const ge::classicenhance::BoardView b = game_menu.job()->view();
       console.print(b.finished ? "classic enhance: " + game_menu.game() + " enhanced"
@@ -1512,6 +1511,7 @@ int run_main(int argc, char** argv) {
     }
     sn::remote_queue_frame(remote, console);    // `ranked`: the game found is joined
     sn::remote_console_foot(remote, con_view);  // the file coming, its bar, the console held down
+    copy_in.show(con_view);                     // the game being copied in, the same way
     if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
         next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;

@@ -1,20 +1,22 @@
 // Games taken into the data folder (games/shooters_edge/client/take_in.hpp), from fixtures only: a
 // game in a folder elsewhere is copied into data/classic and that copy is what opens; pointing at
 // the copy opens it as it is, and a second launch at the same unchanged game copies nothing; the
-// data folder is the player's own (beside the game only when that cannot be written), and the
-// settings an older build kept beside the game are carried over; a folder with no game is refused
-// in the game's words.
+// data folder is the player's own (beside the game only when that cannot be written), with a
+// config beside the program read over the player's; the copy's share said for its bar and run on
+// its own thread; a folder with no game is refused in the game's words.
 //
 // ge:summary Tests taking a pointed-at game into the data folder and opening the copy
-// ge:keywords test import take-in data-folder copy basedir
+// ge:keywords test import take-in data-folder copy basedir series_settings_files share TakeIn
 // ge:skill shooter testing
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "check.hpp"
 #include "console/console.hpp"
+#include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/take_in.hpp"
 #include "vfs/pak.hpp"
 
@@ -86,16 +88,60 @@ TEST(take_in_names_the_mission_packs_and_waits_for_their_game) {
   CHECK(basedir == (top / "data/q1").string());
 }
 
-TEST(take_in_falls_back_beside_the_game_and_adopts_its_old_settings) {
-  const fs::path top = fs::temp_directory_path() / "ge_take_in_adopt_test";
+TEST(take_in_falls_back_beside_the_game_and_reads_its_own_config_over_the_players) {
+  const fs::path top = fs::temp_directory_path() / "ge_take_in_own_config_test";
   fs::remove_all(top);
+  const std::string placed = (top / "placed").string();
+  fs::create_directories(top / "placed");
+  CHECK(cl::data_root(placed, "") == (top / "placed/data").string());
+  const std::string root = cl::data_root(placed, (top / "prefs").string());
+  // No config beside the program: the player's alone, written there.
+  std::vector<fs::path> files = cl::series_settings_files(root, placed);
+  CHECK(files.size() == 1 && files[0] == top / "prefs/data/settings/config.cfg");
+  // One beside it: run after the player's, its lines winning, and the one written.
   fs::create_directories(top / "placed/data/settings");
-  CHECK(cl::data_root((top / "placed").string(), "") == (top / "placed/data").string());
   std::ofstream(top / "placed/data/settings/config.cfg") << "sensitivity 4\n";
-  const std::string root = cl::data_root((top / "placed").string(), (top / "prefs").string());
-  CHECK(cl::adopt_placed_settings((top / "placed").string(), root));
-  CHECK(fs::exists(top / "prefs/data/settings/config.cfg"));
-  CHECK(!cl::adopt_placed_settings((top / "placed").string(), root));  // never over its own
+  files = cl::series_settings_files(root, placed);
+  CHECK(files.size() == 2 && files[1] == top / "placed/data/settings/config.cfg");
+  // The data folder beside the program: the one file, never read twice.
+  CHECK(cl::series_settings_files((top / "placed/data").string(), placed).size() == 1);
+}
+
+TEST(a_game_taken_in_on_its_own_thread_says_its_share_done) {
+  const fs::path top = fs::temp_directory_path() / "ge_take_in_thread_test";
+  fs::remove_all(top);
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"gfx/palette.lmp", std::vector<uint8_t>(768, 3)}}, &pak, &error));
+  for (const char* name : {"id1/pak0.pak", "id1/pak1.pak"}) {
+    fs::create_directories((top / "elsewhere" / name).parent_path());
+    std::ofstream(top / "elsewhere" / name, std::ios::binary)
+        .write(reinterpret_cast<const char*>(pak.data()), std::streamsize(pak.size()));
+  }
+  std::vector<std::pair<std::string, double>> shares;
+  std::string basedir, said;
+  CHECK_MSG(
+      cl::take_in((top / "elsewhere").string(), (top / "data").string(), &basedir, &said, &error,
+                  {}, [&](const std::string& what, double v) { shares.emplace_back(what, v); }),
+      error);
+  // The bar's words and its share by bytes: none, half (one of two packs the same size), all.
+  CHECK_MSG(shares.size() == 3, std::to_string(shares.size()));
+  if (shares.size() == 3) {
+    CHECK(shares[0].first == "Copying Quake" && shares[0].second == 0);
+    CHECK(shares[1].second == 0.5 && shares[2].second == 1);
+  }
+  // On its own thread: the lines said in the console, the copy's folder once it has ended.
+  fs::remove_all(top / "data");
+  ge::console::Console con;
+  cl::TakeIn job;
+  std::string ask = (top / "elsewhere").string(), folder;
+  CHECK(job.start(&ask, (top / "data").string(), true) && ask.empty() && job.running());
+  std::string empty;
+  CHECK(!job.start(&empty, (top / "data").string(), false));
+  while (!job.finished(con, &folder, &error)) {
+  }
+  CHECK_MSG(folder == (top / "data/q1").string(), folder + " " + error);
+  CHECK(job.from_menu() && !job.running());
 }
 
 TEST(homedir_on_the_command_line_is_the_data_folder_and_is_read_only_after) {

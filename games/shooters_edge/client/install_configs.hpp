@@ -58,7 +58,7 @@ struct ConfigsRun {
 // `outside` (the loaded game's layer away while it runs: client/cvar_layers.hpp's
 // `without_game_cvars`; empty: run as it is).
 struct SeriesConfig {
-  std::filesystem::path file;
+  std::vector<std::filesystem::path> files;  // in turn: settings.hpp's `series_settings_files`
   std::function<void(const std::function<void()>&)> outside;
 };
 
