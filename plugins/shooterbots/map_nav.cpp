@@ -605,7 +605,11 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
     const char* model = sb::block_value(b, "model");
     if (!cn || !model || model[0] != '*') continue;
     const bool door = std::strcmp(cn, "func_door") == 0 || std::strcmp(cn, "func_door_secret") == 0;
-    const bool plat = std::strcmp(cn, "func_plat") == 0;
+    // Ground Zero's plat that goes either way rides like a plat: called up from the bottom by a
+    // body on it, its height its whole way less its lip (rmine1's pillar up to the mine's upper
+    // floors, sent down by the soldier who guards it; unknown to the nav, no ride up was found).
+    const bool plat2 = spec.brushes && std::strcmp(cn, "func_plat2") == 0;
+    const bool plat = std::strcmp(cn, "func_plat") == 0 || plat2;
     const bool train = std::strcmp(cn, "func_train") == 0;
     if (!door && !plat && !train) continue;
     if (door && start_open(b)) continue;  // a floor to the nav (open_doors_as_floor)
@@ -629,8 +633,11 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       const char* h = sb::block_value(b, "height");
       const char* sp = sb::block_value(b, "speed");
       const char* lp = spec.brushes ? sb::block_value(b, "lip") : nullptr;
-      const float lip = lp ? static_cast<float>(std::atof(lp)) : 8.f;
-      const float rise = h ? static_cast<float>(std::atof(h)) : (bm.maxs.z - bm.mins.z) - lip;
+      const float lip = lp ? static_cast<float>(std::atof(lp)) : plat2 ? 0.f : 8.f;
+      const float rise = plat2
+                             ? (h ? static_cast<float>(std::atof(h)) : bm.maxs.z - bm.mins.z) - lip
+                         : h ? static_cast<float>(std::atof(h))
+                             : (bm.maxs.z - bm.mins.z) - lip;
       const float fallback = spec.brushes ? 200.f : 150.f;
       const float speed = sp ? static_cast<float>(std::atof(sp)) : fallback;
       if (spec.brushes) {
