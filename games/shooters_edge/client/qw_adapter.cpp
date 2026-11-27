@@ -113,6 +113,16 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     const int firing = int(h.frames.size()) - 1;
     const int takes =
         fire != nullptr && fire->takes > 1 && firing % fire->takes == 0 ? fire->takes : 1;
+    // A whole one stands on its rest and plays its own fire run on a shot when no frames are sent
+    // for it (rules that keep the other game's frames: held.cpp draws those as these).
+    if (const pf::HeldFrames* own = pf::held_frames(name);
+        own != nullptr && own->fire_last < static_cast<int>(h.frames.size())) {
+      h.rest = own->rest;
+      h.clips.push_back({.name = "fire",
+                         .first = own->fire_first,
+                         .count = own->fire_last - own->fire_first + 1,
+                         .fps = 1.0 / ge::classicenhance::kFrameSeconds});
+    }
     for (int k = 0; k < takes && firing > 0 && !whole; ++k)
       h.clips.push_back(
           {.name = "fire",

@@ -52,6 +52,9 @@ struct HeldState {
   // A recording's or a joined server's weapon frame (a classic set's), drawn between its changes.
   FrameTrack recorded;
   int recorded_weapon = -1;  // the weapon `recorded` is of
+  // Whose frames a whole view model of Quake II's is sent (q2_arms_kick.hpp): Quake's are drawn as
+  // its rest and fire run.
+  WholeFrames whole;
   // A frame other than 0 has come: the frames rule the drawn weapon (until then the hand plays
   // its own shots, as under rules that never animate it).
   bool frames_live = false;

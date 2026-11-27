@@ -626,14 +626,7 @@ void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_ent
   }
 }
 
-// A player's hitscan traced as he saw the others (lag compensation), for its scope.
-struct LagScope {
-  Q2Server& s;
-  LagScope(Q2Server& sv, int slot) : s(sv) { s.lag_shooter = slot; }
-  ~LagScope() { s.lag_shooter = -1; }
-  LagScope(const LagScope&) = delete;
-  LagScope& operator=(const LagScope&) = delete;
-};
+using LagScope = FightLagScope;  // q2_fight_kit.hpp
 
 // A bullet or a pellet from `start` along the axes, spread `h` right and `v` up.
 void bullet(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::ViewAxes& ax,
@@ -948,18 +941,14 @@ void weapon_kick(Q2Server& s, int slot, int w, sh::Vec3f forward) {
     return static_cast<float>(ge::core::range(shake, -most, most));
   };
   float up = 0, back = 0;
+  // The base game's straight kicks are the weapons' own (plugins/classic/q2_arms.hpp, which a
+  // window drawing Quake II's weapons on other rules reads too).
+  if (w < gc::kQ2ArmCount && gc::kQ2Kicks[w].kind == gc::Q2KickKind::straight) {
+    v.weapon_angles = {gc::kQ2Kicks[w].pitch, 0, 0};
+    v.weapon_origin = forward * -gc::kQ2Kicks[w].back;
+    return;
+  }
   switch (static_cast<SqWeapon>(w)) {
-    case SqWeapon::blaster:
-    case SqWeapon::hyperblaster:
-    case SqWeapon::grenade_launcher:
-    case SqWeapon::rocket_launcher:
-      up = 1, back = 2;
-      break;
-    case SqWeapon::shotgun:
-    case SqWeapon::super_shotgun:
-      up = 2, back = 2;
-      break;
-    case SqWeapon::railgun:
     case SqWeapon::ion_ripper:
       up = 3, back = 3;
       break;
@@ -969,14 +958,15 @@ void weapon_kick(Q2Server& s, int slot, int w, sh::Vec3f forward) {
     case SqWeapon::machinegun:
     case SqWeapon::chaingun:
       v.weapon_angles = {static_cast<SqWeapon>(w) == SqWeapon::chaingun
-                             ? jitter(0.7f)
+                             ? jitter(gc::kQ2KickShake)
                              : -machinegun_climb(s, slot),
-                         jitter(0.7f), jitter(0.7f)};
-      v.weapon_origin = {jitter(0.35f), jitter(0.35f), jitter(0.35f)};
+                         jitter(gc::kQ2KickShake), jitter(gc::kQ2KickShake)};
+      v.weapon_origin = {jitter(gc::kQ2KickShakeMove), jitter(gc::kQ2KickShakeMove),
+                         jitter(gc::kQ2KickShakeMove)};
       return;
     case SqWeapon::bfg:
-      v.weapon_origin = forward * -2.0f;
-      gc::q2_view_hard_kick(v, -40, jitter(8));
+      v.weapon_origin = forward * -gc::kQ2Kicks[w].back;
+      gc::q2_view_hard_kick(v, gc::kQ2HeavePitch, jitter(gc::kQ2HeaveRoll));
       return;
     default:
       return;
@@ -1949,6 +1939,8 @@ void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
   (impact ? p.impact_at : p.noise_at) = at;
 }
 
+FightLagScope::FightLagScope(Q2Server& sv, int slot) : s(sv) { s.lag_shooter = slot; }
+FightLagScope::~FightLagScope() { s.lag_shooter = -1; }
 Line fight_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int skip_entity) {
   return shoot_line(s, from, to, skip, skip_entity);
 }

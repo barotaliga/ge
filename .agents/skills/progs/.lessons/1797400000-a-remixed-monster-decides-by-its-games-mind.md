@@ -2,7 +2,7 @@
 title: A remixed monster decides by its own game's mind, lifted as pure functions both rules call
 date: 2026-11-27
 scope: games/shooters_edge/server/q2_monster_mind.hpp, games/shooters_edge/rules/campaign_q2_kinds.cpp
-concepts: [remix, cr_monsters, monster-mind, lift-before-port, random-draw-order, sq_runs]
+concepts: [remix, cr-monsters, monster-mind, lift-before-port, random-draw-order, sq-runs]
 ---
 
 Quake II's monster AI already existed for Quake II's own rules (`server/q2_monsters.cpp`), coupled

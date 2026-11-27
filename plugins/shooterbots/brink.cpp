@@ -32,10 +32,21 @@ constexpr float kFlyReach_s = 0.6f;  // a flight's reach across: the run this lo
 constexpr float kFlyReachMost = 256;  // and no more
 constexpr float kFloorZ = 0.7f;       // a plane this steep or flatter is a floor
 constexpr float kStepUp = 18;         // a stair's step the move climbs, units
+constexpr float kCrack = 16;          // a way's pit narrower than this along it is walked across
 
 bool harm_at(const Server& sv, Vec3f origin) {
   const int c = world_contents(sv, {origin.x, origin.y, origin.z + kPlayerMins.z + 2});
   return c == kContentsLava || c == kContentsSlime;
+}
+
+// Whether the player's box at `at`, raised by a stair's step, stands on a floor that is not lava
+// or slime (a wall or a step there that the box cannot stand in: no).
+bool stands_dry(const Server& sv, Vec3f at, int me) {
+  const Vec3f up{at.x, at.y, at.z + kStepUp};
+  const HullTrace down = trace_move(sv, up, kPlayerMins, kPlayerMaxs, {up.x, up.y, up.z - kDeep},
+                                    kTraceNoMonsters, me);
+  if (down.startsolid || down.fraction >= 1) return false;
+  return !harm_at(sv, down.endpos);
 }
 
 }  // namespace
@@ -124,6 +135,11 @@ BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin
                 dy = static_cast<float>(core::libm::sin(a));
     if (!over_harm(sv, origin, {origin.x + dx * kLook, origin.y + dy * kLook, origin.z}, me))
       continue;
+    // A crack between two floors, the box over it no wider than kCrack, is walked across, not a
+    // pit: the floor stands dry just past it (rmine1's catwalks over the lava, a crack between
+    // two of them, stood him still at its lip for the whole run).
+    const float past = kLook + kCrack;
+    if (stands_dry(sv, {origin.x + dx * past, origin.y + dy * past, origin.z}, me)) continue;
     out.ways++;
     const float along = wx * dx + wy * dy;
     if (along > 0) {

@@ -22,6 +22,7 @@
 #include "shooter/hull.hpp"
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/q2_arms_kick.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/arsenal.hpp"
@@ -218,4 +219,24 @@ TEST(q2_railgun_fires_at_its_own_period_on_the_classic_rules) {
     CHECK_MSG(period > 1.55f && period < 1.65f, "period " + std::to_string(period));
   }
   CHECK(listed(qc->effect_names, gc::kQ2RailLine));
+}
+
+// The window's kick for Quake II's weapons on the classic rules (client/q2_arms_kick.hpp): the
+// rocket launcher's shot read off its frames tips the view 1 degree up and the eye 2 units back,
+// in over a tenth and out over the next; Quake's own view model kicks nothing.
+TEST(q2_weapons_on_the_classic_rules_kick_the_view_as_quake_ii) {
+  cl::ArmsKick k;
+  const float ahead[3] = {0, 1, 0};
+  constexpr std::string_view rocket = "models/weapons/v_rocket/tris.md2";
+  cl::arms_kick_step(k, rocket, 13, 0.9, ahead, true, 1);  // idle
+  cl::arms_kick_step(k, rocket, 6, 1.0, ahead, true, 1);   // fired
+  const gc::Q2Kick top = cl::arms_kick_step(k, rocket, 7, 1.1, ahead, true, 1);
+  CHECK(top.angles[0] > -1.01f && top.angles[0] < -0.99f);
+  CHECK(top.origin[1] > -2.01f && top.origin[1] < -1.99f);
+  const gc::Q2Kick gone = cl::arms_kick_step(k, rocket, 8, 1.2, ahead, true, 1);
+  CHECK(gone.angles[0] == 0 && gone.origin[1] == 0);
+  cl::ArmsKick quake;
+  cl::arms_kick_step(quake, "progs/v_rock2.mdl", 0, 0.9, ahead, true, 1);
+  const gc::Q2Kick none = cl::arms_kick_step(quake, "progs/v_rock2.mdl", 1, 1.0, ahead, true, 1);
+  CHECK(none.angles[0] == 0);
 }
