@@ -170,6 +170,16 @@ namespace {
 // The weapon's light off the floor's: the share that is all round and the share from above, and
 // the brightest the floor's light is taken as (twice the light as baked).
 constexpr float kHeldAmbient = 0.55f, kHeldDirect = 0.45f, kHeldMost = 1.6f;
+// THE GUN'S ROLL-OFF (viewmodel::tone_held), measured against the floor's light under the eye (the
+// light the walls around the player show, `level`, its brightest channel, at least kHeldLeast):
+// the gun's light shows as it adds up to `level`, and past it eases toward kHeldMostShare times
+// it. The room's lamps (ce_weapons) light the gun by an inverse square on top of the floor's light,
+// which already holds them as baked, so a step from a torch they add several whites: with no
+// roll-off the gun outshone the wall behind it and the frame's tone map paled it almost to white.
+// Now the lamp's side reads at most twice as bright as the room, its colours kept. The
+// classic flat light never passes `level`, so the classic look is as it was. kHeldLeast lets a
+// muzzle flash still light the gun in a dark corridor.
+constexpr float kHeldMostShare = 2.0f, kHeldLeast = 0.5f;
 constexpr float kParticleSoftM = 0.06f;  // the particles' softening against what is behind them
 
 // THE LIGHT AT A POINT (engine metres), for the smoke there: the open sky's share (1 when a march
@@ -304,6 +314,7 @@ void room_lights(const WorldDraw& f, std::span<const effects::Light> moment, con
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
 // the eye (the lightmap's 0.5 the light as baked, from above), by its own flash and by the room's
 // lights (ce_weapons); with ce_weapons off, the classic's flat light: the floor's all round alone.
+// Either way rolled off past the floor's light (kHeldMostShare), so no lamp washes it out to white.
 gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
                        const gr::FrameView& view, bool engine_fire, float shown,
                        std::span<const effects::Light> moment) {
@@ -338,9 +349,12 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
                        static_cast<float>(view.eye[2] / ge::brush::kUnitM),
                        static_cast<float>(view.eye[1] / ge::brush::kUnitM)};
   const bool lit_by_room = f.picture == nullptr || f.picture->ce.weapons;
+  float level = 1;  // the floor's light, its brightest channel (1: the light as baked, no map)
   if (f.has_map && ge::brush::light_below(f.probe, f.scene.map, at, rgb)) {
+    level = 0;
     for (int k = 0; k < 3; ++k) {
       const float lit = std::min(2 * rgb[k], kHeldMost);
+      level = std::max(level, lit);
       probe.ambient[k] = lit_by_room ? kHeldAmbient * lit : lit;
       probe.direct[k] = lit_by_room ? kHeldDirect * lit : 0;
     }
@@ -361,6 +375,8 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
     room_lights(f, moment, view.eye, h.flashing, f.held_lights);
   }
   g.light = vm::light_held(probe, f.held_lights, pose, grip);
+  g.light.knee = std::max(level, kHeldLeast);
+  g.light.most = kHeldMostShare * g.light.knee;
   if (h.placement.mirror) vm::mirror_lighting(g.light);
   return g;
 }
