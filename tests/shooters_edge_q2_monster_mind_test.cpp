@@ -3,8 +3,9 @@
 // monsters at work are held by shooters_edge_q2_monsters_test.cpp and the campaign's by
 // shooters_edge_campaign_rules_test.cpp.
 //
-// ge:summary Tests Quake II's monster mind: ranges, sight, attack chance, picks, loops, fights
+// ge:summary Tests Quake II's monster mind: sight, attacks, picks, loops, fights, chase, ducks
 // ge:keywords q2 monster-mind test attack-chance pick-ranged sight infighting leap-test
+// ge:keywords dodge duck run-and-shoot
 // ge:skill testing shooter
 #include <string_view>
 #include <vector>
@@ -150,6 +151,54 @@ TEST(the_next_mark_is_the_first_newer_than_its_last_look) {
   const auto only_7 = [](int i) { return i == 7; };
   CHECK(q2_mind::next_mark(times, 7, 4.5, true, only_7) == 7);
   CHECK(q2_mind::newest_mark(7) == 6);
+}
+
+TEST(a_shot_is_offered_always_but_at_skill_0_one_in_four) {
+  Draws d{{0.3, 0.2}};
+  CHECK(q2_mind::dodge_offered(1, d));
+  CHECK(d.used == 0);  // no draw above the easiest skill
+  CHECK(!q2_mind::dodge_offered(0, d));
+  CHECK(q2_mind::dodge_offered(0, d));
+  CHECK(q2_mind::dodge_eta(530, 16, 1000) == 0.514);
+}
+
+TEST(one_offered_shot_in_four_is_ducked_a_soldier_holding_past_it) {
+  Draws d{{0.25, 0.26}};
+  CHECK(q2_mind::dodges(d));
+  CHECK(!q2_mind::dodges(d));
+  Draws s{{0.5, 0.5}};
+  q2_mind::DuckPlan p = q2_mind::duck_plan(true, false, 1, 10, 0.5, s);
+  CHECK(p.hold == 10.8 && !p.shoots);  // a third of the time at skill 1
+  p = q2_mind::duck_plan(true, false, 2, 10, 0.5, s);
+  CHECK(p.shoots);  // two thirds above
+  p = q2_mind::duck_plan(true, false, 0, 10, 0.5, s);
+  CHECK(p.hold < 0 && !p.shoots && s.used == 2);  // the easiest: its own hold, no draw
+  p = q2_mind::duck_plan(false, true, 0, 10, 0.5, s);
+  CHECK(p.hold == 11);  // the brain's
+}
+
+TEST(a_duck_is_held_low_and_the_duck_that_shoots_goes_round) {
+  const roster::Duck& d = roster::kDucks[1];  // the soldier's: down 0, held 1, up 3, 5 frames
+  CHECK(q2_mind::duck_next(d, 0, false, 5, 6) == 1);
+  CHECK(q2_mind::duck_next(d, 1, false, 5, 6) == 1);  // held
+  CHECK(q2_mind::duck_next(d, 1, false, 6, 6) == 2);
+  CHECK(q2_mind::duck_next(d, 4, false, 6, 6) == -1);
+  const roster::Duck& ds = roster::kDuckShoot;
+  CHECK(q2_mind::duck_next(ds, roster::kDuckShootLoop, true, 5, 6) == ds.down);
+  CHECK(q2_mind::duck_next(ds, roster::kDuckShootLoop, true, 5.7, 6) == roster::kDuckShootLoop + 1);
+}
+
+TEST(a_soldier_fires_on_the_run_from_500_off_above_the_easiest_skill) {
+  Draws d{{0.4, 0.6}};
+  CHECK(!q2_mind::runs_and_shoots(true, 0, 900, d));
+  CHECK(!q2_mind::runs_and_shoots(true, 1, 499, d));
+  CHECK(d.used == 0);
+  CHECK(q2_mind::runs_and_shoots(true, 1, 500, d));
+  CHECK(!q2_mind::runs_and_shoots(true, 1, 500, d));
+  CHECK(q2_mind::run_shoot_next(3, 1, true, 900) == 4);
+  CHECK(q2_mind::run_shoot_next(q2_mind::kRunShootLast, 2, true, 900) == -1);
+  CHECK(q2_mind::run_shoot_next(q2_mind::kRunShootLast, 3, true, 900) == q2_mind::kRunShootAgain);
+  CHECK(q2_mind::run_shoot_next(q2_mind::kRunShootLast, 3, true, 400) == -1);
 }
 
 struct Chase {

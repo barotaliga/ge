@@ -215,7 +215,7 @@ constexpr double kCutM = 3.0;
 
 // Everything sized to the targets: made at create and again at a resize.
 void make_targets(ge::gpu::Device& d, WorldDraw& f) {
-  f.scale = f.picture ? std::clamp(f.picture->render_scale, 0.25, 1.0) : 1.0;
+  f.scale = f.picture ? look::render_step(*f.picture) : 1.0;
   const bool upscale = f.scale < 1;
   f.w = upscale ? gr::taa_render_size(f.out_w, f.scale) : f.out_w;
   f.h = upscale ? gr::taa_render_size(f.out_h, f.scale) : f.out_h;
@@ -911,12 +911,18 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (o.mode == ba::Mode::v2 && !o.pack_sky)
     view.sky_lift = std::max(o.sky_light * o.sky_seen, 1e-6);
   // r_scale changed: the targets made again at the new size (the history starts over).
-  if (std::clamp(f.picture->render_scale, 0.25, 1.0) != f.scale) make_targets(d, f);
+  if (look::render_step(*f.picture) != f.scale) make_targets(d, f);
   const bool upscale = f.scale < 1;
   // TAA-U: this frame's sub-pixel jitter, and a cut (a teleport, a respawn, a jump of the view)
   // starts its history over so nothing of the last place is smeared over the new.
   double jitter[2] = {0, 0};
-  if (upscale) {
+  // r_scale_smooth 0: each drawn pixel a crisp square of the window's (no jitter, no history).
+  const bool smooth = upscale && f.picture->scale_smooth;
+  if (upscale && f.taa.settings.blocks == smooth) {
+    f.taa.settings.blocks = !smooth;
+    gr::reset_taa(f.taa);
+  }
+  if (smooth) {
     gr::taa_jitter(f.taa_frame++, gr::taa_phases(f.scale), jitter);
     double moved = 0;
     for (int k = 0; k < 3; ++k)
@@ -927,7 +933,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     }
   }
   gr::fill_uniforms(f.staged, view, f.w, f.h, o.reflections > 0 || upscale ? &f.history : nullptr,
-                    upscale ? jitter : nullptr);
+                    smooth ? jitter : nullptr);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.skypass, view);
   // The moment's lights less the kinds the player puts out (r_rocketlight and its kin).

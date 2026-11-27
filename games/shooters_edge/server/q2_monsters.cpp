@@ -385,7 +385,7 @@ void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
     const float off = sh::length(foe_at(s, foe) - s.entities[size_t(m.entity)].origin);
     if (const int gz = gz_base_sight_run(s, m, off); gz >= 0) {
       if (gz == 1) m.run_shoot = 0;
-    } else if (soldier_kind && skill(s) >= 1 && off >= kNear && random01(s) < 0.5) {
+    } else if (q2_mind::runs_and_shoots(soldier_kind, skill(s), off, draw(s))) {
       kind(m).missile[0].fire == Fire::laser ? begin_attack(s, m, 2) : void(m.run_shoot = 0);
     }
   }
@@ -643,11 +643,11 @@ void choose(Q2Server& s, Q2Monster& m) {
 
 // ---- Dodging (q2-monsters-full.md § Dodging and ducking) ----
 
+using q2_mind::kDuckDrop;
 using roster::Duck;
 using roster::kDucks;
 using roster::kDuckShoot;
 using roster::kDuckShootLoop;
-constexpr float kDuckDrop = 32;  // the box's top lowered while down
 
 const Duck* duck_of(const Q2Monster& m) {
   for (const Duck& d : kDucks)
@@ -680,7 +680,7 @@ void ducking(Q2Server& s, Q2Monster& m) {
         if (gz_ai(s))  // Ground Zero's: at least a second, its dodge's hold kept
           m.duck_hold = std::max(m.duck_hold, s.level_time + 1.0);
         else if (!named(m, "monster_brain"))
-          m.duck_hold = s.level_time + 1.0;  // the brain's is set
+          m.duck_hold = s.level_time + q2_mind::kDuckLow;  // the brain's is set
       }
       if (m.duck_shoot) shoot(s, m, attack_at(m, 2), 0);
       if (!was && named(m, "monster_gunner") && skill(s) >= 2 && random01(s) > 0.5) {
@@ -695,15 +695,10 @@ void ducking(Q2Server& s, Q2Monster& m) {
       m.next_duck = s.level_time + 0.5;  // Ground Zero's next duck no sooner
     }
   }
-  m.duck_fresh = true;
-  if (f == d.held && s.level_time + 0.001 < m.duck_hold) {  // held low: shown again, still
-    m.duck_fresh = false;
-    return;
-  }
-  int next = f + 1;
-  if (m.duck_shoot && f == kDuckShootLoop && s.level_time + 0.4 + 0.001 < m.duck_hold)
-    next = d.down;
-  if (next >= d.frames) {  // done: the run takes over next think
+  const int next = q2_mind::duck_next(d, f, m.duck_shoot, s.level_time, m.duck_hold);
+  m.duck_fresh = next != f;  // held low: shown again, still
+  if (next == f) return;
+  if (next < 0) {  // done: the run takes over next think
     m.duck_frame = -1;
     m.duck_pose = -1;
     m.busy_until = s.level_time;
@@ -794,16 +789,11 @@ void run_and_shoot(Q2Server& s, Q2Monster& m) {
     m.run_shoot = -1;
     return;
   }
-  m.pose.shown = 109 + at;
+  m.pose.shown = q2_mind::kRunShootFirst + at;
   go_to(s, m, foe_at(s, m.enemy), kind(m).run);
-  if (at == 3) shoot(s, m, kind(m).missile[0], 0);
-  if (at < 13) {
-    m.run_shoot = at + 1;
-    return;
-  }
-  const bool again = skill(s) == 3 && foe_alive(s, m.enemy) &&
-                     sh::length(foe_at(s, m.enemy) - body(s, m).origin) >= kNear;
-  m.run_shoot = again ? 2 : -1;
+  if (at == q2_mind::kRunShootFires) shoot(s, m, kind(m).missile[0], 0);
+  const float off = sh::length(foe_at(s, m.enemy) - body(s, m).origin);
+  m.run_shoot = q2_mind::run_shoot_next(at, skill(s), foe_alive(s, m.enemy), off);
 }
 
 // Whether kind `k` fidgets on its idle call (its poses' fidget started by no frame).
@@ -1483,18 +1473,17 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed, sh:
   // Only from in front: the shooter within the cone its facing makes (0.3 the cosine).
   sh::Vec3f to = unpack(s.players[shooter].move.origin) - ent.origin;
   if (sh::normalize(to) <= 0 || sh::dot(to, forward_of(ent.angles.y)) <= 0.3f) return;
-  const double eta = double(dist - ent.maxs.x) / double(speed);
+  const double eta = q2_mind::dodge_eta(dist, ent.maxs.x, speed);
   bool shoot = false;
   if (gz) {
     if (gz_dodge(s, m, shooter, hit, eta) != GzDodgeAct::duck || duck_of(m) == nullptr) return;
   } else {
-    if (random01(s) > 0.25) return;                  // one shot in four
+    if (!q2_mind::dodges(draw(s))) return;           // one shot in four
     if (m.enemy == -1) found(s, m, shooter, false);  // silently: no sight sound
-    if (soldier(m) && skill(s) >= 1) {               // ducks, or ducks and shoots
-      m.duck_hold = s.level_time + eta + 0.3;
-      shoot = random01(s) <= (skill(s) == 1 ? 0.33 : 0.66);
-    }
-    if (named(m, "monster_brain")) m.duck_hold = s.level_time + eta + 0.5;
+    const q2_mind::DuckPlan p = q2_mind::duck_plan(soldier(m), named(m, "monster_brain"), skill(s),
+                                                   s.level_time, eta, draw(s));
+    if (p.hold >= 0) m.duck_hold = p.hold;
+    shoot = p.shoots;
   }
   if (m.duck_frame >= 0 && m.duck_shoot == shoot) return;  // already in it: goes on
   m.duck_frame = 0;

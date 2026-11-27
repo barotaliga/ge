@@ -256,6 +256,9 @@ int32_t launch_weapon(A& q, float w, float mtype) {
   const float life = weapon_number(q, w, 8);
   const int32_t m = launch(q, mdl, mtype, spd, life);
   q.set_f(m, q.L.f.weapon, w);
+#if defined(SE_RULES_CAMPAIGN)
+  if (mtype == kMovetypeFlymissile) sq_offer_dodge(q, m);  // a nail or a rocket: Quake II's dodge
+#endif
   return m;
 }
 
