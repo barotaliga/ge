@@ -40,6 +40,10 @@ inline constexpr double kTaaClipGamma = 1.25;
 struct TaaSettings {
   double scale = 1.0;  // the render size over the output's, 0.25..1
   double alpha = 0.1;  // the new frame's share of a settled pixel
+  // BLOCKS: each output pixel takes the render pixel it lies in, as it is (no history, no
+  // filter; the caller draws with no jitter), so at a whole ratio every render pixel is a crisp
+  // square of output pixels (2x2 at 0.5). Live: the resolve reads it each frame.
+  bool blocks = false;
 };
 
 // The jitter cycle's length: 8 at full size, more as the scale drops (each output pixel wants

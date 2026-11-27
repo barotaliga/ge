@@ -48,6 +48,7 @@
 #include "shooterbots/companion.hpp"
 #include "shooterbots/party.hpp"
 #include "shooterbots/way_through.hpp"
+#include "shooters_edge/bots/arrival_gear.hpp"
 #include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
@@ -93,6 +94,12 @@ struct EpisodeOptions {
   std::vector<std::string> avoid;  // exits to these maps are not taken (a secret level)
   std::vector<std::string> stop;   // an exit to one of these ends the run (the episode's end)
   bool census = false;             // count each class name's entities (EpisodeMap::census)
+  // GEAR ON ARRIVAL (arrival_gear.hpp): the maps a playthrough plays before `first`, in order. A
+  // new game starts on the first of them; on each the leader takes every pickup and pays for its
+  // monsters out of his ammunition, then the program's own level change carries him on, until
+  // `first` is entered with that gear. Empty: `first` from a new game. The companions and
+  // partners join on `first`.
+  std::vector<std::string> before;
 };
 
 // One class name's entities on a map, as the run saw them (EpisodeOptions::census).
@@ -156,6 +163,8 @@ struct EpisodeMap {
 struct EpisodeReport {
   bool ok = false;
   std::string error;
+  std::vector<GearLeg> gear;  // each map of `before`: what it gave and cost
+  std::string arrived;        // the leader's gear as he entered `first` (q1_gear_text)
   std::vector<EpisodeMap> maps;
   int64_t faults = 0;
   uint64_t digest = 0;
