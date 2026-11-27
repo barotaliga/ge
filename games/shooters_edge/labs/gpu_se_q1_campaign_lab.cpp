@@ -162,20 +162,20 @@ bool legs_of(const Campaign& c, const std::string& list, bool each, std::vector<
   while (std::getline(in, w, ',')) {
     const int k = w.size() == 1 && w[0] >= '1' && w[0] <= '9' ? w[0] - '1' : -1;
     if (w == "end" && !c.end.empty()) {
-      out.push_back({c.end, {}, 1});
+      out.push_back({c.end, {}, 1, {}});
     } else if (k >= 0 && k < static_cast<int>(c.episodes.size())) {
       const Episode& e = c.episodes[static_cast<size_t>(k)];
       std::vector<std::string> avoid;
       if (!e.secret.empty()) avoid.push_back(e.secret);
       if (each) {
         for (const std::string& name : e.maps)
-          out.push_back({name, name == e.secret ? std::vector<std::string>{} : avoid, 1});
+          out.push_back({name, name == e.secret ? std::vector<std::string>{} : avoid, 1, {}});
         continue;
       }
-      out.push_back({e.maps.front(), avoid, static_cast<int>(e.maps.size() - avoid.size())});
-      if (!e.secret.empty()) out.push_back({e.secret, {}, 1});
+      out.push_back({e.maps.front(), avoid, static_cast<int>(e.maps.size() - avoid.size()), {}});
+      if (!e.secret.empty()) out.push_back({e.secret, {}, 1, {}});
     } else if (!w.empty() && k < 0 && w != "end") {
-      out.push_back({w, {}, 1});  // one map by its name
+      out.push_back({w, {}, 1, {}});  // one map by its name
     } else {
       bad = w;
       return false;
@@ -379,7 +379,7 @@ void run(gl::Lab& lab) {
   std::string episodes = lab.arg("episodes");  // a mission pack's own by default (below)
   if (game.empty()) {
     o.load = &fb::coop_hall_exit_map;
-    legs.push_back({"hall", {}, 1});
+    legs.push_back({"hall", {}, 1, {}});
   } else {
     ce::Source src;
     std::string error;
