@@ -424,7 +424,9 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           um.party[static_cast<size_t>(k) - 1].push_back(
               s.world.entities[static_cast<size_t>(k) + 1].origin);
       }
-      if (!s.pending_map.empty()) changed = true;
+      // The game's last exit (rboss's: the end's movie, then nothing) asks for no map: the game
+      // over is the way out.
+      if (!s.pending_map.empty() || q->game_over) changed = true;
       // Dead alone (god mode keeps off all but a killbox; co-op brings him back), he would lie
       // there for the rest of the map's time, a gib with his box in the floor: the map ends with
       // his death, said as such (biggun's base blown up round him read as "the time ran out" ten
@@ -478,9 +480,9 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     const std::string asked = rules->pending_map;
     um.finished = true;
     um.next = asked;
-    um.end = "the exit, to " + asked;
+    um.end = asked.empty() ? std::string("the exit, the game's end") : "the exit, to " + asked;
     r.maps.push_back(std::move(um));
-    if (q->next_unit || (!asked.empty() && asked[0] == '*')) {
+    if (q->next_unit || asked.empty() || asked[0] == '*') {
       r.unit_done = true;
       r.out_to = bare(asked);
       break;

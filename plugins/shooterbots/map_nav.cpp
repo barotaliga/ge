@@ -1279,7 +1279,10 @@ int64_t mark_hurt_harm(const NavGraph& g, const std::vector<HurtBox>& boxes,
   for (const HurtBox& b : boxes)
     for (size_t n = 0; n < g.nodes.size() && n < harm.size(); n++) {
       const Vec3f o = g.nodes[n].origin;
-      const float m = b.near ? kHurtMargin : 0;
+      // Across: `kHurtMargin`; round a killing strip in a floor (a box 32 or less high), on the
+      // floor round it (feet under its top and a step), `kHurtFloor`: that floor is the pit's.
+      const bool low = b.maxs.z - b.mins.z <= 32 && o.z - 24 < b.maxs.z + 18;
+      const float m = !b.near ? 0 : low ? kHurtFloor : kHurtMargin;
       const bool near = o.x + 16 + m > b.mins.x && o.x - 16 - m < b.maxs.x &&
                         o.y + 16 + m > b.mins.y && o.y - 16 - m < b.maxs.y && o.z + 32 > b.mins.z;
       // How high over its top: up to `kHurtLip` (the lip round a pit, the slope down into it;
@@ -1612,9 +1615,10 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     // back up, and harms nothing here.
     sb::mark_crusher_harm(g, out.movers, out.harm);
     const std::vector<sb::HurtBox> hurts = hurt_boxes(spec, blocks);
-    out.hurt.assign(g.nodes.size(), 0);
-    out.hurt_nodes = sb::mark_hurt_harm(g, hurts, out.hurt);
-    for (size_t n = 0; n < g.nodes.size(); n++) out.harm[n] = out.harm[n] || out.hurt[n] ? 1 : 0;
+    out.hurt_nodes = sb::mark_hurt_harm(g, hurts, out.harm);
+    // The guard at a lip keeps off the killing boxes themselves (a wheel is no pit).
+    for (const sb::HurtBox& h : hurts)
+      if (h.near) out.hurt_boxes.push_back({h.mins, h.maxs});
     out.hurt_links = sb::cut_hurt_links(g, hurts);
     out.harm_links = sb::nav_close_entries(g, out.harm);
   }
@@ -1632,7 +1636,6 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   out.swim_nav = sb::nav_add_swim(out.world, graph, out.wet, swim_set);
   out.wet.resize(graph.nodes.size(), 1);   // every swim node is wet
   out.harm.resize(graph.nodes.size(), 0);  // and none harms
-  out.hurt.resize(graph.nodes.size(), 0);
   // The map's main part: the most a start spot reaches.
   const auto find_main = [&] {
     out.main_n = 0;
@@ -1787,7 +1790,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   sb::build_swim(out.world, graph, exits, field_set, out.swim);
   // THE BRINK (shooterbots/brink.hpp): the harm kept on the graph, the walks along its lips marked.
   out.brink_links = sb::nav_mark_harm(graph, out.harm);
-  graph.hurt = out.hurt;
+  graph.hurt_boxes = out.hurt_boxes;
   out.side_brink_links = sb::nav_mark_side_harm(graph, out.world);
   sb::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =
