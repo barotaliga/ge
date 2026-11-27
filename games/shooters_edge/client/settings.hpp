@@ -5,7 +5,8 @@
 //   (`series_settings_file`), and over it the program's own when there is one,
 //   `data/settings/config.cfg` beside the program (`series_settings_files`): its lines run after
 //   and win, and the settings are written to it, so a game kept on a stick or in a shared folder
-//   carries its own settings. They hold the binds and every setting in our names, which every
+//   carries its own settings; `cfg_save_global` writes the player's own instead. They hold the
+//   binds and every setting in our names, which every
 //   classic game reads, a game's own spellings being synonyms of them (client/cvar_layers.hpp).
 //   Beside each game, `<game folder>/settings/config.cfg` (`settings_dir`, the console's first
 //   search directory) keeps only that game's own meanings of shared names (Quake II's `crosshair`).
@@ -27,7 +28,7 @@
 // ge:summary The window's settings kept in config.cfg, the user info sent, the mouse on binds
 // ge:keywords settings config-cfg save_settings settings_dir user-info topcolor bottomcolor name
 // ge:keywords skin model player-model series-config one-config series_settings_file
-// ge:keywords series_settings_files local-config portable relative-config
+// ge:keywords series_settings_files local-config portable relative-config cfg_save_global
 // ge:keywords cl_speedjump cl_speedjump_view easy-jump
 // ge:keywords mouse_to_binds keys_to_menu mouse1 mwheelup customize-controls
 // ge:skill console input
@@ -62,6 +63,11 @@ std::vector<std::filesystem::path> series_settings_files(const std::string& data
 // first search directory's config.cfg. Without it, or with a session's own config, all of them
 // in that one file.
 bool save_settings(ge::console::Console& con, const std::filesystem::path& series = {});
+// `cfg_save_global`: the settings written to the player's own series config (`series.front()`),
+// even when the program's own beside it is the one they are written to (`series_settings_files`).
+// `series` outlives `con`.
+void add_save_global_command(ge::console::Console& con,
+                             const std::vector<std::filesystem::path>& series);
 
 struct UserInfo {
   int top = 0, bottom = 0;                                      // topcolor, bottomcolor

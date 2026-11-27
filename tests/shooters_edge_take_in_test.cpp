@@ -6,7 +6,8 @@
 // its own thread; a folder with no game is refused in the game's words.
 //
 // ge:summary Tests taking a pointed-at game into the data folder and opening the copy
-// ge:keywords test import take-in data-folder copy basedir series_settings_files share TakeIn
+// ge:keywords test import take-in data-folder copy basedir series_settings_files share
+// ge:keywords take-in-thread cfg_save_global
 // ge:skill shooter testing
 #include <filesystem>
 #include <fstream>
@@ -105,6 +106,14 @@ TEST(take_in_falls_back_beside_the_game_and_reads_its_own_config_over_the_player
   CHECK(files.size() == 2 && files[1] == top / "placed/data/settings/config.cfg");
   // The data folder beside the program: the one file, never read twice.
   CHECK(cl::series_settings_files((top / "placed/data").string(), placed).size() == 1);
+  // cfg_save_global: written to the player's own, not the program's.
+  ge::console::Console con;
+  fs::create_directories(top / "game");
+  con.set_search_path({top / "game"});
+  cl::add_save_global_command(con, files);
+  con.execute("cfg_save_global");
+  con.run();
+  CHECK(fs::exists(top / "prefs/data/settings/config.cfg"));
 }
 
 TEST(a_game_taken_in_on_its_own_thread_says_its_share_done) {

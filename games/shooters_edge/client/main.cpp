@@ -404,6 +404,7 @@ int run_main(int argc, char** argv) {
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   remote.stuff_file =
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
+  cl::add_save_global_command(console, series);  // the player's own config, not this copy's
   const auto save_settings = [&console, &series, &con_view] {
     cl::save_settings(console, series.empty() ? std::filesystem::path() : series.back());
     con_view.save_history();  // the typed lines, beside the config
@@ -1244,8 +1245,7 @@ int run_main(int argc, char** argv) {
       }
     }
     // Something else asked for while a played demo is up (a map, a save, a game folder, a server,
-    // another demo): the demo stopped, so it is not held behind what comes next; a title demo
-    // about to start is not started.
+    // another demo): the demo stops (a title demo about to start is not started).
     const cl::AskedElsewhere elsewhere_ask{next_map != map_before, !load_ask.empty(),
                                            !folder_ask.empty(), remote.active && !joined_before,
                                            bench_ask != demo_before};

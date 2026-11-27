@@ -161,7 +161,8 @@ folder detection picks a game, and no file beside the settings remembers one.
 `<data folder>/settings/config.cfg`; then the program's own when there is one,
 `data/settings/config.cfg` beside the program (beside the app on a Mac), whose lines win and to
 which the settings are then written, so a copy of the game on a stick or in a shared folder keeps
-its own; then the command line's `+set` words.
+its own (`cfg_save_global` writes them to the player's own instead); then the command line's `+set`
+words.
 
 **Taking a game in** (`client/take_in.hpp`). An install named anywhere outside the data folder is
 copied into it first (`<data folder>/q1`, `<data folder>/q2`) and the copy is what opens; a folder
