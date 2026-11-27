@@ -24,6 +24,7 @@
 // ge:skill shooter labs bots
 // ge:test tests/shooters_edge_q2_unit_test.cpp
 #include <algorithm>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <utility>
@@ -160,6 +161,7 @@ bool unit(std::vector<uint8_t>& pak, std::string& error) {
 struct Loader {
   const cl::SearchPath* files = nullptr;
   std::vector<std::shared_ptr<const br::Map>> read;  // each map read, by the order asked
+  bool keep = true;  // false: none kept (the gear's earlier maps, read once)
 };
 
 bool load(void* ctx, const std::string& name, sv::MapSpec& out, std::string& error) {
@@ -171,7 +173,7 @@ bool load(void* ctx, const std::string& name, sv::MapSpec& out, std::string& err
   out = sv::MapSpec();
   out.name = name;
   out.brushes = read;
-  l.read.push_back(read);
+  if (l.keep) l.read.push_back(read);
   return true;
 }
 
@@ -294,84 +296,185 @@ void run(gl::Lab& lab) {
       static_cast<size_t>(std::clamp(static_cast<int>(lab.arg_num("partners")), 0, 3)),
       ge::shooterbots::AimSkill::expert);
   opt.beside = !lab.arg("beside").empty();
-  const bt::UnitReport r = bt::run_q2_unit(opt);
-  if (!r.ok) {
-    lab.fail(r.error, "Read the reason above. Skill: bots.");
+  // Gear on arrival: the campaign's maps in the order a playthrough first enters them, read off
+  // the maps' level changes from its first map; the ones before this map's are the earlier maps.
+  const std::string& gear = lab.arg("gear");
+  if (gear != "new" && gear != "arrival") {
+    lab.fail("se-q2-unit: --gear=" + gear + " is no gear",
+             "Pass --gear=new (a new game's) or --gear=arrival (the earlier maps' pickups). "
+             "Skill: bots.");
     return;
+  }
+  Loader scratch;  // the earlier maps, read for the gear alone
+  scratch.files = &files;
+  scratch.keep = false;
+  opt.gear_ctx = &scratch;
+  // EACH (`--each=1`): every map of the campaign on its own, in the order a playthrough first
+  // enters it (read off the maps' level changes from its first map), as if arrived from the map
+  // before it; else the one run from `first`.
+  const bool each = lab.arg("each") == "1" && !own;
+  const std::string start =
+      pack == sv::Q2Pack::base ? "base1" : std::string(sv::q2_pack_start_map(pack));
+  std::vector<std::string> order;
+  if (!own && (each || gear == "arrival")) order = bt::q2_campaign_order(&load, &scratch, start);
+  struct Run {
+    std::string first;
+    std::vector<std::string> before;  // the earlier maps (gear on arrival)
+  };
+  std::vector<Run> runs;
+  const auto earlier = [&](const std::string& map) {
+    const auto at = std::find(order.begin(), order.end(), map);
+    return at == order.end() ? std::vector<std::string>{}
+                             : std::vector<std::string>(order.begin(), at);
+  };
+  if (each) {
+    for (const std::string& m : order) {
+      const std::vector<std::string> b = earlier(m);
+      runs.push_back(
+          {b.empty() ? m : m + "$" + b.back(), gear == "arrival" ? b : std::vector<std::string>{}});
+    }
+    opt.maps = 1;
+  } else {
+    Run one{first, {}};
+    if (gear == "arrival" && !own) {
+      one.before = earlier(first.substr(0, first.find('$')));
+      // Arrived from the map before it, unless `--first` names one.
+      if (!one.before.empty() && first.find('$') == std::string::npos)
+        one.first = first + "$" + one.before.back();
+    }
+    runs.push_back(one);
   }
   const gl::Det det = own ? gl::Det::deterministic : gl::Det::measured;
   gl::LabTable t;
-  t.title = "The unit from " + first + (r.unit_done ? " out to " + r.out_to : ", not finished");
   t.columns = {"map",     "time (s)", "led to",   "keys",      "objectives",
                "secrets", "helps",    "monsters", "steps done"};
-  int keys = 0, keys_taken = 0, goals = 0, goals_found = 0, finished = 0;
-  for (const bt::UnitMap& m : r.maps) {
-    t.rows.push_back({m.name, ge::core::num::to_fixed(m.seconds, 1), m.finished ? m.next : m.end,
-                      std::to_string(m.keys_taken) + " of " + std::to_string(m.keys),
-                      std::to_string(m.goals_found) + " of " + std::to_string(m.goals),
-                      std::to_string(m.secrets_found) + " of " + std::to_string(m.secrets),
-                      std::to_string(m.helps),
-                      std::to_string(m.killed) + " of " + std::to_string(m.monsters),
-                      std::to_string(m.way.steps_done)});
-    keys += m.keys;
-    keys_taken += m.keys_taken;
-    goals += m.goals;
-    goals_found += m.goals_found;
-    finished += m.finished ? 1 : 0;
+  gl::LabTable g;
+  g.title = "Gear on arrival (--gear=arrival): each earlier map's pickups, less its cost";
+  g.columns = {"map",         "earlier map", "pickups",   "monster health",
+               "damage held", "kept",        "gear after"};
+  gl::LabTable h;
+  h.title = "Helpers beside him (a person's stand-in)";
+  h.columns = {"map",         "time (s)", "near share",  "farthest",
+               "back to him", "gave way", "exits turned"};
+  int keys = 0, keys_taken = 0, goals = 0, goals_found = 0, finished = 0, maps_played = 0;
+  int killed = 0, monsters = 0, secrets_found = 0, secrets = 0;
+  bool unit_done = false;
+  std::string out_to;
+  uint64_t digest = 1469598103934665603ull;
+  std::vector<std::pair<std::string, std::string>> notes, tracks;  // map, line
+  std::vector<std::pair<gl::Shot, gl::Picture>> shots;             // said last, as they always were
+  for (const Run& run : runs) {
+    opt.first = run.first;
+    opt.before = run.before;
+    loader.read.clear();
+    const bt::UnitReport r = bt::run_q2_unit(opt);
+    if (!r.ok) {
+      lab.fail(r.error, "Read the reason above. Skill: bots.");
+      return;
+    }
+    digest = runs.size() == 1 ? r.digest : (digest ^ r.digest) * 1099511628211ull;
+    unit_done = unit_done || r.unit_done;
+    out_to = r.out_to;
+    if (!run.before.empty()) {
+      for (const bt::GearLeg& l : r.gear)
+        g.rows.push_back({run.first, l.map, std::to_string(l.pickups),
+                          ge::core::num::to_fixed(l.monster_health, 0),
+                          ge::core::num::to_fixed(l.capacity, 0),
+                          ge::core::num::to_fixed(l.kept, 2), l.after});
+      g.rows.push_back({run.first, "arrived", "", "", "", "", r.arrived});
+      std::fprintf(stderr, "se-q2-unit: %s gear on arrival: %s\n", run.first.c_str(),
+                   r.arrived.c_str());
+    }
+    for (const bt::UnitMap& m : r.maps) {
+      t.rows.push_back({m.name, ge::core::num::to_fixed(m.seconds, 1), m.finished ? m.next : m.end,
+                        std::to_string(m.keys_taken) + " of " + std::to_string(m.keys),
+                        std::to_string(m.goals_found) + " of " + std::to_string(m.goals),
+                        std::to_string(m.secrets_found) + " of " + std::to_string(m.secrets),
+                        std::to_string(m.helps),
+                        std::to_string(m.killed) + " of " + std::to_string(m.monsters),
+                        std::to_string(m.way.steps_done)});
+      std::fprintf(stderr, "se-q2-unit: %s done: out %s, kills %d/%d, secrets %d/%d, %.0f s, %s\n",
+                   m.name.c_str(), m.finished ? "yes" : "no", m.killed, m.monsters, m.secrets_found,
+                   m.secrets, m.seconds, m.end.c_str());
+      std::fflush(stderr);
+      keys += m.keys;
+      keys_taken += m.keys_taken;
+      goals += m.goals;
+      goals_found += m.goals_found;
+      killed += m.killed;
+      monsters += m.monsters;
+      secrets_found += m.secrets_found;
+      secrets += m.secrets;
+      finished += m.finished ? 1 : 0;
+      maps_played++;
+      if (opt.beside)
+        h.rows.push_back({m.name, ge::core::num::to_fixed(m.seconds, 1),
+                          ge::core::num::to_fixed(m.helper_near_share, 3),
+                          ge::core::num::to_fixed(m.helper_farthest, 0),
+                          std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
+                          std::to_string(m.helper_exits_turned)});
+      for (const std::string& line : m.plan) notes.emplace_back(m.name, line);
+      if (!lab.arg("track").empty()) {
+        // The track holds a point every 0.2 s (bots/q2_unit.hpp); --track=1 notes one a second.
+        const size_t every = static_cast<size_t>(std::max(1.0, lab.arg_num("track") * 5 + 0.5));
+        for (size_t i = 0; i < m.track.size(); i += every)
+          tracks.emplace_back(m.name, "track " +
+                                          ge::core::num::to_fixed(0.2 * static_cast<double>(i), 1) +
+                                          " s " + ge::core::num::to_fixed(m.track[i].x, 0) + " " +
+                                          ge::core::num::to_fixed(m.track[i].y, 0) + " " +
+                                          ge::core::num::to_fixed(m.track[i].z, 0));
+      }
+    }
+    // The pictures now, each map's floors read for this run alone.
+    for (size_t k = 0; k < r.maps.size() && k < loader.read.size(); k++) {
+      const bt::UnitMap& m = r.maps[k];
+      shots.emplace_back(
+          gl::Shot{m.name,
+                   m.name + (m.finished ? " played through" : " not finished"),
+                   "The floors of " + m.name +
+                       " from above with the way the script took in yellow from "
+                       "his start (ringed white), the keys in green (ringed red once he took them) "
+                       "and the exits in blue.",
+                   "a yellow line from the white ring to a blue exit",
+                   {{"map", m.name}, {"game", own ? "fixture" : "local packs"}}},
+          overhead(*loader.read[k], m));
+    }
+    loader.read.clear();
   }
+  t.title = each ? "Each map of the campaign on its own"
+                 : "The unit from " + first + (unit_done ? " out to " + out_to : ", not finished");
+  if (each)
+    t.rows.push_back({"all", "", std::to_string(finished) + " of " + std::to_string(maps_played),
+                      std::to_string(keys_taken) + " of " + std::to_string(keys),
+                      std::to_string(goals_found) + " of " + std::to_string(goals),
+                      std::to_string(secrets_found) + " of " + std::to_string(secrets), "",
+                      std::to_string(killed) + " of " + std::to_string(monsters), ""});
   lab.table(t, det);
-  if (opt.beside) {
-    gl::LabTable h;
-    h.title = "Helpers beside him (a person's stand-in)";
-    h.columns = {"map",         "time (s)", "near share",  "farthest",
-                 "back to him", "gave way", "exits turned"};
-    for (const bt::UnitMap& m : r.maps)
-      h.rows.push_back({m.name, ge::core::num::to_fixed(m.seconds, 1),
-                        ge::core::num::to_fixed(m.helper_near_share, 3),
-                        ge::core::num::to_fixed(m.helper_farthest, 0),
-                        std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
-                        std::to_string(m.helper_exits_turned)});
-    lab.table(h, det);
-  }
-  lab.metric("unit.done", r.unit_done ? 1 : 0, "bool", det);
-  lab.metric("unit.maps", static_cast<double>(r.maps.size()), "count", det);
+  if (!g.rows.empty()) lab.table(g, det);
+  if (opt.beside) lab.table(h, det);
+  lab.metric("unit.done", unit_done ? 1 : 0, "bool", det);
+  lab.metric("unit.maps", static_cast<double>(maps_played), "count", det);
   lab.metric("unit.exits_taken", finished, "count", det);
   lab.metric("unit.keys_taken", keys_taken, "count", det);
   lab.metric("unit.keys", keys, "count", det);
   lab.metric("unit.objectives_found", goals_found, "count", det);
   lab.metric("unit.objectives", goals, "count", det);
-  lab.metric("unit.digest_low", static_cast<double>(r.digest & 0xffffffu), "hash", det);
-  for (const bt::UnitMap& m : r.maps)
-    for (const std::string& line : m.plan) lab.note(m.name + ": " + line);
-  if (!lab.arg("track").empty()) {
-    // The track holds a point every 0.2 s (bots/q2_unit.hpp); --track=1 notes one a second.
-    const size_t every = static_cast<size_t>(std::max(1.0, lab.arg_num("track") * 5 + 0.5));
-    for (const bt::UnitMap& m : r.maps)
-      for (size_t i = 0; i < m.track.size(); i += every)
-        lab.note(m.name + ": track " + ge::core::num::to_fixed(0.2 * static_cast<double>(i), 1) +
-                 " s " + ge::core::num::to_fixed(m.track[i].x, 0) + " " +
-                 ge::core::num::to_fixed(m.track[i].y, 0) + " " +
-                 ge::core::num::to_fixed(m.track[i].z, 0));
-  }
-  if (own && (!r.unit_done || keys_taken != keys || goals_found != goals))
+  lab.metric("unit.digest_low", static_cast<double>(digest & 0xffffffu), "hash", det);
+  for (const auto* list : {&notes, &tracks})
+    for (const auto& [map, line] : *list) {
+      std::string note = map;
+      note += ": ";
+      note += line;
+      lab.note(note);
+    }
+  if (own && (!unit_done || keys_taken != keys || goals_found != goals))
     lab.fail("the script did not play the fixture unit through: " + std::to_string(finished) +
                  " exits, " + std::to_string(keys_taken) + " of " + std::to_string(keys) +
                  " keys, " + std::to_string(goals_found) + " of " + std::to_string(goals) +
                  " objectives",
              "Run with --plan to see his changes of plan, then check shooterbots/way_through.cpp's "
              "steps for Quake II's words. Skill: bots.");
-  for (size_t k = 0; k < r.maps.size() && k < loader.read.size(); k++) {
-    const bt::UnitMap& m = r.maps[k];
-    lab.shot({m.name,
-              m.name + (m.finished ? " played through" : " not finished"),
-              "The floors of " + m.name +
-                  " from above with the way the script took in yellow from "
-                  "his start (ringed white), the keys in green (ringed red once he took them) "
-                  "and the exits in blue.",
-              "a yellow line from the white ring to a blue exit",
-              {{"map", m.name}, {"game", own ? "fixture" : "local packs"}}},
-             overhead(*loader.read[k], m), det);
-  }
+  for (auto& [spec, picture] : shots) lab.shot(spec, picture, det);
 }
 
 const gl::LabSpec kSpec{
@@ -397,6 +500,13 @@ const gl::LabSpec kSpec{
      {"partners", "0",
       "0..3 partners beside him in co-op, the map's work split among them "
       "(plugins/shooterbots/party.hpp); each partner's track in its own colour"},
+     {"each", "0",
+      "with --game, 1: every map of the campaign on its own, in the order a playthrough first "
+      "enters it (read off the maps' level changes), as if arrived from the map before it"},
+     {"gear", "new",
+      "with --game, arrival: the map entered with the gear a playthrough brings "
+      "(arrival_gear.hpp: the earlier maps' pickups, less their monsters' cost and 20% more); "
+      "new: a new game's"},
      {"beside", "",
       "any value: he plays as a person would and the partners are helpers beside him (a hosted "
       "game's `addbot helper`: leashed to him, the exit his); a table of how they kept to him"}},
