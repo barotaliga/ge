@@ -5,20 +5,21 @@
 // a hound on a path walks it corner to corner. The kinds that fight up close and in the air: a
 // swordsman and a brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down
 // by a big one and gets up again whole, and only its whole health in one blow ends it; a flyer
-// keeps its height and spits at the player. Quake II's guard hears where a shot lands and steps
-// aside round what blocks its way to where it last saw the player; Quake II's soldier and tank
-// take their pains by Quake II's table. The big and
-// late kinds: each counts at spawn and hurts a player in front of it, the giant takes half of a
-// blast, and a spawn bursts when it dies. The bosses: the lava boss rises when used, throws, and
-// falls to three strikes; arriving inside the final boss kills it and ends the game; a teleport
-// train rides its path. A rifleman shows its model's frames for standing, shooting and falling.
+// keeps its height and spits at the player, and near him slides square to him by its own test,
+// waiting a flat 2 s after each spit and crying without the flinch at a small blow. Quake II's
+// guard hears where a shot lands and steps aside round what blocks its way to where it last saw the
+// player; Quake II's soldier and tank take their pains by Quake II's table. The big and late kinds:
+// each counts at spawn and hurts a player in front of it, the giant takes half of a blast, and a
+// spawn bursts when it dies. The bosses: the lava boss rises when used, throws, and falls to three
+// strikes; arriving inside the final boss kills it and ends the game; a teleport train rides its
+// path. A rifleman shows its model's frames for standing, shooting and falling.
 //
 // ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
 // ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
 // ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
 // ge:keywords teleport-train event-lightning animation-frames death-frames impact-heard side-step
-// ge:keywords pains-as-data
+// ge:keywords pains-as-data scrag-slide scrag_check
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <string>
@@ -359,6 +360,41 @@ TEST(a_flyer_keeps_its_height_and_spits_at_the_player) {
   }
   CHECK(g.field(1, g.f().health) < 100);
   CHECK_MSG(lowest > 40, std::to_string(lowest));  // flying, not fallen to the floor
+  CHECK(g.s().q.faults == 0);
+}
+
+// The flyer near the player and in his sight hunts by its own test: it slides square to him
+// (its slide state, its hover frames) and spits, waiting a flat 2 s after each spit; a small blow
+// makes it cry without the flinch.
+TEST(a_flyer_near_the_player_slides_and_spits_by_its_own_test) {
+  Game g(R"({
+"classname" "monster_wizard"
+"origin" "-150 0 100"
+"angle" "180"
+}
+)");
+  const int wizard = g.find("monster_wizard");
+  bool slid = false;
+  float wait = -1;
+  for (int i = 0; i < kFrames * 8 && (!slid || wait < 0); i++) {
+    CHECK_MSG(g.frame(180), g.error);
+    if (g.named(wizard, "attack_state") == 2) {
+      slid = true;
+      CHECK(g.named(wizard, "fr_run_x") == 0);  // the hover frames
+    }
+    const float finished = g.named(wizard, "attack_finished");
+    if (wait < 0 && finished > g.global("time") + 1.5f) wait = finished - g.global("time");
+  }
+  CHECK(slid);
+  CHECK_MSG(wait > 1.9f && wait < 2.01f, std::to_string(wait));  // a flat 2 s after its spit
+  // A blow of 1 is under 70 × nearly any draw: its pain's wait, the cry, no flinch.
+  const pg::Def* pain = pg::find_field(mod(), "pain_finished");
+  CHECK(pain != nullptr);
+  if (pain == nullptr) return;
+  g.set(wizard, pain->offset, 0);
+  CHECK_MSG(g.hit(wizard, 1, 1), g.error);
+  CHECK(g.named(wizard, "pain_finished") > g.global("time"));
+  CHECK(g.named(wizard, "fr_now_x") != 42);  // not its pain frames
   CHECK(g.s().q.faults == 0);
 }
 

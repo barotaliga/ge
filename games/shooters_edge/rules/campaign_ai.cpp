@@ -65,6 +65,19 @@ void ai_walk(A& q, float dist) {
   q.movetogoal(dist);
 }
 
+// THE SLIDE: it turns toward the enemy and steps 8 square to the line to him, to the right first;
+// a blocked step turns it to the other side, tried once in the same frame.
+void ai_run_slide(A& q) {
+  const int32_t me = q.self();
+  q.set_f(me, q.L.f.ideal_yaw,
+          q.vectoyaw(q.v(q.i(me, q.L.f.enemy), q.L.f.origin) - q.v(me, q.L.f.origin)));
+  q.changeyaw();
+  const float ofs = on(q.f(me, f_lefty)) ? 90.0f : -90.0f;
+  if (on(q.walkmove(q.f(me, q.L.f.ideal_yaw) + ofs, q1_mind::kScragSlide))) return;
+  q.set_f(me, f_lefty, 1 - q.f(me, f_lefty));
+  q.walkmove(q.f(me, q.L.f.ideal_yaw) - ofs, q1_mind::kScragSlide);
+}
+
 void ai_run(A& q, float dist) {
   const int32_t me = q.self();
   if (sq_runs(q, me) && sq_busy(q)) return;  // Quake II's monster: a duck or a shot on the run
@@ -100,6 +113,10 @@ void ai_run(A& q, float dist) {
     decided = check_attack(q) ? 1.0f : 0.0f;
   }
   if (on(decided)) return;
+  if (q.f(me, f_attack_state) == kAsSlide) {  // the scrag's slide (its own test sets it)
+    ai_run_slide(q);
+    return;
+  }
   q.movetogoal(dist);
 }
 
