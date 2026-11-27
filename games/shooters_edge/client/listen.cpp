@@ -141,6 +141,16 @@ void take_named(Listen& l, const sv::NetEvent& ev, bool quake_look = false) {
   // Quake's own look in any game (Quake's weapons fired whole by Quake II's rules,
   // classic/q1_arms.hpp): its `q1_` name drawn as Quake's temporary entity of that name.
   if (const char* own = ge::classic::q1_look_name(ev.text.c_str()); own != nullptr) {
+    if (std::string_view(own) == "lightning2") {  // the shaft: Quake's own bolt, held by its owner
+      Effect beam;
+      beam.kind = EffectKind::beam;
+      beam.code = 6;
+      beam.entity = ev.ent;
+      beam.at = ev.origin;
+      beam.end = {ev.values[0], ev.values[1], ev.values[2]};
+      l.effects.push_back(beam);
+      return;
+    }
     sv::NetEvent quake = ev;
     quake.text = std::string("te_") + own;
     take_named(l, quake, true);

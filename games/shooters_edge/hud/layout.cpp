@@ -30,6 +30,8 @@ constexpr std::array<std::string_view, kLooks> kLookNames = {"classic", "modern"
 constexpr std::array<std::string_view, kAmmoKinds> kAmmoWords = {"SHELLS", "NAILS", "ROCKETS",
                                                                  "CELLS"};
 constexpr std::string_view kFragsWord = "FRAGS";
+// A feed's width past any screen's (reference px): the feed then spans its share of the safe area.
+constexpr float kWholeWidth = 1e5f;
 constexpr std::string_view kHealthWord = "HEALTH";
 constexpr std::string_view kArmourWord = "ARMOR";
 constexpr std::string_view kMeleeWord = "AXE";  // the weapon group's melee weapon (no picture)
@@ -513,7 +515,9 @@ std::vector<Row> table() {
        .kind = Kind::feed,
        .anchor = Anchor::top_left,
        .help = "the pickups and frags feed"};
-  e.feed_size = 18, e.feed_w = 420, e.feed_share = 0.6f;
+  // The whole safe area's width, as the classic games print their notify lines across the
+  // screen: a pickup or a server's line wraps only at the screen's edge (or its own newline).
+  e.feed_size = 18, e.feed_w = kWholeWidth, e.feed_share = 1;
   put(notify, e, kAll);
   e = {.id = "chat",
        .kind = Kind::feed,

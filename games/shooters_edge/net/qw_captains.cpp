@@ -159,7 +159,7 @@ void begin_picking(QwCaptains& c, const QwCaptainsGame& g) {
     if (seated(s, i) && captain_of(c, i) < 0) pool.push_back(i);
   gs::draft_start(c.draft, c.captain[0], c.captain[1], pool, g.seed);
   for (const int i : pool) {
-    s.clients[i].pick_number = c.draft.number[static_cast<size_t>(i)];
+    s.clients[i].pick_number = static_cast<uint8_t>(c.draft.number[static_cast<size_t>(i)]);
     set_team(s, i, "", "0", "0");
     qw_set_info(s, i, "skin", "");
     if (g.lobby != nullptr && i < gs::kLobbySeats) gs::lobby_ready(*g.lobby, i, false, g.now);

@@ -28,7 +28,9 @@ enum Release : uint8_t {
   kReleaseMenu = 2u,     // a menu is up (it then reads the pointer: hover and click)
   kReleaseWatch = 4u,    // a demo watched at its pace (its play bar is clicked)
 };
-inline constexpr uint32_t kReleaseDefault = kReleaseConsole | kReleaseWatch;
+// By default all three let it go: a menu shows the pointer as the console does, so it hovers and
+// clicks.
+inline constexpr uint32_t kReleaseDefault = kReleaseConsole | kReleaseMenu | kReleaseWatch;
 
 // This frame's facts.
 struct CaptureFacts {
