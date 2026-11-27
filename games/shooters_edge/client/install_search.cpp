@@ -1,7 +1,7 @@
 // The classic installs around the game (installs.hpp).
 //
 // ge:summary The classic installs around the game: started inside one, placed above several
-// ge:keywords installs install_around installs_below release_of pick_install placed_folder
+// ge:keywords installs install_around installs_below release_of installs_near placed_folder
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_install_search_test.cpp
 #include "shooters_edge/client/install_search.hpp"
@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <system_error>
+#include <utility>
 
 #include "shooters_edge/client/game_folder.hpp"
 
@@ -143,14 +144,23 @@ std::string placed_folder(const std::string& exe_dir) {
   return at.string();
 }
 
-int pick_install(const std::vector<FoundInstall>& found, const std::string& kept) {
-  std::error_code ec;
-  if (!kept.empty())
-    for (size_t i = 0; i < found.size(); ++i)
-      if (fs::equivalent(found[i].basedir, kept, ec)) return static_cast<int>(i);
-  for (size_t i = 0; i < found.size(); ++i)
-    if (found[i].full) return static_cast<int>(i);
-  return found.empty() ? -1 : 0;
+std::vector<FoundInstall> installs_near(const std::vector<std::string>& places) {
+  std::vector<std::string> where{"."};
+  where.insert(where.end(), places.begin(), places.end());
+  std::vector<FoundInstall> near;
+  const auto add = [&](FoundInstall f) {
+    std::error_code ec;
+    if (std::none_of(near.begin(), near.end(), [&](const FoundInstall& b) {
+          return fs::equivalent(b.basedir, f.basedir, ec);
+        }))
+      near.push_back(std::move(f));
+  };
+  for (const std::string& place : where) {
+    if (place.empty()) continue;
+    if (FoundInstall inside; install_around(place, inside)) add(std::move(inside));
+    for (FoundInstall& f : installs_below(place)) add(std::move(f));
+  }
+  return near;
 }
 
 std::string install_line(const FoundInstall& f, int n) {

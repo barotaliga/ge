@@ -338,6 +338,18 @@ TEST(the_classic_monsters_run_by_q2_rules) {
   CHECK(h->m(army).pose.span.last > 0 && h->m(ogre).pose.span.last > 0);  // their own runs
 }
 
+// Quake's monsters keep Quake's mind under Quake II's rules (server/q1_monster_mind.hpp): one that
+// faces away 600 units off hears none of the player's shots, where one of Quake II's goes to them.
+TEST(a_classic_monster_hears_no_shot_under_q2_rules) {
+  for (const char* kind : {"monster_army", "monster_infantry"}) {
+    auto h = open_hall({monster(kind, "0 0 24", "0")});
+    run(*h, 10);
+    for (int i = 0; i < kSecond; i++) run(*h, 1, sh::kButtonAttack, 180);  // the blaster, away
+    const bool quake = std::string_view(kind) == "monster_army";
+    CHECK_MSG((h->m().enemy == -1 && !h->m().sound_target) == quake, kind);
+  }
+}
+
 TEST(the_classic_spawn_bursts_on_whoever_is_near_under_q2_rules) {
   auto h = open_hall({monster("monster_tarbaby", "-560 0 40", "180")});
   run(*h, 2);

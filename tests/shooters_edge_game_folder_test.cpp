@@ -1,20 +1,23 @@
 // The game folder a player loads (games/shooters_edge/client/game_folder.hpp) over installs
 // written here: an install with its first pack in any case taken, its base folder picked taken as
 // its parent, a folder with no base folder or no pack refused with what it lacks; the multiplayer
-// folder played over the base when the install has one; the folder kept and read back, and chosen
-// at start only when -basedir names none; the programs of a folder with no game (the baseline mod,
+// folder played over the base when the install has one; the game opened from the install its
+// setting names (fs_basegame, fs_basedir_<id>), asked for when unset or gone, the settings read,
+// bound and asked for; the programs of a folder with no game (the baseline mod,
 // no campaign, the fallback map) and of one whose packs hold the start map; the campaign's
 // commands taken away with no campaign; `coopgame` asked for in a campaign already running starts
 // a new one in coop, where `addbot` seats companions.
 //
 // ge:summary Tests the game folder a player loads: the install checked, kept, its programs
-// ge:keywords test shooters-edge game-folder load-game check_game_folder game_of remember_game
+// ge:keywords test shooters-edge game-folder load-game check_game_folder game_of fs_basegame
+// ge:keywords fs_basedir read_base_game bind_base_game base_game_asked
 // ge:keywords choose_folder load_programs campaign_commands coopgame addbot new_game
 // ge:skill shooter classicenhance testing
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -96,72 +99,98 @@ TEST(the_multiplayer_folder_is_played_over_the_base_when_the_install_has_one) {
   CHECK(cl::game_of(root.string()) == kMulti);
 }
 
-TEST(the_game_loaded_is_kept_and_chosen_unless_basedir_names_another) {
-  const fs::path prefs = fresh("prefs");
-  CHECK(cl::remembered_game(prefs.string()).basedir.empty());
-  CHECK(cl::remembered_game("").basedir.empty());
-  CHECK(!cl::remember_game("", "/x"));
+TEST(the_game_opens_from_the_install_its_setting_names) {
   const fs::path root = fresh("kept");
   write_pack(root / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   fs::create_directories(root / kMulti);
-  CHECK(cl::remember_game(prefs.string(), root.string()));
-  const cl::KeptGame kept = cl::remembered_game(prefs.string());
-  CHECK(kept.basedir == root.string());
-  CHECK(kept.profile == ge::classicenhance::q1_profile().id);
-  // No -basedir: the game kept, the multiplayer folder over it.
+  const std::string q1(ge::classicenhance::q1_profile().id);
+  // fs_basegame q1, its fs_basedir_q1 set: that install, the multiplayer folder over it.
+  cl::BaseGame base;
+  base.game = q1;
+  base.dirs[q1] = root.string();
   cl::Args a;
-  a.basedir = fresh("cwd").string();
-  cl::choose_folder(a, prefs.string());
-  CHECK(fs::equivalent(a.basedir, root));
-  CHECK(a.game == kMulti);
-  // An install the game was started inside wins over the game kept: it is played at once.
-  const fs::path here = fresh("here");
-  write_pack(here / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
-  cl::Args in_install;
-  in_install.basedir = here.string();
-  cl::choose_folder(in_install, prefs.string());
-  CHECK(fs::equivalent(in_install.basedir, here));
-  // -basedir and -game given: kept as they are.
+  cl::choose_folder(a, base);
+  CHECK(!a.ask_install && fs::equivalent(a.basedir, root));
+  CHECK(a.game == kMulti && a.profile == q1);
+  // -game given: kept as it is.
   cl::Args named;
-  named.basedir = "/elsewhere";
-  named.basedir_set = true;
   named.game = "mod";
   named.game_set = true;
-  cl::choose_folder(named, prefs.string());
-  CHECK(named.basedir == "/elsewhere" && named.game == "mod");
-}
-
-TEST(a_kept_game_that_no_longer_opens_falls_back_to_the_folder_the_game_runs_in) {
-  const fs::path prefs = fresh("prefs-gone");
-  const fs::path here = fresh("here-gone");
-  write_pack(here / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
-  CHECK(cl::remember_game(prefs.string(), (fresh("gone") / "nothing").string()));
-  cl::Args a;
-  a.basedir = here.string();
-  cl::choose_folder(a, prefs.string());
-  CHECK(a.basedir == here.string());
-  CHECK(a.game == kBase);
-  // A game this build does not know is passed over the same way.
-  {
-    std::ofstream f(prefs / "game_folder.txt", std::ios::trunc);
-    f << "profile no-such-game\nbasedir " << here.string() << "\n";
-  }
-  CHECK(cl::remembered_game(prefs.string()).profile == "no-such-game");
+  cl::choose_folder(named, base);
+  CHECK(fs::equivalent(named.basedir, root) && named.game == "mod");
+  // fs_basegame "": Shooter's Edge's own game, whatever installs are set.
+  cl::BaseGame own = base;
+  own.game.clear();
   cl::Args b;
-  b.basedir = fresh("cwd-gone").string();
-  cl::choose_folder(b, prefs.string());
-  CHECK(b.basedir != here.string());
+  cl::choose_folder(b, own);
+  CHECK(!b.ask_install && b.basedir == ".");
 }
 
-TEST(the_older_kept_file_of_a_folder_alone_reads_as_the_first_profile) {
-  const fs::path prefs = fresh("prefs-old");
-  {
-    std::ofstream f(prefs / "game_folder.txt", std::ios::trunc);
-    f << "/games/classic\r\n";
-  }
-  const cl::KeptGame kept = cl::remembered_game(prefs.string());
-  CHECK(kept.basedir == "/games/classic");
-  CHECK(kept.profile == ge::classicenhance::q1_profile().id);
+TEST(a_game_whose_install_is_unset_gone_or_unknown_is_asked_for_or_passed_over) {
+  const std::string q1(ge::classicenhance::q1_profile().id);
+  // Set to a folder that no longer holds the game: asked for.
+  cl::BaseGame base;
+  base.game = q1;
+  base.dirs[q1] = (fresh("gone") / "nothing").string();
+  cl::Args a;
+  cl::choose_folder(a, base);
+  CHECK(a.ask_install && a.profile == q1);
+  // Not set at all: asked for.
+  base.dirs[q1].clear();
+  cl::Args b;
+  cl::choose_folder(b, base);
+  CHECK(b.ask_install);
+  // A game this build does not know: Shooter's Edge's own game, nothing asked.
+  base.game = "no-such-game";
+  cl::Args c;
+  cl::choose_folder(c, base);
+  CHECK(!c.ask_install && c.basedir == ".");
+}
+
+TEST(the_settings_are_read_from_the_config_then_the_command_line) {
+  const std::string config =
+      "seta fs_basegame \"q1\"\nfs_basedir_q1 \"/games/Quake\"\n"
+      "set fs_basedir_q2 \"/games/Quake II\"\r\nvid_mode \"3\"\n";
+  cl::BaseGame base = cl::read_base_game(std::string_view(config), {});
+  CHECK(base.game == "q1" && base.dir("q1") == "/games/Quake");
+  CHECK(base.dir("q2") == "/games/Quake II");  // a folder with a space kept whole
+  // The command line's +set words after the config, either spelling.
+  base = cl::read_base_game(std::string_view(config),
+                            {"+set", "fs_basegame", "q2", "+fs_basedir_q1", "/q1"});
+  CHECK(base.game == "q2" && base.dir("q1") == "/q1");
+  CHECK(base.dir("q3").empty());
+  // No config file: the command line alone.
+  base = cl::read_base_game(fresh("no-config") / "config.cfg", {"+set", "fs_basegame", "q1"});
+  CHECK(base.game == "q1" && base.dir("q1").empty());
+}
+
+TEST(the_settings_are_bound_kept_and_their_change_asks_for_the_game) {
+  ge::console::Console con;
+  cl::BaseGame held;
+  held.game = "q1";
+  held.dirs["q1"] = "/games/Quake";
+  cl::BaseGame bound = held;
+  const cl::BaseGame chosen = cl::bind_base_game(con.cvars(), &bound);
+  CHECK(chosen.game == "q1" && bound.game == "q1" && bound.dir("q1") == "/games/Quake");
+  CHECK(con.cvars().find("fs_basegame") != nullptr && con.cvars().find("fs_basedir_q2") != nullptr);
+  std::string seen = cl::set_base_game(con.cvars(), chosen);
+  std::string why;
+  CHECK(cl::base_game_asked(bound, &seen, &why).empty() && why.empty());  // nothing changed
+  // The window opens Quake II from a folder: both settings kept, nothing asked after.
+  cl::keep_base_game(con.cvars(), bound, "q2", "/games/Quake II", &seen);
+  CHECK(bound.game == "q2" && bound.dir("q2") == "/games/Quake II");
+  CHECK(cl::base_game_asked(bound, &seen, &why).empty() && why.empty());
+  // Set in the console: the game named asked for from its install.
+  con.cvars().set("fs_basegame", "q1", ge::console::Source::code);
+  CHECK(cl::base_game_asked(bound, &seen, &why) == "/games/Quake");
+  CHECK(cl::base_game_asked(bound, &seen, &why).empty() && why.empty());  // asked once
+  // A game with no install, and Shooter's Edge's own: nothing opens, the reason said.
+  con.cvars().set("fs_basedir_q1", "", ge::console::Source::code);
+  CHECK(cl::base_game_asked(bound, &seen, &why).empty());
+  CHECK_MSG(why.find("fs_basedir_q1") != std::string::npos, why);
+  con.cvars().set("fs_basegame", "", ge::console::Source::code);
+  CHECK(cl::base_game_asked(bound, &seen, &why).empty());
+  CHECK_MSG(why.find("next start") != std::string::npos, why);
 }
 
 TEST(a_folder_with_no_game_plays_the_baseline_mod_on_the_fallback_map) {
@@ -289,7 +318,6 @@ TEST(coopgame_in_a_running_campaign_starts_a_coop_game_that_takes_bots) {
 }
 
 TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
-  const fs::path prefs = fresh("prefs-installs");
   const fs::path shareware = fresh("shareware");
   const fs::path full = fresh("full");
   const ge::classicenhance::Profile& classic = ge::classicenhance::q1_profile();
@@ -301,59 +329,6 @@ TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
   CHECK(cl::edition_of((shareware / "gone").string(), classic) == cl::Edition::unknown);
   CHECK(cl::edition_words(cl::Edition::shareware, classic) == "Shareware");
   CHECK(cl::edition_words(cl::Edition::full, classic) == "Registered");
-
-  // Nothing kept yet; then one install a game, the last one kept for each.
-  CHECK(cl::remembered_installs(prefs.string()).empty());
-  CHECK(cl::remember_install(prefs.string(), "q1", shareware.string()));
-  CHECK(cl::remember_install(prefs.string(), "q2", "/games/Quake II"));
-  CHECK(cl::remember_install(prefs.string(), "q1", full.string()));
-  const auto kept = cl::remembered_installs(prefs.string());
-  CHECK(kept.size() == 2);
-  CHECK(kept.at("q1") == full.string());
-  CHECK(kept.at("q2") == "/games/Quake II");  // a folder with a space kept whole
-  // No preferences folder: nothing kept, nothing read.
-  CHECK(!cl::remember_install("", "q1", full.string()));
-  CHECK(cl::remembered_installs("").empty());
-}
-
-TEST(game_n_opens_the_install_kept_for_it_or_asks_for_its_folder) {
-  const fs::path prefs = fresh("prefs-number");
-  const fs::path install = fresh("number-install");
-  write_pack(install / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
-  // Nothing kept for game 1, and not started inside it: the window asks.
-  cl::Args a;
-  a.game_number = 1;
-  a.basedir = fresh("number-cwd").string();
-  cl::choose_folder(a, prefs.string());
-  CHECK(a.ask_install);
-  // Started inside its install: played, no question.
-  cl::Args inside;
-  inside.game_number = 1;
-  inside.basedir = install.string();
-  cl::choose_folder(inside, prefs.string());
-  CHECK(!inside.ask_install && fs::equivalent(inside.basedir, install));
-  // Kept for game 1 (another game loaded last): game 1's own install, no question.
-  CHECK(cl::remember_install(prefs.string(), "q1", install.string()));
-  CHECK(cl::remember_game(prefs.string(), "/games/Quake II"));
-  cl::Args kept;
-  kept.game_number = 1;
-  kept.basedir = fresh("number-cwd2").string();
-  cl::choose_folder(kept, prefs.string());
-  CHECK(!kept.ask_install && fs::equivalent(kept.basedir, install));
-  CHECK(kept.profile == ge::classicenhance::q1_profile().id && kept.game == kBase);
-  // The install kept is gone: asked again. Game 2 kept as game 1's folder: not that game, asked.
-  cl::Args q2;
-  q2.game_number = 2;
-  q2.basedir = fresh("number-cwd3").string();
-  CHECK(cl::remember_install(prefs.string(), "q2", install.string()));
-  cl::choose_folder(q2, prefs.string());
-  CHECK(q2.ask_install);
-  fs::remove_all(install);
-  cl::Args gone;
-  gone.game_number = 1;
-  gone.basedir = fresh("number-cwd4").string();
-  cl::choose_folder(gone, prefs.string());
-  CHECK(gone.ask_install);
 }
 
 TEST(the_file_words_link_over_the_game_s_files) {
@@ -383,17 +358,17 @@ TEST(the_file_words_link_over_the_game_s_files) {
 }
 
 TEST(select_game_lists_each_mission_pack_under_its_game) {
-  const fs::path prefs = fresh("prefs-packs");
   const fs::path install = fresh("packs-install");
   write_pack(install / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   write_pack(install / "rogue" / "pak0.pak", {{"maps/r1m1.bsp", {1}}});
   write_pack(install / "hipnotic" / "pak0.pak", {{"maps/hip1m1.bsp", {1}}});
   fs::create_directories(install / "xatrix");  // another game's pack's name, empty
-  CHECK(cl::remember_install(prefs.string(), "q1", install.string()));
+  cl::BaseGame base;
+  base.dirs["q1"] = install.string();
   const auto& q1 = ge::classicenhance::q1_profile();
   CHECK(cl::packs_of(install.string(), q1).size() == 2);
   // Playing the game itself: its row in colour, a row a pack under it.
-  auto rows = cl::game_rows(prefs.string(), "q1", install.string(), {}, kMulti);
+  auto rows = cl::game_rows(base, "q1", install.string(), {}, kMulti);
   CHECK_MSG(rows.size() == 3, std::to_string(rows.size()));
   if (rows.size() != 3) return;
   CHECK(rows[0].pack.empty() && rows[0].playing);
@@ -401,7 +376,7 @@ TEST(select_game_lists_each_mission_pack_under_its_game) {
         !rows[1].playing && rows[1].install == install.string());
   CHECK(rows[2].pack == "rogue" && rows[2].pack_name == "Dissolution of Eternity");
   // Playing a pack: its row in colour, the game's not.
-  rows = cl::game_rows(prefs.string(), "q1", install.string(), {}, "rogue");
+  rows = cl::game_rows(base, "q1", install.string(), {}, "rogue");
   CHECK(!rows[0].playing && !rows[1].playing && rows[2].playing);
 }
 

@@ -211,7 +211,7 @@ TEST(the_search_path_takes_the_newest_pack_s_file) {
   CHECK(cl::find_file(files, "c.txt", store).empty());
   CHECK(!cl::add_archive(files, "bad.pak", {'P', 'A', 'C', 'K'}, error));
   CHECK(!cl::open_game_dir("no-such-base-folder", "id1", files, error));
-  CHECK(error.find("-basedir") != std::string::npos);
+  CHECK(error.find("Point the game at the folder") != std::string::npos);
 }
 
 TEST(a_save_slot_reads_as_our_title_or_the_classic_comment) {

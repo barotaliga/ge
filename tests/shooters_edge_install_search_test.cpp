@@ -1,12 +1,11 @@
 // The classic installs around the game (games/shooters_edge/client/install_search.hpp) over folders
 // written here: an install found from inside its base folder, its multiplayer folder and a
 // client's folder beside them; the installs under a parent found by their folder names in any
-// case and by what they hold, named ones first; the releases told by their packs' sizes; the one
-// played: the game kept when it is among them, else the first full game; the folder an app bundle
-// was placed in; and choose_folder playing the install placed above.
+// case and by what they hold, named ones first; the releases told by their packs' sizes; the folder
+// an app bundle was placed in; and the installs near the game listed, never played on their own.
 //
 // ge:summary Tests the classic installs around the game: started inside, placed above, releases
-// ge:keywords test shooters-edge installs install_around installs_below release_of pick_install
+// ge:keywords test shooters-edge installs install_around installs_below release_of installs_near
 // ge:keywords placed_folder nquake parent-folder shareware registered demo full-game
 // ge:skill shooter classicenhance testing
 #include <filesystem>
@@ -97,10 +96,6 @@ TEST(installs_under_a_parent_are_found_by_name_in_any_case_and_by_what_they_hold
   CHECK(found[2].content == &q2() && found[2].release == "demo" && !found[2].full);
   CHECK(fs::path(found[3].basedir).filename() == "Other Folder");
   CHECK(found[3].release == "your own copy" && found[3].full);
-  // The one played: the first full game, unless the game kept is among them.
-  CHECK(cl::pick_install(found, "") == 1);
-  CHECK(cl::pick_install(found, found[2].basedir) == 2);
-  CHECK(cl::pick_install({}, "") == -1);
   CHECK(cl::install_line(found[1], 2).find("(registered)") != std::string::npos);
   // Its mission packs beside its base folder, in the profile's order.
   CHECK(found[1].packs.size() == 2 && found[1].packs[0]->name == "Scourge of Armagon");
@@ -130,26 +125,22 @@ TEST(the_folder_the_game_was_placed_in_is_the_one_holding_its_app) {
   CHECK(cl::placed_folder("").empty());
 }
 
-TEST(the_game_placed_above_installs_plays_one_of_them_ahead_of_the_kept_game) {
+TEST(the_installs_near_the_game_are_listed_and_never_played_on_their_own) {
   const fs::path parent = fresh("placed");
   pack(parent / kOneLower / "id1" / "pak0.pak", 18689235);
   pack(parent / kTwo / "baseq2" / "pak0.pak", 183997730);
-  const fs::path prefs = fresh("placed-prefs");
-  const fs::path kept = fresh("placed-kept");
-  pack(kept / "id1" / "pak0.pak");
-  CHECK(cl::remember_game(prefs.string(), kept.string()));
+  // Placed above two installs (and inside one of them twice over): each listed once.
+  const std::vector<cl::FoundInstall> found =
+      cl::installs_near({parent.string(), (parent / kTwo / "baseq2").string()});
+  CHECK_MSG(found.size() == 2, std::to_string(found.size()));
+  // The game played is the settings' alone: none set, Shooter's Edge's own game; Quake II picked,
+  // no install set for it, its folder asked for though one lies beside the game.
+  cl::BaseGame base;
   cl::Args a;
-  a.basedir = fresh("placed-cwd").string();
-  std::vector<cl::FoundInstall> found;
-  cl::choose_folder(a, prefs.string(), {parent.string()}, &found);
-  CHECK(found.size() == 2);
-  CHECK(fs::equivalent(a.basedir, parent / kTwo));  // the first full game
-  CHECK(a.profile == q2().id);
-  CHECK(a.game == q2().base_dir);
-  // The game kept is one of them: it is played.
-  CHECK(cl::remember_game(prefs.string(), (parent / kOneLower).string()));
+  cl::choose_folder(a, base);
+  CHECK(a.basedir == "." && !a.ask_install);
+  base.game = std::string(q2().id);
   cl::Args b;
-  b.basedir = fresh("placed-cwd2").string();
-  cl::choose_folder(b, prefs.string(), {parent.string()});
-  CHECK(fs::equivalent(b.basedir, parent / kOneLower));
+  cl::choose_folder(b, base);
+  CHECK(b.ask_install && b.profile == q2().id);
 }

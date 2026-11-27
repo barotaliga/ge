@@ -61,32 +61,6 @@ bool flag_like(std::string_view w) {
          std::isalpha(static_cast<unsigned char>(w[dashes])) != 0;
 }
 
-namespace {
-
-// `-classic <id>`: the content profile of that id (classicenhance/profile.hpp's `kProfiles`: q1,
-// q2), kept as its number from 1. False with `why` on anything else, the games there are named; a
-// mod's folder is `-game <folder>`.
-bool game_named(std::string_view v, Args& a, std::string& why) {
-  constexpr int kGames = static_cast<int>(std::size(ge::classicenhance::kProfiles));
-  for (int i = 0; i < kGames; ++i)
-    if (ge::classicenhance::kProfiles[i].id == v) {
-      a.game_number = i + 1;
-      return true;
-    }
-  std::string games;
-  for (int i = 0; i < kGames; ++i)
-    games += (i == 0            ? ""
-              : i + 1 == kGames ? " or "
-                                : ", ") +
-             std::string(ge::classicenhance::kProfiles[i].id) + " (" +
-             std::string(ge::classicenhance::kProfiles[i].what) + ")";
-  why = "-classic " + std::string(v) + " is no game: the games are " + games +
-        ". A mod's folder is -game <folder>.";
-  return false;
-}
-
-}  // namespace
-
 bool known_flag(std::string_view word) {
   for (const Flag& f : kFlags)
     for (const std::string_view n : {f.name, f.also}) {
@@ -139,10 +113,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
     // from a `+` to the next flag or `+`, so `+r_look modern -timedemo demo1` is a look and a
     // benchmark, not one console line of four words.
-    if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
-      a.basedir = expand_home(argv[++i]);
-      a.basedir_set = true;
-    } else if (arg == "-hidden" || arg == "--hidden") {
+    if (arg == "-hidden" || arg == "--hidden") {
       a.hidden = true;
     } else if (arg == "-recipes" || arg == "--recipes") {
       a.recipes = true;
@@ -198,10 +169,6 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.tv = argv[++i];
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
       a.playdemo = expand_home(argv[++i]);
-    } else if ((arg == "-classic" || arg == "--classic") && i + 1 < argc) {
-      if (!game_named(argv[++i], a, why)) return false;
-    } else if (arg.rfind("--classic=", 0) == 0) {
-      if (!game_named(arg.substr(10), a, why)) return false;
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
       a.game = argv[++i];
       a.game_set = true;

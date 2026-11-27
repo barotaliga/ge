@@ -26,6 +26,7 @@ prefix comes the thing in one word, abbreviated when it is long: `r_shadowsize`,
 | `con_` | the drop-down console | `con_height`, `con_speed`, `con_chat` |
 | `hud_` | the HUD | `hud_scale` |
 | `scr_` | the screen as a whole: its overlays and the screenshots taken of it | `scr_levelstats`, `scr_format`, `scr_quality` |
+| `fs_` | the files: which game is played, where each is installed, the shell's own config files | `fs_basegame`, `fs_basedir_q1`, `fs_autoexec` |
 | none | a few names everyone knows | `name`, `rate`, `sensitivity`, `volume` |
 
 `ge cvar ls <prefix>` lists a game's cvars with a prefix; a new name matches its neighbours'
@@ -533,7 +534,7 @@ programs' own registrations, never kept by hand, so it cannot fall behind the co
    flags by). A program with games writes one PASS per game: Shooter's Edge's window loads each
    game's own layer in turn as a game switch does (`se -manual <file>`, client/manual.hpp; the
    Quake pass is QuakeWorld's too), the dedicated server writes the game it serves
-   (`sesv [-classic q2] --manual=<file>`); any console writes its one pass with `writemanual`.
+   (`sesv [+set fs_basegame q2] --manual=<file>`); any console writes its one pass with `writemanual`.
    A dedicated server's GAME words (its rules' `map`, its admin's `kick`, the relay's and the
    lists' words), which the game takes through `ServerGame::console`, are declared as
    `ServerGame::words` (`GameWord`, Shooter's Edge's `net/server_words.hpp`) and registered on the

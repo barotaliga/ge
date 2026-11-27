@@ -79,7 +79,7 @@ void write_block(const ge::progs::EntityBlock& b, std::string& out) {
 
 }  // namespace
 
-// What a cr_ switch naming a game takes: a game's id, as -classic and SELECT GAME know it.
+// What a cr_ switch naming a game takes: a game's id, as fs_basegame and SELECT GAME know it.
 constexpr std::string_view kWhoseValues =
     "\"\": the played game's own (the default); q1: Quake's; q2: Quake II's";
 
@@ -168,7 +168,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: the base games alone, a pack's own items left out; 1: the packs "
                         "installed beside each game too (the default)"},
              &out->expansions);
-  cvars.bind({.name = "cr_strong_min",
+  cvars.bind({.name = "cr_items_strong_min",
               .fallback = "1",
               .flags = kServerSetting,
               .help = "How many strong weapons (the rocket launcher's kind) a remixed map keeps at "
@@ -179,7 +179,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: as the item table gives them; 1: one at least (the default); N: that "
                         "many at least"},
              &out->balance.strong_min);
-  cvars.bind({.name = "cr_strong_share",
+  cvars.bind({.name = "cr_items_strong_share",
               .fallback = "0.4",
               .flags = kServerSetting,
               .help = "The share of a remixed map's weapons that may be strong at most; the "
@@ -190,7 +190,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: none strong; 0.4: two strong of five weapons (the default); 1: no "
                         "limit"},
              &out->balance.strong_share);
-  cvars.bind({.name = "cr_strong_same",
+  cvars.bind({.name = "cr_items_strong_same",
               .fallback = "2",
               .flags = kServerSetting,
               .help = "How many copies of one strong weapon a remixed map keeps at most; the rest "
@@ -200,7 +200,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .max = 8,
               .values = "0: no limit; 2: two of a kind at most (the default)"},
              &out->balance.strong_same);
-  cvars.bind({.name = "cr_weak_same",
+  cvars.bind({.name = "cr_items_weak_same",
               .fallback = "2",
               .flags = kServerSetting,
               .help = "How many copies of one weak weapon (the shotguns' kind) a remixed map keeps "
@@ -210,7 +210,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .max = 16,
               .values = "0: no limit; N: at most that many (2 the default)"},
              &out->balance.weak_same);
-  cvars.bind({.name = "cr_pool_radius",
+  cvars.bind({.name = "cr_items_pool_radius",
               .fallback = "160",
               .flags = kServerSetting,
               .help = "How near one another a map's small pickups lie to be gathered into the "
@@ -223,21 +223,17 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->balance.pool_radius);
 }
 
-std::vector<KnownGame> known_games(const std::string& prefs, std::string_view played,
+std::vector<KnownGame> known_games(const BaseGame& base, std::string_view played,
                                    const std::string& played_basedir) {
   std::vector<KnownGame> out;
-  const auto kept = remembered_installs(prefs);
   for (const ce::Profile& p : ce::kProfiles) {
     KnownGame g;
     g.id = std::string(p.id);
-    if (p.id == played)
-      g.basedir = played_basedir;
-    else if (const auto it = kept.find(p.id); it != kept.end())
-      g.basedir = it->second;
-    std::string base, why;
-    if (g.basedir.empty() || !check_game_folder(g.basedir, &base, &why, p)) continue;
-    g.basedir = base;
-    g.edition = edition_of(base, p);
+    g.basedir = p.id == played ? played_basedir : base.dir(p.id);
+    std::string found, why;
+    if (g.basedir.empty() || !check_game_folder(g.basedir, &found, &why, p)) continue;
+    g.basedir = found;
+    g.edition = edition_of(found, p);
     out.push_back(std::move(g));
   }
   return out;
@@ -463,6 +459,8 @@ struct Item {
   std::string becomes;  // "" dropped
   int32_t bits = 0;
   const pf::PoolItem* pool = nullptr;
+  // More of a pool laid on this spot, past the one `becomes` names: (class, variant bits).
+  std::vector<std::pair<std::string, int32_t>> also;
   const pf::PackSpawn* pack = nullptr;  // the played pack's own weapon for its role, if any
   std::string by_role;                  // what the role table gave, before the balance
 };
@@ -609,7 +607,42 @@ void balance_weapons(std::vector<Item>& items, std::string_view to, const pf::Re
   }
 }
 
-// The pools: small pickups near one another added up and laid down as the target's own sizes.
+// The target's sizes whose sum comes nearest `total`, largest first: the fewest pickups on a
+// tie, then the sum under the total. `sizes` is largest first; empty for a pool nearer nothing.
+std::vector<const pf::PoolOutput*> nearest_sum(const std::vector<const pf::PoolOutput*>& sizes,
+                                               int total) {
+  std::vector<const pf::PoolOutput*> out;
+  if (sizes.empty() || total <= 0) return out;
+  const int top = total + sizes.front()->amount;
+  constexpr int kNone = 1 << 30;
+  std::vector<int> fewest(size_t(top) + 1, kNone);  // pickups that sum to s exactly
+  std::vector<int> last(size_t(top) + 1, -1);       // the size the last one is
+  fewest[0] = 0;
+  for (int sum = 1; sum <= top; sum++)
+    for (size_t k = 0; k < sizes.size(); k++) {
+      const int a = sizes[k]->amount;
+      if (a <= 0 || a > sum || fewest[size_t(sum - a)] == kNone) continue;
+      if (fewest[size_t(sum - a)] + 1 < fewest[size_t(sum)]) {
+        fewest[size_t(sum)] = fewest[size_t(sum - a)] + 1;
+        last[size_t(sum)] = int(k);
+      }
+    }
+  int best = 0;
+  for (int sum = 1; sum <= top; sum++) {
+    if (fewest[size_t(sum)] == kNone) continue;
+    const int off = std::abs(sum - total), was = std::abs(best - total);
+    if (off < was || (off == was && fewest[size_t(sum)] < fewest[size_t(best)])) best = sum;
+  }
+  for (int sum = best; sum > 0; sum -= sizes[size_t(last[size_t(sum)])]->amount)
+    out.push_back(sizes[size_t(last[size_t(sum)])]);
+  std::stable_sort(out.begin(), out.end(), [](const pf::PoolOutput* x, const pf::PoolOutput* y) {
+    return x->amount > y->amount;
+  });
+  return out;
+}
+
+// The pools: health and armour near one another added up and laid down as the target's own
+// sizes, the sum nearest the total (profiles/remix.hpp § THE BALANCE).
 void lay_pools(std::vector<Item>& items, std::string_view to, const pf::RemixBalance& bal,
                RemixReport& r) {
   const float r2 = bal.pool_radius * bal.pool_radius;
@@ -637,26 +670,28 @@ void lay_pools(std::vector<Item>& items, std::string_view to, const pf::RemixBal
     for (size_t m : members) total += items[m].pool->amount;
     r.pooled += static_cast<int>(members.size());
     for (size_t m : members) items[m].becomes.clear();
-    std::vector<const pf::PoolOutput*> outs;  // the target's sizes, largest first (table order)
+    std::vector<const pf::PoolOutput*> sizes;  // the target's sizes, largest first (table order)
     for (const pf::PoolOutput& o : pf::kPoolOutputs)
-      if (o.to == to && o.pool == items[i].pool->pool) outs.push_back(&o);
-    if (outs.empty()) continue;
-    const int smallest = outs.back()->amount;
+      if (o.to == to && o.pool == items[i].pool->pool) sizes.push_back(&o);
+    const std::vector<const pf::PoolOutput*> picks = nearest_sum(sizes, total);
     std::string laid;
-    int left = total;
-    for (size_t m = 0; m < members.size() && 2 * left >= smallest; m++) {
-      const pf::PoolOutput* pick = outs.back();
-      for (const pf::PoolOutput* o : outs)
-        if (o->amount <= left) {
-          pick = o;
-          break;
-        }
-      items[members[m]].becomes = std::string(pick->class_name);
-      items[members[m]].bits = pick->bits;
-      left -= pick->amount;
+    int sum = 0;
+    for (size_t k = 0; k < picks.size(); k++) {
+      Item& spot = items[members[k % members.size()]];
+      if (k < members.size()) {
+        spot.becomes = std::string(picks[k]->class_name);
+        spot.bits = picks[k]->bits;
+      } else {
+        spot.also.emplace_back(std::string(picks[k]->class_name), picks[k]->bits);
+      }
+      sum += picks[k]->amount;
       r.laid++;
-      laid += (laid.empty() ? "" : " + ") + std::to_string(pick->amount);
+      laid += (laid.empty() ? "" : " + ") + std::to_string(picks[k]->amount);
     }
+    if (picks.size() < members.size())
+      r.pool_dropped += static_cast<int>(members.size() - picks.size());
+    r.pool_total += total;
+    r.pool_laid += sum;
     r.notes.push_back(std::to_string(members.size()) + " " + std::string(items[i].pool->pool) +
                       " pickups near " + where(items[i]) + " worth " + std::to_string(total) +
                       " laid down as " + (laid.empty() ? "nothing" : laid));
@@ -689,7 +724,7 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
     it.flags = std::atoi(std::string(value_of(blocks[bi], "spawnflags")).c_str());
     std::sscanf(std::string(value_of(blocks[bi], "origin")).c_str(), "%f %f %f", &it.at[0],
                 &it.at[1], &it.at[2]);
-    it.pool = pf::pool_item(from, to, cls);
+    it.pool = pf::pool_item(from, to, cls, it.flags);
     if (it.pool == nullptr) {
       const pf::ItemSwap swap = pf::remix_item(from, to, cls, it.flags, packs);
       it.becomes = std::string(swap.becomes);
@@ -712,6 +747,7 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
   for (const Item& it : items) {
     by_block[it.block] = &it;
     count(r, it.cls, it.becomes);
+    for (const auto& more : it.also) count(r, it.cls, more.first);
     (it.becomes.empty() ? r.dropped : r.swapped)++;
   }
   out.clear();
@@ -748,6 +784,21 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
         if (k == "origin") v = place;
     }
     write_block(b, out);
+    // A pool's further pickups stacked on the spot, each its own block.
+    for (const auto& [cls, bits] : it->also) {
+      ge::progs::EntityBlock more = b;
+      const int32_t f = (it->flags & ~pf::kItemBits) | bits;
+      bool flagged = false;
+      for (auto& [k, v] : more.pairs) {
+        if (k == "classname") v = cls;
+        if (k == "spawnflags") {
+          v = std::to_string(f);
+          flagged = true;
+        }
+      }
+      if (!flagged && f != 0) more.pairs.emplace_back("spawnflags", std::to_string(f));
+      write_block(more, out);
+    }
   }
   return true;
 }
@@ -755,7 +806,7 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
 std::string remix_line(const RemixReport& r, std::string_view to) {
   const ce::Profile* p = ce::find_profile(to);
   const std::string whose = p != nullptr ? std::string(p->what) : std::string(to);
-  const int unmatched = r.dropped - (r.pooled - r.laid);
+  const int unmatched = r.dropped - r.pool_dropped;
   std::string line =
       "Classic remix: the map's " + std::to_string(r.items) + " items swapped for " + whose + "'s";
   if (r.pooled > 0)
@@ -823,10 +874,10 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
   return true;
 }
 
-std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const std::string& prefs,
+std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const BaseGame& base,
                            std::string_view played, const std::string& basedir,
                            const std::string& game) {
-  const RemixState st = remix_check(s, played, known_games(prefs, played, basedir));
+  const RemixState st = remix_check(s, played, known_games(base, played, basedir));
   std::string why;
   if (!open_remix(r, st, played, basedir, game, why)) return why;
   if (!st.on) return st.why;

@@ -94,13 +94,13 @@ echo "bot-match-video: playing $map, seed $seed, $minutes minutes ($name)"
   exit 1
 }
 grep -E '^  team\.(red|blue)\.frags ' "$work/videos/$name.log" | awk '{printf "  %s %s\n", $1, $2}'
-echo "bot-match-video: the demo is $mvd (watch: $game -basedir $basedir -playdemo $mvd)"
+echo "bot-match-video: the demo is $mvd (watch: $game +set fs_basegame q1 +set fs_basedir_q1 $basedir -playdemo $mvd)"
 echo "bot-match-video: why a bot did something at a moment: make bot-why" \
   "ARGS=\"--video=$name --bot=<name> --at=<m:ss>\""
 ((video)) || exit 0
 
 echo "bot-match-video: rendering $mkv"
-"$game" -basedir "$basedir" -demovideo "$mvd" "$mkv" --autotrack \
+"$game" +set fs_basegame q1 +set fs_basedir_q1 "$basedir" -demovideo "$mvd" "$mkv" --autotrack \
   >"$work/videos/$name-video.log" 2>&1 || {
   echo "bot-match-video: the render failed; next: read $work/videos/$name-video.log" >&2
   exit 1
