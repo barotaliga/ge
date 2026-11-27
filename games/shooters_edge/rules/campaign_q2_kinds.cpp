@@ -661,8 +661,9 @@ void sq_found(A& q) {
 
 // HEARING, Quake II's: with no enemy, a player's shot of the last fifth of a second within 1000
 // units that it may hear (in its sight's set of places; an ambusher must see where it was) turns it
-// to the noise and sends it there, its first shot a second off. True when it heard one now or goes
-// to one already.
+// to the noise and sends it there, its first shot a second off; so does where his shot landed in
+// that fifth, within 1000 and in a clear line from it (no ambusher). True when it heard one now or
+// goes to one already.
 bool sq_hear(A& q) {
   const int32_t me = q.self();
   if (q.i(me, q.L.f.enemy) != 0) return false;
@@ -686,7 +687,35 @@ bool sq_hear(A& q) {
     q.set_f(me, f_attack_finished, q.time() + static_cast<float>(q2_mind::kFirstWait));
     return true;
   }
+  // Where his shot landed, within 1000 and in a clear line from it: heard by one with no enemy
+  // that lies in no ambush.
+  if (q2_mind::hears_impact(ambush, false)) {
+    for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+         p = q.find(p, q.L.f.classname, q.s(s_player))) {
+      if ((q.f(p, q.L.f.health) <= 0) || on(band(q.f(p, q.L.f.flags), kFlNotarget))) continue;
+      const float when = q.f(p, f_sq_impact);
+      if (when <= 0 || when < q.time() - static_cast<float>(q2_mind::kHeardFor)) continue;
+      const Vec3 at = q.v(p, f_sq_impact_at);
+      if (q.vlen(at - q.v(me, q.L.f.origin)) > q2_mind::kHear) continue;
+      q.traceline(at, eye_of(q, me), 1, me);
+      if (q.gf(q.L.g.trace_fraction) < 1) continue;
+      q.set_f(me, f_sq_sound, q.time());
+      q.set_v(me, f_sq_sound_at, at);
+      q.set_f(me, q.L.f.ideal_yaw, q.vectoyaw(at - q.v(me, q.L.f.origin)));
+      q.set_f(me, f_attack_finished, q.time() + static_cast<float>(q2_mind::kFirstWait));
+      return true;
+    }
+  }
   return q.f(me, f_sq_sound) > 0;
+}
+
+// A player's shot landed at `at` (`by` the player or his missile): Quake II's monsters may hear it.
+void sq_note_impact(A& q, int32_t by, Vec3 at) {
+  const int32_t p = q.is(q.i(by, q.L.f.classname), "player") ? by : q.i(by, q.L.f.owner);
+  if (p == 0 || !q.is(q.i(p, q.L.f.classname), "player")) return;
+  if (on(band(q.f(p, q.L.f.flags), kFlNotarget))) return;
+  q.set_f(p, f_sq_impact, q.time());
+  q.set_v(p, f_sq_impact_at, at);
 }
 
 // A step toward the noise it heard: within 64 units it stands facing it, and 5 s on forgets it

@@ -222,6 +222,13 @@ struct Field {  // a line: the monster at `at`, marks at 100, 200, 300
   void correct() {}
 };
 
+TEST(where_a_shot_lands_is_heard_only_with_no_enemy_and_no_ambush) {
+  CHECK(q2_mind::hears_impact(false, false));
+  CHECK(!q2_mind::hears_impact(true, false));
+  CHECK(!q2_mind::hears_impact(false, true));
+  CHECK(q2_mind::kHeardFor == 0.2);
+}
+
 TEST(the_chase_goes_to_the_last_sighting_then_the_trail_then_at_him) {
   Chase c;
   Field w;

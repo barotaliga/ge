@@ -172,6 +172,9 @@ void line_shot(A& q, Vec3 start, Vec3 dir, Vec3 right, Vec3 up, float h, float v
     return;
   }
   if (q.pointcontents(at + dir * 2) == kContentSky) return;
+#if defined(SE_RULES_CAMPAIGN)
+  sq_note_impact(q, me, at);  // Quake II's monsters may hear where it landed
+#endif
   effect_at(q, puff, at, normal);
 }
 
@@ -511,6 +514,9 @@ void q2_bolt_touch(A& q) {
     hit(q, q.other(), me, q.i(me, q.L.f.owner), q.f(me, f_dmg), static_cast<float>(arm(a).kick), a,
         false);
   } else {
+#if defined(SE_RULES_CAMPAIGN)
+    sq_note_impact(q, me, q.v(me, q.L.f.origin));  // Quake II's monsters may hear where it landed
+#endif
     effect_at(q, idx(gc::kQ2HitBolt), q.v(me, q.L.f.origin), back);
   }
   q.remove(me);
@@ -530,6 +536,9 @@ void q2_rocket_touch(A& q) {
     hit(q, q.other(), me, owner, q.f(me, f_dmg), 0, a, false);
   q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) - q.normalize(q.v(me, q.L.f.velocity)) * 8);
   q2_radius(q, me, owner, gc::kQ2RocketSplash, q.other(), gc::kQ2RocketRadius, a);
+#if defined(SE_RULES_CAMPAIGN)
+  sq_note_impact(q, me, q.v(me, q.L.f.origin));  // Quake II's monsters may hear where it landed
+#endif
   const bool wet = q.pointcontents(q.v(me, q.L.f.origin)) <= -3;
   effect_at(q, idx(wet ? gc::kQ2RocketBlastWater : gc::kQ2RocketBlast), q.v(me, q.L.f.origin),
             {0, 0, 1});
@@ -572,6 +581,9 @@ void q2_grenade_blast(A& q) {
     blow_done(q);
   }
   q2_radius(q, me, owner, points, enemy, gc::kQ2GrenadeRadius, a);
+#if defined(SE_RULES_CAMPAIGN)
+  sq_note_impact(q, me, q.v(me, q.L.f.origin));  // Quake II's monsters may hear where it landed
+#endif
   const bool wet = q.pointcontents(q.v(me, q.L.f.origin)) <= -3;
   effect_at(q, idx(wet ? gc::kQ2GrenadeBlastWater : gc::kQ2GrenadeBlast), q.v(me, q.L.f.origin),
             {0, 0, 1});

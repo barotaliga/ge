@@ -310,6 +310,31 @@ TEST(arrows_leave_the_list_for_the_typed_line_and_the_history) {
   CHECK(v.selected() == 0);
 }
 
+// Tab with several matches completes to what they all start with and keeps the list open; with
+// nothing more to add it selects the first row, and Tab again takes it.
+TEST(tab_completes_to_the_shared_part_and_keeps_the_list) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_particles", .fallback = "1"});
+  c.cvars().add({.name = "r_particle_scale", .fallback = "1"});
+  c.cvars().add({.name = "r_taa", .fallback = "1"});
+  v.type("/r_part");
+  CHECK(v.hint() == "icle");  // what Tab adds
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/r_particle" && v.suggestions().size() == 2 && v.selected() == -1);
+  CHECK(v.hint().empty());
+  v.key(EditKey::tab);  // nothing more shared: into the list
+  CHECK(v.selected() == 0 && v.suggestions()[0].name == "r_particles");
+  v.key(EditKey::down);
+  CHECK(v.selected() == 1 && v.hint() == "_scale");
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/r_particle_scale ");
+  while (!v.input().empty()) v.key(EditKey::backspace);
+  v.type("/r_t");
+  v.key(EditKey::tab);  // the one match: taken
+  CHECK(v.input() == "/r_taa ");
+}
+
 // Under a game's own Tab (list_mode) a selected row is still what Tab takes.
 TEST(tab_takes_the_selected_row_under_a_games_own_tab) {
   Console c;
@@ -348,8 +373,8 @@ TEST(suggestions_rank_by_use_then_length) {
   std::vector<Suggestion> s = v.suggestions();
   CHECK(s.size() == 3 && s[0].name == "sv_delay" && s[1].name == "sv_demotxt");
   CHECK(s[0].kind == Suggestion::Kind::cvar && s[0].detail == "5");
-  CHECK(v.hint() == "lay");
-  v.key(EditKey::enter);  // nothing selected: the line runs as typed (and fails, unknown)
+  CHECK(v.hint().empty());  // all three share only "sv_de": Tab would add nothing
+  v.key(EditKey::enter);    // nothing selected: the line runs as typed (and fails, unknown)
   for (int i = 0; i < 2; ++i) {
     v.type("/sv_deathmatch 1");
     v.key(EditKey::enter);
@@ -362,6 +387,9 @@ TEST(suggestions_rank_by_use_then_length) {
   v.key(EditKey::backspace);  // "/sv_d": the most used one is still on top
   s = v.suggestions();
   CHECK(s.size() == 3 && s[0].name == "sv_deathmatch" && s[0].uses == 2);
+  v.key(EditKey::tab);  // to the shared part, then into the list at the most used, then taken
+  CHECK(v.input() == "/sv_de" && v.selected() == -1);
+  v.key(EditKey::tab);
   v.key(EditKey::tab);
   CHECK(v.input() == "/sv_deathmatch " && v.suggestions().empty());
   c.execute("con_suggest 2");
