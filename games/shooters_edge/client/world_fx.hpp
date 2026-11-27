@@ -217,7 +217,7 @@ inline constexpr uint32_t kMarks = 256;
 // bright at a level of 1 (the lightmaps' units).
 inline constexpr int kMarkGlowLights = 6;
 inline constexpr double kMarkGlowGain = 3;
-inline constexpr double kHoleM = 0.16, kNailHoleM = 0.2;
+inline constexpr double kHoleM = 0.28, kNailHoleM = 0.32;
 inline constexpr double kPelletSpread = 0.04;  // a shot's pellets' cone, rad: one message's holes
 // THE WOUNDS (ce_decals): where a round struck a body, a hole with blood splattered round it,
 // pinned to the body's own triangle there (body_triangles, the point's place on it), so it rides
