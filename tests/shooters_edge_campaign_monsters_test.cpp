@@ -6,7 +6,8 @@
 // swordsman and a brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down
 // by a big one and gets up again whole, and only its whole health in one blow ends it; a flyer
 // keeps its height and spits at the player. Quake II's guard hears where a shot lands and steps
-// aside round what blocks its way to where it last saw the player. The big and
+// aside round what blocks its way to where it last saw the player; Quake II's soldier and tank
+// take their pains by Quake II's table. The big and
 // late kinds: each counts at spawn and hurts a player in front of it, the giant takes half of a
 // blast, and a spawn bursts when it dies. The bosses: the lava boss rises when used, throws, and
 // falls to three strikes; arriving inside the final boss kills it and ends the game; a teleport
@@ -17,6 +18,7 @@
 // ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
 // ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
 // ge:keywords teleport-train event-lightning animation-frames death-frames impact-heard side-step
+// ge:keywords pains-as-data
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <string>
@@ -144,6 +146,49 @@ TEST(a_q2_guard_blocked_on_its_way_to_the_last_sighting_steps_aside) {
     CHECK(g.field(goal, g.f().origin) > -400);   // short of the sighting
   }
   CHECK(g.s().q.faults == 0);
+}
+
+// Quake II's soldier and tank (classic remix) hurt in Quake's campaign take their pains by Quake
+// II's table: the soldier cries and plays one of its three pain runs, then waits 3 s, a blow in
+// the wait doing nothing; the tank ignores a blow of 10 or less; at skill 3 the soldier only
+// cries, and every blow puts the next pain 5 s off.
+TEST(a_q2_soldier_and_tank_take_their_pains_by_quake_iis_table) {
+  for (const int skill : {1, 3}) {
+    Game g(R"({
+"classname" "monster_soldier"
+"origin" "-100 0 24"
+"angle" "0"
+}
+{
+"classname" "monster_tank"
+"origin" "-100 200 24"
+"angle" "0"
+}
+)",
+           {"skill " + std::to_string(skill)});
+    const int soldier = g.find("monster_soldier"), tank = g.find("monster_tank");
+    CHECK(soldier > 0 && tank > 0);
+    for (int i = 0; i < 2; i++) CHECK_MSG(g.frame(), g.error);
+    const float now = g.global("time");
+    CHECK_MSG(g.hit(soldier, 1, 5), g.error);
+    CHECK(g.named(soldier, "sq_health") == g.field(soldier, g.f().health));
+    const float first = g.named(soldier, "fr_now_x");
+    const bool flinched = first == 50 || first == 55 || first == 62;
+    CHECK_MSG(flinched == (skill < 3), std::to_string(first));
+    const float wait = g.named(soldier, "pain_finished") - now;
+    CHECK_MSG(wait > (skill < 3 ? 2.9f : 4.9f) && wait < (skill < 3 ? 3.1f : 5.1f),
+              std::to_string(wait));
+    if (skill < 3) {  // a blow in the wait: nothing new
+      CHECK_MSG(g.hit(soldier, 1, 5), g.error);
+      CHECK(g.named(soldier, "fr_now_x") == first);
+    }
+    CHECK_MSG(g.hit(tank, 1, 10), g.error);
+    // Its wait untouched (at skill 3 every blow still puts the next pain 5 s off).
+    CHECK(skill < 3 ? g.named(tank, "pain_finished") == 0
+                    : g.named(tank, "pain_finished") > now + 4.9f);
+    CHECK(g.named(tank, "fr_now_x") < 197);
+    CHECK(g.s().q.faults == 0);
+  }
 }
 
 TEST(a_death_counts_and_fires_the_monsters_targets) {
