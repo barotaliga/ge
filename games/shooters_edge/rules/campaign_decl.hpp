@@ -105,7 +105,8 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_grenade_touch, "sq_grenade_touch")             \
   X(sq_rocket_touch, "sq_rocket_touch")               \
   X(sq_leap_touch, "sq_leap_touch")                   \
-  X(sq_medic_check, "sq_medic_check")
+  X(sq_medic_check, "sq_medic_check")                 \
+  X(sq_check, "sq_check")
 
 // THE CAMPAIGN'S OWN FUNCTIONS by name: the hooks, the map's things, every think, touch, use and
 // `th_` a rule stores (the C++ `main_hook` is the program's `main`). `use_targets` is shared but
@@ -371,6 +372,11 @@ int32_t monster_missile(A& q, int32_t mdl, float spd, float points, float lob);
 void flinch(A& q, Fn again, float steps);
 void monster_kind(A& q, St sight, St death, St head, float gib_health, float walk, float run);
 void lands_no_flag(A& q, int32_t e);
+// campaign_q2_kinds: Quake II's monsters decide by Quake II's mind (server/q2_monster_mind.hpp)
+bool sq_runs(A& q, int32_t e);
+bool sq_choose(A& q);
+bool sq_sees(A& q, int32_t foe);
+bool sq_hurt_by_monster(A& q, int32_t attacker);
 // campaign_monsters
 void leap_off(A& q, float fwd, float up, Fn touch);
 void ai_precache(A& q);
