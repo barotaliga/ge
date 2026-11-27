@@ -353,7 +353,7 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
         "record: \"" + name + "\" can't be a recording's name: use 1 to 64 letters, digits, _ or -";
     return false;
   }
-  if (files.folder.empty()) {
+  if (own_folder(files).empty()) {
     error = "record: there is no game folder to keep recordings in (pick the game's folder first)";
     return false;
   }
@@ -363,9 +363,9 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
   }
   const int level = record_pack_level(s);
   sv::Q2Server* q2 = l.rules ? sv::q2_of(*l.rules) : nullptr;
-  const fs::path file = fs::path(files.folder) / (name + (q2          ? ".ged"
-                                                          : level > 0 ? ".mvdz"
-                                                                      : ".mvd"));
+  const fs::path file = fs::path(own_folder(files)) / (name + (q2          ? ".ged"
+                                                               : level > 0 ? ".mvdz"
+                                                                           : ".mvd"));
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
   r.file.open(file, std::ios::binary | std::ios::trunc);

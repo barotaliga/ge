@@ -134,6 +134,12 @@ class Screenshots {
   void flush();
 
   const std::string& dir() const { return dir_; }
+  // Another folder for the pictures from the next one taken (another game opened); called on the
+  // thread that hands them in, as `write` is. The folder, as `dir`.
+  const std::string& set_dir(std::string dir) {
+    dir_ = std::move(dir);
+    return dir_;
+  }
 
  private:
   struct Job {

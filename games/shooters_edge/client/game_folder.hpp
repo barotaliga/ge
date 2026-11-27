@@ -14,8 +14,13 @@
 //   else the base folder, so the install plays as the multiplayer client sees it.
 // - **Which install opens** (`choose_folder`): the game `fs_basegame` names, from its
 //   `fs_basedir_<id>`, or the window asks for its folder when that is empty or does not open; with
-//   `fs_basegame` "", Shooter's Edge's own game, from the folder the game runs in. The installs
-//   around the game (client/install_search.hpp) are only listed, for `games`.
+//   `fs_basegame` "", Shooter's Edge's own game, from its own folder in the data folder
+//   (`own_game_folder`, `<data folder>/se`). The installs around the game
+//   (client/install_search.hpp) are only listed, for `games`.
+// - **Where the player's files go**: under the game folder opened, so each game keeps its own:
+//   `<data folder>/<q1|q2|se>/<game folder>/` holds its `saves/`, `screenshots/`, recordings,
+//   `settings/config.cfg` (its own meanings) and downloads. A classic game is played from its copy
+//   in the data folder (client/take_in.hpp), never from the install it was taken from.
 // - **What it holds** (`load_programs`): the multiplayer program (`-progs`, else the game's own
 //   program files, a mod's folder first, else the baseline mod), the single-player program the
 //   campaign runs, whether the packs are the full game, and the first map (the profile's start
@@ -27,6 +32,7 @@
 // ge:keywords install_of which-game content-profile q2
 // ge:keywords fs_basegame fs_basedir game-played load_programs first-map
 // ge:keywords campaign-program path-command search-path
+// ge:keywords own_game_folder user-files per-game-folder
 // ge:keywords choose_folder campaign_commands newgame coopgame save load new_game_level intro
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
@@ -68,9 +74,15 @@ std::string game_of(const std::string& basedir,
 
 // The install the window opens, into `args`: the game `base.game` names, from its
 // `fs_basedir_<id>` when that still checks, else `args.ask_install` (the chooser asks for it);
-// `base.game` "" (or a game no profile knows) is Shooter's Edge's own, the folder the game runs
-// in. Then the game folder over it, `-game`, else `game_of`.
-void choose_folder(Args& args, const BaseGame& base);
+// `base.game` "" (or a game no profile knows) is Shooter's Edge's own, in `own`
+// (`own_game_folder`), which is also the folder while the chooser asks. Then the game folder over
+// it, `-game`, else `game_of`.
+void choose_folder(Args& args, const BaseGame& base, const std::string& own);
+
+// Shooter's Edge's own game's folder, `<data folder>/se`: its saves, screenshots, recordings and
+// settings kept apart from each classic game's (`<data folder>/q1`, `<data folder>/q2`, where
+// the game taken in is). With no data folder, "." (nothing is written).
+std::string own_game_folder(const std::string& data_root);
 
 // What the window plays out of an open game folder. `campaign` points into this struct (at
 // `progs` or `pack_progs`) or is null, so it is filled in place and never moved.

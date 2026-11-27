@@ -143,12 +143,13 @@ from the cache, behind the one drawn. Loading it sets `fs_basegame` and the game
 (`client/installs.hpp`, `client/game_folder.hpp`). Then `map dm3` plays that map.
 
 **The game and its install** (`client/installs.hpp`). Two kinds of setting pick what the window
-plays, in the shell's layer and kept in the series config (`<data folder>/settings/config.cfg`):
+plays and where its files go, in the shell's layer and kept in the series config (`<data folder>/settings/config.cfg`):
 
 | Setting | Values | What it does |
 | --- | --- | --- |
 | `fs_basegame` | `""` (the default), `q1`, `q2` | The game played: `""` is Shooter's Edge's own, else that classic game from its install. Set in the console, it opens that game |
 | `fs_basedir_q1`, `fs_basedir_q2` | a folder, `""` (the default) | Where each classic game is installed: the folder holding `id1` or `baseq2`. A relative folder starts from the program's own folder (the one holding the app on a Mac), never the folder it was started in. SELECT GAME, LOAD GAME and `games <n>` set it |
+| `fs_artifacts_basedir` | `0` (the default), `1` | Where the player's own files go (saves, screenshots, recordings): `0` under the game in the data folder, `1` under the same game folder in its install (`fs_basedir_<id>`), so a copy beside the program carries them. Takes hold when a game opens |
 
 They are read before any config runs (the series config, then the command line's `+set` words), so
 `se +set fs_basegame q2` plays Quake II from its `fs_basedir_q2`. With that empty, or its folder no
@@ -170,6 +171,13 @@ holding no game is refused with what it lacks. The copy runs on its own thread w
 held down and a bar on its foot, as a map downloading is shown: "Copying Quake" by the share of
 the files' bytes, then "Taking Quake's music" by its tracks. A folder taken in before and unchanged
 since opens at once.
+
+**The player's own files** (`BaseGame::own_files`). Each game keeps its saves (`saves/`), screenshots
+(`screenshots/`) and recordings under the game folder it plays: `<data folder>/q1/id1/`,
+`<data folder>/q2/baseq2/`, and Shooter's Edge's own game `<data folder>/se/id1/`
+(`own_game_folder`), never the folder the game was started in. `fs_artifacts_basedir 1` puts them
+under the same game folder in the install instead; `playdemo`, the demos page and `secli demos`
+look there too.
 
 **Dropped into an install, or beside several** (`client/install_search.hpp`). Started inside a
 classic install (the folder the game runs in, or the folder its executable or app was placed in,

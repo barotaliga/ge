@@ -30,6 +30,7 @@ using ge::classic::content::map_lit;
 using ge::classic::content::map_names;
 using ge::classic::content::on_disk_any_case;
 using ge::classic::content::open_game_dir;
+using ge::classic::content::own_folder;
 using ge::classic::content::read_save;
 using ge::classic::content::save_label;
 using ge::classic::content::SearchPath;
