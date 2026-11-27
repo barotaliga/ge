@@ -246,12 +246,17 @@ inline const GameItems* game_items(std::string_view game) {
 //   too. Which copy is lowered: the one nearest a strong pickup (`kStrongPickups`: the best armours
 //   and the mega health), so the power is spread across the map; with none on the map, the last in
 //   it.
-// - **Pools** (`kPoolItems`, `kPoolOutputs`): where one game scatters small pickups the other
-//   does not have (Quake II's stimpacks and health boxes, its armour shards), the ones lying
-//   within `pool_radius` of each other are added up and laid down again as the target's own sizes,
-//   the largest that fits first, on the spots they lay on: four stimpacks and a box of ten make
-//   one fifteen, three boxes of twenty-five make two twenty-fives and a fifteen. A pool too small
-//   for the target's smallest by half is left out.
+// - **Pools** (`kPoolItems`, `kPoolOutputs`): health and armour the two games size differently
+//   (Quake II's stimpacks, boxes of ten and twenty-five and its armour shards; Quake's fifteens
+//   and twenty-fives) are added up where they lie within `pool_radius` of each other and laid
+//   down again as the target's own sizes, the set of them whose sum comes nearest the total (the
+//   fewest pickups on a tie, then the one under it), so the total is kept wherever the target's
+//   sizes can make it. The first pickups take the pool's spots in turn; a pool that needs more
+//   than it had spots stacks the rest on them, so one of Quake's fifteens on Quake II's rules is a
+//   box of ten and two stimpacks on the one spot (fourteen: Quake II has no odd size). Four
+//   stimpacks and a box of ten make eighteen, one fifteen in Quake; three boxes of twenty-five
+//   make three twenty-fives. A pool nearer nothing than the target's smallest is left out. The
+//   pickups keep their own game's rules when taken (a stimpack goes past the most health).
 // `ammo` is the box of what it fires, which a weak copy past `RemixBalance::weak_same` becomes.
 struct WeaponTier {
   std::string_view game;
@@ -306,6 +311,7 @@ struct RemixBalance {
 struct PoolItem {
   std::string_view from, to;  // the direction it pools in
   std::string_view class_name;
+  int32_t bits = -1;      // the variant bits it has (`kItemBits` of its spawnflags); -1 any
   std::string_view pool;  // "health", "armour"
   int32_t amount = 0;
 };
@@ -318,18 +324,22 @@ struct PoolOutput {
   int32_t amount = 0;
 };
 
+// Quake's health is fifteen (the rotten box, bit 1) or twenty-five (no bit); its mega health
+// (bit 2) is swapped by role, never pooled.
 inline constexpr PoolItem kPoolItems[] = {
-    {"q2", "q1", "item_health_small", "health", 2},
-    {"q2", "q1", "item_health", "health", 10},
-    {"q2", "q1", "item_health_large", "health", 25},
-    {"q2", "q1", "item_armor_shard", "armour", 2},
+    {"q2", "q1", "item_health_small", -1, "health", 2},
+    {"q2", "q1", "item_health", -1, "health", 10},
+    {"q2", "q1", "item_health_large", -1, "health", 25},
+    {"q2", "q1", "item_armor_shard", -1, "armour", 2},
+    {"q1", "q2", "item_health", 1, "health", 15},
+    {"q1", "q2", "item_health", 0, "health", 25},
 };
-// Quake's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
-// green armour.
+// What each game lays a pool down as, largest first: Quake's health as twenty-five and fifteen,
+// twenty shard points as a green armour; Quake II's health as twenty-five, ten and two.
 inline constexpr PoolOutput kPoolOutputs[] = {
-    {"q1", "health", "item_health", 0, 25},
-    {"q1", "health", "item_health", 1, 15},
-    {"q1", "armour", "item_armor1", 0, 20},
+    {"q1", "health", "item_health", 0, 25}, {"q1", "health", "item_health", 1, 15},
+    {"q1", "armour", "item_armor1", 0, 20}, {"q2", "health", "item_health_large", 0, 25},
+    {"q2", "health", "item_health", 0, 10}, {"q2", "health", "item_health_small", 0, 2},
 };
 
 // The tier of `class_name` in `game` (0: not a ranked weapon).
@@ -339,11 +349,13 @@ inline int32_t weapon_tier(std::string_view game, std::string_view class_name) {
   return 0;
 }
 
-// The pool row of `class_name` from `from` to `to`, or nullptr.
+// The pool row of `class_name` with spawnflags `flags` from `from` to `to`, or nullptr.
 inline const PoolItem* pool_item(std::string_view from, std::string_view to,
-                                 std::string_view class_name) {
+                                 std::string_view class_name, int32_t flags = 0) {
   for (const PoolItem& p : kPoolItems)
-    if (p.from == from && p.to == to && p.class_name == class_name) return &p;
+    if (p.from == from && p.to == to && p.class_name == class_name &&
+        (p.bits < 0 || p.bits == (flags & kItemBits)))
+      return &p;
   return nullptr;
 }
 

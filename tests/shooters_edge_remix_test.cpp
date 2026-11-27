@@ -228,6 +228,52 @@ TEST(q2_small_pickups_are_gathered_into_the_classic_games_sizes) {
   CHECK(cl::remix_line(rep, "q1").find("19 small pickups gathered into 5") != std::string::npos);
 }
 
+TEST(the_classic_games_health_is_split_into_q2s_sizes_keeping_the_total) {
+  const std::string text =
+      // A lone fifteen (the rotten box): a box of ten and two stimpacks on its spot, 14.
+      "{\n\"classname\" \"item_health\"\n\"spawnflags\" \"1\"\n\"origin\" \"0 0 0\"\n}\n"
+      // A fifteen and a twenty-five together: 40, four tens (Quake II's 25 would leave it odd).
+      "{\n\"classname\" \"item_health\"\n\"spawnflags\" \"1\"\n\"origin\" \"2000 0 0\"\n}\n"
+      "{\n\"classname\" \"item_health\"\n\"origin\" \"2064 0 0\"\n}\n"
+      // A lone twenty-five stays one, and the mega health is swapped by role.
+      "{\n\"classname\" \"item_health\"\n\"origin\" \"4000 0 0\"\n}\n"
+      "{\n\"classname\" \"item_health\"\n\"spawnflags\" \"2\"\n\"origin\" \"6000 0 0\"\n}\n";
+  std::string out, error;
+  cl::RemixReport rep;
+  CHECK(cl::remix_entities(text, "q1", "q2", out, &rep, error));
+  const auto b = blocks_of(out);
+  std::vector<std::string> names;
+  for (const auto& block : b) names.emplace_back(value(block, "classname"));
+  std::string got;
+  for (const std::string& n : names) got += n + " ";
+  const std::vector<std::string> want = {
+      "item_health",       "item_health_small", "item_health_small",  // 15: 10 + 2 + 2
+      "item_health",       "item_health",       "item_health",
+      "item_health",  // 40: four tens
+      "item_health_large", "item_health_mega"};
+  CHECK_MSG(names == want, got);
+  if (names != want) return;
+  // The stacked pickups stand on their pool's spot.
+  CHECK(value(b[1], "origin") == value(b[0], "origin"));
+  CHECK(value(b[2], "origin") == value(b[0], "origin"));
+  CHECK(value(b[4], "origin") == value(b[3], "origin"));
+  CHECK(rep.pool_total == 15 + 40 + 25);
+  CHECK_MSG(rep.pool_laid == 14 + 40 + 25, std::to_string(rep.pool_laid));
+}
+
+TEST(q2s_health_is_pooled_into_the_classic_games_sizes_nearest_the_total) {
+  // Twenty stimpacks in a row (40): a twenty-five and a fifteen, the total kept.
+  std::string text;
+  for (int i = 0; i < 20; i++)
+    text += "{\n\"classname\" \"item_health_small\"\n\"origin\" \"" + std::to_string(32 * i) +
+            " 0 0\"\n}\n";
+  std::string out, error;
+  cl::RemixReport rep;
+  CHECK(cl::remix_entities(text, "q2", "q1", out, &rep, error));
+  CHECK(blocks_of(out).size() == 2);
+  CHECK(rep.pool_total == 40 && rep.pool_laid == 40 && rep.pool_dropped == 18);
+}
+
 TEST(a_map_with_no_strong_weapon_gets_one_and_one_with_too_many_loses_some) {
   const auto weapons = [](std::initializer_list<const char*> names) {
     std::string t;
@@ -312,7 +358,7 @@ TEST(a_third_copy_of_a_weak_weapon_is_laid_down_as_its_ammunition) {
         value(b[1], "classname") == "weapon_supershotgun");
   CHECK(value(b[2], "classname") == "item_shells" && value(b[3], "classname") == "item_shells");
   CHECK(value(b[4], "classname") == "weapon_rocketlauncher");
-  // `cr_weak_same 0`: no limit.
+  // `cr_items_weak_same 0`: no limit.
   shooters_edge::profiles::RemixBalance no_limit;
   no_limit.weak_same = 0;
   CHECK(cl::remix_entities(map, "q2", "q1", out, &rep, error, no_limit));
