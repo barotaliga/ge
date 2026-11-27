@@ -241,10 +241,14 @@ void client_data(DemoState& s, DemoMsg& m) {
   if (wide && (bits & kMore2) != 0) bits |= static_cast<uint32_t>(m.u8()) << 24;
   s.view_height = (bits & kViewHeight) != 0 ? static_cast<float>(m.i8()) : 22.0f;
   if ((bits & kIdealPitch) != 0) m.i8();
+  // The player's velocity in steps of 16 units a second; a part not sent is 0. The view's bob and
+  // strafe roll ride it (demo_eyes.hpp), as they do a QuakeWorld recording's.
   for (int i = 0; i < 3; i++) {
     if ((bits & (kPunch1 << i)) != 0) m.i8();
-    if ((bits & (kVelocity1 << i)) != 0) m.i8();
+    const float v = (bits & (kVelocity1 << i)) != 0 ? static_cast<float>(m.i8()) * 16.0f : 0.0f;
+    (i == 0 ? s.velocity.x : i == 1 ? s.velocity.y : s.velocity.z) = v;
   }
+  s.velocity_read = true;
   if ((bits & kItems) != 0) s.stats[kStatItems] = m.i32();
   s.weapon_frame = (bits & kWeaponFrame) != 0 ? m.u8() : 0;
   s.stats[kStatArmour] = (bits & kArmour) != 0 ? m.u8() : 0;

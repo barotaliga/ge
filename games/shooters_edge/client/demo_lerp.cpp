@@ -88,6 +88,8 @@ void lerp_frame(DemoLerp& l, const DemoState& s, bool cut) {
   p.set_angles = s.set_angles;
   p.eye = s.eye;
   p.angles = s.angles;
+  p.velocity = s.velocity;
+  p.velocity_read = s.velocity_read;
   p.fov = s.fov;
   p.teleport_bit = s.teleport_bit;
   p.entities.assign(s.entities.begin(), s.entities.end());
@@ -190,6 +192,9 @@ const DemoState& lerp_at(DemoLerp& l, const DemoState& s, double time) {
   }
   const bool set = s.player >= 0 && s.player < 32 && (b.set_angles >> s.player & 1u) != 0;
   if (moved && !set) d.angles = lerp_angles(a.angles, b.angles, f);
+  // The velocity between the frames too: the bob and the strafe roll ride it, and stepped at the
+  // recording's rate they twitch.
+  if (moved && a.velocity_read && b.velocity_read) d.velocity = lerp3(a.velocity, b.velocity, f);
   return d;
 }
 

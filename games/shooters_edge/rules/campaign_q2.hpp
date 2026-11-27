@@ -2,10 +2,12 @@
 // Quake II's kinds the campaign runs (profiles/remix_monsters.hpp's `kQ1RunsQ2`, in its
 // order), each with the roster's numbers (server/q2_monster_kinds.hpp) and the two sounds its
 // shots and blows make, and the strings they add after the rules' own: per kind its model, sight,
-// pain, death, shot and blow, then the missiles' models. Internal to games/shooters_edge/rules.
+// first pain cry, death, shot, blow and up to two more pain cries (its pain table's,
+// server/q2_monster_pain_rules.hpp), then the missiles' models. Internal to
+// games/shooters_edge/rules.
 //
 // ge:summary Quake II's monsters the classic campaign runs: their roster rows and their strings
-// ge:keywords campaign cr_monsters remix q2-monsters monster-swap roster strings
+// ge:keywords campaign cr_monsters remix q2-monsters monster-swap roster strings pain-cries
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_campaign_rules_test.cpp
 #pragma once
@@ -17,6 +19,7 @@
 
 #include "shooters_edge/profiles/remix_monsters.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
+#include "shooters_edge/server/q2_monster_pain_rules.hpp"
 
 namespace shooters_edge::server::rules::campaign {
 
@@ -49,7 +52,17 @@ inline constexpr SqRun kSqRuns[] = {
 inline constexpr int kSqRunCount = static_cast<int>(std::size(kSqRuns));
 
 // The words each kind adds, in order, then the shared ones once.
-enum SqWord : uint8_t { kSqModel, kSqSight, kSqPain, kSqDeath, kSqShot, kSqBlow, kSqWords };
+enum SqWord : uint8_t {
+  kSqModel,
+  kSqSight,
+  kSqPain,  // its first pain cry; kSqCry1 and kSqCry2 the others (the first again when none)
+  kSqDeath,
+  kSqShot,
+  kSqBlow,
+  kSqCry1,
+  kSqCry2,
+  kSqWords
+};
 inline constexpr const char* kSqShared[] = {
     "models/objects/laser/tris.md2", "models/objects/grenade/tris.md2",
     "models/objects/rocket/tris.md2", "models/objects/gibs/head2/tris.md2"};
@@ -74,7 +87,13 @@ constexpr const char* sq_word(int run, int w) {
     case kSqSight:
       return k.sight;
     case kSqPain:
-      return k.pain;
+    case kSqCry1:
+    case kSqCry2: {
+      const int i = w == kSqPain ? 0 : w == kSqCry1 ? 1 : 2;
+      const char* c = q2_pain::cry(r.classname, i);
+      if (c == nullptr) c = q2_pain::cry(r.classname, 0);
+      return c != nullptr ? c : k.pain;
+    }
     case kSqDeath:
       return k.death;
     case kSqShot:
@@ -89,11 +108,14 @@ constexpr bool sq_runs_agree() {
   for (int i = 0; i < kSqRunCount; i++) {
     if (profiles::kQ1RunsQ2[i] != kSqRuns[i].classname) return false;
     if (sq_roster_of(kSqRuns[i].classname) < 0) return false;
+    if (q2_pain::rule_of(kSqRuns[i].classname) == nullptr) return false;  // its pains as data
+    if (q2_pain::cry(kSqRuns[i].classname, 3) != nullptr) return false;   // at most 3 cries
     for (int w = 0; w < kSqWords; w++)
       if (sq_word(i, w) == nullptr) return false;
   }
   return true;
 }
-static_assert(sq_runs_agree(), "each kind the campaign runs is the remix table's, in the roster");
+static_assert(sq_runs_agree(),
+              "each kind the campaign runs is the remix table's, in the roster, with its pains");
 
 }  // namespace shooters_edge::server::rules::campaign
