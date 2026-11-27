@@ -266,8 +266,10 @@ fn shafts_under_one_top(ray: vec3f, down: vec3f, jitter: f32, step: f32, t: f32,
     }
     // The least blur of the eight: a wave it smooths away is smoothed away at all of them.
     var least = blur[0];
+    var most = blur[0];
     for (var j = 1; j < 8; j++) {
       least = min(least, blur[j]);
+      most = max(most, blur[j]);
     }
     let at = first + per_step * k0;
     for (var i = 0u; i < total; i++) {
@@ -286,6 +288,18 @@ fn shafts_under_one_top(ray: vec3f, down: vec3f, jitter: f32, step: f32, t: f32,
       var cp = cos(phi);
       let st = sin(turn);
       let ct = cos(turn);
+      if (length_ >= 4.0 * most && (!detail || body.air.z <= 0.0)) {
+        // Kept whole at every step (smoothstep's 1 past its edge) and at its own amplitude (no
+        // gusts, or a band they do not raise): the same sums without the per-step weights.
+        let ka2 = 2.0 * k * a0;
+        for (var j = 0; j < 8; j++) {
+          h[j] += a0 * (ka2 * (1.0 - 2.0 * sp * sp) - sp) * shape;
+          let next = sp * ct + cp * st;
+          cp = cp * ct - sp * st;
+          sp = next;
+        }
+        continue;
+      }
       for (var j = 0; j < 8; j++) {
         let keep = smoothstep(2.0 * blur[j], 4.0 * blur[j], length_);
         let a = a0 * select(1.0, gust[j], detail);
