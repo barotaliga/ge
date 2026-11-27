@@ -9,15 +9,18 @@
 //   one loads), its place in the list over it.
 // - THE CONFIRM: a box over either asking whether to delete it, ENTER deleting, ESC keeping it.
 // - THE FOOTER: the selected file's name, when it was taken, its pixel size, format and bytes, or
-//   why the last delete failed; under it the keys.
-// - AN EMPTY FOLDER says F12 takes a screenshot and where they are kept.
+//   why the last delete failed; under it the keys, and at their right O SHOW IN FINDER (EXPLORER
+//   on Windows, FILES on Linux), a button too: the selected file shown in its folder by the
+//   system's file manager (the console's `reveal`, platform/reveal.hpp).
+// - AN EMPTY FOLDER says F12 takes a screenshot and where they are kept, and O OPEN IN FINDER
+//   opens that folder.
 //
 // The textures are slots that stay at one address (the GPU pass keys its textures by it), filled
 // again only when a picture's stamp moves (`ui::Image::revision`).
 //
 // ge:summary Shooter's Edge's screenshots page: the engine gallery drawn in the menu's look
 // ge:keywords gallery screenshots page menu_screenshots thumbnail viewer confirm delete grid
-// ge:keywords shooters-edge options slots revision footer empty-folder
+// ge:keywords shooters-edge options slots revision footer empty-folder show-in-finder reveal
 // ge:skill ui replay
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -27,6 +30,7 @@
 #include <vector>
 
 #include "capture/gallery.hpp"
+#include "capture/reveal.hpp"
 #include "ui/draw.hpp"
 #include "ui/image.hpp"
 #include "ui/menu_view.hpp"
@@ -41,6 +45,11 @@ class GalleryPage {
             const ge::ui::MenuStyle& style);
   // The entry under (x, y) in the last drawn grid; -1 none (or not on the grid).
   int hit(float x, float y) const;
+  // Whether (x, y) is on the footer's SHOW IN FINDER (EXPLORER, FILES) button last drawn.
+  bool hit_reveal(float x, float y) const;
+  // The desktop whose file manager the button names (this build's; a lab pins one, so its
+  // pictures are the same on every machine).
+  void set_desktop(ge::capture::Desktop d) { desktop_ = d; }
   // What the layout drawn last found wrong: words wider than their box.
   const std::vector<std::string>& problems() const { return problems_; }
 
@@ -56,6 +65,8 @@ class GalleryPage {
   Slot full_;
   uint64_t revision_ = 0;
   std::vector<ge::ui::Rect> cells_;  // the page's cells, from its first entry
+  ge::ui::Rect reveal_{};            // the SHOW IN button's box (w 0: not drawn)
+  ge::capture::Desktop desktop_ = ge::capture::this_desktop();
   int first_ = 0;
   bool on_grid_ = false;
   std::vector<std::string> problems_;

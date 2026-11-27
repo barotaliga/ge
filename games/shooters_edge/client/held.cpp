@@ -23,6 +23,18 @@ namespace {
 constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock runs above
 constexpr double kDegRad = 0.017453292519943295;
 
+// The frame to draw of a whole view model (one resting past frame 0, its raise first) sent
+// `frame`: its own frame from Quake II's hand, or Quake's frames as its rest and fire run
+// (q2_arms_kick.hpp's `WholeFrames`). Any other model's frame as sent.
+int whole_drawn(const ge::viewmodel::HeldModel& m, WholeFrames& w, int frame, double t) {
+  if (m.rest <= 0) return frame;
+  read_whole_frames(w, frame, t);
+  const int clip = ge::viewmodel::find_held_clip(m, "fire");
+  if (clip < 0) return w.quake ? m.rest : frame;
+  const ge::viewmodel::HeldClip& c = m.clips[static_cast<size_t>(clip)];
+  return whole_frame(w, m.rest, c.first, c.first + c.count - 1, frame);
+}
+
 }  // namespace
 
 void q2_gun_sway(ge::shooter::Vec3f gun_angles, ge::shooter::Vec3f gun_offset,
@@ -152,7 +164,8 @@ view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& 
   const auto held = static_cast<size_t>(f.weapon);
   if (w >= 0 && held < models.size() && static_cast<int>(held) == w) {
     const int count = static_cast<int>(models[held].frames.size());
-    const int wf = frame >= 0 && frame < count ? frame : 0;
+    const int drawn = whole_drawn(models[held], s.whole, frame, t);
+    const int wf = drawn >= 0 && drawn < count ? drawn : 0;
     if (s.recorded_weapon != w) s.recorded = FrameTrack{};
     int from = -1;
     float g = 1;
@@ -195,7 +208,8 @@ namespace {
 
 // Quake II's weapons fired whole by our rules (classic remix's `cr_items q2`): the rules step
 // Quake II's hand and keep its frame in `weaponframe`, so the view model (every frame kept,
-// qw_adapter.cpp) is drawn on that frame; the frames carry the firing, the hand adds no kick.
+// qw_adapter.cpp) is drawn on that frame; the frames carry the firing; the view's kick is
+// Quake II's, read off the same frames (q2_arms_kick.hpp, client/present.cpp).
 view::HandFrame step_q2_arms_held(const Listen& l, const PlayerState& p, const ViewState& v,
                                   HeldState& s, const view::ViewSettings& settings,
                                   std::span<const ge::viewmodel::HeldModel> models, double t,
@@ -218,7 +232,8 @@ view::HandFrame step_q2_arms_held(const Listen& l, const PlayerState& p, const V
   const auto held = static_cast<size_t>(f.weapon);
   if (held < models.size() && static_cast<int>(held) == w) {
     const int count = static_cast<int>(models[held].frames.size());
-    const int wf = frame >= 0 && frame < count ? frame : 0;
+    const int drawn = whole_drawn(models[held], s.whole, frame, t);
+    const int wf = drawn >= 0 && drawn < count ? drawn : 0;
     if (s.recorded_weapon != w) s.recorded = FrameTrack{};
     int from = -1;
     float g = 1;
@@ -316,7 +331,11 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
     in.fire_frame = s.own_shot_frame;
   }
   h.own_shots = s.own_shots;
-  if (now_frame != 0) h.frames_live = true;
+  // A whole view model (Quake II's: its frame 0 the bottom of its raise, out of sight) is drawn
+  // from the frames sent from the start.
+  const auto shown = static_cast<size_t>(game);
+  const bool whole_view = shown < models.size() && models[shown].rest > 0;
+  if (now_frame != 0 || whole_view) h.frames_live = true;
   // Rules that never animate the weapon frame (our arena's), unpredicted: the shot the server's
   // weapon sound on the player says, once per frame read (any game, a demo or a joined server).
   if (!in.fired && !h.frames_live && s.frames != h.frames_read && !in.dead && in.weapon == game) {
@@ -334,7 +353,7 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   // A classic set's frame as the server sent it: its fire animations played as recorded.
   const auto w = static_cast<size_t>(f.weapon);
   if (h.hand.at_eye && w < models.size() && f.weapon == game && h.frames_live) {
-    int wf = now_frame;
+    int wf = whole_drawn(models[w], h.whole, now_frame, t);
     if (wf < 0 || static_cast<size_t>(wf) >= models[w].frames.size()) wf = 0;
     if (h.recorded_weapon != static_cast<int>(w)) h.recorded = FrameTrack{};
     h.recorded_weapon = static_cast<int>(w);

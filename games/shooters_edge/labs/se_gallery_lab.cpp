@@ -12,13 +12,18 @@
 //   deleted   ENTER: the file gone, the viewer on the next one, the count one less
 //   empty     every file deleted: the empty folder says F12 and where they are kept
 //
+// The footer's SHOW IN button (O, or a click) names the file manager; the lab pins Linux's words
+// (FILES) so its pictures are the same on every machine. `--from=<folder>` shows that folder's real
+// screenshots in place of the painted ones (private pictures: the player's own).
+//
 // Every layout is held to the page's problems check. The loads are timed (measured).
 //
 // ge:summary Lab: the screenshots page's grid, viewer, delete and empty folder at three viewports
 // ge:keywords lab se-gallery gallery screenshots thumbnail viewer confirm delete empty viewports
-// ge:keywords menu_screenshots
+// ge:keywords menu_screenshots show-in-finder reveal from-folder
 // ge:skill ui replay labs
 // ge:test tests/capture_gallery_test.cpp tests/shooters_edge_menu_test.cpp
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -110,11 +115,32 @@ constexpr int kShots = 10;
 
 // The folder as a player's would be after ten F12s: the window's names a minute apart (the
 // first two in one second, told apart by a count), and one file damaged.
+// `--from=<folder>`: the stills there (png or jpg, by name, taken in turn) stand in for the painted
+// scenes under the same names, so the page can be pictured over a game's real screenshots
+// (private pictures: they are the player's).
+std::vector<fs::path> stills_in(const std::string& from) {
+  std::vector<fs::path> out;
+  std::error_code ec;
+  if (from.empty()) return out;
+  for (const auto& e : fs::directory_iterator(from, ec)) {
+    const std::string ext = e.path().extension().string();
+    if (ext == ".png" || ext == ".jpg") out.push_back(e.path());
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
 void write_folder(const fs::path& dir, const Viewport& v, ge::lab::Lab& lab) {
   std::error_code ec;
   fs::remove_all(dir, ec);
   fs::create_directories(dir, ec);
-  for (int i = 0; i < kShots; ++i) {
+  const std::vector<fs::path> real = stills_in(lab.arg("from"));
+  for (int i = 0; i < kShots && !real.empty(); ++i) {
+    const fs::path& src = real[static_cast<size_t>(i) % real.size()];
+    const std::string name = "shooters_edge-2026-11-05-21" + std::to_string(10 + i) + "00";
+    fs::copy_file(src, dir / (name + src.extension().string()), ec);
+  }
+  for (int i = 0; i < kShots && real.empty(); ++i) {
     const ui::Image img = scene(i, v.w, v.h);  // taken on this screen
     gc::StillOptions o;                        // the window's default: jpg at 90
     std::vector<uint8_t> bytes;
@@ -159,6 +185,7 @@ void run(ge::lab::Lab& lab) {
     write_folder(dir, v, lab);
     Game g;
     g.menu.set_screenshots(dir.string());
+    g.menu.gallery_page().set_desktop(gc::Desktop::freedesktop);  // the same words everywhere
     g.con.execute("menu_screenshots");
     g.menu.update({}, false, g.host, 0.016);
     if (!g.menu.in_gallery()) {
@@ -267,7 +294,9 @@ const ge::lab::LabSpec kSpec{
     "ui",
     "Does the screenshots page show the screenshots taken, view one, delete one after asking and "
     "say so when there are none, at every screen shape?",
-    {{"viewports", "1280x720,390x844,844x390", "the screen sizes, comma-separated WxH"}},
+    {{"viewports", "1280x720,390x844,844x390", "the screen sizes, comma-separated WxH"},
+     {"from", "",
+      "a folder of real screenshots (png, jpg) to show in place of the painted scenes"}},
     "--viewports=1280x720,390x844",
     run,
 };

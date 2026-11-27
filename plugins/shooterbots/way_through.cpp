@@ -181,7 +181,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         out.push_back(gate);
       } else if ((std::strcmp(dc, "func_door") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) ||
                  std::strcmp(dc, "func_door_secret") == 0 || std::strcmp(dc, "func_plat") == 0 ||
-                 std::strcmp(dc, "func_togglewall") == 0) {
+                 std::strcmp(dc, "func_plat2") == 0 || std::strcmp(dc, "func_togglewall") == 0) {
         any = true;
         const int e = dm ? edict_of(s, dm) : -1;
         if (e >= 0) out.push_back(e);
@@ -407,9 +407,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.name = cn;
       w.steps.push_back(st);
       continue;
-    } else if (std::strcmp(cn, "func_plat") == 0 && name && brush) {
+    } else if ((std::strcmp(cn, "func_plat") == 0 || std::strcmp(cn, "func_plat2") == 0) && name &&
+               brush) {
       // A plat with a name waits up top for what fires it, and only then runs: shut to a ride
-      // till then (e1m3's took him down into a pit by a ride that never came back up).
+      // till then (e1m3's took him down into a pit by a ride that never came back up; Ground
+      // Zero's plat that goes either way the same, rmine1's till its soldier falls).
       const int e = edict_of(s, model);
       if (e >= 0) {
         w.locked.push_back(e);

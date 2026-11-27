@@ -109,6 +109,7 @@ struct WorldDraw {
   // once on the read's thread.
   std::vector<float> classic_grade;
   double gamma = 1;    // the gamma the grades were last made with
+  double sharpen = 1;  // the post passes' live sharpen strength (create_post starts them at 1)
   look::Picture made;  // the picture as it was when the world was made
   gr::Particles particles;
   gr::Explosions explosions;  // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
@@ -607,9 +608,15 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::BloomSettings bs;
     bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
     gr::create_bloom_pipelines(d, f.pipelines, f.bloom, bs);
-    for (int p = 0; p < 2; ++p)
-      gr::create_post(d, f.pipelines, f.post[p], f.layout, f.format,
-                      look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, made));
+    // The sharpen after the upscale compiled in, so r_scale turns it on live (its strength is set
+    // every frame below: 0, off, at r_scale 1).
+    for (int p = 0; p < 2; ++p) {
+      gr::PostSettings ps =
+          look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, made);
+      ps.look.sharpen = 1;
+      gr::create_post(d, f.pipelines, f.post[p], f.layout, f.format, ps);
+    }
+    f.sharpen = 1;  // the start strength above
     // TAA-U's resolve, made whether r_scale is under 1 or not, so the setting turns it on live.
     gr::create_taa(d, f.pipelines, f.taa, f.layout, gr::TaaSettings{});
     f.gamma = f.picture->gamma;
@@ -1121,6 +1128,11 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       ge::classic::flash_tint(f.models.flash_tint, tints.flat);
     gr::set_post_blend(d, f.post[p], tints.flat);
     gr::set_post_edge_blend(d, f.post[p], tints.edge, f.picture->damage_frac);
+  }
+  // The sharpen after the upscale (r_scale_sharpen), off at r_scale 1.
+  if (const double sh = look::upscale_sharpen(*f.picture); sh != f.sharpen) {
+    for (auto& post : f.post) gr::set_post_look(d, post, {.sharpen = sh});
+    f.sharpen = sh;
   }
   // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
   gr::set_post_warp(

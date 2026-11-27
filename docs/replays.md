@@ -458,12 +458,22 @@ look, its words and its keys are the game's, a hundred lines of layout over it.
   through `ui::Image::revision`, which the GPU's 2D pass reads to upload an image again.
 - **The folder changing under it** (F12 pressed with the page up, a file deleted outside) is
   listed again by the next `poll`, the selection kept on its file.
+- **Shown in the system's file manager.** The `reveal` press answers `reveal`, and
+  `reveal_target` is the selected file (the folder when there is none). The game runs the
+  console's `reveal <path>` (`platform/reveal.hpp`, registered by `add_reveal_command`), which
+  starts this desktop's file manager on it with the file selected: `open -R` on macOS (Finder),
+  `explorer /select,"<file>"` on Windows, and on Linux the freedesktop file manager's `ShowItems`
+  over the session bus, or `xdg-open` on the folder when no file manager answers
+  (`capture/reveal.hpp` names the steps; SDL's processes run them, so no other platform glue).
+  It never runs from a line a server sent.
 
 Shooter's Edge's page is OPTIONS ▸ SCREENSHOTS (`menu_screenshots` opens it from the console;
 `games/shooters_edge/menu/gallery_page.hpp`): the grid with the selected cell ringed and its facts
 in the footer, ENTER for the viewer, LEFT and RIGHT through the pictures, DELETE or BACKSPACE (a
-Mac's delete key) to delete after asking, ESC back. The `se-gallery` lab walks it at three
-screen shapes. Fall Line's pause card is where its page goes, the same gallery under it.
+Mac's delete key) to delete after asking, O (or a click on the footer's SHOW IN FINDER,
+EXPLORER on Windows, FILES on Linux) to show the picture selected in its folder, ESC back; an
+empty folder offers O OPEN IN FINDER. The `se-gallery` lab walks it at three screen shapes
+(`--from=<folder>` over real screenshots). Fall Line's pause card is where its page goes, the same gallery under it.
 
 ## Broadcasting to a video service (M23e)
 

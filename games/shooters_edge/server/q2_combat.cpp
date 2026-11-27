@@ -144,7 +144,8 @@ bool sq_choose(SqHand& hand, const SqBody& body, int w) {
   return hand.pending >= 0;
 }
 
-SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infinite, int swap) {
+SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infinite, int swap,
+                    uint32_t idle_draw) {
   swap = swap > 1 ? swap : 1;
   SqStep out;
   const SqWeaponRow& r = row_of(h.weapon);
@@ -171,7 +172,7 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
         return out;
       }
       if (!attack) {
-        ge::classic::q2_idle_step(sq_runs(r), h.frame);
+        ge::classic::q2_idle_step(sq_runs(r), sq_pauses(h.weapon), h.frame, idle_draw);
         return out;
       }
       if ((!infinite || h.weapon == int(SqWeapon::trap) || h.weapon == int(SqWeapon::disruptor)) &&

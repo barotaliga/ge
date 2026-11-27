@@ -38,6 +38,7 @@
 #include "camera/first_person.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/q2_arms_kick.hpp"
 #include "shooters_edge/client/q2_view.hpp"
 
 namespace shooters_edge::client {
@@ -76,6 +77,8 @@ struct ViewState {
   double eye_prev_s = -1, eye_now_s = -1;
   // The rules' own view (PlayerState::rules_view) at their last two frames and as drawn between.
   sh::Vec3f offset_prev, offset_now, kick_prev, kick_now, offset, kick;
+  // Quake II's weapons on other rules: their kick read off the hand's frames (q2_arms_kick.hpp).
+  ArmsKick arms_kick{};
   float fov_prev = 0, fov_now = 0;  // the rules' field of view (Quake II's) at those frames
   // Quake II's view settings (q2_view.hpp: cl_adjustfov, cl_kickangles; null their defaults) and
   // the window's width over its height, which the field of view across is kept on with the first

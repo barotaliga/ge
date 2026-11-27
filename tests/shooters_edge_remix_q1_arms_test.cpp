@@ -248,3 +248,46 @@ TEST(quakes_view_frames_run_from_one_and_rest_on_zero) {
   CHECK(std::string(gc::q1_look_name("q1_spike")) == "spike");
   CHECK(gc::q1_look_name("te_spike") == nullptr);
 }
+
+// Lag compensation (the network server's `lag_place`) reaches Quake's hitscan as Quake II's own:
+// Ana's shotgun and her axe meet Ben where her screen showed him. Shown 200 units aside, every
+// pellet misses; shown where he stands, they hit. The rewind ends with the shot.
+namespace {
+bool ben_aside(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& mins,
+               sh::Vec3f& maxs) {
+  const auto& s = *static_cast<const sv::Q2Server*>(ctx);
+  if (shooter != 0 || target != 1) return false;
+  const int32_t* o = s.players[1].move.origin;
+  at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f + 200, float(o[2]) * 0.125f};
+  mins = s.players[1].mins;
+  maxs = s.players[1].maxs;
+  return true;
+}
+float hit_ben(bool aside, int weapon_key) {
+  auto d = stage();
+  if (aside) {
+    d->s().lag_place = &ben_aside;
+    d->s().lag_ctx = &d->s();
+  }
+  for (int i = 0; i < 60; i++) tick(*d, 0, 0, weapon_key);
+  for (int i = 0; i < 20; i++) {
+    put(d->p(0), -40, 24);
+    put(d->p(1), 0, 24);
+    tick(*d, 0);
+  }
+  for (int i = 0; i < 30; i++) {
+    put(d->p(0), -40, 24);
+    put(d->p(1), 0, 24);
+    tick(*d, sh::kButtonAttack);
+  }
+  CHECK(d->s().lag_shooter == -1);
+  return d->p(1).health;
+}
+}  // namespace
+
+TEST(quakes_hitscan_meets_the_others_where_the_shooter_saw_them) {
+  CHECK_MSG(hit_ben(false, 2) < 100, "shotgun, shown where he stands");
+  CHECK_MSG(hit_ben(true, 2) == 100, "shotgun, shown aside");
+  CHECK_MSG(hit_ben(false, 1) < 100, "axe, shown where he stands");
+  CHECK_MSG(hit_ben(true, 1) == 100, "axe, shown aside");
+}

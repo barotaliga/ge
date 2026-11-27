@@ -82,7 +82,7 @@ The checklist for a new extension, in every game that gets it:
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
 | Extensions negotiated by bit, stock ends untouched | Quake's later clients and servers | `qw_ext.hpp`, both games |
-| Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | Quake's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `qw_antilag.hpp` |
+| Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | Quake's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `qw_antilag.hpp`; remix's weapons from the other game too (`FightLagScope`) |
 | Chunked downloads into archives | Quake's later protocol | `content.md` |
 | Downloads from a web address, a GitHub repository too | Quake II's modern clients | `web_downloads.hpp`, both games |
 | Moves sent between the 10 Hz frames | ours, for Quake II | Quake II's server, by `other-moves` |

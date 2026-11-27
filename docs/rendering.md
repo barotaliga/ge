@@ -1977,7 +1977,11 @@ window a side and resolves it with the same TAA-U to the window, before the bloo
 HUD is drawn after, at the window's size. The resolve's pipeline is made at the load, so the
 setting changes live (the targets are made again). A view that moves more than 3 m between two
 frames (a teleport, a respawn, a demo's jump) is a cut: the history starts over
-(`client/world_draw.cpp`).
+(`client/world_draw.cpp`). The post pass then sharpens the upscaled picture by its contrast
+(the CAS, `r_scale_sharpen`, 0.5 by default): on dm3 at 0.75 the picture's edge energy is
+about 80% of r_scale 1's unsharpened, about 90% at 0.3 and 93 to 100% at 0.6. It is compiled into the post pass
+always and its strength set live, 0 at r_scale 1, where the post pass skips it and the picture
+is the same, byte for byte.
 
 **4× MSAA with no temporal pass** is the fallback for the lowest tier, where a phone's
 tile memory resolves MSAA almost for free.
