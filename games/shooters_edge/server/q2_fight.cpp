@@ -626,14 +626,7 @@ void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_ent
   }
 }
 
-// A player's hitscan traced as he saw the others (lag compensation), for its scope.
-struct LagScope {
-  Q2Server& s;
-  LagScope(Q2Server& sv, int slot) : s(sv) { s.lag_shooter = slot; }
-  ~LagScope() { s.lag_shooter = -1; }
-  LagScope(const LagScope&) = delete;
-  LagScope& operator=(const LagScope&) = delete;
-};
+using LagScope = FightLagScope;  // q2_fight_kit.hpp
 
 // A bullet or a pellet from `start` along the axes, spread `h` right and `v` up.
 void bullet(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::ViewAxes& ax,
@@ -1946,6 +1939,8 @@ void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
   (impact ? p.impact_at : p.noise_at) = at;
 }
 
+FightLagScope::FightLagScope(Q2Server& sv, int slot) : s(sv) { s.lag_shooter = slot; }
+FightLagScope::~FightLagScope() { s.lag_shooter = -1; }
 Line fight_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int skip_entity) {
   return shoot_line(s, from, to, skip, skip_entity);
 }
