@@ -483,18 +483,59 @@ void monster_zombie(A& q) {
   q.set_i(q.self(), f_th_hurt, q.fn(fn_ghoul_hurt));
 }
 
-// THE FLYER (monster_wizard): 80 health, spit fired two at a time. Two spits at 600, 9 each, a
-// step apart.
+// THE FLYER (monster_wizard): 80 health, its own test (q1_mind::scrag_check), hunting straight on
+// its fly frames or sliding square to him on its hover frames. Its spit: 10 frames, two spits at
+// 600, 9 each, 0.3 s and 0.8 s in; at its end a flat 2 s wait (none at skill 3), then a slide if he
+// is near and seen, else straight. Its pain: the cry on every hit, the flinch only when 70 × a
+// draw is no more than the blow.
+void wizard_mode(A& q, q1_mind::Mode m) {
+  if (m == q1_mind::Mode::keep) return;
+  const bool slide = m == q1_mind::Mode::slide;
+  q.set_f(q.self(), f_attack_state, slide ? kAsSlide : kAsStraight);
+  if (slide)
+    set_frames(q, f_fr_run, 0, 14);  // the hover
+  else
+    set_frames(q, f_fr_run, 15, 28);  // the fly
+}
+
+// Its own test, with him in sight and its wait spent: out of range or with no clear shot it goes
+// straight; else one draw, an attack at 0.9, 0.6 or 0.2 by range, failing it a slide nearer than
+// mid range, straight at mid.
+void wizard_check(A& q) {
+  const int32_t me = q.self();
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  if (!can_see(q, enemy) || q.time() < q.f(me, f_attack_finished)) {
+    q.ret_f(0);
+    return;
+  }
+  const auto eye = [&q](int32_t e) { return q.v(e, q.L.f.origin) + q.v(e, q.L.f.view_ofs); };
+  q.traceline(eye(me), eye(enemy), 0, me);
+  const bool clear = !((q.gf(q.L.g.trace_inopen) != 0) & (q.gf(q.L.g.trace_inwater) != 0)) &&
+                     q.gi(q.L.g.trace_ent) == enemy;
+  const auto r = static_cast<q1_mind::Range>(range_to(q, enemy));
+  const q1_mind::ScragTurn t = q1_mind::scrag_check(r, clear, [&q] { return q.random(); });
+  wizard_mode(q, t.mode);
+  if (t.attack) q.set_f(me, f_attack_state, kAsMissile);
+  q.ret_f(t.attack ? 1.0f : 0.0f);
+}
+
 void wizard_spit(A& q) {
   think_again(q, fn_wizard_spit);
   anim_tick(q);
   face_enemy(q);
-  if ((anim_step(q) == 2) | (anim_step(q) == 3)) {
+  if ((anim_step(q) == 4) | (anim_step(q) == 9)) {  // 0.3 s and 0.8 s in
     q.sound(q.self(), kChanWeapon, q.s(s_wizard_wattack_wav), 1, kAttnNorm);
     const int32_t m = monster_missile(q, q.s(s_w_spike_mdl), 600, 9, 0);
     q.set_i(m, f_deathtype, q.s(s_spat_on));
   }
-  if (anim_step(q) >= 5) monster_run(q);
+  if (anim_step(q) < 10) return;
+  const int32_t me = q.self();
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  q.set_f(me, f_attack_finished,
+          q.time() + (q.cvar(q.s(s_skill)) >= 3 ? 0.0f : q1_mind::kScragWait));
+  const bool seen = (enemy != 0) && can_see(q, enemy);
+  wizard_mode(q, q1_mind::scrag_after_spit(static_cast<q1_mind::Range>(range_to(q, enemy)), seen));
+  monster_run(q);
 }
 
 void wizard_missile(A& q) {
@@ -505,9 +546,15 @@ void wizard_missile(A& q) {
 void wizard_flinch(A& q) { flinch(q, fn_wizard_flinch, q1_mind::pain_of("monster_wizard").frames); }
 
 void wizard_pain(A& q) {
+  const int32_t me = q.self();
+  const float health = q.f(me, q.L.f.health);
+  float had = q.f(me, f_last_health);
+  if (had < health) had = 80;  // the first blow (none kept yet)
+  q.set_f(me, f_last_health, health);
   hold_pain(q, q1_mind::pain_of("monster_wizard").wait);
-  q.sound(q.self(), kChanVoice, q.s(s_wizard_wpain_wav), 1, kAttnNorm);
-  anim_begin(q, q.v(q.self(), f_fr_pain));
+  q.sound(me, kChanVoice, q.s(s_wizard_wpain_wav), 1, kAttnNorm);
+  if (!q1_mind::flinches("monster_wizard", had - health, [&q] { return q.random(); })) return;
+  anim_begin(q, q.v(me, f_fr_pain));
   wizard_flinch(q);
 }
 
@@ -531,6 +578,7 @@ void monster_wizard(A& q) {
   monster_kind(q, s_wizard_wsight_wav, s_wizard_wdeath_wav, s_h_wizard_mdl, -40, 8, 16);
   const int32_t me = q.self();
   q.set_i(me, f_th_missile, q.fn(fn_wizard_missile));
+  q.set_i(me, f_th_check, q.fn(fn_wizard_check));
   q.set_i(me, f_th_pain, q.fn(fn_wizard_pain));
   q.set_i(me, f_th_die, q.fn(fn_wizard_die));
   set_frames(q, f_fr_stand, 0, 14);
