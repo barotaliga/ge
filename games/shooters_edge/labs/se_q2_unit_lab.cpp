@@ -460,8 +460,13 @@ void run(gl::Lab& lab) {
   lab.metric("unit.objectives_found", goals_found, "count", det);
   lab.metric("unit.objectives", goals, "count", det);
   lab.metric("unit.digest_low", static_cast<double>(digest & 0xffffffu), "hash", det);
-  for (const auto& [map, line] : notes) lab.note(map + ": " + line);
-  for (const auto& [map, line] : tracks) lab.note(map + ": " + line);
+  for (const auto* list : {&notes, &tracks})
+    for (const auto& [map, line] : *list) {
+      std::string note = map;
+      note += ": ";
+      note += line;
+      lab.note(note);
+    }
   if (own && (!unit_done || keys_taken != keys || goals_found != goals))
     lab.fail("the script did not play the fixture unit through: " + std::to_string(finished) +
                  " exits, " + std::to_string(keys_taken) + " of " + std::to_string(keys) +

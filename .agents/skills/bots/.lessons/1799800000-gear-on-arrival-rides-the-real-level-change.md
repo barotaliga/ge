@@ -2,7 +2,7 @@
 title: Gear on arrival rides the program's own level change, never hand-written parms
 date: 2026-11-27
 scope: games/shooters_edge/bots/arrival_gear.cpp, games/shooters_edge/bots/coop_episode.cpp
-concepts: [arrival-gear, spawn-parms, set-change-parms, touch, mission-pack, q2_campaign_order]
+concepts: [arrival-gear, spawn-parms, set-change-parms, touch, mission-pack, q2-campaign-order]
 ---
 
 - To start a Quake map with gear, do not write `parm1..parm16` by hand: a mission pack keeps its
