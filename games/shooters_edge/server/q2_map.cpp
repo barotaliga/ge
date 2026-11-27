@@ -1135,9 +1135,12 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
 }
 
 // `late`: a delayed use's copy, which keeps only the message and the targets: it says talk1, and
-// it uses a door's area portals too.
+// it uses a door's area portals too. A user removed by its own use stops there; one already going
+// (an explosive blown, an item taken) still fires every target, as it is removed only after its
+// use.
 void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
   const Q2Entity& e = s.entities[size_t(ent)];
+  const bool going = e.gone;
   if (!e.message.empty()) {
     centre_to(s, activator, e.message);
     const int sounds = late ? 0 : e.sounds;
@@ -1159,7 +1162,7 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
         k.arrive = kNoAct;
         k.think_at = 0;
       }
-    if (s.entities[size_t(ent)].gone)
+    if (!going && s.entities[size_t(ent)].gone)
       return s.console.push_back("entity was removed while using killtargets");
   }
   const std::string target = e.target;
@@ -1171,7 +1174,7 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
     if (int(i) == ent) continue;
     if (door && class_of(s.entities[i]) == kAreaPortal) continue;  // the door sets those itself
     use(s, static_cast<int>(i), activator, depth + 1, ent);
-    if (s.entities[size_t(ent)].gone)
+    if (!going && s.entities[size_t(ent)].gone)
       return s.console.push_back("entity was removed while using targets");
   }
 }
