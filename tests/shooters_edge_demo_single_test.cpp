@@ -133,11 +133,12 @@ std::vector<uint8_t> larger_limits_demo(Wire wire) {
     w = Bytes{wire, {}};
     w.u8(7);  // the time
     w.f32(static_cast<float>(f) * 0.1f);
-    // The status: health, then past a byte the armour and the shells by their high bytes, and
-    // the view model by a word's.
+    // The status: the velocity in x (steps of 16 units a second), health, then past a byte the
+    // armour and the shells by their high bytes, and the view model by a word's.
     w.u8(15);
-    w.u16((1 << 9) | (1 << 13) | (1 << 14) | (1 << 15));
+    w.u16((1 << 5) | (1 << 9) | (1 << 13) | (1 << 14) | (1 << 15));
     w.u8((1 << 0) | (1 << 1) | (1 << 3));  // bits 16, 17, 19
+    w.u8(100 / 16 * (f + 1));              // the velocity in x: 96, 192, 288 units a second
     w.i32(0);                              // items
     w.u8(0x2C);                            // armour 300 = 0x12C
     w.u8(0x2D);                            // the view model 301 = 0x12D
@@ -222,6 +223,7 @@ TEST(a_protocol_666_demo_reads_its_wider_fields) {
   CHECK(e.scale == 2.0f);
   CHECK(e.origin.x == 3000.0f && e.origin.y == -200.0f && e.origin.z == 64.0f);
   CHECK(s.stats[cl::kStatArmour] == 300);
+  CHECK(s.velocity_read && s.velocity.x == 288 && s.velocity.y == 0);  // the clientdata's
   CHECK(s.stats[cl::kStatShells] == 500);
   CHECK(s.stats[cl::kStatWeapon] == 301);
   CHECK(s.stats[cl::kStatHealth] == 88);

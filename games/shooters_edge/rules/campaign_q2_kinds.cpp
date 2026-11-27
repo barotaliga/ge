@@ -18,6 +18,7 @@
 // ge:keywords monster_soldier monster_gunner monster_tank monster_gladiator
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_campaign_rules_test.cpp
+#include <algorithm>
 #include <cstdint>
 #include <string_view>
 
@@ -592,21 +593,60 @@ void sq_attack_step(A& q) {
   q.set_f(me, f_sq_rest, q.time() + (a.recover > 0.1f ? a.recover : 0.1f));
 }
 
-// Pain: its cry and its flinch, no more than every 3 s.
+// Pain: its cry and its flinch, no more than every 3 s (th_pain, the kind's mark; a blow takes
+// the table's way, sq_take_pain).
 void sq_pain(A& q) {
   const int32_t me = q.self();
   if (on(q.f(me, f_sq_ducked))) return;  // ducked: no pain
-  hold_pain(q, 3);
+  hold_pain(q, static_cast<float>(q2_mind::kPainEvery));
   q.sound(me, kChanVoice, word(q, run_of(q, me), kSqPain), 1, kAttnNorm);
   if (q.f(me, f_sq_duck_frame) > 0) return;  // going down: the duck goes on
   anim_begin(q, q.v(me, f_fr_pain));
   sq_flinch(q);
 }
 
+// A blow it lives through, as Quake II's pain table has it (q2_monster_pain_rules.hpp): by the
+// health it took (from what it had after the last), the skill (a kind that flinches at skill 3
+// reads it as 2), how fast it rises, the frame it shows and whether that is a pain's. Its wait is
+// 3 s from a pain spent; while it lasts only a pain run may be swapped for the knocked-up one. At
+// skill 3 every blow puts the next pain 5 s off. Ducked, nothing; going down, the cry alone.
+void sq_take_pain(A& q) {
+  const int32_t me = q.self();
+  const int run = run_of(q, me);
+  const roster::Kind& k = kind_of(run);
+  const float health = q.f(me, q.L.f.health);
+  float had = q.f(me, f_sq_health);
+  if (had < health) had = static_cast<float>(k.health);  // new (none kept yet), or raised
+  q.set_f(me, f_sq_health, health);
+  if (on(q.f(me, f_sq_ducked))) return;  // ducked: no pain
+  const int skill = skill_of(q);
+  const bool waiting = q.time() < q.f(me, f_pain_finished);
+  const bool in_pain = q.i(me, q.L.f.think) == q.fn(fn_sq_flinch);
+  const PainChoice c =
+      q2_pain::pain(kSqRuns[run].classname, had > health ? static_cast<int>(had - health) : 0,
+                    k.pain_at_3 ? std::min(skill, 2) : skill, q.v(me, q.L.f.velocity).z,
+                    static_cast<int>(q.f(me, q.L.f.frame)), static_cast<int>(q.v(me, f_fr_now).x),
+                    in_pain, waiting, roll_of(q));
+  if (c.spent) q.set_f(me, f_pain_finished, q.time() + static_cast<float>(q2_mind::kPainEvery));
+  if (c.sound != nullptr)
+    for (const SqWord w : {kSqPain, kSqCry1, kSqCry2})
+      if (std::string_view(sq_word(run, w)) == c.sound) {
+        q.sound(me, kChanVoice, word(q, run, w), 1, c.everywhere ? kAttnNone : kAttnNorm);
+        break;
+      }
+  if (!c.run.none() && !(q.f(me, f_sq_duck_frame) > 0)) {  // the flinch cuts what it was doing
+    q.set_f(me, f_sq_run_step, 0);
+    anim_begin(q, frames_of(c.run));
+    sq_flinch(q);
+  }
+  if (skill == 3)
+    q.set_f(me, f_pain_finished,
+            q.time() + 2 + static_cast<float>(q2_mind::kPainEvery));  // the next 5 s off
+}
+
 void sq_flinch(A& q) {
-  const Vec3 f = q.v(q.self(), f_fr_pain);
-  const float steps = f.z == 0 ? 3 : f.y - f.x + 1;
-  flinch(q, fn_sq_flinch, steps < 8 ? steps : 8);
+  const Vec3 f = q.v(q.self(), f_fr_now);
+  flinch(q, fn_sq_flinch, f.z == 0 ? 3 : f.y - f.x + 1);
 }
 
 // A grenade's or a rocket's blast: its points less half the distance to everything near.
