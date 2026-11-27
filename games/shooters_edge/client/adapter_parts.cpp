@@ -143,6 +143,19 @@ std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const Search
 
 std::vector<std::string> list_demos(const GameAdapter& self, const SearchPath& files) {
   std::set<std::string> out;
+  // The player's own folder's recordings, when it is not the game folder (installs.hpp's
+  // `fs_artifacts_basedir`).
+  std::error_code ec;
+  if (!files.own.empty() && files.own != files.folder)
+    for (const auto& e : std::filesystem::directory_iterator(files.own, ec)) {
+      const std::string n = e.path().filename().string();
+      for (const std::string_view ext : self.game->demo_extensions)
+        if (e.is_regular_file(ec) && n.size() > ext.size() &&
+            folded(n.substr(n.size() - ext.size())) == folded(ext)) {
+          out.insert(n);
+          break;
+        }
+    }
   for (const ge::vfs::Listed& l : ge::vfs::list(files.vfs)) {
     for (const std::string_view ext : self.game->demo_extensions) {
       const std::string_view n = l.name;

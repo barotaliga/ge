@@ -26,7 +26,7 @@ prefix comes the thing in one word, abbreviated when it is long: `r_shadowsize`,
 | `con_` | the drop-down console | `con_height`, `con_speed`, `con_chat` |
 | `hud_` | the HUD | `hud_scale` |
 | `scr_` | the screen as a whole: its overlays and the screenshots taken of it | `scr_levelstats`, `scr_format`, `scr_quality` |
-| `fs_` | the files: which game is played, where each is installed, the shell's own config files | `fs_basegame`, `fs_basedir_q1`, `fs_autoexec` |
+| `fs_` | the files: which game is played, where each is installed, where the player's own files go, the shell's own config files | `fs_basegame`, `fs_basedir_q1`, `fs_artifacts_basedir`, `fs_autoexec` |
 | none | a few names everyone knows | `name`, `rate`, `sensitivity`, `volume` |
 
 `ge cvar ls <prefix>` lists a game's cvars with a prefix; a new name matches its neighbours'

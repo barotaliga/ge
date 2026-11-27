@@ -123,7 +123,11 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
   return std::string(content.base_dir);
 }
 
-void choose_folder(Args& args, const BaseGame& base) {
+std::string own_game_folder(const std::string& data_root) {
+  return data_root.empty() ? "." : (fs::path(data_root) / "se").string();
+}
+
+void choose_folder(Args& args, const BaseGame& base, const std::string& own) {
   const ge::classicenhance::Profile* want =
       base.game.empty() ? nullptr : ge::classicenhance::find_profile(base.game);
   if (!base.game.empty() && want == nullptr)
@@ -131,8 +135,8 @@ void choose_folder(Args& args, const BaseGame& base) {
               " is no game this build knows (it knows " + ge::classicenhance::profile_ids() +
               "); next: set " + std::string(kBaseGame) + " to one of them, or \"\"");
   if (want == nullptr) {
-    // Shooter's Edge's own game: the folder the game runs in.
-    args.basedir = ".";
+    // Shooter's Edge's own game: its own folder in the data folder.
+    args.basedir = own;
     if (!args.game_set) args.game = game_of(args.basedir);
     return;
   }
@@ -153,7 +157,7 @@ void choose_folder(Args& args, const BaseGame& base) {
     out::status("shooters_edge: no install of " + std::string(want->what) + " is set (" +
                 basedir_setting(want->id) + "); asking for its folder");
   args.ask_install = true;
-  args.basedir = ".";
+  args.basedir = own;
   if (!args.game_set) args.game = game_of(args.basedir, *want);
 }
 

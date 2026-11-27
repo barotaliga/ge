@@ -207,6 +207,14 @@ bool find_demo(const SearchPath& files, const std::string& name,
   std::vector<std::string> tries = {name};
   if (!has_ext)
     for (const std::string_view ext : extensions) tries.push_back(name + std::string(ext));
+  // The player's own folder first, when it is not the game folder (installs.hpp's
+  // `fs_artifacts_basedir`): what they recorded there.
+  if (!files.own.empty() && files.own != files.folder)
+    for (const std::string& path : tries)
+      if (read_disk((fs::path(files.own) / path).string(), out)) {
+        found = (fs::path(files.own) / path).string();
+        return true;
+      }
   for (const std::string& path : tries) {
     const std::span<const uint8_t> b = find_file(files, path, store);
     if (!b.empty()) {

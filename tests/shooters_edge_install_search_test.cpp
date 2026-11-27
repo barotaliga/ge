@@ -137,10 +137,10 @@ TEST(the_installs_near_the_game_are_listed_and_never_played_on_their_own) {
   // no install set for it, its folder asked for though one lies beside the game.
   cl::BaseGame base;
   cl::Args a;
-  cl::choose_folder(a, base);
-  CHECK(a.basedir == "." && !a.ask_install);
+  cl::choose_folder(a, base, "own");
+  CHECK(a.basedir == "own" && !a.ask_install);
   base.game = std::string(q2().id);
   cl::Args b;
-  cl::choose_folder(b, base);
+  cl::choose_folder(b, base, "own");
   CHECK(b.ask_install && b.profile == q2().id);
 }
