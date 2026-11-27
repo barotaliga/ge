@@ -311,8 +311,8 @@ struct RemixBalance {
 struct PoolItem {
   std::string_view from, to;  // the direction it pools in
   std::string_view class_name;
-  int32_t bits = -1;      // the variant bits it has (`kItemBits` of its spawnflags); -1 any
   std::string_view pool;  // "health", "armour"
+  int32_t bits = -1;      // the variant bits it has (`kItemBits` of its spawnflags); -1 any
   int32_t amount = 0;
 };
 // What a pool is laid down as in the target game: the largest first.
@@ -327,12 +327,12 @@ struct PoolOutput {
 // Quake's health is fifteen (the rotten box, bit 1) or twenty-five (no bit); its mega health
 // (bit 2) is swapped by role, never pooled.
 inline constexpr PoolItem kPoolItems[] = {
-    {"q2", "q1", "item_health_small", -1, "health", 2},
-    {"q2", "q1", "item_health", -1, "health", 10},
-    {"q2", "q1", "item_health_large", -1, "health", 25},
-    {"q2", "q1", "item_armor_shard", -1, "armour", 2},
-    {"q1", "q2", "item_health", 1, "health", 15},
-    {"q1", "q2", "item_health", 0, "health", 25},
+    {"q2", "q1", "item_health_small", "health", -1, 2},
+    {"q2", "q1", "item_health", "health", -1, 10},
+    {"q2", "q1", "item_health_large", "health", -1, 25},
+    {"q2", "q1", "item_armor_shard", "armour", -1, 2},
+    {"q1", "q2", "item_health", "health", 1, 15},
+    {"q1", "q2", "item_health", "health", 0, 25},
 };
 // What each game lays a pool down as, largest first: Quake's health as twenty-five and fifteen,
 // twenty shard points as a green armour; Quake II's health as twenty-five, ten and two.

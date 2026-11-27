@@ -243,6 +243,7 @@ TEST(the_classic_games_health_is_split_into_q2s_sizes_keeping_the_total) {
   CHECK(cl::remix_entities(text, "q1", "q2", out, &rep, error));
   const auto b = blocks_of(out);
   std::vector<std::string> names;
+  names.reserve(b.size());
   for (const auto& block : b) names.emplace_back(value(block, "classname"));
   std::string got;
   for (const std::string& n : names) got += n + " ";
