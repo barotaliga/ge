@@ -634,9 +634,10 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       const char* sp = sb::block_value(b, "speed");
       const char* lp = spec.brushes ? sb::block_value(b, "lip") : nullptr;
       const float lip = lp ? static_cast<float>(std::atof(lp)) : plat2 ? 0.f : 8.f;
-      const float rise = plat2 ? (h ? static_cast<float>(std::atof(h)) : bm.maxs.z - bm.mins.z) - lip
-                         : h   ? static_cast<float>(std::atof(h))
-                               : (bm.maxs.z - bm.mins.z) - lip;
+      const float rise = plat2
+                             ? (h ? static_cast<float>(std::atof(h)) : bm.maxs.z - bm.mins.z) - lip
+                         : h ? static_cast<float>(std::atof(h))
+                             : (bm.maxs.z - bm.mins.z) - lip;
       const float fallback = spec.brushes ? 200.f : 150.f;
       const float speed = sp ? static_cast<float>(std::atof(sp)) : fallback;
       if (spec.brushes) {

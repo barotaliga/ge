@@ -43,8 +43,8 @@ bool harm_at(const Server& sv, Vec3f origin) {
 // or slime (a wall or a step there that the box cannot stand in: no).
 bool stands_dry(const Server& sv, Vec3f at, int me) {
   const Vec3f up{at.x, at.y, at.z + kStepUp};
-  const HullTrace down = trace_move(sv, up, kPlayerMins, kPlayerMaxs,
-                                    {up.x, up.y, up.z - kDeep}, kTraceNoMonsters, me);
+  const HullTrace down = trace_move(sv, up, kPlayerMins, kPlayerMaxs, {up.x, up.y, up.z - kDeep},
+                                    kTraceNoMonsters, me);
   if (down.startsolid || down.fraction >= 1) return false;
   return !harm_at(sv, down.endpos);
 }
