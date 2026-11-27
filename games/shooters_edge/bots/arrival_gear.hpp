@@ -5,12 +5,13 @@
 // THE RULE: the earlier maps (those a normal playthrough plays before this one, in order, from the
 // start of its episode or the new game) are walked one by one. On each, every pickup it places for
 // the skill played is taken by the game's own pickup rule (weapons with their ammunition,
-// ammunition boxes and packs, armour; never health, powers or keys), as if the player had found
+// ammunition boxes and packs, armour; never health or powers), as if the player had found
 // them all. Then the map's monsters are paid for: their health in damage, each ammunition kind
 // worth its weapon's damage a unit (`kQ1Damage`, `kQ2Damage`), every kind spent by the same share
 // (`gear_kept_share`); then a further 20% of what was held (`kGearMargin`) for the shots that
 // miss. What is left is carried into the next earlier map, and from the last one into this.
-// Health is full on arrival.
+// Health is full on arrival. Quake's keys stay behind (its level change takes them); Quake II's
+// carry on, less those an earlier map's locks took, as a single player's do.
 //
 // QUAKE (`q1_take_map_gear`): run on the campaign host's map with the player in it; the pickups
 // are touched by the program's own touch functions (so a mission pack's weapons and ammunition
@@ -19,7 +20,8 @@
 // QUAKE II (`q2_arrival_body`): each earlier map started on a scratch server and its item rows
 // taken into a body by `sq_pick_up`; the body is then the player's on the map he arrives on.
 //
-// ge:summary Gear on arrival: the earlier maps' pickups taken, less the ammo their monsters cost
+// ge:summary Gear on arrival: the earlier maps' pickups and keys taken,
+// ge:summary less the ammo their monsters cost
 // ge:keywords arrival-gear realistic-gear starting-gear loadout carried-gear campaign each-map
 // ge:keywords ammo-spent monster-health kept-share earlier-maps spawn-parms q1 q2 mission-pack
 // ge:skill shooter bots

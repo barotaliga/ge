@@ -182,9 +182,7 @@ bool q2_arrival_body(sv::MapLoader load, void* ctx, sv::Q2Pack pack, int skill,
     for (const sv::Q2Entity& e : s.entities) {
       if (e.item < 0 || e.gone) continue;
       const sv::SqItem& it = sv::kSqItems[e.item];
-      if (it.kind == sv::SqKind::health || it.kind == sv::SqKind::powerup ||
-          it.kind == sv::SqKind::key)
-        continue;
+      if (it.kind == sv::SqKind::health || it.kind == sv::SqKind::powerup) continue;
       int count = 0;
       if (it.kind == sv::SqKind::ammo && e.block >= 0 && s.map != nullptr &&
           static_cast<size_t>(e.block) < s.map->entities.size())
@@ -192,6 +190,11 @@ bool q2_arrival_body(sv::MapLoader load, void* ctx, sv::Q2Pack pack, int skill,
             std::atoi(s.map->entities[static_cast<size_t>(e.block)].get_any_case("count").c_str());
       if (sv::sq_pick_up(e.item, out, false, skill, 0, count)) leg.pickups++;
     }
+    // The keys this map's locks take (a lock takes its key in single player); the rest carry
+    // on to the maps that need them (Ground Zero's last level opens for the bomb brought to it).
+    for (const sv::Q2Entity& e : s.entities)
+      if (e.classname == "trigger_key" && !e.gone && e.needs >= 0 && out.counts[e.needs] > 0)
+        out.counts[e.needs]--;
     for (const sv::Q2Monster& m : s.monsters) {
       if (m.spare || m.entity < 0) continue;
       const sv::Q2Entity& e = s.entities[static_cast<size_t>(m.entity)];
@@ -219,6 +222,12 @@ std::string q2_gear_text(const sv::SqBody& body, sv::Q2Pack pack) {
     out += std::string(out.empty() ? "" : ", ") + it.pickup;
   }
   if (out.empty()) out = "Blaster";
+  std::string keys;
+  for (int i = 0; i < sv::kSqItemCount; i++)
+    if (sv::kSqItems[i].kind == sv::SqKind::key && body.counts[i] > 0)
+      keys += std::string(keys.empty() ? "" : ", ") + sv::kSqItems[i].pickup +
+              (body.counts[i] > 1 ? " x" + std::to_string(body.counts[i]) : "");
+  if (!keys.empty()) out += " | keys: " + keys;
   static constexpr const char* kAmmo[sv::kSqAmmoKinds] = {
       "",         "shells", "bullets",    "grenades", "rockets", "cells", "slugs",
       "magslugs", "traps",  "flechettes", "prox",     "tesla",   "rounds"};
