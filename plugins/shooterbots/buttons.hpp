@@ -56,6 +56,12 @@ constexpr double kDoorAvoid_s = 20;   // and a door whose button only it leads t
 std::vector<std::string> button_fires(const std::vector<ge::shooterbots::EntityBlock>& blocks,
                                       const char* target);
 
+constexpr float kDoomDmg = 1000;  // a blast that hurts this much kills anyone in its reach
+
+// Whether what a button's `target` fires (`button_fires`) reaches a killbox or a blast no one lives
+// through: biggun's evacuate button, two relays and 22 s on, sets off both over the whole base.
+bool button_dooms(const std::vector<ge::shooterbots::EntityBlock>& blocks, const char* target);
+
 // (`fields`) The map's buttons as the fields' errands (shooterbots/nav_field.hpp), one for each of
 // `f.button_spots` in order (an errand's index is its button's): the node it is pressed or shot
 // from, the doors that are a way once fired (`ButtonSpot::way_doors`), the press and the doors'

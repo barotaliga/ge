@@ -25,12 +25,15 @@ constexpr int kTriggerWaits = 4;  // a trigger's flag: it waits to be made live 
 bool trigger_waits(const EntityBlock& b);
 
 // Step `st` (a trigger named `name` that waits) gated on its name and every name that fires it in
-// turn (a trigger the button fires: bunk1's t97 wakes t98's strip through a trigger_once), left
-// for good until way_wake_gates opens it.
-void way_gate_names(WayStep& st, const char* name, const std::vector<EntityBlock>& blocks);
+// turn (a trigger the button fires: bunk1's t97 wakes t98's strip through a trigger_once), and on
+// the monsters of `s` whose death fires one (`WayStep::gate_dead`), left for good until
+// way_wake_gates opens it.
+void way_gate_names(WayStep& st, const char* name, const std::vector<EntityBlock>& blocks,
+                    const BotView& s);
 
-// A trigger made live by a step done (the button that wakes it pressed) is walked into from now.
-void way_wake_gates(WayThrough& w);
+// A trigger made live by a step done (the button that wakes it pressed) or by a monster's death
+// (one of `gate_dead` gone from `s`) is walked into from now.
+void way_wake_gates(WayThrough& w, const BotView& s);
 
 // Whether locked door `e` (its edict `de`) is one a live trigger_multiple reaching across it opens
 // each time he walks up (bunk1's pairs by the strips their buttons wake): a door he opens by

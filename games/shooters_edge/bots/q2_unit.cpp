@@ -297,7 +297,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     const int helped = q->help_changed;
     const int frames = static_cast<int>(opt.map_seconds * kHz);
     int frame = 0;
-    bool changed = false;
+    bool changed = false, died = false;
     int health =
         q->world.entities[1].health > 0 ? static_cast<int>(q->world.entities[1].health) : 0;
     std::vector<bool> took(m.bots[0].way.steps.size(), false);
@@ -410,6 +410,15 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
               s.world.entities[static_cast<size_t>(k) + 1].origin);
       }
       if (!s.pending_map.empty()) changed = true;
+      // Dead alone (god mode keeps off all but a killbox; co-op brings him back), he would lie
+      // there for the rest of the map's time, a gib with his box in the floor: the map ends with
+      // his death, said as such (biggun's base blown up round him read as "the time ran out" ten
+      // minutes later).
+      if (!changed && n == 1 && now <= 0 && q->intermission_at <= 0) {
+        died = true;
+        frame++;
+        break;
+      }
     }
     um.seconds = static_cast<double>(frame) / kHz;
     um.helper_near_share =
@@ -440,7 +449,14 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       }
     }
     if (!changed) {
-      um.end = "the time ran out";
+      if (died) {
+        const sh::Vec3f at = rules->world.entities[1].origin;
+        char line[96];
+        std::snprintf(line, sizeof line, "he died at %.0f %.0f %.0f", at.x, at.y, at.z);
+        um.end = line;
+      } else {
+        um.end = "the time ran out";
+      }
       r.maps.push_back(std::move(um));
       break;
     }
