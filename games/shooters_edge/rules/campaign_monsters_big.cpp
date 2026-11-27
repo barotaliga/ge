@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include "shooters_edge/rules/campaign_decl.hpp"
+#include "shooters_edge/server/q1_monster_mind.hpp"
 
 namespace shooters_edge::server::rules::campaign {
 
@@ -92,12 +93,10 @@ bool demon_decides(A& q) {
     return true;
   }
   const Vec3 delta = enemy_origin(q) - q.v(me, q.L.f.origin);
-  if (q.fabs(delta.z) > 64) return false;
-  const float d = q.vlen(delta);
-  if ((d < 100) | (d > 350)) return false;
+  if (!q1_mind::leaps(q1_mind::kFiendLeap, q.fabs(delta.z), q.vlen(delta))) return false;
   if (q.time() < q.f(me, f_attack_finished)) return false;
   if (!can_see(q, enemy(q))) return false;
-  q.set_f(me, f_attack_finished, q.time() + 2);
+  q.set_f(me, f_attack_finished, q.time() + q1_mind::kFiendLeap.refire);
   demon_leap(q);
   return true;
 }
@@ -523,15 +522,16 @@ bool hknight_decides(A& q) {
   const int32_t me = q.self();
   if (!can_see(q, enemy(q))) return false;
   const float d = enemy_distance(q);
-  if (d <= 80) {
+  if (d <= q1_mind::kKnightReach) {
     q.set_f(me, f_attack_state, kAsMelee);
     return true;
   }
   if (q.time() < q.f(me, f_attack_finished)) return false;
-  const bool near = d <= 250;
-  const bool level = q.fabs(enemy_origin(q).z - q.v(me, q.L.f.origin).z) <= 20;  // either way
+  const bool near = d <= q1_mind::kChargeReach;
+  const bool level =  // asked either way
+      q.fabs(enemy_origin(q).z - q.v(me, q.L.f.origin).z) <= q1_mind::kChargeRise;
   if (near & level) {
-    q.set_f(me, f_attack_finished, q.time() + 2);
+    q.set_f(me, f_attack_finished, q.time() + q1_mind::kChargeRefire);
     face_enemy(q);
     anim_begin(q, q.v(q.self(), f_fr_leap));
     hknight_charge(q);
