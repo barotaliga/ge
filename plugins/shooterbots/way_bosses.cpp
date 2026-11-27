@@ -3,7 +3,7 @@
 // ge:summary The way through's shot triggers and the lightning boss: its electrodes, bolt, bridge
 // ge:keywords way_shot_triggers way_bolt_init way_bolt_pick shot-trigger event-lightning chthon
 // ge:skill shooterbots bots
-// ge:test tests/shooters_edge_companion_test.cpp
+// ge:test tests/shooters_edge_companion_test.cpp tests/shooterbots_way_bosses_test.cpp
 #include "shooterbots/way_bosses.hpp"
 
 #include <cmath>
@@ -122,6 +122,95 @@ void way_shot_triggers(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
     // One that opens no door (e2m7's seven, counted by a trigger_counter that opens the way on)
     // is still shot: done once it answered (gone, or touching nothing).
     // Shot from the nearest node whose eye line reaches it (a window is shot through the room).
+    float best_d = kWayShotTriggerFrom;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      const float dd = dist(o, bs.at);
+      if (dd >= best_d) continue;
+      const sh::HullTrace tr =
+          sh::trace_move(s.sv, {o.x, o.y, o.z + 22}, {}, {}, bs.at, sh::kTraceNoMonsters, -1);
+      if (tr.fraction < 1 && tr.ent != e) continue;
+      bs.node = static_cast<int32_t>(n);
+      best_d = dd;
+    }
+    if (bs.node >= 0) f.button_spots.push_back(std::move(bs));
+  }
+}
+
+const char* way_calmed_push(const std::vector<sb::EntityBlock>& blocks, const char* target) {
+  if (!target) return nullptr;
+  // What it removes: the killtargets of what it fires (hangar1's relay kills the push).
+  std::vector<std::string> killed;
+  for (const std::string& n : button_fires(blocks, target))
+    for (const sb::EntityBlock& d : blocks) {
+      const char* dn = sb::block_value(d, "targetname");
+      const char* kt = sb::block_value(d, "killtarget");
+      if (dn && kt && n == dn) killed.emplace_back(kt);
+    }
+  for (const sb::EntityBlock& d : blocks) {
+    const char* dc = sb::block_value(d, "classname");
+    const char* dn = sb::block_value(d, "targetname");
+    const char* dm = sb::block_value(d, "model");
+    const char* sp = sb::block_value(d, "speed");
+    if (!dc || !dn || !dm || dm[0] != '*' || std::strcmp(dc, "trigger_push") != 0) continue;
+    bool gone = false;
+    for (const std::string& k : killed) gone = gone || k == dn;
+    // A push's velocity is ten times its speed (1000 unless it says).
+    const float v = 10 * (sp && std::atof(sp) > 0 ? static_cast<float>(std::atof(sp)) : 1000);
+    if (gone && v >= kCurrentFast) return dm;
+  }
+  return nullptr;
+}
+
+bool way_shot_door(const Fighter& f, int e) {
+  for (const ButtonSpot& bs : f.button_spots)
+    if (e >= 0 && bs.shoot && bs.ent == e && bs.doors.size() == 1 && bs.doors[0] == e &&
+        bs.calm_lo.x == bs.calm_hi.x && bs.model.empty())
+      return true;
+  return false;
+}
+
+void way_shot_currents(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
+                       const ge::shooter::MapSpec& spec,
+                       const std::vector<sb::EntityBlock>& blocks) {
+  const sb::NavGraph& g = nav.graph;
+  const auto box_of = [&](const char* model, sh::Vec3f& lo, sh::Vec3f& hi) {
+    const int m = std::atoi(model + 1);
+    if (spec.brushes) {
+      if (m <= 0 || static_cast<size_t>(m) >= spec.brushes->models.size()) return false;
+      const ge::brush::Model& bm = spec.brushes->models[static_cast<size_t>(m)];
+      lo = {bm.mins[0], bm.mins[1], bm.mins[2]};
+      hi = {bm.maxs[0], bm.maxs[1], bm.maxs[2]};
+      return true;
+    }
+    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) return false;
+    lo = spec.models[static_cast<size_t>(m)].mins;
+    hi = spec.models[static_cast<size_t>(m)].maxs;
+    return true;
+  };
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    const char* health = sb::block_value(b, "health");
+    if (!cn || std::strcmp(cn, "func_explosive") != 0 || !model || model[0] != '*' || !health ||
+        std::atof(health) <= 0 || sb::block_value(b, "targetname"))
+      continue;
+    sh::Vec3f calm_lo{0, 0, 0}, calm_hi{0, 0, 0};
+    const char* push = way_calmed_push(blocks, sb::block_value(b, "target"));
+    if (push) box_of(push, calm_lo, calm_hi);
+    if (calm_lo.x == calm_hi.x) continue;  // it calms no current
+    const int e = edict_of(s, model);
+    if (e < 0) continue;
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    ButtonSpot bs;
+    bs.ent = e;
+    bs.at = (d.absmin + d.absmax) * 0.5f;
+    bs.shoot = true;
+    bs.model = model;
+    bs.doors = {e};
+    bs.calm_lo = calm_lo;
+    bs.calm_hi = calm_hi;
+    // Shot from the nearest node whose eye line reaches it.
     float best_d = kWayShotTriggerFrom;
     for (size_t n = 0; n < g.nodes.size(); n++) {
       const sh::Vec3f o = g.nodes[n].origin;

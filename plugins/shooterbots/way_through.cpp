@@ -497,6 +497,17 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         gates.push_back(e);
       }
       continue;
+    } else if (std::strcmp(cn, "func_door") == 0 && !name && brush &&
+               way_shot_door(f, edict_of(s, model))) {
+      // A door a shot opens (`way_complete_init`'s, its shot a step) stays shut to a walk till it
+      // moves, and is shut again once it falls back: hangar1's by the duct, taken as open from the
+      // start, stood him in front of it for eight minutes.
+      const int e = edict_of(s, model);
+      w.locked.push_back(e);
+      w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+      w.locked_turns.push_back(0);
+      gates.push_back(e);
+      continue;
     } else if (std::strcmp(cn, "func_door") == 0 && name && brush) {
       const char* sf = sb::block_value(b, "spawnflags");
       if (std::strcmp(cn, "func_door") == 0 && sf && (std::atoi(sf) & 1) != 0) {
@@ -635,6 +646,18 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     if (st.kind == WayKind::key && st.key_bit != 0)
       for (const WayThrough::KeyDoor& kd : w.key_doors)
         if (kd.bit == st.key_bit) st.doors.push_back(kd.door);
+  // (`complete`) A current a breakable switches off (`way_shot_currents`): the nodes in its push
+  // are shut while the breakable stands (hangar1's duct pinned him against its fan for ten
+  // minutes).
+  for (const ButtonSpot& bs : f.button_spots) {
+    if (bs.calm_lo.x == bs.calm_hi.x) continue;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      if (o.x + 16 > bs.calm_lo.x && o.x - 16 < bs.calm_hi.x && o.y + 16 > bs.calm_lo.y &&
+          o.y - 16 < bs.calm_hi.y && o.z + 32 > bs.calm_lo.z && o.z - 24 < bs.calm_hi.z)
+        w.node_door[n] = bs.ent;
+    }
+  }
   for (size_t k = 0; k < f.button_spots.size(); k++) {
     const ButtonSpot& bs = f.button_spots[k];
     WayStep st;
@@ -872,6 +895,7 @@ void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
     f.button_spots.push_back(bs);
   }
   way_shot_triggers(f, nav, s, spec, blocks);
+  way_shot_currents(f, nav, s, spec, blocks);
 }
 
 void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -934,7 +958,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
                            (!bs.model.empty() && (be.free || be.solid == sh::kSolidNot));
       bool all = !bs.doors.empty();
       for (const int d : bs.doors) all = all && door_open(d);
-      const bool now = pressed || all || (bs.doors.empty() && st.done);
+      // A breakable that calms a current (`way_shot_currents`) is done once it is gone.
+      const bool calms = bs.calm_lo.x != bs.calm_hi.x;
+      const sh::WorldEntity& bw = s.world.entities[static_cast<size_t>(bs.ent)];
+      const bool now =
+          calms ? bw.free || bw.modelindex <= 0 : pressed || all || (bs.doors.empty() && st.done);
       if (now && !st.done) w.stats.steps_done++;
       st.done = now;
       // One that blows the place up, pressed, is let go of at once: the poke's hold on it kept him
@@ -1009,6 +1037,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     held = held || way_touch_opened(w, s.sv.edicts[static_cast<size_t>(w.locked[k])], w.locked[k]);
     if (!held && (t >= w.hopeful_until || keyed)) w.barred.push_back(w.locked[k]);
   }
+  // A current a breakable still standing calms (`way_shot_currents`): barred till it is shot.
+  for (const WayStep& st : w.steps)
+    if (st.kind == WayKind::button && !st.done) {
+      const ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
+      if (bs.calm_lo.x != bs.calm_hi.x) w.barred.push_back(bs.ent);
+    }
   // His own routes never through them either (a secret wall by its crossings, below: its sweep's
   // movers stood him still in front of it).
   f.bot.pilot.pilot.shut.clear();
