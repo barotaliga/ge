@@ -126,7 +126,7 @@ Particle puff(const double p[3], double size, double grow, double grey, double o
 // The kinds' colours (linear).
 constexpr float kAcid[3] = {0.45f, 1.0f, 0.12f};
 constexpr float kAcidHot[3] = {0.85f, 1.0f, 0.35f};
-constexpr float kAcidMist[3] = {0.55f, 0.9f, 0.4f};
+constexpr float kAcidCore[3] = {0.7f, 1.0f, 0.3f};
 constexpr float kVoid[3] = {0.62f, 0.25f, 1.0f};
 constexpr float kVoidHot[3] = {0.95f, 0.8f, 1.0f};
 constexpr float kVoidSmoke[3] = {0.55f, 0.4f, 0.75f};
@@ -312,23 +312,38 @@ void monster_trail(MonsterShot k, const double from[3], const double to[3], uint
                    Particles* out) {
   Rng r = ge::core::make_rng(seed);
   switch (k) {
-    case MonsterShot::acid:
-      along(from, to, 0.07, r, [&](const double p[3], const double dir[3]) {
-        // Drops of acid that drip off and fall, glowing green, in a thin green mist.
-        Particle d = shine(p, kAcid, 1.7, 0.25, 0.6, rnd(r, 0.35, 0.7), rnd(r, 0.04, 0.08));
-        double v[3];
-        unit(r, v);
-        for (int c = 0; c < 3; ++c) d.v[c] = float(v[c] * rnd(r, 0.1, 0.5) - dir[c] * 0.4);
-        d.fall = 1.0f;
-        d.streak = 0.03f;
-        d.drag = 0.6f;
+    case MonsterShot::acid: {
+      // The classic's two rows of specks thrown either side of its line in turn, as glowing drops
+      // that drift off sideways, dim to a dark green and sag as they go; now and then a heavier
+      // drop falls; and a faint luminous vapour along the line that spreads and fades.
+      int side = int(seed & 1u);
+      double a[3], b[3];
+      along(from, to, 0.06, r, [&](const double p[3], const double dir[3]) {
+        across(dir, a, b);
+        const double sign = (side++ & 1) != 0 ? 1 : -1;
+        const double out_v = rnd(r, 0.5, 0.95), up_v = rnd(r, -0.15, 0.2);
+        const bool heavy = rnd(r, 0, 1) < 0.15;
+        Particle d = shine(p, kAcid, heavy ? 2.2 : 1.8, 0.06, 0.35, rnd(r, 0.45, 0.75),
+                           heavy ? rnd(r, 0.07, 0.1) : rnd(r, 0.045, 0.075));
+        for (int c = 0; c < 3; ++c)
+          d.v[c] = float(a[c] * out_v * sign + b[c] * up_v - dir[c] * 0.3);
+        d.fall = heavy ? 1.0f : 0.3f;
+        d.drag = heavy ? 0.4f : 1.4f;
+        d.streak = 0.02f;
+        d.glow = 0.9f;
         out->push_back(d);
-        if (rnd(r, 0, 1) < 0.4) {
-          out->push_back(puff(p, rnd(r, 0.06, 0.12), rnd(r, 0.25, 0.5), 0.5, rnd(r, 0.1, 0.22),
-                              rnd(r, 0.5, 0.9), kAcidMist, r));
+        if (rnd(r, 0, 1) < 0.6) {
+          Particle v = shine(p, kAcid, 0.22, 0.02, 0.3, rnd(r, 0.3, 0.5), rnd(r, 0.12, 0.2));
+          v.grow = float(rnd(r, 0.2, 0.35));
+          v.drag = 2.0f;
+          v.fall = -0.02f;
+          v.opacity = 0.5f;
+          v.glow = 1.0f;
+          out->push_back(v);
         }
       });
       break;
+    }
     case MonsterShot::flame:
       along(from, to, 0.07, r, [&](const double p[3], const double dir[3]) {
         double v[3];
@@ -431,7 +446,9 @@ void monster_head(MonsterShot k, const double p[3], const double dir[3], double 
   constexpr float kFireHot[3] = {1.0f, 0.8f, 0.45f};
   switch (k) {
     case MonsterShot::acid:
-      core = kAcidHot;
+      core = kAcidCore;
+      core_m = 0.075;
+      level = 2.6;
       break;
     case MonsterShot::flame:
       core = kFireHot;
@@ -462,6 +479,18 @@ void monster_head(MonsterShot k, const double p[3], const double dir[3], double 
   c.streak = k == MonsterShot::laser ? 0.035f : 0.012f;
   c.fall = 0;
   c.opacity = 0.9f;
+  if (k == MonsterShot::acid) {
+    // A small round green-hot core in a wide soft green halo, the pack's glob inside.
+    c.glow = 0.6f;
+    c.opacity = 1;
+    Particle halo = shine(p, kAcid, 0.9, 0.5, 0, 0.035, 0.34);
+    for (int i = 0; i < 3; ++i) halo.v[i] = float(dir[i] * speed);
+    halo.streak = 0.02f;
+    halo.fall = 0;
+    halo.opacity = 0.55f;
+    halo.glow = 1;
+    out->push_back(halo);
+  }
   out->push_back(c);
 }
 
@@ -475,8 +504,8 @@ bool monster_glow(MonsterShot k, const double p[3], const double dir[3], uint32_
   switch (k) {
     case MonsterShot::acid:
       rgb = kAcid;
-      level = 0.9;
-      reach = 3;
+      level = 1.1;
+      reach = 3.5;
       break;
     case MonsterShot::flame:
       rgb = nullptr;
@@ -557,24 +586,54 @@ void monster_splash(MonsterShot k, const double p[3], const double* normal, cons
   const double off[3] = {p[0] + n[0] * 0.05, p[1] + n[1] * 0.05, p[2] + n[2] * 0.05};
   switch (k) {
     case MonsterShot::acid: {
-      // Droplets thrown off the face that fall and run, a hiss of green haze.
+      // A green flash where it bursts; drops splashed out along the face (the classic's thirty
+      // specks) that fall, hop and dim; bright specks that fizz on the spot; and a glowing green
+      // haze that rises off it.
+      Particle f = shine(off, kAcidHot, 1.8, 0.1, 0, 0.16, 0.9);
+      f.glow = 1;
+      f.opacity = 0.8f;
+      f.fall = 0;
+      births->push_back(f);
       for (int i = 0; i < 36; ++i) {
         double d[3];
         unit(r, d);
         away_from(n, d);
-        Particle q = shine(off, i % 3 == 0 ? kAcidHot : kAcid, 1.8, 0.2, 0.5, rnd(r, 0.4, 0.9),
-                           rnd(r, 0.035, 0.07));
-        for (int c = 0; c < 3; ++c) q.v[c] = float(d[c] * rnd(r, 0.6, 2.5));
+        const double along_n = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+        for (int c = 0; c < 3; ++c) d[c] -= 0.55 * along_n * n[c];  // spread along the face
+        Particle q = shine(off, i % 4 == 0 ? kAcidHot : kAcid, 1.8, 0.06, 0.4, rnd(r, 0.45, 0.95),
+                           rnd(r, 0.05, 0.09));
+        for (int c = 0; c < 3; ++c) q.v[c] = float(d[c] * rnd(r, 1.0, 3.5));
         q.fall = 1;
-        q.drag = 0.8f;
-        q.streak = 0.03f;
+        q.drag = 0.9f;
+        q.streak = 0.025f;
         q.floor_y = float(floor_y);
-        q.bounce = 0.1f;
+        q.bounce = 0.15f;
+        q.glow = 0.9f;
         births->push_back(q);
       }
-      for (int i = 0; i < 6; ++i)
-        births->push_back(puff(off, rnd(r, 0.1, 0.2), rnd(r, 0.4, 0.8), 0.55, rnd(r, 0.15, 0.3),
-                               rnd(r, 0.8, 1.5), kAcidMist, r));
+      for (int i = 0; i < 14; ++i) {
+        double q[3];
+        for (int c = 0; c < 3; ++c) q[c] = off[c] + rnd(r, -0.12, 0.12) * (1 - std::abs(n[c]));
+        Particle z = shine(q, kAcidHot, 1.8, 0.06, 0.6, rnd(r, 0.6, 1.3), rnd(r, 0.04, 0.065));
+        for (int c = 0; c < 3; ++c) z.v[c] = float(n[c] * rnd(r, 0.05, 0.2));
+        z.fall = -0.04f;
+        z.drag = 3.0f;
+        z.swirl = 0.15f;
+        z.glow = 0.9f;
+        births->push_back(z);
+      }
+      for (int i = 0; i < 5; ++i) {
+        Particle h = shine(off, kAcid, 0.32, 0.02, 0.6, rnd(r, 0.9, 1.5), rnd(r, 0.2, 0.35));
+        double d[3];
+        unit(r, d);
+        for (int c = 0; c < 3; ++c) h.v[c] = float(d[c] * 0.15 + n[c] * 0.12);
+        h.grow = float(rnd(r, 0.3, 0.5));
+        h.drag = 2.0f;
+        h.fall = -0.05f;
+        h.opacity = 0.5f;
+        h.glow = 1;
+        births->push_back(h);
+      }
       break;
     }
     case MonsterShot::flame: {
@@ -629,6 +688,8 @@ bool splash_light(MonsterShot k, const double p[3], double age, Light* out) {
   switch (k) {
     case MonsterShot::acid:
       rgb = kAcid;
+      level = 2.2;
+      reach = 4;
       break;
     case MonsterShot::flame:
       rgb = kFire;

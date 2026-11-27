@@ -21,7 +21,7 @@ struct Particle {
   hops: f32,  // the hops it has made (render/particles.hpp's max_hops)
   swirl: f32,  // m/s: the eddies of the air it rides (`eddy`), 0 none
   accel: vec3f,  // m/s²: its own acceleration on top of gravity's share
-  spare: f32,
+  glow: f32,
 }
 
 const kFloorRest = 0.35;   // m/s: slower than this down, it lies still

@@ -1097,6 +1097,7 @@ std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shoote
 // `kLadderAbove` over it, within `kLadderTop` across of the ladder): the climb the move makes
 // facing the ladder with the view up, unproven by the nav's move (which has no ladders), timed at
 // the climb's 200 units/s.
+constexpr int32_t kSealedStart = 8;  // a start spot reaching fewer nodes on foot is sealed in
 constexpr float kLadderBeside = 40, kLadderTop = 64, kLadderAbove = 64, kLadderFoot = 64;
 constexpr float kLadderMin = 48;  // a ladder this tall or more is climbed (a lower one is a step)
 constexpr int32_t kLadderContents = 0x20000000;
@@ -1644,7 +1645,15 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
       const char* cn = sb::block_value(b, "classname");
       const char* org = sb::block_value(b, "origin");
       if (!cn || !org || std::strcmp(cn, start_class) != 0) continue;
-      const int32_t k = sb::nav_reach(graph, sb::nav_nearest(graph, origin_of(org)), sr);
+      const int32_t at = sb::nav_nearest(graph, origin_of(org));
+      int32_t k = sb::nav_reach(graph, at, sr);
+      // A start sealed in (xship's pod, left by a hatch shot and a rocket jump): what it reaches
+      // with rocket jumps, or its traps are reckoned from the pod and the whole map is one.
+      if (k > 0 && k < kSealedStart) {
+        sb::NavJumper rj;
+        rj.rockets = true;
+        k = sb::nav_reach(graph, at, sr, rj);
+      }
       if (k > out.main_n) {
         out.main_n = k;
         std::swap(out.main, sr);

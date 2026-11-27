@@ -274,14 +274,20 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
     target = S;
     p.mode = PilotMode::jump;
     const float d = across(s.origin, S);
+    // A standing flip: turned round on the spot, then the back key with the jump.
+    const float up = heading(dir.x, dir.y) + (flip ? 180 : 0);
     if (d > p.set.arrive && along < 0) {
-      w.yaw = unwrap(yaw_at(s.origin, S), p.yaw);
-      w.forward = d > 2 * p.set.look ? 1 : d / (2 * p.set.look);
+      // Already turning to the jump's view as he goes (the keys under it): walked to its foot
+      // facing it, the turn round undid the walk and the walk the turn (xship's pod, a standing
+      // flip up through its hatch tried for the whole map).
+      const float k = d > 2 * p.set.look ? 1 : d / (2 * p.set.look);
+      w.yaw = unwrap(up, p.yaw);
+      const double rs = static_cast<double>(yaw_at(s.origin, S) - p.yaw) * (core::kPi / 180);
+      w.forward = static_cast<float>(core::libm::cos(rs)) * k;
+      w.side = static_cast<float>(-core::libm::sin(rs)) * k;
       because = "to the foot of a standing jump";
       return false;
     }
-    // A standing flip: turned round on the spot, then the back key with the jump.
-    const float up = heading(dir.x, dir.y) + (flip ? 180 : 0);
     w.yaw = unwrap(up, p.yaw);
     w.forward = flip || still ? 0.0f : 1.0f;
     // Up into an updraft: from a stand (a step's way on and the draft takes him by its side, where

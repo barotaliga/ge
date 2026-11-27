@@ -120,7 +120,7 @@ bool wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, c
   put(engine_point(body->origin), origin);
   float q[4];
   const float ang[3] = {body->angles.x, body->angles.y, body->angles.z};
-  models::rotation_of(ang, true, q);
+  models::rotation_of(ang, s.models->alias_pitch_up, q);
   Wound w;
   w.entity = body->entity;
   w.seed = s.seed++;
@@ -265,7 +265,7 @@ void draw_wounds(FxState& s, const std::vector<Placed>& placed, const ge::camera
     put(engine_point(m.origin), origin);
     float q[4];
     const float ang[3] = {m.angles.x, m.angles.y, m.angles.z};
-    models::rotation_of(ang, true, q);
+    models::rotation_of(ang, s.models->alias_pitch_up, q);
     for (const Wound& w : s.wounds) {
       if (w.entity != skinned || size_t(w.tri) * 9 + 9 > s.skin.size()) continue;
       double c[3][3];
@@ -363,7 +363,7 @@ void body_blood(const FxScene& l, FxState& s, double t, double dt, FxFrame& out)
         skinned = body_triangles(*s.models, m, t, s.skin);
         put(engine_point(m.origin), origin);
         const float ang[3] = {m.angles.x, m.angles.y, m.angles.z};
-        models::rotation_of(ang, true, q);
+        models::rotation_of(ang, s.models->alias_pitch_up, q);
       }
       if (!skinned || size_t(w.tri) * 9 + 9 > s.skin.size()) continue;
       double c[3][3];
