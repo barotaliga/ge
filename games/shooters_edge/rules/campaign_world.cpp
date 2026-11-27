@@ -115,6 +115,7 @@ void worldspawn(A& q) {
 
 void StartFrame(A& q) {
   if (on(q.g(g_intermission_running))) intermission_frame(q);
+  sq_trail_frame(q);  // the players' trail Quake II's monsters follow (none without them)
 }
 
 void main_hook(A&) {}
