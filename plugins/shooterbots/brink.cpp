@@ -34,36 +34,35 @@ constexpr float kFloorZ = 0.7f;       // a plane this steep or flatter is a floo
 constexpr float kStepUp = 18;         // a stair's step the move climbs, units
 constexpr float kCrack = 16;          // a way's pit narrower than this along it is walked across
 
-bool harm_at(const Server& sv, Vec3f origin) {
+bool harm_at(const Server& sv, const NavGraph* g, Vec3f origin) {
   const int c = world_contents(sv, {origin.x, origin.y, origin.z + kPlayerMins.z + 2});
-  return c == kContentsLava || c == kContentsSlime;
+  return c == kContentsLava || c == kContentsSlime || (g != nullptr && nav_hurt_at(*g, origin));
 }
 
 // Whether the player's box at `at`, raised by a stair's step, stands on a floor that is not lava
 // or slime (a wall or a step there that the box cannot stand in: no).
-bool stands_dry(const Server& sv, Vec3f at, int me) {
+bool stands_dry(const Server& sv, const NavGraph* g, Vec3f at, int me) {
   const Vec3f up{at.x, at.y, at.z + kStepUp};
   const HullTrace down = trace_move(sv, up, kPlayerMins, kPlayerMaxs, {up.x, up.y, up.z - kDeep},
                                     kTraceNoMonsters, me);
   if (down.startsolid || down.fraction >= 1) return false;
-  return !harm_at(sv, down.endpos);
+  return !harm_at(sv, g, down.endpos);
 }
 
 }  // namespace
 
-bool over_harm(const Server& sv, Vec3f from, Vec3f to, int me) {
+bool over_harm(const Server& sv, Vec3f from, Vec3f to, int me, const NavGraph* g) {
   const HullTrace go = trace_move(sv, from, kPlayerMins, kPlayerMaxs, to, kTraceNoMonsters, me);
   if (go.startsolid) return false;
   const Vec3f end = go.endpos;
   const HullTrace down = trace_move(sv, end, kPlayerMins, kPlayerMaxs,
                                     {end.x, end.y, end.z - kDeep}, kTraceNoMonsters, me);
   if (down.fraction >= 1) return false;  // no floor near: not a pit this guard knows
-  const float feet = down.endpos.z + kPlayerMins.z;
-  const int c = world_contents(sv, {down.endpos.x, down.endpos.y, feet + 2});
-  return c == kContentsLava || c == kContentsSlime;
+  return harm_at(sv, g, down.endpos);
 }
 
-bool fall_into_harm(const Server& sv, Vec3f origin, Vec3f velocity, float ground, int me) {
+bool fall_into_harm(const Server& sv, Vec3f origin, Vec3f velocity, float ground, int me,
+                    const NavGraph* g) {
   Vec3f p = origin, v = velocity;
   bool flew = false;
   for (int i = 0; i < kFlySteps && ground > 0; i++) {
@@ -100,7 +99,7 @@ bool fall_into_harm(const Server& sv, Vec3f origin, Vec3f velocity, float ground
     const HullTrace d = trace_move(sv, p, kPlayerMins, kPlayerMaxs, {p.x, p.y, p.z + v.z * kFly_dt},
                                    kTraceNoMonsters, me);
     p = d.endpos;
-    if (harm_at(sv, p)) return true;
+    if (harm_at(sv, g, p)) return true;
     if (d.fraction < 1 && d.plane.normal.z >= kFloorZ) {
       if (flew && ground < kLandRun) ground = kLandRun;
       flew = false;
@@ -133,13 +132,13 @@ BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin
     const double a = k * (core::kPi / 4);
     const float dx = static_cast<float>(core::libm::cos(a)),
                 dy = static_cast<float>(core::libm::sin(a));
-    if (!over_harm(sv, origin, {origin.x + dx * kLook, origin.y + dy * kLook, origin.z}, me))
+    if (!over_harm(sv, origin, {origin.x + dx * kLook, origin.y + dy * kLook, origin.z}, me, &g))
       continue;
     // A crack between two floors, the box over it no wider than kCrack, is walked across, not a
     // pit: the floor stands dry just past it (rmine1's catwalks over the lava, a crack between
     // two of them, stood him still at its lip for the whole run).
     const float past = kLook + kCrack;
-    if (stands_dry(sv, {origin.x + dx * past, origin.y + dy * past, origin.z}, me)) continue;
+    if (stands_dry(sv, &g, {origin.x + dx * past, origin.y + dy * past, origin.z}, me)) continue;
     out.ways++;
     const float along = wx * dx + wy * dy;
     if (along > 0) {
@@ -153,8 +152,9 @@ BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin
     const float ahead = speed * kRun_s < kRunMost ? speed * kRun_s : kRunMost;
     const float vx = velocity.x / speed, vy = velocity.y / speed;
     out.run_in =
-        near && over_harm(sv, origin, {origin.x + vx * ahead, origin.y + vy * ahead, origin.z}, me);
-    if (!out.run_in && fly && fall_into_harm(sv, origin, velocity, ahead, me))
+        near &&
+        over_harm(sv, origin, {origin.x + vx * ahead, origin.y + vy * ahead, origin.z}, me, &g);
+    if (!out.run_in && fly && fall_into_harm(sv, origin, velocity, ahead, me, &g))
       out.run_in = out.fall_in = true;
     if (out.run_in) {
       const float along = wx * vx + wy * vy;

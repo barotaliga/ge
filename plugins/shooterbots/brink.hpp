@@ -30,14 +30,17 @@
 namespace ge::shooterbots {
 
 // Whether the player's box swept from `from` toward `to` (stopped by a wall) stands over lava or
-// slime: the floor under where it stops, looked for down to 400 units, is in either.
-bool over_harm(const Server& sv, Vec3f from, Vec3f to, int me);
+// slime: the floor under where it stops, looked for down to 400 units, is in either, or (with
+// `g`) by one of its `hurt` nodes (a pit a killing trigger fills, `nav_hurt_at`).
+bool over_harm(const Server& sv, Vec3f from, Vec3f to, int me, const NavGraph* g = nullptr);
 
 // Whether the player's box at `origin` moving `velocity`, flown on under gravity (walls stop it, a
 // stair's step is climbed, a floor lands it), comes with its feet into lava or slime within
 // `ground` units run on the floor (any flight between not counted; at least `kLandRun` after a
 // landing) or a second.
-bool fall_into_harm(const Server& sv, Vec3f origin, Vec3f velocity, float ground, int me);
+// `g`: its `hurt` nodes too, as `over_harm`.
+bool fall_into_harm(const Server& sv, Vec3f origin, Vec3f velocity, float ground, int me,
+                    const NavGraph* g = nullptr);
 
 // What the guard found and did on one command.
 struct BrinkGuard {

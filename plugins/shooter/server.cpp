@@ -224,6 +224,11 @@ void set_brush_model(Server& sv, int e, int modelindex) {
   set_size(sv, e, m.mins, m.maxs);
 }
 
+bool traced_by_brush(const Server& sv, const Edict& e) {
+  return e.solid == kSolidBsp && e.modelindex >= 1 &&
+         static_cast<size_t>(e.modelindex) < sv.models.size();
+}
+
 void call_program(Server& sv, Func fn) {
   if (fn == kNoFunc || sv.program.call == nullptr) return;
   sv.program.call(sv.program.ctx, sv, fn);

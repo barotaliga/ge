@@ -6,7 +6,7 @@
 //
 // ge:summary Tests: the brink guard's keys by a lava pit, and the nav's brink links
 // ge:keywords test brink brink_guard over_harm nav_mark_harm nav_harm_near lava-lip lava pit
-// ge:keywords fall_into_harm stair-fall
+// ge:keywords fall_into_harm stair-fall nav_hurt_at hurt dry-pit trigger_hurt
 // ge:skill shooter testing
 #include <algorithm>
 #include <vector>
@@ -236,4 +236,27 @@ TEST(a_run_into_a_wall_that_slides_it_off_the_lip_is_braked) {
   sh::MoveCmd c = keys(90, 320, 0);
   const sb::BrinkGuard bg = sb::brink_guard(b.sv, g, -1, at, run, c, true);
   CHECK(bg.fall_in && bg.changed);
+}
+
+// A pit with no lava in it, its floor a trigger that kills (Ground Zero's rboss): the contents
+// show nothing, so only the nav's `hurt` nodes on its floor keep him off the lip.
+TEST(a_dry_pit_a_killing_trigger_fills_is_kept_off_by_its_hurt_nodes) {
+  Bench b;
+  b.start({box({-1024, -1024, -64}, {0, 1024, 0}), box({512, -1024, -64}, {1024, 1024, 0}),
+           box({-1024, -1024, -192}, {1024, 1024, -128})});
+  sb::NavGraph g =
+      graph({{-16, -64, 24}, {-16, 64, 24}, {16, 0, -104}, {48, 0, -104}, {-600, 0, 24}}, {});
+  const sh::Vec3f lip{-24, 0, 24};
+  g.hurt.clear();  // no hurt nodes: the dry floor is walked onto
+  sh::MoveCmd c = keys(0, 320, 0);
+  CHECK(!sb::brink_guard(b.sv, g, -1, lip, {}, c).changed);
+  CHECK(!sb::over_harm(b.sv, lip, {lip.x + 40, lip.y, lip.z}, -1, &g));
+  g.hurt = g.harm;  // the pit's floor nodes in the trigger
+  CHECK(sb::nav_hurt_at(g, {16, 0, -104}));
+  CHECK(!sb::nav_hurt_at(g, lip));
+  CHECK(sb::over_harm(b.sv, lip, {lip.x + 40, lip.y, lip.z}, -1, &g));
+  c = keys(0, 320, 0);
+  const sb::BrinkGuard in = sb::brink_guard(b.sv, g, -1, lip, {}, c);
+  CHECK(in.changed);
+  CHECK(c.forward <= 0);
 }

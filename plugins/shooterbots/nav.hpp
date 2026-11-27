@@ -292,6 +292,9 @@ struct NavGraph {
   std::vector<NavEscape> escapes;
   // Each node's: a floor in lava or slime (`nav_mark_harm`); empty: none known.
   std::vector<uint8_t> harm;
+  // Each node's: in or by a trigger that kills (`mark_hurt_harm`), a pit the world's contents do
+  // not show (the brink guard reads it, `nav_hurt_at`); empty: none.
+  std::vector<uint8_t> hurt;
 };
 
 // One proof's result.
@@ -476,6 +479,9 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
 int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach = 40);
 // Whether a harm node lies within `reach` across of `p` and a step or more under it.
 bool nav_harm_near(const NavGraph& g, Vec3f p, float reach);
+// Whether a `NavGraph::hurt` node stands where a player at `p` stands: within 24 across and 32 up
+// or down (the floor of a pit a killing trigger fills, which no contents show).
+bool nav_hurt_at(const NavGraph& g, Vec3f p);
 // Whether the move's air keys carry a flight (an air acceleration with no cap on the wish: Quake
 // II's): forward in the air gains speed toward the way, and a key let go there is a flight lost.
 inline bool air_carries(const MoveSettings& m) { return m.air_wish_cap <= 0 && m.air_accel > 0; }

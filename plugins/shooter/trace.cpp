@@ -77,7 +77,7 @@ HullTrace clip_to_entity(const Server& sv, int ent, Vec3f start, Vec3f mins, Vec
     tr.ent = tr.fraction < 1 || tr.startsolid ? ent : -1;
     return tr;
   }
-  if (e.solid == kSolidBsp) {
+  if (traced_by_brush(sv, e)) {
     const BrushModel& m = sv.models[static_cast<size_t>(e.modelindex)];
     const float width = maxs.x - mins.x;
     const int h = width < 3 ? 0 : width <= 32 ? 1 : 2;
