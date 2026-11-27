@@ -32,6 +32,7 @@ struct VertexOut {
   @location(3) @interpolate(flat) kelvin: f32, // its glow's heat now, K (0: none)
   @location(4) @interpolate(flat) tint: vec3f,  // the colour its albedo reflects
   @location(5) @interpolate(flat) shine: vec3f, // an unlit speck's own light, whites (0: lit)
+  @location(6) @interpolate(flat) glow: f32,    // its soft glow's share (Particle::glow)
 }
 
 const kCorners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),
@@ -77,6 +78,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   let thin = size / max(len, size);
   out.look = vec4f(p.albedo, p.opacity * fade * spread, thin, size);
   out.tint = p.tint;
+  out.glow = clamp(p.glow, 0.0, 1.0);
   out.kelvin = 0.0;
   out.shine = vec3f(0.0);
   if (p.kelvin > 0.0) {
@@ -140,9 +142,17 @@ fn shape_cover(q: vec2f) -> f32 {
   }
 }
 
+// A soft glow's cover: round (an ellipse along a streak), full only at its middle, falling as the
+// square of the way out to nothing at the rim.
+fn glow_cover(q: vec2f) -> f32 {
+  let f = clamp(1.0 - length(q), 0.0, 1.0);
+  return f * f;
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
-  var a = in.look.y * in.look.z * shape_cover(in.quad);
+  let cover = mix(shape_cover(in.quad), glow_cover(in.quad), in.glow);
+  var a = in.look.y * in.look.z * cover;
   // Softened where it nears what is behind it.
   let d = textureLoad(scene_depth, vec2i(in.position.xy), 0);
   let behind = pp.step.y / max(d, 1e-7);
@@ -174,7 +184,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let hazed = haze(c, in.position.xy * frame.size.zw, length(in.rel));
   var out: FragmentOut;
   // Added to what is behind (ParticleSettings::additive): the light alone, nothing hidden.
-  out.colour = vec4f(hazed * a, select(a, 0.0, pp.info.z != 0u));
+  // A soft glow's light added in its share.
+  out.colour = vec4f(hazed * a, select(a * (1.0 - in.glow), 0.0, pp.info.z != 0u));
   out.motion = vec4f(0.0, 0.0, a, 0.0);
   return out;
 }

@@ -81,6 +81,8 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_trail_time, kTypeFloat)  \
   X(sq_last_sight, kTypeVector) \
   X(sq_goal, kTypeEntity)       \
+  X(sq_side_step, kTypeFloat)   \
+  X(sq_real_goal, kTypeVector)  \
   X(sq_trail_last, kTypeVector) \
   X(sq_sound, kTypeFloat)       \
   X(sq_sound_at, kTypeVector)   \

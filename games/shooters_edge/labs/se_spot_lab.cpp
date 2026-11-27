@@ -333,7 +333,6 @@ gl::Picture top_picture(const Scene& s, int px_size) {
   const int m = 30;
   gl::Picture p = gl::create_picture(px_size + 2 * m, px_size + 2 * m + 16, {250, 250, 246, 255});
   const sh::MoveWorld& w = s.nav.world;
-  const sh::Hull& hull = w.solids[0].point_hull;
   auto wx = [&](double px) { return s.at.x - s.r + (px - m + 0.5) / scale; };
   auto wy = [&](double py) { return s.at.y + s.r - (py - m + 0.5) / scale; };
   auto sx = [&](double x) { return m + (x - (s.at.x - s.r)) * scale; };
@@ -352,25 +351,30 @@ gl::Picture top_picture(const Scene& s, int px_size) {
       if (!std::isnan(s.clip_top)) {
         // Cut away over the clip: down from it through any roof to the first open space.
         from = std::min(ztop, s.clip_top);
-        while (from > zlo && sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid)
+        while (from > zlo &&
+               sh::solid_point_contents(w.solids[0], {X, Y, from}) == sh::kContentsSolid)
           from -= 4;
       } else {
-        while (from < ztop && sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid)
+        while (from < ztop &&
+               sh::solid_point_contents(w.solids[0], {X, Y, from}) == sh::kContentsSolid)
           from += 8;
-        if (sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid) {
+        if (sh::solid_point_contents(w.solids[0], {X, Y, from}) == sh::kContentsSolid) {
           from = std::min(ztop, s.at.z + 64);
-          while (from > zlo && sh::point_contents(hull, {X, Y, from}) == sh::kContentsSolid)
+          while (from > zlo &&
+                 sh::solid_point_contents(w.solids[0], {X, Y, from}) == sh::kContentsSolid)
             from -= 8;
         }
       }
-      const sh::HullTrace tr = sh::trace_hull(hull, {X, Y, from}, {X, Y, zlo});
+      const sh::HullTrace tr = sh::point_trace(w, {X, Y, from}, {X, Y, zlo});
       if (tr.startsolid || from <= zlo) {
         gl::set_pixel(p, x + m, y + m, {70, 74, 72, 255});
         continue;
       }
       hz[i] = tr.endpos.z;
-      wet[i] = sh::point_contents(hull, {X, Y, tr.endpos.z + 1}) <= sh::kContentsWater ||
-               sh::point_contents(hull, {X, Y, std::min(ztop, s.at.z + 8)}) <= sh::kContentsWater;
+      wet[i] =
+          sh::solid_point_contents(w.solids[0], {X, Y, tr.endpos.z + 1}) <= sh::kContentsWater ||
+          sh::solid_point_contents(w.solids[0], {X, Y, std::min(ztop, s.at.z + 8)}) <=
+              sh::kContentsWater;
       gl::Rgba c = height_colour((tr.endpos.z - zlo) / (ztop - zlo));
       if (tr.fraction == 1) c = {225, 225, 230, 255};
       if (wet[i])
@@ -541,7 +545,7 @@ la::InsideCamera eye_toward(const Scene& s, double yaw, float back, float up) {
   const sh::Vec3f look{s.at.x, s.at.y, s.at.z + 24};
   const sh::Vec3f want{look.x + back * static_cast<float>(ge::core::libm::cos(a)),
                        look.y + back * static_cast<float>(ge::core::libm::sin(a)), look.z + up};
-  const sh::HullTrace tr = sh::trace_hull(s.nav.world.solids[0].point_hull, look, want);
+  const sh::HullTrace tr = sh::point_trace(s.nav.world, look, want);
   const float f = tr.fraction < 1 ? std::max(0.05f, tr.fraction - 0.06f) : 1.0f;
   la::InsideCamera c;
   c.eye = {look.x + (want.x - look.x) * f, look.y + (want.y - look.y) * f,
@@ -659,7 +663,6 @@ gl::Picture cut_picture(const Scene& s, bool along_x, int px_size) {
   const int m = 30;
   gl::Picture p = gl::create_picture(px_size + 2 * m, px_size + 2 * m, {250, 250, 246, 255});
   const sh::MoveWorld& w = s.nav.world;
-  const sh::Hull& hull = w.solids[0].point_hull;
   auto world_at = [&](double u, double z) {
     return along_x ? sh::Vec3f{static_cast<float>(u), s.at.y, static_cast<float>(z)}
                    : sh::Vec3f{s.at.x, static_cast<float>(u), static_cast<float>(z)};
@@ -670,7 +673,7 @@ gl::Picture cut_picture(const Scene& s, bool along_x, int px_size) {
   for (int y = 0; y < px_size; y++)
     for (int x = 0; x < px_size; x++) {
       const sh::Vec3f q = world_at(u0 + (x + 0.5) / scale, z1 - (y + 0.5) / scale);
-      const int c = sh::point_contents(hull, q);
+      const int c = sh::solid_point_contents(w.solids[0], q);
       gl::Rgba col{240, 240, 236, 255};
       if (c == sh::kContentsSolid)
         col = {80, 84, 82, 255};

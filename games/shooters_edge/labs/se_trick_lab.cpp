@@ -378,13 +378,12 @@ void draw_reach(gl::Lab& lab, const std::string& name, const sh::MoveWorld& worl
   gl::Picture p = gl::create_picture(kSide, kSide, {245, 245, 240, 255});
   const auto px = [&](float x) { return (x - lo.x) * sc; };
   const auto py = [&](float y) { return (lo.y + span - y) * sc; };
-  const sh::Hull& hull = world.solids[0].point_hull;
   for (int y = 0; y < kSide; y += 2)
     for (int x = 0; x < kSide; x += 2) {
       const float wx = lo.x + (static_cast<float>(x) + 1) / sc;
       const float wy = lo.y + span - (static_cast<float>(y) + 1) / sc;
       const shooters_edge::labs::ClippedFloor fl =
-          shooters_edge::labs::floor_below(hull, wx, wy, std::min(clip, hi.z), lo.z);
+          shooters_edge::labs::floor_below(world, wx, wy, std::min(clip, hi.z), lo.z);
       const float f = !fl.found || fl.open ? 0 : (fl.z - lo.z) / (hi.z - lo.z);
       const auto v = static_cast<uint8_t>(!fl.found ? 70 : 140 + 105 * std::clamp(f, 0.0f, 1.0f));
       gl::fill_rect(p, x, y, 2, 2,
@@ -758,7 +757,6 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   }
 
   // The close-ups: each section from above, its tries' trails over the floor.
-  const sh::Hull& hull = nav.world.solids[0].point_hull;
   const int rows = (static_cast<int>(out.sections.size()) + kSheetColumns - 1) / kSheetColumns;
   gl::Picture sheet =
       gl::create_picture(kSheetColumns * kCell, std::max(1, rows) * kCell, {255, 255, 255, 255});
@@ -786,7 +784,7 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
         const float wx = lo.x + (static_cast<float>(x - 10) + 0.5f) / scale;
         const float wy = lo.y + span - (static_cast<float>(y - 10) + 0.5f) / scale;
         const shooters_edge::labs::ClippedFloor fl =
-            shooters_edge::labs::floor_below(hull, wx, wy, std::min(clip, hi.z), lo.z);
+            shooters_edge::labs::floor_below(nav.world, wx, wy, std::min(clip, hi.z), lo.z);
         if (!fl.found) {
           gl::set_pixel(cell, x, y, {70, 74, 72, 255});
           continue;

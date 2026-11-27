@@ -18,7 +18,7 @@
 // ge:keywords native rules-calls native-rules builtins makevectors setorigin spawn remove find
 // ge:keywords findradius bprint sprint sound writebyte multicast vector-math native-program
 // ge:keywords movetogoal walkmove checkclient changeyaw particle ambientsound single-player-form
-// ge:keywords pointparticles trailparticles particleeffectnum named-effect
+// ge:keywords pointparticles trailparticles particleeffectnum named-effect tracebox
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_native_rules_test.cpp
 #pragma once
@@ -188,6 +188,11 @@ struct Q {
   void remove(int32_t e) { run(15, e); }
   void traceline(Vec3 from, Vec3 to, float nomonsters, int32_t ignore) {
     run(16, from, to, nomonsters, ignore);
+  }
+  // A box (`mins`, `maxs` about the line) swept from `from` to `to`; the trace's globals as
+  // traceline writes them.
+  void tracebox(Vec3 from, Vec3 mins, Vec3 maxs, Vec3 to, float nomonsters, int32_t ignore) {
+    run(90, from, mins, maxs, to, nomonsters, ignore);
   }
   int32_t checkclient() { return run(17) ? result_i() : 0; }
   int32_t find(int32_t from, int field, int32_t match) {

@@ -100,7 +100,10 @@ struct Particle {
   // m/s²: AN ACCELERATION OF ITS OWN on top of gravity's share (world axes), steady for its life:
   // a speck pulled back toward where it was thrown from, or pushed up.
   float accel[3] = {0.0f, 0.0f, 0.0f};
-  float spare = 0;  // the slot's 16-byte rounding, unused
+  // 0..1: A SOFT GLOW instead of the pool's shape (ParticleSettings::shape): round, brightest at
+  // its middle and falling off as the square of the way out, and at 1 its light added to what is
+  // behind it, hiding nothing (a halo, a glowing drop's bloom); 0: the pool's shape, laid over.
+  float glow = 0;
 };
 static_assert(sizeof(Particle) == 112, "match particles.wgsl's Particle");
 inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
