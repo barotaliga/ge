@@ -4,7 +4,7 @@
 // window's paced run: the walker drawn on his straight line at the clock's time, evenly spaced
 // between the recording's frames, the teleporter not dragged across the map, the eye riding the
 // tracked player's drawn origin, `demo_lerp 0` drawing each frame as read, and a single-player
-// recording's walking monster gliding over its strides.
+// recording's walking monster gliding over its strides; the player's velocity drawn between.
 //
 // ge:summary Tests: a demo drawn between its frames, the snapping rules, the paced run smooth
 // ge:keywords test demo lerp interpolation smooth teleport respawn gib shortest-angle playdemo
@@ -264,4 +264,27 @@ TEST(a_flipped_teleport_bit_snaps_the_view_for_one_frame) {
     CHECK(near(d.angles.y, flip ? 30 : 20));
     CHECK(near(d.eye.x, flip ? 16 : 8));
   }
+}
+
+// The player's velocity is drawn between the frames as his eye is: the view's bob and strafe roll
+// ride it, and stepped at the recording's rate they twitch.
+TEST(the_players_velocity_is_drawn_between_the_frames) {
+  cl::DemoLerp l;
+  cl::DemoState s;
+  s.format = cl::DemoFormat::client;
+  s.frames = 2;
+  s.player = 0;
+  s.view_height = 22;
+  s.players = {body({0, 0, 24})};
+  s.velocity = {0, 0, 0};
+  s.velocity_read = true;
+  s.time = 1.0;
+  cl::lerp_frame(l, s);
+  s.players = {body({16, 0, 24})};
+  s.velocity = {320, -160, 0};
+  s.time = 1.1;
+  cl::lerp_frame(l, s);
+  const cl::DemoState& d = cl::lerp_at(l, s, 1.05);
+  CHECK(near(d.velocity.x, 160));
+  CHECK(near(d.velocity.y, -80));
 }
