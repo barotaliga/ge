@@ -1628,6 +1628,29 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
   found(s, m, foe, false);
 }
 
+// A Quake kind's pain: none while its last one's wait lasts; at the hardest skill each puts the
+// next 5 s off; a strong shambler may shrug the blow; else its wait, its cry and its flinch.
+// `m.pain_at` keeps the time its wait ends less Quake II's `kPainEvery`, which the rest reads.
+void quake_pain(Q2Server& s, Q2Monster& m, int e, float health, bool waiting) {
+  if (waiting) return;
+  const roster::Kind& k = kind(m);
+  const double now = s.level_time;
+  double until = now;
+  if (skill(s) >= 3) until = now + double(q1_mind::kPainEveryHard);
+  m.pain_at = until - kPainEvery;
+  if (q1_mind::shrugs(k.classname, health, draw(s))) return;
+  const q1_mind::Pain p = q1_mind::pain_of(k.classname);
+  until = std::max(until, now + double(p.wait));
+  m.pain_at = until - kPainEvery;
+  if (k.pain != nullptr) sound(s, e, k.pain);
+  if (p.frames > 0) {  // the flinch cuts what it was doing
+    m.pose.cue_pain = true;
+    m.pain_hold = now + 0.1 * double(p.frames);
+    m.run_shoot = -1;
+    m.busy_until = m.burst_until = std::min(m.burst_until, now);
+  }
+}
+
 bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash,
                     const sh::Vec3f* point) {
   const int i = monster_index(s, e);
@@ -1694,6 +1717,10 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   if (gz_pain(s, m, damage)) return true;  // Ground Zero's kinds' own (a turret's none)
   if (gz_base_pain(s, m)) return true;     // and its base kinds' (none in the air)
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
+  if (q1_mind::runs(k)) {  // Quake's kinds: Quake's pains (q1_monster_mind.hpp)
+    quake_pain(s, m, e, static_cast<float>(ent.health), waiting);
+    return true;
+  }
   if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;
   if (monster_pain_known(pain_class(k))) {  // its pains as data (q2_monster_pain.cpp)
     const PainChoice c =

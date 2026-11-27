@@ -350,6 +350,21 @@ TEST(a_classic_monster_hears_no_shot_under_q2_rules) {
   }
 }
 
+TEST(a_classic_monster_flinches_again_after_its_own_wait_under_q2_rules) {
+  auto h = open_hall({monster("monster_ogre", "0 0 24", "0")});  // the brute: 1.5 s
+  run(*h, 10);
+  const int e = h->m().entity;
+  CHECK(sv::map_damage(h->s(), e, 0, 5));
+  CHECK(h->m().pain_hold > h->s().level_time);  // it flinched
+  const double first = h->m().pain_at;          // its wait set
+  run(*h, kSecond);                             // a second on: still within its wait
+  CHECK(sv::map_damage(h->s(), e, 0, 5));
+  CHECK(h->m().pain_at == first);
+  run(*h, kSecond / 2 + 5);  // past 1.5 s, short of Quake II's 3
+  CHECK(sv::map_damage(h->s(), e, 0, 5));
+  CHECK_MSG(h->m().pain_at > first, std::to_string(h->m().pain_at));
+}
+
 TEST(the_classic_spawn_bursts_on_whoever_is_near_under_q2_rules) {
   auto h = open_hall({monster("monster_tarbaby", "-560 0 40", "180")});
   run(*h, 2);

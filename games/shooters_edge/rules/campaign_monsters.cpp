@@ -74,10 +74,10 @@ void army_missile(A& q) {
 }
 
 // Flinches for 0.3 s.
-void army_flinch(A& q) { flinch(q, fn_army_flinch, 3); }
+void army_flinch(A& q) { flinch(q, fn_army_flinch, q1_mind::pain_of("monster_army").frames); }
 
 void army_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_army").wait);
   if (q.random() < 0.5f)
     q.sound(q.self(), kChanVoice, q.s(s_soldier_pain1_wav), 1, kAttnNorm);
   else
@@ -191,10 +191,10 @@ bool dog_decides(A& q) {
 
 void dog_check(A& q) { q.ret_f(dog_decides(q) ? 1.0f : 0.0f); }
 
-void dog_flinch(A& q) { flinch(q, fn_dog_flinch, 3); }
+void dog_flinch(A& q) { flinch(q, fn_dog_flinch, q1_mind::pain_of("monster_dog").frames); }
 
 void dog_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_dog").wait);
   q.sound(q.self(), kChanVoice, q.s(s_dog_dpain1_wav), 1, kAttnNorm);
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_noop));
   anim_begin(q, q.v(q.self(), f_fr_pain));
@@ -260,10 +260,10 @@ void knight_check(A& q) {
   q.ret_f(yes ? 1.0f : 0.0f);
 }
 
-void knight_flinch(A& q) { flinch(q, fn_knight_flinch, 3); }
+void knight_flinch(A& q) { flinch(q, fn_knight_flinch, q1_mind::pain_of("monster_knight").frames); }
 
 void knight_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_knight").wait);
   q.sound(q.self(), kChanVoice, q.s(s_knight_khurt_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   knight_flinch(q);
@@ -348,10 +348,10 @@ void ogre_melee(A& q) {
   ogre_saw(q);
 }
 
-void ogre_flinch(A& q) { flinch(q, fn_ogre_flinch, 4); }
+void ogre_flinch(A& q) { flinch(q, fn_ogre_flinch, q1_mind::pain_of("monster_ogre").frames); }
 
 void ogre_pain(A& q) {
-  hold_pain(q, 1.5f);
+  hold_pain(q, q1_mind::pain_of("monster_ogre").wait);
   q.sound(q.self(), kChanVoice, q.s(s_ogre_ogpain1_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   ogre_flinch(q);
@@ -449,7 +449,7 @@ void ghoul_hurt(A& q) {
 }
 
 void ghoul_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_zombie").wait);
   q.sound(q.self(), kChanVoice, q.s(s_zombie_z_pain_wav), 1, kAttnNorm);
 }
 
@@ -502,10 +502,10 @@ void wizard_missile(A& q) {
   wizard_spit(q);
 }
 
-void wizard_flinch(A& q) { flinch(q, fn_wizard_flinch, 2); }
+void wizard_flinch(A& q) { flinch(q, fn_wizard_flinch, q1_mind::pain_of("monster_wizard").frames); }
 
 void wizard_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_wizard").wait);
   q.sound(q.self(), kChanVoice, q.s(s_wizard_wpain_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   wizard_flinch(q);
@@ -562,7 +562,7 @@ void fish_melee(A& q) {
 }
 
 void fish_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_fish").wait);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   wizard_flinch(q);
 }

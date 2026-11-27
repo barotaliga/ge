@@ -72,6 +72,23 @@ TEST(the_hound_and_the_fiend_leap_within_their_reach) {
   CHECK(!q1_mind::leaps(q1_mind::kFiendLeap, 0, 99));
 }
 
+TEST(each_kind_waits_and_flinches_its_own_and_a_strong_shambler_shrugs) {
+  CHECK(q1_mind::pain_of("monster_army").wait == 1 && q1_mind::pain_of("monster_army").frames == 3);
+  CHECK(q1_mind::pain_of("monster_ogre").wait == 1.5f);
+  CHECK(q1_mind::pain_of("monster_shambler").wait == 2);
+  CHECK(q1_mind::pain_of("monster_shalrath").wait == 3);
+  CHECK(q1_mind::pain_of("monster_wizard").frames == 2);
+  CHECK(q1_mind::pain_of("monster_zombie").frames == 0);  // it only cries
+  CHECK(q1_mind::pain_of("monster_tarbaby").wait == 0);   // none
+  Draws d{{0.4f, 0.4f, 0.6f}};
+  CHECK(!q1_mind::shrugs("monster_ogre", 900, d));
+  CHECK(d.used == 0);  // no draw but a shambler's
+  CHECK(q1_mind::shrugs("monster_shambler", 600, d));
+  CHECK(!q1_mind::shrugs("monster_shambler", 400, d));  // drawn, but not strong
+  CHECK(!q1_mind::shrugs("monster_shambler", 600, d));
+  CHECK(d.used == 3);
+}
+
 TEST(the_kinds_with_tests_of_their_own_and_who_turns_on_whom) {
   CHECK(q1_mind::test_of("monster_dog") == q1_mind::Test::hound);
   CHECK(q1_mind::test_of("monster_hell_knight") == q1_mind::Test::death_knight);
