@@ -4,11 +4,11 @@
 // it notices him, when its first attack lands, how often it hits him in 20 s, and his health at its
 // lowest. Facing away 600 off while he fires the other way for a second: whether it heard him (one
 // of Quake II's walks to the noise; one of Quake's hears nothing). Facing him while he fires the
-// blaster at it: how often it flinches. Every number is deterministic.
+// blaster at it: how often it flinches. And how long it slid sideways round him. Every number is deterministic.
 //
 // ge:summary Lab: Quake's monsters under Quake II's rules, each kind's notice, hits and hearing
 // ge:keywords lab q2 cr_monsters remix quake-monsters q1-mind se-q2-quake-monsters hearing pain
-// ge:keywords flinch
+// ge:keywords flinch slide scrag
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_q2_monsters_test.cpp
 #include <algorithm>
@@ -94,7 +94,7 @@ void run(gl::Lab& lab) {
   const int seconds = static_cast<int>(lab.arg_num("seconds"));
   gl::LabTable t{
       "each of Quake's kinds alone with the player under Quake II's rules",
-      {"kind", "noticed (s)", "first hit (s)", "hits", "lowest health", "heard", "flinches"},
+      {"kind", "noticed (s)", "first hit (s)", "hits", "lowest health", "heard", "flinches", "slid (s)"},
       {}};
   int total_hits = 0, heard_any = 0, total_flinches = 0;
   for (const char* kind : kKinds) {
@@ -106,12 +106,13 @@ void run(gl::Lab& lab) {
     }
     for (int i = 0; i < 10; i++) tick(*h, 0, 0);
     float noticed = -1, first = -1, lowest = 100;
-    int hits = 0;
+    int hits = 0, sliding = 0;
     float last = h->s().players[0].health;
     for (int i = 0; i < seconds * kSecond && h->s().players[0].alive; i++) {
       tick(*h, 0, 0);
       const float now = float(i + 1) / float(kSecond);
       if (noticed < 0 && !h->s().monsters.empty() && h->s().monsters[0].enemy == 0) noticed = now;
+      if (!h->s().monsters.empty() && h->s().monsters[0].slide) sliding++;
       const float hp = h->s().players[0].health;
       if (hp < last) {
         hits++;
@@ -155,7 +156,8 @@ void run(gl::Lab& lab) {
     };
     t.rows.push_back({kind, secs(noticed), secs(first), std::to_string(hits),
                       std::to_string(static_cast<int>(lowest)), heard ? "yes" : "no",
-                      std::to_string(flinches)});
+                      std::to_string(flinches), secs(float(sliding) / float(kSecond))});
+    lab.metric(std::string("quake_monsters.") + kind + ".slid", float(sliding) / float(kSecond), "s");
     lab.metric(std::string("quake_monsters.") + kind + ".flinches", flinches, "count");
     lab.metric(std::string("quake_monsters.") + kind + ".hits", hits, "count");
     lab.metric(std::string("quake_monsters.") + kind + ".first_hit", first, "s");
