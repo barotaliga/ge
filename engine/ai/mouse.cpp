@@ -158,8 +158,13 @@ void Mouse::step(double dt, const MouseWant& want, double& x, double& y) {
     stats.lifted_s += dt;
     if (lift_left_ <= 0) {
       // Set down across the pad, a little off where it was meant to go.
-      hx_ = -lift_side_ * hand_.back * hand_.reach_cm;
-      hy_ *= 0.5;
+      if (lift_y_ != 0) {
+        hy_ = -lift_y_ * hand_.back * hand_.reach_y_cm;
+        lift_y_ = 0;
+      } else {
+        hx_ = -lift_side_ * hand_.back * hand_.reach_cm;
+        hy_ *= 0.5;
+      }
       // The slip as the mouse meets the pad: a short slide, not a jump.
       const double sx = hand_.setdown_cm * normal(rng_), sy = hand_.setdown_cm * normal(rng_);
       if (count_ < kStrokes) strokes_[static_cast<size_t>(count_++)] = {0, kSlip_s, sx, sy};
@@ -199,8 +204,16 @@ void Mouse::step(double dt, const MouseWant& want, double& x, double& y) {
       count_ = 0;
       stats.lifts++;
     }
-    if (hy_ + dy > hand_.reach_y_cm) dy = hand_.reach_y_cm - hy_;
-    if (hy_ + dy < -hand_.reach_y_cm) dy = -hand_.reach_y_cm - hy_;
+    if (hy_ + dy > hand_.reach_y_cm || hy_ + dy < -hand_.reach_y_cm) {
+      const int side = hy_ + dy > 0 ? 1 : -1;
+      dy = side * hand_.reach_y_cm - hy_;
+      if (lift_left_ <= 0 && count_ > 0) {  // a stroke still under way past the edge: up and back
+        lift_y_ = side;
+        lift_left_ = hand_.lift_s;
+        count_ = 0;
+        stats.lifts++;
+      }
+    }
     // The arc: what the hand does across bends the view down to the right, and down at both
     // ends of a long drag.
     const double nx = hx_ + dx;
