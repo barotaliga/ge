@@ -88,7 +88,9 @@ void kick_trace(gc::Q2ArmId id, std::string_view model, double from, double to,
   bool firing = false;
   const float ahead[3] = {1, 0, 0};
   double next = from;
-  for (double t = from; t < to; t += 1.0 / 60) {
+  const int draws = static_cast<int>((to - from) * 60);
+  for (int i = 0; i < draws; i++) {
+    const double t = from + i / 60.0;
     while (t + 1e-9 >= next) {  // the hand's step
       bool attack = false;
       for (const auto& [a0, a1] : held) attack = attack || (next >= a0 && next < a1);

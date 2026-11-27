@@ -245,10 +245,10 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   if (listen_q2_arms(l)) {
     const sh::ViewAxes ax = sh::angle_vectors(me.v_angle);
     const float forward[3] = {ax.forward.x, ax.forward.y, ax.forward.z};
-    const ge::classic::Q2Kick k = arms_kick_step(
-        v.arms_kick, string_field_named(l, me.entity, "weaponmodel"),
-        static_cast<int>(field_named(l, me.entity, "weaponframe")), t, forward,
-        !wants_campaign(l.opt), static_cast<uint32_t>(me.entity));
+    const ge::classic::Q2Kick k =
+        arms_kick_step(v.arms_kick, string_field_named(l, me.entity, "weaponmodel"),
+                       static_cast<int>(field_named(l, me.entity, "weaponframe")), t, forward,
+                       !wants_campaign(l.opt), static_cast<uint32_t>(me.entity));
     const ge::camera::Vec3 o = engine_point({0, 0, 0}),
                            d = engine_point({k.origin[0], k.origin[1], k.origin[2]});
     v.pose.eye = {v.pose.eye.x + d.x - o.x, v.pose.eye.y + d.y - o.y, v.pose.eye.z + d.z - o.z};

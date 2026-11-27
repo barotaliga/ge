@@ -1448,7 +1448,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     if (turns) ang[0] = ang[2] = 0;  // yaw only
     if (in_place.roll_hack && p.entity > 0 && p.entity <= sh::kMaxClients &&
         p.entity != in_place.self)
-      ang[2] = -ang[2];            // cl_rollhack: another player's lean the other way
+      ang[2] = -ang[2];          // cl_rollhack: another player's lean the other way
     if (p.spinning && !turns) {  // upside down, its own yaw turned on 500 degrees a second
       ang[0] = 0;
       ang[2] = 180;

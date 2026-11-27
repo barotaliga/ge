@@ -11,12 +11,13 @@
 //   shot starts from the eye (forward, right).
 // - **The hand** steps once a rules frame (0.1 s). Raising (`q2_raise_step`) climbs the activate
 //   run, `swap` frames a step, and is ready on the step after its last frame. Ready and idle
-//   (`q2_idle_step`) loops the idle run, resting on its pause frames (`kQ2ArmPauses`). Firing (`q2_firing_step`) walks the fire run, a shot on
-//   each fire frame, and is ready again a step after its last fire frame, so a weapon's period is
-//   (last fire − last activate + 1) steps. Held fire (`q2_fire_frame`): the machinegun alternates
-//   frames 4 and 5 while attack is held; the chaingun runs 5 to 21 (1, then 2 from frame 10, then
-//   3 bullets a step from 15), loops 15 to 21 while held and stocked, and ends early when let go at
-//   14; the hyperblaster loops 12 back to 6. The hand grenade's own step is its rules'.
+//   (`q2_idle_step`) loops the idle run, resting on its pause frames (`kQ2ArmPauses`). Firing
+//   (`q2_firing_step`) walks the fire run, a shot on each fire frame, and is ready again a step
+//   after its last fire frame, so a weapon's period is (last fire − last activate + 1) steps. Held
+//   fire (`q2_fire_frame`): the machinegun alternates frames 4 and 5 while attack is held; the
+//   chaingun runs 5 to 21 (1, then 2 from frame 10, then 3 bullets a step from 15), loops 15 to 21
+//   while held and stocked, and ends early when let go at 14; the hyperblaster loops 12 back to 6.
+//   The hand grenade's own step is its rules'.
 // - **The hand's sounds** (`q2_arm_sound`): the grenade's pin pulled, the chaingun's spin up from
 //   its first fire frame and down at the burst's end (not when let go early), the hyperblaster's
 //   wind-down.
@@ -123,9 +124,9 @@ struct Q2ArmPauses {
   bool last_holds = false;
 };
 inline constexpr Q2ArmPauses kQ2ArmPauses[kQ2ArmCount] = {
-    {{19, 32, 0, 0}},  {{22, 28, 34, 0}},  {{29, 42, 57, 0}}, {{23, 45, 0, 0}},
-    {{38, 43, 51, 61}}, {{34, 51, 59, 0}}, {{25, 33, 42, 50}}, {{0, 0, 0, 0}},
-    {{56, 0, 0, 0}},   {{39, 45, 50, 55}}, {{29, 34, 39, 48}, true},
+    {{19, 32, 0, 0}},   {{22, 28, 34, 0}},  {{29, 42, 57, 0}},        {{23, 45, 0, 0}},
+    {{38, 43, 51, 61}}, {{34, 51, 59, 0}},  {{25, 33, 42, 50}},       {{0, 0, 0, 0}},
+    {{56, 0, 0, 0}},    {{39, 45, 50, 55}}, {{29, 34, 39, 48}, true},
 };
 inline constexpr Q2ArmPauses kQ2NoPauses{};
 
@@ -151,8 +152,7 @@ inline constexpr uint32_t kQ2PauseRests = 1;
 
 // A ready hand with attack up: the idle run round and round, resting on its pause frames by
 // `draw` (`q2_pause_draw`).
-constexpr void q2_idle_step(const Q2ArmFrames& a, const Q2ArmPauses& p, int& frame,
-                            uint32_t draw) {
+constexpr void q2_idle_step(const Q2ArmFrames& a, const Q2ArmPauses& p, int& frame, uint32_t draw) {
   const bool rest = q2_pauses_on(p, frame) && (draw & 15u) != 0;
   if (frame >= a.last_idle && !(p.last_holds && rest)) {
     frame = a.last_fire + 1;
@@ -492,8 +492,8 @@ constexpr Q2Kick q2_shot_kick(Q2ArmId id, const float forward[3], float climb, u
 // of them; none in deathmatch.
 constexpr float q2_machine_climb(int before, bool deathmatch) {
   if (deathmatch || before <= 0) return 0;
-  return kQ2MachineClimb * static_cast<float>(before < kQ2MachineClimbMost ? before
-                                                                          : kQ2MachineClimbMost);
+  return kQ2MachineClimb *
+         static_cast<float>(before < kQ2MachineClimbMost ? before : kQ2MachineClimbMost);
 }
 
 // THE KICK DRAWN: a kick lives in one of the rules' frames (0.1 s) and the view eases from the

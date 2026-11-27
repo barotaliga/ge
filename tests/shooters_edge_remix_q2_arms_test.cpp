@@ -221,7 +221,6 @@ TEST(q2_railgun_fires_at_its_own_period_on_the_classic_rules) {
   CHECK(listed(qc->effect_names, gc::kQ2RailLine));
 }
 
-
 // The window's kick for Quake II's weapons on the classic rules (client/q2_arms_kick.hpp): the
 // rocket launcher's shot read off its frames tips the view 1 degree up and the eye 2 units back,
 // in over a tenth and out over the next; Quake's own view model kicks nothing.

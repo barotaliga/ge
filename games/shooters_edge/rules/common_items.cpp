@@ -216,8 +216,9 @@ void armour_start(A& q, float slot, float bit) {
   const float lift = words > 6 ? number_of(q, q.argv(6)) : 0;
   q.set_f(me, q.L.f.items, bit);
   q.set_i(me, q.L.f.touch, q.fn(fn_armour_touch));
-  q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, lift});  // the box's foot stays
-  item_start(q, mdl, snd, {-16, -16, -lift}, {16, 16, 56 - lift}, 20);
+  if (lift != 0) q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, lift});  // foot stays
+  // `0 - lift`, never `-lift`: no lift leaves the foot +0, not -0 (its bits are digested)
+  item_start(q, mdl, snd, {-16, -16, 0 - lift}, {16, 16, 56 - lift}, 20);
 }
 
 // An ammunition box: `big` (spawnflags 1) holds twice as much and lies as the big box's model.
@@ -283,8 +284,8 @@ void weapon_start(A& q, float w, int32_t name, int32_t mdl) {
   int32_t snd = q.s(s_pkup_wav);
   if (const int32_t own = q.cvar_string(q.s(s_arsenal_pickup)); !q.is(own, ""))
     snd = q.strzone(own);
-  q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, lift});  // the box's foot stays
-  item_start(q, mdl, snd, {-16, -16, -lift}, {16, 16, 56 - lift}, 30);
+  if (lift != 0) q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, lift});  // foot stays
+  item_start(q, mdl, snd, {-16, -16, 0 - lift}, {16, 16, 56 - lift}, 30);
 }
 
 int32_t pack_weapon_name(A& q, float w) {

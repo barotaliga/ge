@@ -160,16 +160,16 @@ TEST(shots_are_read_off_the_hands_frames) {
     const gc::Q2Arm& a = gc::q2_arm(id);
     return gc::q2_frame_fired(a.frames, a.held, was, now);
   };
-  CHECK(fired(gc::Q2ArmId::rocket_launcher, 13, 6));   // from idle: frame 5 fired, 6 shown
+  CHECK(fired(gc::Q2ArmId::rocket_launcher, 13, 6));  // from idle: frame 5 fired, 6 shown
   CHECK(!fired(gc::Q2ArmId::rocket_launcher, 6, 7));
   CHECK(!fired(gc::Q2ArmId::rocket_launcher, 20, 21));  // idle
-  CHECK(!fired(gc::Q2ArmId::bfg, 16, 18));  // a frame missed between: no shot read
+  CHECK(!fired(gc::Q2ArmId::bfg, 16, 18));              // a frame missed between: no shot read
   CHECK(fired(gc::Q2ArmId::bfg, 17, 18));
   CHECK(fired(gc::Q2ArmId::machinegun, 6, 5));
   CHECK(fired(gc::Q2ArmId::machinegun, 5, 4));
   CHECK(!fired(gc::Q2ArmId::machinegun, 4, 6));  // let go
   CHECK(fired(gc::Q2ArmId::chaingun, 20, 21));
-  CHECK(fired(gc::Q2ArmId::chaingun, 21, 15));  // round the loop
+  CHECK(fired(gc::Q2ArmId::chaingun, 21, 15));   // round the loop
   CHECK(!fired(gc::Q2ArmId::chaingun, 14, 32));  // let go before the spin
   CHECK(fired(gc::Q2ArmId::hyperblaster, 12, 7));
   CHECK(!fired(gc::Q2ArmId::hyperblaster, 8, 12));  // let go

@@ -185,9 +185,10 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
                                        ? std::string_view(read.models[static_cast<size_t>(view)])
                                        : std::string_view{};
     const auto slot = static_cast<size_t>(read.player);
-    const int frame = read.format == DemoFormat::single             ? read.weapon_frame
-                      : read.player >= 0 && slot < read.players.size() ? read.players[slot].weapon_frame
-                                                                       : 0;
+    const int frame = read.format == DemoFormat::single ? read.weapon_frame
+                      : read.player >= 0 && slot < read.players.size()
+                          ? read.players[slot].weapon_frame
+                          : 0;
     const sh::ViewAxes ax = sh::angle_vectors(drawn.angles);
     const float forward[3] = {ax.forward.x, ax.forward.y, ax.forward.z};
     bool deathmatch = true;  // a server that says otherwise climbs the machinegun

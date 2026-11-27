@@ -740,9 +740,8 @@ int run_main(int argc, char** argv) {
   cl::ServerRemix told;  // a server's or a demo's remix, not the player's own (remix.hpp)
   const auto remix_now = [&]() -> const auto& { return told.of(remix_settings); };
   // `cr_items` (remix.hpp's `worn_arsenal`): the other game's things worn, from the next map.
-  // `reopened`: the remix's files were opened again, which forgets what it wore, so what is worn
-  // (the held set, the HUD, the rules' lines) is put on again even when the parts compare the same
-  // (a demo recorded without a remix after the player's own: everything back to the game's own).
+  // `reopened`: the files opened again forget what was worn, so it is put on again even when the
+  // parts compare the same (a demo recorded without a remix: everything back to the game's own).
   const auto remix_wear = [&](bool reopened) {  // true: the remix is worn as its settings say
     remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
     const bool dressed = cl::remix_dress(remix, remix_now(), args.profile);

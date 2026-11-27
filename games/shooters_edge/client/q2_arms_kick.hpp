@@ -23,6 +23,7 @@
 #include <string_view>
 
 #include "classic/q2_arms.hpp"
+#include "core/num.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 
 namespace shooters_edge::client {
@@ -35,12 +36,12 @@ namespace shooters_edge::client {
 // II's hand; frame 0 held a quarter of a second is Quake's. Quake's frames are drawn on Quake II's
 // model as its rest and its fire run (`whole_frame`), never its raise, and kick nothing of Quake
 // II's.
-inline constexpr int kQuakeFramesMost = 8;   // Quake's view models' frames run 0..8
+inline constexpr int kQuakeFramesMost = 8;      // Quake's view models' frames run 0..8
 inline constexpr double kQuakeRestHeld = 0.25;  // s on frame 0 that only Quake's frames hold
 struct WholeFrames {
-  bool quake = false;   // the frames are Quake's
-  int last = -1;        // the frame last read
-  double since = 0;     // when it was first read, s
+  bool quake = false;  // the frames are Quake's
+  int last = -1;       // the frame last read
+  double since = 0;    // when it was first read, s
 };
 inline void read_whole_frames(WholeFrames& w, int frame, double t) {
   if (frame != w.last) {
@@ -85,13 +86,13 @@ inline ge::classic::Q2Kick arms_kick_step(ArmsKick& k, std::string_view model, i
   read_whole_frames(k.read, frame, t);
   if (k.frame >= 0 && frame != k.frame && !k.read.quake) {
     if (gc::q2_frame_fired(arm.frames, arm.held, k.frame, frame)) {
-      const float climb = held->arm == gc::Q2ArmId::machinegun
-                              ? gc::q2_machine_climb(k.in_row, deathmatch)
-                              : 0.0f;
+      const float climb =
+          held->arm == gc::Q2ArmId::machinegun ? gc::q2_machine_climb(k.in_row, deathmatch) : 0.0f;
       k.in_row++;
-      const auto tenth = static_cast<uint32_t>(static_cast<int64_t>(t * 10.0 + 0.5));
-      gc::q2_kick_shot(k.blend, t, gc::q2_shot_kick(held->arm, forward, climb,
-                                                   gc::q2_pause_draw(tenth, who)));
+      const auto tenth =
+          static_cast<uint32_t>(static_cast<int64_t>(ge::core::num::round(t * 10.0)));
+      gc::q2_kick_shot(k.blend, t,
+                       gc::q2_shot_kick(held->arm, forward, climb, gc::q2_pause_draw(tenth, who)));
     } else {
       k.in_row = 0;
     }

@@ -29,6 +29,7 @@
 
 #include "classic/q2_arms.hpp"
 #include "classic/q2_view.hpp"
+#include "core/num.hpp"
 #include "shooters_edge/rules/q2_arm_strings.hpp"
 #include "shooters_edge/rules/variant.hpp"
 #if defined(SE_RULES_CAMPAIGN)
@@ -263,7 +264,8 @@ void fire_rail(A& q, int a) {
 // The draw of a rest on an idle pause frame: off the rules' tenth and the player, so a rest moves
 // none of the rules' own random draws.
 uint32_t pause_draw(A& q, int32_t me) {
-  const auto tenth = static_cast<uint32_t>(static_cast<int64_t>(q.time() * 10.0f + 0.5f));
+  const auto tenth =
+      static_cast<uint32_t>(static_cast<int64_t>(ge::core::num::round(q.time() * 10.0f)));
   return gc::q2_pause_draw(tenth, static_cast<uint32_t>(me));
 }
 

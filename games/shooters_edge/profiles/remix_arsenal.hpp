@@ -101,11 +101,14 @@ inline constexpr WeaponRow kQ1AsQ2Weapons[] = {
 // its own count, adding onto the one worn up to its most.
 inline constexpr ArmourRow kQ1AsQ2Armour[] = {
     {1, ge::classic::kQ2Armours[1].normal, ge::classic::kQ2Armours[1].base, 0,
-     "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[1].maximum, kQ2Lift},
+     "models/items/armor/jacket/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[1].maximum,
+     kQ2Lift},
     {2, ge::classic::kQ2Armours[2].normal, ge::classic::kQ2Armours[2].base, 0,
-     "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[2].maximum, kQ2Lift},
+     "models/items/armor/combat/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[2].maximum,
+     kQ2Lift},
     {3, ge::classic::kQ2Armours[3].normal, ge::classic::kQ2Armours[3].base, 0,
-     "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[3].maximum, kQ2Lift},
+     "models/items/armor/body/tris.md2", "misc/ar1_pkup.wav", ge::classic::kQ2Armours[3].maximum,
+     kQ2Lift},
 };
 // Its ammunition and health as Quake II's: the nails the bullets, the cells the slugs, the
 // small health the medium, the plain one the large, the mega health Quake II's own, each giving
