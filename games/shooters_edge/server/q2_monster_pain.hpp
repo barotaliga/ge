@@ -1,4 +1,5 @@
-// Quake II's monsters' pains and deaths as data (q2_monster_pain.cpp): which run a blow plays
+// Quake II's monsters' pains and deaths as data (q2_monster_pain.cpp; the pain table and its rule
+// in q2_monster_pain_rules.hpp, which any rules read): which run a blow plays
 // and which cry it gives, by kind, by the blow's size, by the skill and by how the body moves;
 // which death run a kind falls by and its cry.
 //
@@ -12,17 +13,10 @@
 
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
+#include "shooters_edge/server/q2_monster_pain_rules.hpp"
 #include "shooters_edge/server/q2_poses.hpp"
 
 namespace shooters_edge::server {
-
-// What a blow does to a kind with its pains as data.
-struct PainChoice {
-  bool spent = false;           // the pain's wait starts now (a blow ignored by chance spends it)
-  const char* sound = nullptr;  // the cry, or none
-  bool everywhere = false;      // heard across the whole map
-  SqSpan run;                   // the flinch, or none
-};
 
 // Whether kind `classname` has its pains as data.
 bool monster_pain_known(std::string_view classname);
