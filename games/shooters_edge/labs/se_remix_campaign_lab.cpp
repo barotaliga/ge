@@ -9,6 +9,13 @@
 // `--take=0` is the window before the fix: the campaign's own change of map read the next map
 // without the cr_ settings changed during the last one, so Quake's monsters stood in it.
 //
+// `--start=pack` (the default) starts the campaign on the packs' own program, as the window's NEW
+// GAME does, and the next map runs the program the window chooses for it (listen.hpp's
+// `campaign_program`): the engine's own campaign rules once `cr_monsters` names Quake II's, since
+// the packs' program has no spawn for Quake II's monsters. `--choose=0` is the window before that
+// fix: the packs' program plays on and the map stands empty. `--start=own` plays the engine's own
+// rules from the start.
+//
 // `--fire=<rank>` gives him that weapon of Quake's (7 the rocket launcher) and from `--fire-at` he
 // fires it at the nearest of Quake II's monsters hunting him in his sight: their dodges, ducks and
 // shots on the run are counted. The side steps they take round what blocks their way are counted
@@ -61,12 +68,19 @@ struct Window {
   cl::SearchPath* own = nullptr;
   std::string monsters;  // what `cr_monsters` says now
   int taken = 0;
+  bool choose = true;                           // the window's choice of campaign program taken
+  const ge::progs::Progs* pack = nullptr;       // the packs' own program
+  const ge::progs::Progs* own_rules = nullptr;  // the engine's own campaign rules
 };
 
 void take_settings(void* ctx) {
   Window& w = *static_cast<Window*>(ctx);
   w.remix->monsters = w.monsters;
   w.l->opt.files = w.remix->from_files() ? &w.remix->files : w.own;
+  if (w.choose) {  // the window's choice of program (game_folder.cpp's `campaign_commands`)
+    w.l->opt.pack_campaign = w.pack;
+    w.l->opt.own_campaign = w.own_rules;
+  }
   w.taken++;
 }
 
@@ -179,8 +193,19 @@ void run(gl::Lab& lab) {
     lab.fail("se-remix-campaign: " + error, "next: run tests/shooters_edge_campaign_rules_test");
     return;
   }
+  // The packs' own single-player program, which the window's NEW GAME starts on.
+  ge::progs::Progs pack;
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = cl::find_file(files, "progs.dat", store);
+  if (bytes.empty() ||
+      !ge::progs::load_progs(bytes.data(), bytes.size(), pack, error, ge::progs::every_form())) {
+    lab.fail("se-remix-campaign: the packs hold no program that loads: " + error,
+             "next: pass --game=<folder>/id1 of a full game");
+    return;
+  }
+  const bool from_pack = lab.arg("start") == "pack";
   cl::Listen l;
-  Window w{&l, &remix, &files, "", 0};
+  Window w{&l, &remix, &files, "", 0, lab.arg("choose") == "1", &pack, &progs};
   cl::ListenOptions lo = shooters_edge::net::listen_options();
   lo.files = &files;
   lo.remix = &remix;
@@ -198,7 +223,7 @@ void run(gl::Lab& lab) {
   float lowest_hp = 100, first_hit = -1, nearest = -1;
   try {
     std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(files, lab.arg("map"), &remix, error);
-    if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
+    if (!map || !cl::listen_start(l, from_pack ? pack : progs, std::move(map), lo, error)) {
       lab.fail("se-remix-campaign: " + error, "next: read the reason above");
       return;
     }
@@ -220,10 +245,15 @@ void run(gl::Lab& lab) {
       lab.fail("se-remix-campaign: no campaign plays after the change", "next: read the prints");
       return;
     }
+    // The program the next map runs (the window's choice, or the one running).
+    const ge::progs::Progs& running = l.progs != nullptr ? *l.progs : progs;
+    const bool own_rules = &running == &progs;
+    t.rows.push_back({"program", own_rules ? "the engine's own campaign rules" : "the packs' own"});
+    lab.metric("remix_campaign.own_rules", own_rules ? 1 : 0, "");
     mv::Fields f;
-    f.classname = mv::field_of(progs, "classname");
-    const int target = mv::field_of(progs, "target");
-    const int targetname = mv::field_of(progs, "targetname");
+    f.classname = mv::field_of(running, "classname");
+    const int target = mv::field_of(running, "target");
+    const int targetname = mv::field_of(running, "targetname");
     for (const auto& [cn, n] : monsters(l, f)) {
       const bool theirs = pf::monster_as(cn, "q2") == cn;
       (theirs ? q2 : q1) += n;
@@ -244,10 +274,10 @@ void run(gl::Lab& lab) {
       stand(*s, top_of(s->sv.edicts[size_t(lift)]));
       for (int i = 0; i < 5; i++) frame(l, eyes);
       // The button pressed by the player, as his touch does.
-      f.touch = mv::field_of(progs, "touch");
-      f.self = mv::global_of(progs, "self");
-      f.other = mv::global_of(progs, "other");
-      f.activator = mv::global_of(progs, "activator");
+      f.touch = mv::field_of(running, "touch");
+      f.self = mv::global_of(running, "self");
+      f.other = mv::global_of(running, "other");
+      f.activator = mv::global_of(running, "activator");
       mv::call_as(*s, f, mv::word_at(*s, button, f.touch), button);
       const int frames = static_cast<int>(lab.arg_num("seconds") / sv::kCampaignStep);
       float lowest = z0;
@@ -261,12 +291,12 @@ void run(gl::Lab& lab) {
       const auto fire = static_cast<int>(lab.arg_num("fire"));
       const auto fire_at = static_cast<float>(lab.arg_num("fire-at"));
       if (fire > 0) {  // the weapon given, loaded
-        const int items = mv::field_of(progs, "items");
+        const int items = mv::field_of(running, "items");
         auto* it = ge::progs::entity_field(s->q.vm, 1, items);
         const float bit = fire == 7 ? 32.0f : fire == 5 ? 8.0f : 4.0f;  // its item: rockets, nails
         *it = ge::progs::as_word(ge::progs::as_float(*it) + bit);
         for (const char* ammo : {"ammo_rockets", "ammo_nails"})
-          *ge::progs::entity_field(s->q.vm, 1, mv::field_of(progs, ammo)) =
+          *ge::progs::entity_field(s->q.vm, 1, mv::field_of(running, ammo)) =
               ge::progs::as_word(100.0f);
       }
       std::vector<int> was_ducking, was_running, was_stepping;
@@ -276,7 +306,7 @@ void run(gl::Lab& lab) {
         const float t0 = float(i) * float(sv::kCampaignStep);
         if (fire > 0 && alive && t0 >= fire_at) {  // at the nearest of Quake II's hunting him
           if (t0 < fire_at + 0.05f) l.impulse = fire;
-          const int enemy = mv::field_of(progs, "enemy");
+          const int enemy = mv::field_of(running, "enemy");
           const sh::Vec3f eye = s->sv.edicts[1].origin + sh::Vec3f{0, 0, 22};
           float best = -1;
           sh::Vec3f aim{};
@@ -323,8 +353,8 @@ void run(gl::Lab& lab) {
         if (alive) lowest_hp = std::min(lowest_hp, hp);
         // A shot's noise, as firing makes it (the player's `show_hostile` a second on).
         if (shot_at >= 0 && now >= shot_at && now < shot_at + float(sv::kCampaignStep) * 1.5f) {
-          const int hostile = mv::field_of(progs, "show_hostile");
-          const int time = mv::global_of(progs, "time");
+          const int hostile = mv::field_of(running, "show_hostile");
+          const int time = mv::global_of(running, "time");
           if (hostile >= 0 && time >= 0)
             *ge::progs::entity_field(s->q.vm, 1, hostile) =
                 ge::progs::as_word(ge::progs::as_float(s->q.vm.globals[size_t(time)]) + 1.0f);
@@ -332,7 +362,7 @@ void run(gl::Lab& lab) {
         // Quake II's monsters that lost him, that follow his trail and that go to a noise, this
         // frame (the fields are theirs alone).
         const auto count = [&](const char* field) {
-          const int ofs = mv::field_of(progs, field);
+          const int ofs = mv::field_of(running, field);
           int n = 0;
           for (int e = 2; ofs >= 0 && e < s->sv.num_edicts; e++)
             if (!s->sv.edicts[size_t(e)].free && s->sv.edicts[size_t(e)].health > 0 &&
@@ -342,7 +372,7 @@ void run(gl::Lab& lab) {
         };
         // Dodges begun and shots on the run begun this frame, and the most ducking at once.
         const auto begun = [&](const char* field, std::vector<int>& was) {
-          const int ofs = mv::field_of(progs, field);
+          const int ofs = mv::field_of(running, field);
           was.resize(size_t(s->sv.num_edicts), 0);
           int n = 0, now_in = 0;
           for (int e = 2; ofs >= 0 && e < s->sv.num_edicts; e++) {
@@ -355,7 +385,7 @@ void run(gl::Lab& lab) {
         };
         side_steps += begun("sq_side_step", was_stepping).first;
         {  // pains spent this frame: a monster's next-pain time moved on
-          const int ofs = mv::field_of(progs, "pain_finished");
+          const int ofs = mv::field_of(running, "pain_finished");
           pain_was.resize(size_t(s->sv.num_edicts), 0);
           for (int e = 2; ofs >= 0 && e < s->sv.num_edicts; e++) {
             const int32_t pw = s->sv.edicts[size_t(e)].free ? 0 : mv::word_at(*s, e, ofs);
@@ -374,7 +404,7 @@ void run(gl::Lab& lab) {
       lift_dz = static_cast<int>(lowest - z0);
       // The monsters on the hunt at the end: an enemy of their own (the world's is none).
       if (s = rules_of(l); s != nullptr) {
-        const int enemy = mv::field_of(progs, "enemy");
+        const int enemy = mv::field_of(running, "enemy");
         for (int e = 2; e < s->sv.num_edicts; e++)
           if (!s->sv.edicts[size_t(e)].free && s->sv.edicts[size_t(e)].health > 0 &&
               mv::string_at(*s, e, f.classname).rfind("monster_", 0) == 0 &&
@@ -454,6 +484,11 @@ const gl::LabSpec kSpec{
         {"skill", "1", "the skill (1: medium)"},
         {"monsters", "q2", "what cr_monsters is set to during the first map"},
         {"take", "1", "1: the window takes the settings before the next map (0: before the fix)"},
+        {"start", "pack",
+         "the program the campaign starts on: pack (the packs', as NEW GAME) or own"},
+        {"choose", "1",
+         "1: the next map runs the program the window chooses (0: before the fix, the one "
+         "running)"},
         {"button", "t1", "the target of the button that moves the first lift"},
         {"seconds", "20", "how long the map runs once the lift is set off, s"},
         {"walk", "",
