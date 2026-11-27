@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/map.hpp"
@@ -42,6 +43,7 @@
 #include "lab/lab.hpp"
 #include "lab/labs/explosion_scene.hpp"
 #include "progs/file.hpp"
+#include "shooter/server.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -136,6 +138,9 @@ struct Setup {
   const ge::progs::Progs* progs = nullptr;
   float range = 256;
   double before = 0.4, seconds = 2.2, wait = 8;
+  double look = 0.4, fov = 1.15;  // --look, --fov: the camera's aim and its field
+  bool pass = false;              // --pass: the shot passes through the player
+  bool reverse = false;           // --behind=monster: the camera behind the monster
   ge::gpu::Device* device = nullptr;
   std::vector<uint8_t> palette;
   shooters_edge::look::Picture looks[kLooks];
@@ -235,10 +240,12 @@ bool clear_line(const cl::Listen& l, sh::Vec3f a, sh::Vec3f b) {
 
 // The camera: off to one side of the line between the two (as far as the room lets), a little
 // back from the player and up, seeing both, looking at a point a third of the way from him to the
-// monster, so the shot crosses the picture and lands short of the camera.
-ge::camera::Pose side_camera(const Staged& g) {
-  const sh::Vec3f eye = {g.stand.x, g.stand.y, g.stand.z + 22};
-  const sh::Vec3f aim = {g.at.x, g.at.y, g.at.z + 8};
+// monster (`--look`; from the monster with `--behind=monster`), so the shot crosses the picture and
+// lands short of the camera.
+ge::camera::Pose side_camera(const Staged& g, double look_share, double fov, bool reverse) {
+  sh::Vec3f eye = {g.stand.x, g.stand.y, g.stand.z + 22};
+  sh::Vec3f aim = {g.at.x, g.at.y, g.at.z + 8};
+  if (reverse) std::swap(eye, aim);
   const float dx = aim.x - eye.x, dy = aim.y - eye.y;
   const float len = std::max(1.f, std::sqrt(dx * dx + dy * dy));
   const float fx_ = dx / len, fy = dy / len, sx = -fy, sy = fx_;
@@ -257,8 +264,9 @@ ge::camera::Pose side_camera(const Staged& g) {
           found = true;
         }
       }
-  const sh::Vec3f look = {eye.x + (aim.x - eye.x) * 0.4f, eye.y + (aim.y - eye.y) * 0.4f,
-                          eye.z + (aim.z - eye.z) * 0.4f};
+  const float u = static_cast<float>(look_share);
+  const sh::Vec3f look = {eye.x + (aim.x - eye.x) * u, eye.y + (aim.y - eye.y) * u,
+                          eye.z + (aim.z - eye.z) * u};
   const double ex = look.x - cam.x, ey = look.y - cam.y, ez = look.z - cam.z;
   ge::camera::Pose pose;
   pose.eye = cl::engine_point(cam);
@@ -266,7 +274,7 @@ ge::camera::Pose side_camera(const Staged& g) {
       static_cast<float>(ge::core::libm::atan2(ey, ex) * 180 / 3.14159265358979));
   pose.pitch = cl::engine_pitch(static_cast<float>(
       -ge::core::libm::atan2(ez, std::sqrt(ex * ex + ey * ey)) * 180 / 3.14159265358979));
-  pose.fov_y = 1.15;
+  pose.fov_y = fov;
   return pose;
 }
 
@@ -312,7 +320,7 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   sh::MoveCmd cmd;
   cmd.msec = static_cast<uint8_t>(std::lround(tic * 1000));
   cmd.angles = {g.pitch, g.yaw, 0};
-  const ge::camera::Pose cam = side_camera(g);
+  const ge::camera::Pose cam = side_camera(g, s.look, s.fov, s.reverse);
   const int start = std::max(0, shot_at - int(s.before / tic));
   const int end = shot_at + int(s.seconds / tic);
   double t = 0, next_draw = -1;
@@ -320,6 +328,12 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   std::vector<gl::Picture> gif;
   std::vector<std::vector<gl::Picture>> moments;
   for (int i = 0; i <= end; i++) {
+    // Not solid once the shot is out (`--pass`), so it flies through him to land behind.
+    if (i > shot_at && s.pass) {
+      cl::set_field_named(g.l, 1, "solid", 0);
+      g.l.server->sv.edicts[1].solid = sh::kSolidNot;
+      sh::link_edict(g.l.server->sv, 1, false);
+    }
     hold(g);
     cl::listen_frame(g.l, cmd);
     t += tic;
@@ -461,6 +475,10 @@ void run(gl::Lab& lab) {
   s.range = static_cast<float>(lab.arg_num("range"));
   s.seconds = lab.arg_num("seconds");
   s.wait = lab.arg_num("wait");
+  s.look = std::clamp(lab.arg_num("look"), -1.0, 1.0);
+  s.fov = std::clamp(lab.arg_num("fov"), 0.2, 2.0);
+  s.pass = lab.arg("pass") == "1";
+  s.reverse = lab.arg("behind") == "monster";
   if (const auto size = lab.arg_nums("size"); size.size() == 2 && size[0] >= 64 && size[1] >= 64) {
     s.w = static_cast<uint32_t>(size[0]);
     s.h = static_cast<uint32_t>(size[1]);
@@ -511,6 +529,14 @@ const gl::LabSpec kSpec{
         {"range", "256", "units from the monster the player stands"},
         {"seconds", "2.2", "seconds filmed after the shot"},
         {"wait", "8", "seconds the monster is given to attack"},
+        {"look", "0.4",
+         "where the camera looks: the share of the way from the player to the "
+         "monster (0.7: close on the shot as it leaves; below 0: behind him)"},
+        {"fov", "1.15", "the camera's vertical field, radians (0.6: a close-up)"},
+        {"pass", "0", "1: the shot passes through the player and lands on what is behind him"},
+        {"behind", "player",
+         "whose side the camera stands behind: player, or monster (to see "
+         "where a shot lands with --pass=1)"},
         {"size", "400,250", "with --game: each look's width and height in pixels"},
         {"cvars", "", "with --game: picture cvars for every look (r_look ...)"},
     },

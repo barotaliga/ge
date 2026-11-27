@@ -510,8 +510,10 @@ struct FxFrame {
 // A player's dust and the sweep of his warp from where he stands (`origin`, `angles`: map units
 // and degrees) and his entity (the noise's seed): the wind blows into his face, so his back goes
 // first and the ash streams behind him, and an arrival is blown in from ahead of him, his face and
-// head first. The warp's share is the caller's.
-effects::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entity);
+// head first. The warp's share is the caller's. `pitch_up`: his pitch tips him up (Quake's
+// figures; Quake II's tip down: WorldModels::alias_pitch_up).
+effects::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entity,
+                          bool pitch_up = true);
 
 // One frame of a warp's ash on `d`, `was` to `age` s into it (`was` < 0: its first frame): blown
 // in to land on the body as it appears, or off it as the cut passes.

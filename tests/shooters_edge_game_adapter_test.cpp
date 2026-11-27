@@ -8,14 +8,15 @@
 // menus' pictures are the packs' with a PNG or TGA of a picture's name standing in for it; a
 // config file in the packs runs through `exec` after the player's own; a map's place names are
 // read from its loc file; the game's own held weapons are its first-person models, all or none;
-// its menu, its modes and its HUD's pictures are its own.
+// its menu, its modes and its HUD's pictures are its own; a missile fired up is drawn nose up in
+// either game, by the way each game's entities pitch.
 //
 // ge:summary Tests Quake's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
 // ge:keywords map_textures list_demos find_demo demo_folder attract mission-pack pack-pictures
 // ge:keywords qwprogs open_model open_sound replacement-skin
 // ge:keywords pictures replacement-picture find_config read_configs_from open_locations
-// ge:keywords held_weapons menu-table game-modes hud_art_of
+// ge:keywords held_weapons menu-table game-modes hud_art_of pitch_down alias_pitch_up
 // ge:skill shooter testing
 #include <cmath>
 #include <filesystem>
@@ -43,6 +44,7 @@
 #include "morph/write.hpp"
 #include "progs/assembler.hpp"
 #include "progs/layout.hpp"
+#include "shooters_edge/app/classic_models.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -676,4 +678,22 @@ TEST(a_mission_packs_own_console_and_quit_pictures_win_over_the_base_games) {
     CHECK(back->width == (packed ? 640 : 320) && quit->width == (packed ? 200 : 100));
   }
   fs::remove_all(root);
+}
+
+// A rocket fired 30 degrees up: Quake sends its pitch as +30 (a vertex-animated model's pitch tips
+// it up), Quake II as -30 (every entity's pitch tips it down, as a view's does). Drawn by the way
+// each adapter says its game pitches, the nose (the file's +x) points up (the engine's +y) in both.
+TEST(a_rocket_fired_up_is_drawn_nose_up_in_either_game) {
+  const auto nose_up = [](const cl::GameAdapter& game, float pitch) {
+    const float angles[3] = {pitch, 0, 0};
+    float q[4];
+    shooters_edge::models::rotation_of(angles, !game.pitch_down, q);
+    const double x = q[0], y = q[1], z = q[2], w = q[3];
+    // The file's +x turned by q: its height in the engine's frame.
+    return 2 * (x * y + w * z);
+  };
+  CHECK(!cl::qw_adapter().pitch_down);
+  CHECK(cl::q2_adapter().pitch_down);
+  CHECK(std::abs(nose_up(cl::qw_adapter(), 30) - 0.5) < 1e-6);
+  CHECK(std::abs(nose_up(cl::q2_adapter(), -30) - 0.5) < 1e-6);
 }

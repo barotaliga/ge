@@ -325,6 +325,7 @@ bool open_demo_(const GameAdapter&, std::vector<uint8_t> bytes, Demo& out, std::
 }
 
 const GameAdapter kQ2{.game = &pf::kGameProfiles[1],
+                      .pitch_down = true,
                       .list_mods = parts::list_mods,
                       .find_program = parts::find_program,
                       .list_maps = parts::list_maps,
