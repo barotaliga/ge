@@ -109,6 +109,18 @@ bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to) {
   return side_falls_in_(world, p, to);
 }
 
+bool nav_on_mover_top(std::span<const NavMover> now, Vec3f p) {
+  constexpr float kOn = 8;      // the box this far over its edge stands on it, units
+  constexpr float kFeet = 24;   // the origin this far over the feet
+  constexpr float kUnder = 24;  // and the top this far under the feet still under them (a step)
+  const float feet = p.z - kFeet;
+  for (const NavMover& m : now)
+    if (ridden(m) && p.x > m.absmin.x - kOn && p.x < m.absmax.x + kOn && p.y > m.absmin.y - kOn &&
+        p.y < m.absmax.y + kOn && m.absmax.z <= feet + kStepHeight && m.absmax.z >= feet - kUnder)
+      return true;
+  return false;
+}
+
 int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side, float near) {
   if (g.harm.size() != g.nodes.size()) return 0;
   int64_t marked = 0;

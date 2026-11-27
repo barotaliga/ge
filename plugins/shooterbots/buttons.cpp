@@ -502,6 +502,10 @@ bool button_poke(Fighter& f, const ge::shooterbots::BotView& s, int me, double t
 void button_poke_look(Fighter& f, const ge::shooterbots::BotView& s, int me, double t) {
   f.poke_looked = false;
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
+  // Nor on a jump (lined up, run at, flown) or on or onto a mover's top: the keys are the route's.
+  // Walked at the button across the gap, the run-up on boss1's ferry stepped off its end into the
+  // lava under the ledge, and the step onto it from the ledge walked past it into the lava.
+  if (sb::leaping_mode(f.bot.pilot.pilot.mode) || sb::route_on_mover(f.bot.pilot.pilot)) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
@@ -552,9 +556,19 @@ void into_face(sh::MoveCmd& cmd, sh::Vec3f self, const ButtonSpot& b) {
   cmd.side = static_cast<int16_t>(320 * (wx * sn - wy * c));
 }
 
+bool button_looks_pressed(ButtonSpot& b, const ge::shooterbots::BotView& s) {
+  const sh::WorldEntity& row = s.world.entities[static_cast<size_t>(b.ent)];
+  if (b.rest_frame < 0) b.rest_frame = row.frame, b.rest_effects = row.effects;
+  return row.frame != b.rest_frame || row.effects != b.rest_effects;
+}
+
 void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
+  // Nor on a jump (lined up, run at, flown) or on or onto a mover's top: the keys are the route's.
+  // Walked at the button across the gap, the run-up on boss1's ferry stepped off its end into the
+  // lava under the ledge, and the step onto it from the ledge walked past it into the lava.
+  if (sb::leaping_mode(f.bot.pilot.pilot.mode) || sb::route_on_mover(f.bot.pilot.pilot)) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};

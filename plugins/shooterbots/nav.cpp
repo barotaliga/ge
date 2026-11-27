@@ -609,6 +609,10 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     for (size_t a = 0; a < rest; a++) {
       const NavNode& na = g.nodes[a];
       if (na.mover != m.ent) continue;
+      // Under its bottom at rest, a column it rises away from (xship's two lifts in one shaft:
+      // the lower one's top under the upper one's bottom, a "ride" up the upper one from there
+      // led him round the lower one for minutes).
+      if (na.origin.z < m.absmin.z) continue;
       const float x = na.origin.x, y = na.origin.y;
       // Ridden only where the player's whole box stands on the top: a ride from a column on its
       // edge ends half over the drop. A top hardly wider than the box (e2m6's pillars that rise
@@ -1688,12 +1692,15 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
   // round reckons again what is stuck and bridges what is left, until a round adds nothing. A group
   // tried and not bridged is not tried again (`failed`, by its root).
   {
-    const std::vector<uint8_t> core = nav_core(g, main);
+    // `out_from`: the core, and every node a rocket jump out starts from (`reaching` follows no
+    // blast link, so without them a pocket bridged by a rocket stayed stuck and was bridged again
+    // every round).
+    std::vector<uint8_t> out_from = nav_core(g, main);
     std::vector<uint8_t> failed(g.nodes.size(), 0);
     for (int round = 0; round < 8; round++) {
       // Reckoned from the main part's core: every node of the main part reaches the main part
       // itself, a pit dropped into as well.
-      const std::vector<uint8_t> back = reaching(g, core);
+      const std::vector<uint8_t> back = reaching(g, out_from);
       std::vector<uint8_t> stuck(g.nodes.size());
       for (size_t n = 0; n < stuck.size(); n++)
         stuck[n] = main[n] && !back[n] && !avoided(n) ? 1 : 0;
@@ -1715,6 +1722,7 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
           failed[r] = 1;
       }
       if (extra.empty()) break;
+      for (const NavExtraLink& e : extra) out_from[static_cast<size_t>(e.from)] = 1;
       nav_add_links(g, extra);
     }
   }

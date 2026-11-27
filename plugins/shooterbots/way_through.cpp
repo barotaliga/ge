@@ -1001,10 +1001,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     if (st.kind == WayKind::button) {
       // A button that opens doors is done while they stand open (one that shuts again, a lift
       // called, is pressed again); one that opens none (a counter's) once it is pressed.
-      const ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
+      ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
       const sh::Edict& be = s.sv.edicts[static_cast<size_t>(bs.ent)];
       // A shot trigger (`model` kept) never moves: answered, it is removed or touches nothing.
-      const bool pressed = dist(be.origin, st.lo) > 0.5f ||
+      const bool pressed = dist(be.origin, st.lo) > 0.5f || button_looks_pressed(bs, s) ||
                            (!bs.model.empty() && (be.free || be.solid == sh::kSolidNot));
       bool all = !bs.doors.empty();
       for (const int d : bs.doors) all = all && door_open(d);
