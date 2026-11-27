@@ -637,9 +637,8 @@ int run_main(int argc, char** argv) {
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
-  // No map asked for: the title. A classic game plays its recordings (`menu_attract`) under the
-  // loading console, the menu up only where none can play; a measured run (timedemo, --frames)
-  // loads its map first; -tv watches and `+connect` joins, with no recording or map of our own.
+  // No map: the title, a classic game's recordings (`menu_attract`) under the console, or the menu
+  // where none play; a measured run (timedemo, --frames) loads its map; -tv and `+connect` join.
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
   bool on_title = next_map.empty() && !measured && args.tv.empty() && !remote.active;
   bool menu_at_start = on_title;
