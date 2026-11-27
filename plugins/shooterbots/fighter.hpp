@@ -147,6 +147,9 @@ struct ButtonSpot {
   // (`complete`) A breakable that switches off a current (`way_shot_currents`): the box of the
   // push it removes, whose nodes are shut to him till it is shot. Empty (lo == hi) for the rest.
   sh::Vec3f calm_lo{0, 0, 0}, calm_hi{0, 0, 0};
+  // (`complete`) A breakable lid over a way (`way_shot_currents`): the links that climb through it
+  // are shut to him till it is shot.
+  bool lid = false;
 };
 
 // A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button

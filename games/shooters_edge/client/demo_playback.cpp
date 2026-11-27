@@ -125,6 +125,12 @@ float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
   return h - top;
 }
 
+double playback_fx_step(DemoPlayback& p, bool demo, double dt) {
+  const double step = !demo ? dt : p.paused ? 0 : dt * p.speed * p.rate;
+  p.fx_t += step;
+  return step;
+}
+
 bool playback_pause_word(DemoPlayback& p, const Timedemo& bench, const std::string& line) {
   if (line.substr(0, line.find(' ')) != "pause" || !bench.active || !bench.paced) return false;
   p.paused = !p.paused;

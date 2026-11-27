@@ -88,6 +88,8 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   RecordSettings record;  // demo_pack, demo_pack_level (record_cvars.hpp)
   VideoSettings video;    // demovideo_ (video_cfg.hpp), read by -demovideo alone
   double rate = 1;        // times `speed`: the live map's fly (0 while it dives, then catching up)
+  // The demo's own clock for its effects, the fire and the held weapon, s (playback_fx_step).
+  double fx_t = 0;
   // The demo playing:
   DemoScan scan;
   ge::replay::Highlights highlights;  // the tracked player's
@@ -177,6 +179,10 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
 // `pause` typed over a demo played (`line` the console's unknown line): it stops where it is or
 // plays on (a timed one runs on). True when it took the line.
 bool playback_pause_word(DemoPlayback& p, const Timedemo& bench, const std::string& line);
+// This frame's step of `p.fx_t`, advanced by it: on the demo's clock (`demo`: a demo played, not a
+// game joined or a timed run) the wall's `dt` at the demo's speed, 0 while it is held (paused, or
+// behind the menu), so its effects, fire and held weapon freeze with it; else the wall's `dt`.
+double playback_fx_step(DemoPlayback& p, bool demo, double dt);
 // `timedemo <demo>` (into `ask`) and `playdemo <demo>` (into `ask`, with `paced` set); the window
 // starts what they ask for at its next frame. Both must outlive `console`.
 void add_demo_commands(ge::console::Console& console, std::string& ask, bool& paced);
