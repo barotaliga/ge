@@ -643,6 +643,25 @@ TEST(a_maps_backslash_n_is_a_new_line_and_a_speaker_keeps_its_volume_and_reach) 
   CHECK_MSG(g->s().help[1] == "first\nsecond", g->s().help[1]);
 }
 
+TEST(an_explosive_shot_fires_every_target_and_its_relays_killtarget) {
+  // hangar1's power box: its targets are speakers, blasts and a relay that removes the duct's push;
+  // the box gone before its use stopped at the first target, and the push blew for ever.
+  Pairs kill = relay("power", "fan");
+  kill.push_back({"killtarget", "fan"});
+  auto g = open_game(
+      {{{"classname", "func_explosive"}, {"model", "*4"}, {"health", "20"}, {"target", "power"}},
+       {{"classname", "target_goal"}, {"targetname", "power"}},
+       {{"classname", "target_goal"}, {"targetname", "power"}},
+       kill,
+       help("fan", "the fan")});
+  run(*g, 10);
+  const int box = g->find("func_explosive");
+  CHECK(sv::map_damage(g->s(), box, 0, 50));
+  CHECK(g->at(box).gone);
+  CHECK_MSG(g->s().goals_found == 2, std::to_string(g->s().goals_found));
+  CHECK_MSG(g->at(g->named("fan")).gone, "the relay's killtarget removed the fan");
+}
+
 TEST(an_items_first_touch_fires_its_targets_once) {
   auto g =
       open_game({{{"classname", "item_armor_shard"}, {"origin", "-600 0 24"}, {"target", "won"}},

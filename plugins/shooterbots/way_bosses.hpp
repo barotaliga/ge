@@ -1,11 +1,12 @@
 // The way through's bosses and puzzles (way_through.hpp): a Quake trigger only a shot fires, and
-// the boss only the map's lightning hurts (e1m7's Chthon), with the buttons that work it.
+// the boss only the map's lightning hurts (e1m7's Chthon), with the buttons that work it; a
+// breakable that switches off a current, and a door a shot opens.
 //
 // ge:summary The way through's shot triggers and the lightning boss: its electrodes, bolt, bridge
 // ge:keywords way_shot_triggers way_bolt_init way_bolt_pick shot-trigger event-lightning chthon
-// ge:keywords boss electrode lightning bolt
+// ge:keywords boss electrode lightning bolt way_shot_currents way_calmed_push way_shot_door
 // ge:skill shooterbots bots
-// ge:test tests/shooters_edge_companion_test.cpp
+// ge:test tests/shooters_edge_companion_test.cpp tests/shooterbots_way_bosses_test.cpp
 #pragma once
 
 #include <vector>
@@ -23,6 +24,23 @@ namespace ge::shooterbots {
 // the fighter's: its edict found by its box, its doors those its target fires through relays,
 // shot from the nearest node within kWayShotTriggerFrom that sees it.
 void way_shot_triggers(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
+                       const ge::shooter::MapSpec& spec,
+                       const std::vector<ge::shooterbots::EntityBlock>& blocks);
+
+// (`complete`) Each breakable (`func_explosive` with health and no name) whose target, through
+// relays and their killtargets, removes a named push faster than he moves (`kCurrentFast`:
+// hangar1's duct, a 500 units/s current into a turning fan, ends when its power box is shot) as a
+// shot button of the fighter's, with the push's box (`ButtonSpot::calm_lo`, `calm_hi`): shot from
+// the nearest node within kWayShotTriggerFrom that sees it.
+constexpr float kCurrentFast = 400;  // a push this fast (units/s) is not swum or walked against
+// The model ("*N") of the push faster than kCurrentFast that a breakable firing `target` removes
+// (a relay's killtarget, through relays), or null.
+const char* way_calmed_push(const std::vector<ge::shooterbots::EntityBlock>& blocks,
+                            const char* target);
+// Whether door `e` is a plain one a shot of the fighter's opens (`way_complete_init`'s shot door:
+// its own one door, no current calmed, no trigger's model).
+bool way_shot_door(const Fighter& f, int e);
+void way_shot_currents(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
                        const ge::shooter::MapSpec& spec,
                        const std::vector<ge::shooterbots::EntityBlock>& blocks);
 

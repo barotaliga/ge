@@ -144,6 +144,9 @@ struct ButtonSpot {
   // A shot trigger's inline model ("*N"): the rules keep no model on a trigger's edict, so the
   // plan finds its entity text by this. Empty for a button or a wall.
   std::string model;
+  // (`complete`) A breakable that switches off a current (`way_shot_currents`): the box of the
+  // push it removes, whose nodes are shut to him till it is shot. Empty (lo == hi) for the rest.
+  sh::Vec3f calm_lo{0, 0, 0}, calm_hi{0, 0, 0};
 };
 
 // A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button

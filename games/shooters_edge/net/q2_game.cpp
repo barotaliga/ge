@@ -45,6 +45,7 @@
 #include "shooters_edge/bots/bot_seats.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/remix_dedicated.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_game_tv.hpp"
 #include "shooters_edge/net/q2_login.hpp"
@@ -292,7 +293,8 @@ std::span<const gs::GameRule> all_rules() {
           std::span<const gs::GameRule>(gs::kLimitRules),
           std::span<const gs::GameRule>(gs::kStatusRules),
           std::span<const gs::GameRule>(gs::kLrconRules),
-          std::span<const gs::GameRule>(gs::kWebFilesRules), std::span<const gs::GameRule>(kRules)})
+          std::span<const gs::GameRule>(gs::kWebFilesRules), std::span<const gs::GameRule>(kRules),
+          cl::remix_rules()})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
@@ -415,6 +417,9 @@ struct Game {
   // The masters it reports to (`setmaster`, `heartbeat`; classic/protocol/masters.hpp).
   ge::classic::protocol::Masters masters;
   cl::SearchPath files;
+  // Classic remix on a dedicated server (client/remix_dedicated.hpp): the other game's files the
+  // maps are read through while the cr_ rules turn it on.
+  cl::RemixFiles remix;
   std::unique_ptr<cl::LoadedMap> map;
   sv::RulesRunner rules;
   Q2NetConfig cfg;
@@ -571,16 +576,22 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->cinematics = v->second != "0";
   if (const auto p = c.rules.find("sv_entpath"); p != c.rules.end()) g->ent_path = p->second;
   while (!g->ent_path.empty() && g->ent_path.back() == '/') g->ent_path.pop_back();
-  g->map = cl::load_named_map(g->files, name, error);
+  std::filesystem::path library;
+  const bool native = !mod.empty() && sv::find_native_library(c.root, mod, base, library);
+  if (std::string line = cl::open_server_remix(g->remix, c.rules, "q2", c.root, g->folder, native);
+      !line.empty())
+    g->said.push_back(std::move(line));
+  std::string remixed;  // classic remix's line for another game's map
+  g->map = cl::load_remixed_map(g->files, name, &g->remix, error, &remixed);
   if (!g->map) return nullptr;
+  if (!remixed.empty()) g->said.push_back(std::move(remixed));
   mend(*g, *g->map);
   if (g->map->spec.brushes == nullptr) {
     error = "maps/" + name + ".bsp is not a map of Quake II's family; name one from " + c.root +
             "/" + base;
     return nullptr;
   }
-  std::filesystem::path library;
-  if (!mod.empty() && sv::find_native_library(c.root, mod, base, library)) {
+  if (native) {
     // The mod's own rules: its game library hosted unchanged (q2_native.hpp).
     sv::NativeQ2Options no;
     no.library = library;
@@ -603,11 +614,12 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   }
   g->rules.console("deathmatch 1");
   g->rules.console("sv_speedcheck 1");  // a server's default (the rules' alone: 0); a rule may undo
+  for (const std::string& line : cl::server_remix_lines(g->remix)) g->rules.console(line);
   if (!c.maprotation.empty()) {  // the rules' own list: this map, then the rotation's, wrapping
     g->rules->cvars.set("sv_maplist", name + " " + c.maprotation, ge::console::Source::local);
   }
   for (const auto& [rule, value] : c.rules) {
-    if (value.empty()) continue;  // unset: the rules' own default
+    if (value.empty() || cl::is_remix_rule(rule)) continue;  // unset: the rules' own default
     if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode" || rule == "sv_maxrate" ||
         rule == "sv_minrate" || rule == "sv_zombietime" || rule == "lrcon_password" ||
         rule == "sv_ghosttime" || rule == "sv_nodelta" || rule == "sv_pingmethod" ||
@@ -631,7 +643,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->votes.map = [game] { return game->map ? game->map->name : std::string(); };
   g->votes.has_map = [game](const std::string& wanted) {
     std::string why;
-    return cl::load_named_map(game->files, wanted, why) != nullptr;
+    return cl::load_remixed_map(game->files, wanted, &game->remix, why) != nullptr;
   };
   g->cfg.hostname = c.hostname;
   g->cfg.version = kProgramVersion;
@@ -1017,7 +1029,7 @@ void change_level(Game& g) {
   g.cfg.wire.show.clear();
   const std::string asked = s.pending_map;
   std::string error;
-  std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(g.files, asked, error);
+  std::unique_ptr<cl::LoadedMap> next = cl::load_remixed_map(g.files, asked, &g.remix, error);
   if (next) mend(g, *next);
   if (!g.mode.empty()) {  // gamemode: the three modes set together for the map that starts
     g.rules.console(std::string("deathmatch ") + (g.mode == "dm" ? "1" : "0"));
@@ -1243,7 +1255,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   game.relay.log = [&game](const std::string& line) { game.net->log.push_back(line); };
   game.relay.spot = [&game](const std::string& name, float origin[3], float angles[3],
                             int32_t& checksum, std::string& why) {
-    std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(game.files, name, why);
+    std::unique_ptr<cl::LoadedMap> m = cl::load_remixed_map(game.files, name, &game.remix, why);
     if (!m) return false;
     checksum = sv::q2_map_checksum(m->file);
     const ge::brush::Entity* best = nullptr;
