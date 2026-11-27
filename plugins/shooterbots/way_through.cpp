@@ -807,11 +807,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         // A fall (a drop's, a jump's) runs out at its height and then down: the straight line
         // under its arc missed hip2m2's floor over the pit to the exit, shut till its button far
         // off drops it (a jump from the start's floor down past its lip to the exit below).
-        const bool falls = (l.kind == sb::NavKind::drop || l.kind == sb::NavKind::jump) &&
-                           to.z < n.origin.z;
-        if (hits(n.origin, to) ||
-            (falls && (hits(n.origin, {to.x, to.y, n.origin.z}) ||
-                       hits({to.x, to.y, n.origin.z}, to))))
+        const bool falls =
+            (l.kind == sb::NavKind::drop || l.kind == sb::NavKind::jump) && to.z < n.origin.z;
+        if (hits(n.origin, to) || (falls && (hits(n.origin, {to.x, to.y, n.origin.z}) ||
+                                             hits({to.x, to.y, n.origin.z}, to))))
           w.crossings.push_back({li, static_cast<int32_t>(a), e});
       }
     }
