@@ -85,7 +85,9 @@
 #include "net/voice_codec.hpp"
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
+#include "platform/menu_keys.hpp"
 #include "platform/pacing.hpp"
+#include "platform/reveal.hpp"
 #include "platform/window.hpp"
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
@@ -352,7 +354,8 @@ int run_main(int argc, char** argv) {
       "shooters_edge", &shot_settings);
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
-  game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
+  ge::platform::add_reveal_command(console);  // the screenshots page's SHOW IN FINDER
+  game_menu.set_screenshots(shots.dir());     // OPTIONS > SCREENSHOTS looks through them
   game_menu.servers().set_query(shooters_edge::net::qw_query());         // JOIN A GAME
   game_menu.servers().set_routes(shooters_edge::net::qw_route_query());  // sb_findroutes
   game_menu.servers().set_cache_dir(
@@ -742,11 +745,13 @@ int run_main(int argc, char** argv) {
   cl::ServerRemix told;  // a server's or a demo's remix, not the player's own (remix.hpp)
   const auto remix_now = [&]() -> const auto& { return told.of(remix_settings); };
   // `cr_items` (remix.hpp's `worn_arsenal`): the other game's things worn, from the next map.
-  const auto remix_wear = [&] {  // true: the remix is worn as its settings say
+  // `reopened`: the files opened again forget what was worn, so it is put on again even when the
+  // parts compare the same (a demo recorded without a remix: everything back to the game's own).
+  const auto remix_wear = [&](bool reopened) {  // true: the remix is worn as its settings say
     remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
     const bool dressed = cl::remix_dress(remix, remix_now(), args.profile);
     listen.opt.remix_info = cl::remix_info_lines(remix);  // told to everyone who joins
-    if (!dressed) return true;
+    if (!dressed && !reopened) return true;
     cl::worn_hud_reset(worn_hud, remix);       // read again from the files now open
     pictures_enhanced = !picture.ce.pictures;  // the pictures read again (cr_menu)
     cl::wear_lines(listen.opt, remix, game_content.arsenal);
@@ -770,14 +775,14 @@ int run_main(int argc, char** argv) {
     remix_items = cl::remix_parts(remix_now());
     // A cr_ setting changed while the remix is off takes nothing: the console says why.
     if (same_files && !remix.state.on) return console.print(cl::remix_off_line(remix_off)), true;
-    if (same_files) return remix_wear();
+    if (same_files) return remix_wear(false);
     remix_open = open;
     remix_for = args.basedir;
     if (const std::string said =
             cl::open_remix_for(remix, remix_now(), prefs, args.profile, args.basedir, args.game);
         !said.empty())
       console.print(said), remix_off = remix.state.on ? "" : said;
-    return remix_wear();
+    return remix_wear(true);
   };
   // A campaign's own change of map (a level's exit, the start map's skill gates) takes the cr_
   // settings changed during the map before it reads the next one, as the console's `map` does.
@@ -1184,15 +1189,8 @@ int run_main(int argc, char** argv) {
       using ge::platform::Key;
       ge::ui::MenuInput mi;
       if (!con_keys.held && was_open) {
-        mi.up = input.tapped(Key::up) || input.tapped(Key::w);
-        mi.down = input.tapped(Key::down) || input.tapped(Key::s);
-        mi.left = input.tapped(Key::left) || input.tapped(Key::a);
-        mi.right = input.tapped(Key::right) || input.tapped(Key::d);
-        mi.accept = input.tapped(Key::enter) || input.tapped(Key::space);
-        mi.back = input.tapped(Key::escape);
-        mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
-        mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
-        mi.letter = input.tapped_letter("efmnpy");  // the browser's filters, the quit box's Y and N
+        // the browser's filters, the quit box's Y and N, the screenshots page's O (show in Finder)
+        ge::platform::menu_keys(input, "efmnopy", mi);
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;
@@ -1303,8 +1301,8 @@ int run_main(int argc, char** argv) {
                             tap(Key::f5), tap(Key::f6), tap(Key::enter)};
       cl::lobby_keys(listen, k, to_server);
     }
-    const bool captured = mouse.held;
-    const bool playing = !(con_keys.held || !captured || was_open);
+    const bool captured = mouse.held;  // a recipe (-recipes) plays with the pointer free too
+    const bool playing = !(con_keys.held || (!captured && !args.recipes) || was_open);
     const ge::input::InputState& played = playing ? held : idle;
     // The mouse's buttons and wheel to the game's binds (the keyboard's went with the console's
     // keys above); the moves let go while the menu or the console has the keys.

@@ -15,16 +15,19 @@
 
 #include "classic/q2_move.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
+#include "shooters_edge/server/q2_monster_mind.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server::monster_ai {
 
 constexpr float kStep = 0.1f;  // a rules frame, s
-constexpr float kMelee = 80, kNear = 500, kMid = 1000;
-constexpr float kStepUp = 18;     // the highest step a walker climbs
-constexpr float kInFront = 0.3f;  // the cosine of in front
-constexpr double kPainEvery = 3;  // s
-constexpr float kHear = 1000;     // a noise's reach
+using q2_mind::kMelee;
+using q2_mind::kMid;
+using q2_mind::kNear;
+constexpr float kStepUp = 18;  // the highest step a walker climbs
+using q2_mind::kInFront;
+using q2_mind::kPainEvery;
+constexpr float kHear = 1000;  // a noise's reach
 constexpr int32_t kMonsterMask =
     sh::kSqSolid | sh::kSqWindow | sh::kSqMonster | 0x20000;  // + monster clip
 constexpr int32_t kOpaque = sh::kSqSolid | sh::kSqSlime | sh::kSqLava;
@@ -32,7 +35,7 @@ constexpr int32_t kShotMask =
     sh::kSqSolid | sh::kSqWindow | sh::kSqSlime | sh::kSqLava | sh::kSqMonster | sh::kSqDeadMonster;
 constexpr uint32_t kEveryone = 0xffffffffu;
 
-enum class Range : uint8_t { melee, near, mid, far };
+using q2_mind::Range;  // the decisions are q2_monster_mind.hpp's, shared with other rules
 
 using roster::Attack;
 using roster::End;

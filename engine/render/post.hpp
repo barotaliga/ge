@@ -34,11 +34,11 @@
 //              whether its own motion reaches the pixel and which stands in front, so a figure
 //              the camera follows stays sharp; a still tile costs one load
 //
-// The STRENGTHS are a small uniform (`set_post_look`), so a strength turns live; whether each
-// is COMPILED is decided when the pipeline is made (PostSettings::look's strength above 0), so
-// turning one on from 0 means making the pass again (Fall Line's frame is remade). The lens
-// pass's light (render/lens.hpp: the sun's rays through what stands, the flare's ghosts) is
-// mixed in here before the exposure, one bilinear tap of a quarter-size target.
+// The STRENGTHS are a small uniform (`set_post_look`), so a strength turns live (the sharpen at
+// 0 is off); whether each is COMPILED is decided when the pipeline is made (PostSettings::look's
+// strength above 0), so turning one on from 0 means making the pass again (Fall Line's frame is
+// remade). The lens pass's light (render/lens.hpp: the sun's rays through what stands, the
+// flare's ghosts) is mixed in here before the exposure, one bilinear tap of a quarter-size target.
 //
 // A fragment pass rather than a compute one: it writes the surface's texture, which a compute
 // shader may not store to without an optional feature (bgra8unorm storage), and a tile GPU

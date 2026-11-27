@@ -6,7 +6,7 @@
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
-// ge:keywords r_scale render-scale
+// ge:keywords r_scale render-scale r_scale_sharpen upscale-sharpen
 // ge:keywords r_particles scr_centertime centre-message r_powershells r_itempulse power-shells
 // ge:skill classic shooter render
 // ge:test tests/classic_look_test.cpp
@@ -218,6 +218,15 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "1: the window's size (the default); 0.25..1: that share of it a side "
                   "(0.75 draws about half the pixels)"},
        &picture.render_scale);
+  bind(cv,
+       {.name = "r_scale_sharpen",
+        .flags = gc::kArchive,
+        .help = "How much the picture is sharpened after it is upscaled (r_scale under 1), most "
+                "where it is flat and least at edges already sharp.",
+        .min = 0,
+        .max = 1,
+        .values = "0.5: about the detail r_scale 1 shows (the default); 0: none; 1: the most"},
+       &picture.scale_sharpen);
   bind(cv,
        {.name = "ce_water_specks",
         .flags = gc::kArchive,
@@ -983,6 +992,10 @@ gr::PostSettings post_settings(Look look, const Picture& picture) {
   // painted dark, and the toe took their blues and greys to brown.
   s.toe = false;
   return s;
+}
+
+double upscale_sharpen(const Picture& picture) {
+  return picture.render_scale < 1 ? std::clamp(picture.scale_sharpen, 0.0, 1.0) : 0.0;
 }
 
 double world_light_scale(const Picture& picture) {

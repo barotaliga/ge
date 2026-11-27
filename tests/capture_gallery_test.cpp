@@ -187,3 +187,27 @@ TEST(the_pictures_load_off_the_thread_and_a_bad_file_is_marked) {
   g.poll();
   CHECK(g.count() == 9 && g.current()->name == on);
 }
+
+TEST(reveal_shows_the_selected_file_or_the_empty_folder) {
+  // O (or the footer's button) asks the game to show the selected file in the system's file
+  // manager; with nothing selected, the folder itself; never while a delete is being asked.
+  const fs::path dir = seven("ge_gallery_reveal");
+  gc::Gallery g(dir.string());
+  g.scan();
+  g.reset();
+  g.select(1);
+  CHECK(g.input({.reveal = true}) == gc::GalleryAction::reveal);
+  CHECK(g.reveal_target() == g.current()->path && g.mode() == gc::GalleryMode::grid);
+  g.input({.accept = true});
+  CHECK(g.input({.reveal = true}) == gc::GalleryAction::reveal);
+  CHECK(g.mode() == gc::GalleryMode::viewer);
+  g.input({.del = true});
+  CHECK(g.input({.reveal = true}) == gc::GalleryAction::none);  // the question waits
+  g.input({.back = true});
+  const fs::path empty = fresh_dir("ge_gallery_reveal_empty");
+  gc::Gallery none(empty.string());
+  none.scan();
+  none.reset();
+  CHECK(none.input({.reveal = true}) == gc::GalleryAction::reveal);
+  CHECK(none.reveal_target() == empty.string());
+}

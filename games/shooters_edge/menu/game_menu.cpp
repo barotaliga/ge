@@ -478,15 +478,25 @@ void GameMenu::update_gallery(const ui::MenuInput& in, Host& host) {
   gi.accept = in.accept;
   gi.back = in.back;
   gi.del = in.del;
+  // O, or a click on the footer's SHOW IN FINDER: the selected file (or the folder) shown in the
+  // system's file manager by the console's `reveal` (platform/reveal.hpp).
+  const bool on_reveal = in.click && gallery_page_.hit_reveal(in.pointer_x, in.pointer_y);
+  gi.reveal =
+      (in.letter == 'o' || on_reveal) && gallery_.mode() != ge::capture::GalleryMode::confirm;
   if (in.pointer_moved || in.click) gi.pointed = gallery_page_.hit(in.pointer_x, in.pointer_y);
-  gi.click = in.click && gi.pointed >= 0;
+  gi.click = in.click && gi.pointed >= 0 && !on_reveal;
   if (in.up || in.down || in.left || in.right) cue(ui::MenuCue::move);
   if (in.accept || gi.click) cue(ui::MenuCue::enter);
-  if (gallery_.input(gi) == ge::capture::GalleryAction::leave) {
+  const ge::capture::GalleryAction did = gallery_.input(gi);
+  if (did == ge::capture::GalleryAction::leave) {
     cue(ui::MenuCue::back);
     in_gallery_ = false;
     refresh_main(host);
     return;
+  }
+  if (did == ge::capture::GalleryAction::reveal && host.console != nullptr) {
+    cue(ui::MenuCue::enter);
+    host.console->execute("reveal \"" + gallery_.reveal_target() + "\"");
   }
   gallery_.poll();
 }

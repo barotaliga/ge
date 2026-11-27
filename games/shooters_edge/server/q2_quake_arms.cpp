@@ -66,6 +66,7 @@ void pellets(Q2Server& s, int slot, int count, float across, float up, int quad,
   const Q2Player& p = s.players[slot];
   const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
   const sh::Vec3f from = origin_of(p) + sh::Vec3f{0, 0, p.view_height};
+  const FightLagScope lag(s, slot);  // the others where he saw them
   int summed[sh::kMaxClients] = {};
   for (int i = 0; i < count; i++) {
     const float r1 = fight_crandom(s);  // the draws in a fixed order
@@ -106,6 +107,7 @@ void beam(Q2Server& s, int slot, int quad, int w) {
   const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
   const sh::Vec3f from = origin_of(p) + sh::Vec3f{0, 0, gc::kQ1EyeLift};
   const uint32_t me = 1u << slot;
+  const FightLagScope lag(s, slot);  // the others where he saw them
   const Line wall = fight_line(s, from, from + ax.forward * gc::kQ1BeamReach, me);
   fight_line_effect(s, gc::kQ1Beam, from, wall.end, slot + 1);
   const sh::Vec3f to = wall.end + ax.forward * 4;
@@ -320,7 +322,11 @@ void quake_arms_frame(Q2Server& s, int slot, bool attack) {
   // The axe's cut lands: 64 units along the view as it is now, from 16 over the origin.
   const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
   const sh::Vec3f from = origin_of(p) + sh::Vec3f{0, 0, gc::kQ1EyeLift};
-  const Line l = fight_line(s, from, from + ax.forward * gc::kQ1AxeReach, 1u << slot);
+  Line l;
+  {
+    const FightLagScope lag(s, slot);  // the others where he saw them
+    l = fight_line(s, from, from + ax.forward * gc::kQ1AxeReach, 1u << slot);
+  }
   const int w = int(SqWeapon::q1_axe);
   const int damage = static_cast<int>(gc::kQ1AxeDamage) * fight_multiplier(s, p);
   if (strike(s, slot, l, ax.forward, damage, w, gc::kQ1HitPellet) || l.fraction >= 1 || l.sky)
@@ -343,7 +349,11 @@ bool quake_missile(Q2Server& s, Q2Missile& m) {
   if (grenade) m.velocity.z -= static_cast<float>(s.cvars.find("sv_gravity")->number) * s.step;
   const sh::Vec3f to = m.origin + m.velocity * s.step;
   const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
-  const Line l = fight_line(s, m.origin, to, owner);
+  Line l;
+  {  // sv_antilag 2 with sv_antilag_projectiles: it meets the players where its owner saw them
+    const FightLagScope lag(s, s.lag_missiles ? m.owner : -1);
+    l = fight_line(s, m.origin, to, owner);
+  }
   const bool met = l.player >= 0 || l.fraction < 1;
   if (!met) {
     m.origin = to;

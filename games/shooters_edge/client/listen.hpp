@@ -572,6 +572,8 @@ bool model_shown(const Listen& l, int entity);
 
 // A float field of an entity by its name in the progs (0 when the progs has no such field).
 float field_named(const Listen& l, int entity, const char* name);
+// The string field `name` of `entity` (empty when the program has none).
+std::string_view string_field_named(const Listen& l, int entity, const char* name);
 // A vector field by name into `out`; false (and `out` untouched) when the program has none.
 bool vector_field_named(const Listen& l, int entity, const char* name, float out[3]);
 // Sets that field (nothing when the progs has no such field): a lab hands the player its weapons.

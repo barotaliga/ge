@@ -27,7 +27,13 @@ constexpr std::string_view kHelpAsk = "ENTER DELETE   ESC KEEP";
 constexpr std::string_view kEmpty = "NO SCREENSHOTS YET";
 constexpr std::string_view kEmptyHow = "F12 takes one. They are kept in:";
 constexpr std::string_view kUnread = "DOES NOT READ";
-constexpr std::string_view kSep = "  \xc2\xb7  ";  // a middle dot between the footer's facts
+constexpr std::string_view kSep = "  \xc2\xb7  ";    // a middle dot between the footer's facts
+constexpr std::string_view kShowKey = "O SHOW IN ";  // + FINDER, EXPLORER or FILES
+constexpr std::string_view kOpenKey = "O OPEN IN ";  // the empty folder's
+
+std::string reveal_words(gc::Desktop d) {
+  return std::string(kShowKey) + std::string(gc::file_manager_name(d));
+}
 
 std::string format_word(gc::StillFormat f) {
   std::string w(gc::still_extension(f));
@@ -75,6 +81,10 @@ bool GalleryPage::fill(Slot& slot, const gc::GalleryPicture* pic) {
   return true;
 }
 
+bool GalleryPage::hit_reveal(float x, float y) const {
+  return reveal_.w > 0 && reveal_.contains(x, y);
+}
+
 int GalleryPage::hit(float x, float y) const {
   if (!on_grid_) return -1;
   for (size_t i = 0; i < cells_.size(); ++i)
@@ -86,6 +96,7 @@ void GalleryPage::draw(ui::DrawList& list, gc::Gallery& gallery, int width, int 
                        const ui::MenuStyle& style) {
   problems_.clear();
   cells_.clear();
+  reveal_ = {};
   const float w = static_cast<float>(width), h = static_cast<float>(height);
   const float s = std::min(w, h) / 720.0f;
   const bool portrait = h > w;
@@ -123,13 +134,21 @@ void GalleryPage::draw(ui::DrawList& list, gc::Gallery& gallery, int width, int 
     }
   }
 
-  // The footer: the facts (or the delete's failure) over the keys.
+  // The footer: the facts (or the delete's failure) over the keys; at the keys' right the button
+  // that shows the selected file in the system's file manager (O, or a click on it).
   const float help_base = h - margin;
   const float facts_base = help_base - line;
   const gc::GalleryEntry* e = gallery.current();
   const std::string_view help = gallery.mode() == gc::GalleryMode::grid ? kHelpGrid : kHelpViewer;
-  if (n > 0)
-    list.text(small, word, margin, help_base, fit_right(small, help, word, inner), style.text_dim);
+  const std::string show = reveal_words(desktop_);
+  const float show_w = small.advance(show, word);
+  if (n > 0) {
+    reveal_ = {w - margin - show_w, help_base - word, show_w, word * 1.3f};
+    list.text(small, word, w - margin, help_base, show, style.accent_hi, ui::Align::right);
+    list.text(small, word, margin, help_base,
+              fit_right(small, help, word, std::max(0.0f, inner - show_w - 24 * s)),
+              style.text_dim);
+  }
   if (!gallery.error().empty()) {
     list.text(small, word, margin, facts_base, fit_right(small, gallery.error(), word, inner),
               style.accent_hi);
@@ -159,6 +178,10 @@ void GalleryPage::draw(ui::DrawList& list, gc::Gallery& gallery, int width, int 
               ui::Align::center);
     list.text(small, word, w * 0.5f, cy + line * 2.4f, fit_left(small, gallery.dir(), word, inner),
               style.text_dim, ui::Align::center);
+    const std::string open = std::string(kOpenKey) + std::string(gc::file_manager_name(desktop_));
+    const float open_w = small.advance(open, word);
+    reveal_ = {(w - open_w) * 0.5f, cy + line * 3.6f - word, open_w, word * 1.3f};
+    list.text(small, word, w * 0.5f, cy + line * 3.6f, open, style.accent_hi, ui::Align::center);
     return;
   }
 

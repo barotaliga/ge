@@ -411,9 +411,17 @@ struct SqStep {
 
 // Steps the hand once (`attack` held this frame, `now` the level time); ammo is taken from `body`
 // for each shot it asks for. `infinite`: shots take no ammo. `swap`: the frames a lower or a raise
-// advances a step (g_swap_speed; 1 the classic pace).
+// advances a step (g_swap_speed; 1 the classic pace). `idle_draw`: whether a ready hand rests on
+// an idle pause frame (`ge::classic::q2_idle_step`); the server's is `q2_pause_draw` of the frame
+// and the slot, a window predicting ahead of it always rests and waits for the server's frame.
 SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool infinite = false,
-                    int swap = 1);
+                    int swap = 1, uint32_t idle_draw = ge::classic::kQ2PauseRests);
+
+// The idle run's pause frames of weapon `w`: the base game's own, none for a pack's.
+constexpr const ge::classic::Q2ArmPauses& sq_pauses(int w) {
+  return w >= 0 && w < ge::classic::kQ2ArmCount ? ge::classic::kQ2ArmPauses[w]
+                                                : ge::classic::kQ2NoPauses;
+}
 
 // A match server's faster weapon switch (`g_fast_weap_switch`), before the hand's step: `mode` 1
 // skips the lowering (the swap is this step's), 2 also the raising (ready the step after the swap);
