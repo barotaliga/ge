@@ -7,6 +7,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "prof/zones.hpp"
 #include "shooters_edge/client/q2_look.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 
 #include <algorithm>
@@ -597,12 +598,19 @@ bool campaign_map(void* ctx, const std::string& name, sv::MapSpec& out, std::str
   Listen& l = *static_cast<Listen*>(ctx);
   std::unique_ptr<LoadedMap> m = std::move(l.next);
   if (!m || m->name != name) {
+    // Through classic remix (its monsters `cr_monsters`'s) as the console's `map` reads it, the
+    // cr_ settings changed during the last map taken first.
+    if (l.opt.before_map) l.opt.before_map();
     if (l.opt.files == nullptr) {
       error = "the game is built wrong: it has no files to read maps/" + name + ".bsp from";
       return false;
     }
-    m = load_named_map(*l.opt.files, name, error);
+    if (l.campaign_host)  // the next map's models sized from the files it is read from
+      l.campaign_host->opt.server.model_ctx = const_cast<SearchPath*>(l.opt.files);
+    std::string said;
+    m = load_remixed_map(*l.opt.files, name, l.opt.remix, error, &said);
     if (!m) return false;
+    if (!said.empty()) say(l, said);
   }
   l.map = std::move(m);
   out = l.map->spec;

@@ -521,6 +521,15 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   CHECK(cl::worn_line(r).ends_with(
       " The sounds are " + std::string(ge::classicenhance::find_profile("q2")->what) + "'s."));
   CHECK(!cl::remix_dress(r, s, "q1"));
+  // `cr_monsters` is told too: the console says whose monsters the next map has.
+  cvars.set("cr_monsters", "q2", ge::console::Source::local);
+  CHECK(cl::remix_dress(r, s, "q1") && r.monsters == "q2" && r.from_files());
+  CHECK(cl::worn_line(r).ends_with(
+      " The monsters are " + std::string(ge::classicenhance::find_profile("q2")->what) + "'s."));
+  // Off, a cr_ setting says why it changes nothing: cr_enabled first, or why the remix is off.
+  CHECK(cl::remix_off_line("").find("set cr_enabled 1") != std::string::npos);
+  CHECK(cl::remix_off_line("Classic remix needs the full game.") ==
+        "Classic remix needs the full game.");
 }
 
 // `cr_menu`: the menu's pictures and its letters are one game's, apart from the items; a glyph
