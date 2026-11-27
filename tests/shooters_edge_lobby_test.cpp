@@ -11,9 +11,11 @@
 // ge:keywords test lobby warmup countdown ready break team leader addbot match-restart panel
 // ge:keywords lobby-screen sitout togglewarmup frags-reset
 // ge:skill shooter testing
+#include <chrono>
 #include <memory>
 #include <span>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "check.hpp"
@@ -245,6 +247,47 @@ TEST(addbot_seats_bots_in_a_deathmatch_with_no_lobby) {
   for (int f = 0; f < 5; f++) cl::listen_frame(l, idle);
   CHECK(l.server->clients[1].active);
   CHECK(l.server->clients[2].active);
+}
+
+// The window's bots build their nav on a thread of their own: `addbot` seats the bot at once and
+// returns without waiting for the nav; it stands still, an idle command a frame, until a frame
+// lands the nav, and from then on it plays.
+TEST(addbot_in_the_window_seats_the_bot_while_its_nav_builds_on_another_thread) {
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(cl::baseline_progs(progs, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 1"};
+  opt.lobby = false;
+  opt.bots_background = true;
+  cl::SearchPath none;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(cl::listen_lobby(l, "addbot"));
+  CHECK(l.room != nullptr);
+  CHECK(l.room->seats.background);
+  CHECK(l.room->seats.bots[1] != nullptr);
+  CHECK(!l.room->seats.bots[1]->made);  // seated, its nav still asked for
+  CHECK(!shooters_edge::bots::bot_seats_nav_ready(l.room->seats));
+  sh::MoveCmd idle;
+  cl::listen_frame(l, idle);
+  CHECK(l.server->clients[1].active);
+  // Frames run until the nav lands (the arena's takes well under a second).
+  const auto start = std::chrono::steady_clock::now();
+  while (!shooters_edge::bots::bot_seats_nav_ready(l.room->seats) &&
+         std::chrono::steady_clock::now() - start < std::chrono::seconds(120)) {
+    cl::listen_frame(l, idle);
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  CHECK(shooters_edge::bots::bot_seats_nav_ready(l.room->seats));
+  CHECK(l.room->seats.bots[1]->made);
+  CHECK(l.room->seats.gone.empty());
+  const sh::Vec3f bot_at = l.server->sv.edicts[2].origin;
+  for (int f = 0; f < 600; f++) cl::listen_frame(l, idle);
+  const sh::Vec3f bot_now = l.server->sv.edicts[2].origin;
+  CHECK(bot_now.x != bot_at.x || bot_now.y != bot_at.y);
 }
 
 // A match running in its lobby, then `sv deathmatch 0` and a map: single player starts afresh on
