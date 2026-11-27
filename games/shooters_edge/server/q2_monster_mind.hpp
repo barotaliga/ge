@@ -28,11 +28,20 @@
 // - **Hurt by another monster**: one that moves as it does (walks, flies or swims alike), of
 //   another kind and not one of the heavy kinds, or that was aiming at it, it turns on; else it
 //   joins the attacker against the attacker's foe.
+// - **Hearing**: with no enemy, a player's noise within 1000 it may hear (an ambusher must see
+//   where) turns it to the noise and sends it there, its first shot a second off; within 64 it
+//   stands, and 5 s on forgets it.
 // - **Pain**: at most every 3 s; at the hardest skill each blow puts the next 5 s off.
+// - **The chase** (a foe out of sight): first to where it last saw him; there, and at each mark
+//   after, the search restarts (5 s) and it takes the next mark of the players' trail newer than
+//   its last look, facing the way he went; 20 s past a search's start it makes one move straight
+//   at him. The trail is 8 marks: a player's place at the last frame is marked once his eye no
+//   longer sees the newest mark.
 //
 // ge:summary Quake II's monsters' decisions as any rules run them: sight, attack, pick, loop, fight
 // ge:keywords q2 monster-mind monster-ai cr_monsters remix real-ai attack-chance pick-ranged
 // ge:keywords sight in-front infighting leap-test attack-loop q2_attack_chance
+// ge:keywords chase pursue last-sighting player-trail trail-marks next-mark
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_q2_monster_mind_test.cpp
 #pragma once
@@ -61,6 +70,9 @@ inline constexpr double kPainEveryHard = 5;  // s at the hardest skill
 inline constexpr float kLeapLeast = 100;     // the mutant's leap: the least ground distance
 inline constexpr double kLeapChance = 0.1;
 inline constexpr double kBlowSkipped = 0.75;  // at skill 0, the chance a blow is let go
+inline constexpr float kHear = 1000;          // a noise's reach
+inline constexpr float kSoundNear = 64;       // near enough the noise: it stands there
+inline constexpr double kSoundForget = 5;     // s at the noise before it forgets it
 
 constexpr Range range_of(float dist) {
   return dist < kMelee  ? Range::melee
@@ -225,6 +237,68 @@ constexpr Turn infight(const Attacker& a) {
   if ((a.alike && !a.same_kind && !a.heavy) || a.aiming_at_me) return Turn::attacker;
   if (a.has_live_foe) return Turn::attackers_foe;
   return Turn::none;
+}
+
+// ---- The chase ----
+
+inline constexpr int kTrailMarks = 8;
+inline constexpr double kSearchAgain = 5;    // s a search lasts from a mark reached
+inline constexpr double kSearchGiveUp = 20;  // s past a search's start: one move straight at him
+
+// The newest mark of a trail whose oldest is `head`.
+constexpr int newest_mark(int head) { return (head + kTrailMarks - 1) % kTrailMarks; }
+
+// The trail mark after a monster's last look (`after`, a time): the first newer than it from the
+// oldest on; from the last sighting (`first`), the one before it when only that one is in sight
+// (`sees(i)`). -1 when there is none.
+template <class Sees>
+int next_mark(const double (&times)[kTrailMarks], int head, double after, bool first, Sees&& sees) {
+  for (int n = 0; n < kTrailMarks; n++) {
+    const int i = (head + n) % kTrailMarks;
+    if (times[i] <= after) continue;
+    if (!first || sees(i)) return i;
+    const int before = (i + kTrailMarks - 1) % kTrailMarks;
+    if (n > 0 && times[before] > 0 && sees(before)) return before;
+    return i;
+  }
+  return -1;
+}
+
+// One frame of the chase of a foe out of sight. `M` holds the chase's state (`lost`, `on_trail`,
+// `side_step`, `goal`, `real_goal`, `search_time`, `trail_time`); `W` is the world: `now()`,
+// `last_sight()`, `foe_at()`, `far_from(goal)` (not yet there), `next_mark(first)`, `mark_at(i)`,
+// `mark_time(i)`, `face(yaw)` with `mark_yaw(i)`, and `correct()` (a side step round what blocks
+// the new goal, where the world has one).
+template <class M, class W>
+void pursue(M& m, W& w) {
+  if (!m.lost) {
+    m.lost = true;
+    m.on_trail = m.side_step = false;
+    m.goal = w.last_sight();
+    w.correct();
+    return;
+  }
+  if (m.search_time > 0 && w.now() > m.search_time + kSearchGiveUp) {
+    m.goal = w.foe_at();
+    m.side_step = false;
+    m.search_time = 0;
+    return;
+  }
+  if (w.far_from(m.goal)) return;  // not there yet
+  m.search_time = w.now() + kSearchAgain;
+  if (m.side_step) {  // round the obstacle: on to the point it was making for
+    m.side_step = false;
+    m.goal = m.real_goal;
+    w.correct();
+    return;
+  }
+  const int i = w.next_mark(!m.on_trail);
+  if (i < 0) return;
+  m.on_trail = true;
+  m.goal = w.mark_at(i);
+  m.trail_time = w.mark_time(i);
+  w.face(w.mark_yaw(i));
+  w.correct();
 }
 
 }  // namespace shooters_edge::server::q2_mind

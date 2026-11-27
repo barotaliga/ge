@@ -2,8 +2,11 @@
 // campaign_q2.hpp spawned with the roster's health, box, speeds and attacks, Quake II's
 // model, frames and sounds. They decide by Quake II's mind (server/q2_monster_mind.hpp, the same
 // code Quake II's own rules decide by): whom they see, when they attack and with which attack,
-// whether an attack goes on, the mutant's leap and whom they turn on when another monster hurts
-// them; the campaign's states carry the rest (the chase, pain and death, campaign_ai.cpp). An
+// whether an attack goes on, the mutant's leap, whom they turn on when another monster hurts them,
+// and the chase: with its foe out of sight it goes to where it last saw him, then follows the
+// players' trail (8 marks the frame drops, `sq_trail_frame`), toward a goal of its own (`sq_goal`,
+// a mark the campaign's step heads for round what blocks it). The campaign's states carry the rest
+// (pain and death, campaign_ai.cpp). An
 // attack is the roster's: a wind-up, shots on a loop `every` s apart, another loop at its odds
 // while the enemy is in sight, then the recovery; the shots are the campaign's own kinds of harm
 // (bolts, pellets, bullets, blows, grenades, rockets, a rail, a drain, a zap, a leap). A medic
@@ -208,9 +211,59 @@ void start_attack(A& q, int slot) {
   sq_attack_step(q);
 }
 
+// THE TRAIL: 8 marks, chained by `sq_goal` from the global `sq_trail`; a mark's place, its time
+// (`sq_trail_time`) and the way he went (its yaw). Made with the first of Quake II's monsters.
+int32_t mark(A& q, int i) {
+  int32_t m = q.ge(g_sq_trail);
+  for (int n = 0; n < i && m != 0; n++) m = q.i(m, f_sq_goal);
+  return m;
+}
+
+int32_t new_mark(A& q) {
+  const int32_t m = q.spawn();
+  q.set_i(m, q.L.f.classname, q.s(s_empty));
+  q.set_f(m, q.L.f.solid, kSolidNot);
+  q.set_f(m, q.L.f.movetype, kMovetypeNone);
+  q.setsize(m, {0, 0, 0}, {0, 0, 0});
+  return m;
+}
+
+void make_trail(A& q) {
+  if (q.ge(g_sq_trail) != 0) return;
+  int32_t next = 0;
+  for (int i = 0; i < q2_mind::kTrailMarks; i++) {
+    const int32_t m = new_mark(q);
+    q.set_i(m, f_sq_goal, next);
+    next = m;
+  }
+  q.set_ge(g_sq_trail, next);
+  q.set_g(g_sq_trail_head, 0);
+}
+
+// The chase's state as Quake II's mind reads it, from the monster's fields and back.
+struct ChaseState {
+  bool lost = false, on_trail = false, side_step = false;
+  Vec3 goal{}, real_goal{};
+  double search_time = 0, trail_time = 0;
+};
+
+ChaseState chase_of(A& q, int32_t me) {
+  ChaseState c;
+  c.lost = on(q.f(me, f_sq_lost));
+  c.on_trail = on(q.f(me, f_sq_on_trail));
+  const int32_t g = q.i(me, f_sq_goal);
+  c.goal = g != 0 ? q.v(g, q.L.f.origin) : q.v(me, f_sq_last_sight);
+  c.search_time = q.f(me, f_sq_search);
+  c.trail_time = q.f(me, f_sq_trail_time);
+  return c;
+}
+
 // The kind's spawn: its numbers, model, frames and sounds, over the campaign's minds.
 void spawn(A& q, int run) {
   if (no_monsters_here(q)) return;
+  const int32_t self = q.self();
+  make_trail(q);
+  q.set_self(self);
   const roster::Kind& k = kind_of(run);
   for (int w = kSqSight; w < kSqWords; w++) q.precache_sound(word(q, run, w));
   for (int w = kSqLaser; w <= kSqHead; w++) q.precache_model(shared(q, w));
@@ -515,6 +568,160 @@ void sq_leap_touch(A& q) {
     damage(q, other, me, me, q.f(me, f_dmg));
   }
   q.set_i(me, q.L.f.touch, 0);
+}
+
+// Found a foe: the chase starts from where he is now.
+void sq_found(A& q) {
+  const int32_t me = q.self();
+  q.set_v(me, f_sq_last_sight, q.v(q.i(me, q.L.f.enemy), q.L.f.origin));
+  q.set_f(me, f_sq_lost, 0);
+  q.set_f(me, f_sq_on_trail, 0);
+  q.set_f(me, f_sq_search, 0);
+  q.set_f(me, f_sq_trail_time, q.time());
+  q.set_f(me, f_sq_sound, 0);
+}
+
+// HEARING, Quake II's: with no enemy, a player's shot of the last fifth of a second within 1000
+// units that it may hear (in its sight's set of places; an ambusher must see where it was) turns it
+// to the noise and sends it there, its first shot a second off. True when it heard one now or goes
+// to one already.
+bool sq_hear(A& q) {
+  const int32_t me = q.self();
+  if (q.i(me, q.L.f.enemy) != 0) return false;
+  const bool ambush = band(q.f(me, q.L.f.spawnflags), kSpawnAmbush) != 0;
+  const int32_t near = ambush ? 0 : q.checkclient();
+  for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+       p = q.find(p, q.L.f.classname, q.s(s_player))) {
+    if ((q.f(p, q.L.f.health) <= 0) || on(band(q.f(p, q.L.f.flags), kFlNotarget))) continue;
+    if (q.f(p, f_show_hostile) < q.time() + 0.8f) continue;  // no shot this fifth of a second
+    const Vec3 at = q.v(p, q.L.f.origin);
+    if (q.vlen(at - q.v(me, q.L.f.origin)) > q2_mind::kHear) continue;
+    if (ambush) {
+      q.traceline(eye_of(q, me), at, 1, me);
+      if (q.gf(q.L.g.trace_fraction) < 1) continue;
+    } else if (near != p) {
+      continue;
+    }
+    q.set_f(me, f_sq_sound, q.time());
+    q.set_v(me, f_sq_sound_at, at);
+    q.set_f(me, q.L.f.ideal_yaw, q.vectoyaw(at - q.v(me, q.L.f.origin)));
+    q.set_f(me, f_attack_finished, q.time() + static_cast<float>(q2_mind::kFirstWait));
+    return true;
+  }
+  return q.f(me, f_sq_sound) > 0;
+}
+
+// A step toward the noise it heard: within 64 units it stands facing it, and 5 s on forgets it
+// (back to its path, or to stand). False when it heard none.
+bool sq_to_sound(A& q) {
+  const int32_t me = q.self();
+  const float heard = q.f(me, f_sq_sound);
+  if (heard <= 0) return false;
+  const Vec3 to = q.v(me, f_sq_sound_at) - q.v(me, q.L.f.origin);
+  if (q.vlen({to.x, to.y, 0}) <= q2_mind::kSoundNear) {
+    q.set_f(me, q.L.f.ideal_yaw, q.vectoyaw(to));
+    q.changeyaw();
+    if (q.time() <= heard + static_cast<float>(q2_mind::kSoundForget)) return true;
+    q.set_f(me, f_sq_sound, 0);
+    if (q.i(me, f_movetarget) != 0) {
+      q.set_i(me, q.L.f.goalentity, q.i(me, f_movetarget));
+      return false;
+    }
+    q.set_f(me, f_pausetime, q.time() + kForever);
+    run_field(q, me, f_th_stand);
+    return true;
+  }
+  int32_t g = q.i(me, f_sq_goal);
+  if (g == 0) {
+    g = new_mark(q);
+    q.set_i(me, f_sq_goal, g);
+  }
+  q.setorigin(g, q.v(me, f_sq_sound_at));
+  q.set_i(me, q.L.f.goalentity, g);
+  q.movetogoal(q.f(me, f_run_step));
+  return true;
+}
+
+// A frame of the hunt: in a clear line it goes at him (and keeps where it saw him); out of sight,
+// Quake II's chase (q2_monster_mind.hpp's `pursue`) sets its goal: the last sighting, the trail's
+// marks after its last look, one move at him 20 s on. The campaign's step makes for the goal.
+void sq_chase(A& q) {
+  const int32_t me = q.self();
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  if (clear_to(q, enemy)) {
+    q.set_v(me, f_sq_last_sight, q.v(enemy, q.L.f.origin));
+    q.set_f(me, f_sq_trail_time, q.time());
+    q.set_f(me, f_sq_lost, 0);
+    q.set_f(me, f_sq_on_trail, 0);
+    q.set_i(me, q.L.f.goalentity, enemy);
+    return;
+  }
+  ChaseState c = chase_of(q, me);
+  struct World {
+    A& q;
+    int32_t me, enemy;
+    double now() const { return q.time(); }
+    Vec3 last_sight() const { return q.v(me, f_sq_last_sight); }
+    Vec3 foe_at() const { return q.v(enemy, q.L.f.origin); }
+    bool far_from(Vec3 goal) const {
+      const Vec3 d = goal - q.v(me, q.L.f.origin);
+      return q.vlen({d.x, d.y, 0}) > q.f(me, f_run_step) + 1;
+    }
+    int next_mark(bool first) const {
+      double times[q2_mind::kTrailMarks];
+      for (int i = 0; i < q2_mind::kTrailMarks; i++) times[i] = q.f(mark(q, i), f_sq_trail_time);
+      return q2_mind::next_mark(times, static_cast<int>(q.g(g_sq_trail_head)),
+                                q.f(me, f_sq_trail_time), first, [&](int i) {
+                                  q.traceline(eye_of(q, me), q.v(mark(q, i), q.L.f.origin), 1, me);
+                                  return q.gf(q.L.g.trace_fraction) >= 1;
+                                });
+    }
+    Vec3 mark_at(int i) const { return q.v(mark(q, i), q.L.f.origin); }
+    double mark_time(int i) const { return q.f(mark(q, i), f_sq_trail_time); }
+    float mark_yaw(int i) const { return q.v(mark(q, i), q.L.f.angles).y; }
+    void face(float yaw) const {
+      Vec3 a = q.v(me, q.L.f.angles);
+      a.y = yaw;
+      q.set_v(me, q.L.f.angles, a);
+      q.set_f(me, q.L.f.ideal_yaw, yaw);
+    }
+    void correct() const {}  // the campaign's step finds its own way round what blocks it
+  } w{q, me, enemy};
+  q2_mind::pursue(c, w);
+  q.set_f(me, f_sq_lost, c.lost ? 1.0f : 0.0f);
+  q.set_f(me, f_sq_on_trail, c.on_trail ? 1.0f : 0.0f);
+  q.set_f(me, f_sq_search, static_cast<float>(c.search_time));
+  q.set_f(me, f_sq_trail_time, static_cast<float>(c.trail_time));
+  int32_t g = q.i(me, f_sq_goal);
+  if (g == 0) {
+    g = new_mark(q);
+    q.set_i(me, f_sq_goal, g);
+  }
+  q.setorigin(g, c.goal);
+  q.set_i(me, q.L.f.goalentity, g);
+}
+
+// The players' trail, each frame while Quake II's monsters are about: a mark where a player stood
+// last frame once his eye no longer sees the newest mark.
+void sq_trail_frame(A& q) {
+  if (q.ge(g_sq_trail) == 0) return;
+  for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+       p = q.find(p, q.L.f.classname, q.s(s_player))) {
+    if (q.f(p, q.L.f.health) <= 0) continue;
+    const Vec3 at = q.v(p, q.L.f.origin);
+    const Vec3 last = q.v(p, f_sq_trail_last);
+    q.set_v(p, f_sq_trail_last, at);
+    if ((last.x == 0) & (last.y == 0) & (last.z == 0)) continue;  // new: no mark yet
+    const int head = static_cast<int>(q.g(g_sq_trail_head));
+    const int32_t newest = mark(q, q2_mind::newest_mark(head));
+    q.traceline(eye_of(q, p), q.v(newest, q.L.f.origin), 1, p);
+    if (q.gf(q.L.g.trace_fraction) >= 1) continue;
+    const int32_t m = mark(q, head);
+    q.setorigin(m, last);
+    q.set_f(m, f_sq_trail_time, q.time());
+    q.set_v(m, q.L.f.angles, {0, q.vectoyaw(last - q.v(newest, q.L.f.origin)), 0});
+    q.set_g(g_sq_trail_head, static_cast<float>((head + 1) % q2_mind::kTrailMarks));
+  }
 }
 
 #define SE_SQ_SPAWN(name, i)                                      \

@@ -51,11 +51,16 @@ void lost_enemy(A& q) {
 
 void ai_stand(A& q) {
   if (look_for_target(q)) return;
+  if (sq_runs(q, q.self()) && sq_hear(q)) {  // Quake II's monster: to the shot it heard
+    run_field(q, q.self(), f_th_walk);
+    return;
+  }
   if (q.time() > q.f(q.self(), f_pausetime)) run_field(q, q.self(), f_th_walk);
 }
 
 void ai_walk(A& q, float dist) {
   if (look_for_target(q)) return;
+  if (sq_runs(q, q.self()) && (sq_hear(q), sq_to_sound(q))) return;
   q.movetogoal(dist);
 }
 
@@ -67,6 +72,7 @@ void ai_run(A& q, float dist) {
     return;
   }
   if (can_see(q, enemy)) sees_on(q);
+  if (sq_runs(q, me)) sq_chase(q);  // Quake II's monster: at him, or after him by his trail
   if ((q.coop() != 0) & (q.f(me, f_search_time) < q.time())) {
     if (look_for_target(q)) return;
   }
@@ -213,6 +219,7 @@ void found_target(A& q) {
   q.set_f(me, f_search_time, q.time() + 5);
   q.set_f(me, f_attack_finished, q.time() + 1);
   q.set_f(me, f_attack_state, kAsStraight);
+  if (sq_runs(q, me)) sq_found(q);  // its chase starts from where he is now
   if (!q.is(q.i(me, q.L.f.noise), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
   // Its run starts now, unless this sighting came from inside another one: an enemy the run drops
   // at once (a player at the intermission, alive but past harm) sends it back to stand, and the

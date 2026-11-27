@@ -141,4 +141,50 @@ TEST(hurt_by_another_monster_it_turns_on_one_unlike_it_or_joins_it) {
   CHECK(!q2_mind::heavy("monster_gunner"));
 }
 
+TEST(the_next_mark_is_the_first_newer_than_its_last_look) {
+  const double times[q2_mind::kTrailMarks] = {5, 6, 7, 0, 0, 0, 0, 4};  // head 7: 4, 5, 6, 7
+  const auto all = [](int) { return true; };
+  CHECK(q2_mind::next_mark(times, 7, 4.5, false, all) == 0);
+  CHECK(q2_mind::next_mark(times, 7, 7, false, all) == -1);
+  // From the last sighting, the one before it when only that one is in sight.
+  const auto only_7 = [](int i) { return i == 7; };
+  CHECK(q2_mind::next_mark(times, 7, 4.5, true, only_7) == 7);
+  CHECK(q2_mind::newest_mark(7) == 6);
+}
+
+struct Chase {
+  bool lost = false, on_trail = false, side_step = false;
+  float goal = 0, real_goal = 0;
+  double search_time = 0, trail_time = 0;
+};
+
+struct Field {  // a line: the monster at `at`, marks at 100, 200, 300
+  float at = 0, sighting = 50, foe = 900, faced = -1;
+  double t = 0;
+  double now() const { return t; }
+  float last_sight() const { return sighting; }
+  float foe_at() const { return foe; }
+  bool far_from(float goal) const { return (goal > at ? goal - at : at - goal) > 10; }
+  int next_mark(bool) const { return t < 30 ? 0 : -1; }
+  float mark_at(int) const { return 100; }
+  double mark_time(int) const { return 3; }
+  float mark_yaw(int) const { return 90; }
+  void face(float yaw) { faced = yaw; }
+  void correct() {}
+};
+
+TEST(the_chase_goes_to_the_last_sighting_then_the_trail_then_at_him) {
+  Chase c;
+  Field w;
+  q2_mind::pursue(c, w);  // lost: to where it saw him
+  CHECK(c.lost && c.goal == 50);
+  w.at = 50;
+  w.t = 1;
+  q2_mind::pursue(c, w);  // there: a search, the trail's mark
+  CHECK(c.on_trail && c.goal == 100 && w.faced == 90 && c.search_time == 6);
+  w.t = 27;
+  q2_mind::pursue(c, w);  // 20 s past the search: straight at him
+  CHECK(c.goal == 900 && c.search_time == 0);
+}
+
 }  // namespace
