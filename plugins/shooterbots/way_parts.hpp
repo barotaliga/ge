@@ -4,9 +4,9 @@
 //
 // ge:summary The way through's shared parts: boxes, edicts, open links, the searches past bars
 // ge:keywords way_parts touches crosses shut_crossings link_open reach_past reach_back
-// ge:keywords locked_moved is_wall is_lift say_way name_linked_doors
+// ge:keywords locked_moved is_wall is_lift say_way name_linked_doors way_idle idle hopeful
 // ge:skill shooterbots bots
-// ge:test tests/shooters_edge_companion_test.cpp
+// ge:test tests/shooters_edge_companion_test.cpp tests/shooterbots_way_parts_test.cpp
 #pragma once
 
 #include <cstddef>
@@ -26,6 +26,12 @@ namespace ge::shooterbots::way_parts {
 constexpr float kHatchOver = 256;
 
 float dist(sh::Vec3f a, sh::Vec3f b);
+
+// The time he has had nothing to do since (`WayThrough::idle_since`), after a plan at `t`: -1 while
+// he has something (`busy`: a step, a monster, a gun, a place to see), else when it began. A clock
+// left running from an earlier idle spell lifted every door the first moment city1's bot dropped
+// off its graph, and he ran to a secret door shut till its button.
+double way_idle(double since, bool busy, double t);
 
 sh::Vec3f origin_of(const char* org);
 

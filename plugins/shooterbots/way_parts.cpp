@@ -3,7 +3,7 @@
 // ge:summary The way through's shared parts: boxes, edicts, open links, the searches past bars
 // ge:keywords way_parts touches crosses link_open reach_past reach_back
 // ge:skill shooterbots bots
-// ge:test tests/shooters_edge_companion_test.cpp
+// ge:test tests/shooters_edge_companion_test.cpp tests/shooterbots_way_parts_test.cpp
 #include "shooterbots/way_parts.hpp"
 
 #include <algorithm>
@@ -25,6 +25,8 @@
 namespace sb = ge::shooterbots;
 
 namespace ge::shooterbots::way_parts {
+
+double way_idle(double since, bool busy, double t) { return busy ? -1 : since < 0 ? t : since; }
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
