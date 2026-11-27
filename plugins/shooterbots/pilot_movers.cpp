@@ -100,6 +100,23 @@ static bool on_world_floor(const PilotSense& s) {
   return tr.fraction < 1 && !tr.startsolid;
 }
 
+bool rises(const NavMover& m, Vec3f& lo, Vec3f& hi) {
+  if (m.stops.empty()) return false;
+  lo = m.absmin;
+  hi = m.absmax;
+  float zlo = m.stops[0].z, zhi = m.stops[0].z;
+  for (const Vec3f& at : m.stops) {
+    const Vec3f d = at - m.rest;
+    lo = {std::min(lo.x, m.absmin.x + d.x), std::min(lo.y, m.absmin.y + d.y),
+          std::min(lo.z, m.absmin.z + d.z)};
+    hi = {std::max(hi.x, m.absmax.x + d.x), std::max(hi.y, m.absmax.y + d.y),
+          std::max(hi.z, m.absmax.z + d.z)};
+    zlo = std::min(zlo, at.z);
+    zhi = std::max(zhi, at.z);
+  }
+  return zhi - zlo > kStepHeight;
+}
+
 const NavMover* over_him(const Pilot& p, const PilotSense& s, float margin) {
   if (!p.set.under_plat) return nullptr;
   const float feet = s.origin.z + kPlayerMins.z;
@@ -168,6 +185,14 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
     // he steps to must be under its top now (it moves on under him); off it, it stands at the stop.
     if (l.kind == NavKind::ride || l.stop < 0) return false;
     const NavNode& nb = node(*p.g, b);
+    // Onto it, it waits at the stop of the node stepped to, as a step off it does: at another
+    // stop the node's spot may lie under its top too, and the ride planned from it starts from
+    // the wrong end (boss1's ferry, boarded at its far stop: he jumped for the ledge from the
+    // near end, into the lava).
+    if (nb.mover == l.mover && node(*p.g, a).mover != l.mover) {
+      const Vec3f d = platform_at(*rest, *now) - rest->stops[static_cast<size_t>(l.stop)];
+      if (d.x * d.x + d.y * d.y + d.z * d.z > kAtStop * kAtStop) return true;
+    }
     if (nb.mover == l.mover) {
       const Vec3f o = nb.origin;
       return !(o.x - now->absmin.x >= kOnTop && now->absmax.x - o.x >= kOnTop &&

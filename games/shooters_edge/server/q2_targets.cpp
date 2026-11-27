@@ -623,6 +623,7 @@ bool targets_spawn(Q2Server& s, int i) {
     e.maxs = sh::Vec3f{m.maxs[0], m.maxs[1], m.maxs[2]};
   }
   e.message = map_text(key(s, e, "message"));
+  e.killtarget = key(s, e, "killtarget");  // a counter or a relay removes what it names
   e.dmg = static_cast<int>(number(s, e, "dmg", 0));
   e.speed = number(s, e, "speed", 0);
   e.delay = number(s, e, "delay", 0);
