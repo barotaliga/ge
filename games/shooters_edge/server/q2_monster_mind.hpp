@@ -30,7 +30,8 @@
 //   joins the attacker against the attacker's foe.
 // - **Hearing**: with no enemy, a player's noise within 1000 it may hear (an ambusher must see
 //   where) turns it to the noise and sends it there, its first shot a second off; within 64 it
-//   stands, and 5 s on forgets it.
+//   stands, and 5 s on forgets it. Where his shot lands is heard too, by one with no enemy that
+//   lies in no ambush.
 // - **Pain**: at most every 3 s; at the hardest skill each blow puts the next 5 s off.
 // - **The chase** (a foe out of sight): first to where it last saw him; there, and at each mark
 //   after, the search restarts (5 s) and it takes the next mark of the players' trail newer than
@@ -84,6 +85,10 @@ inline constexpr double kBlowSkipped = 0.75;  // at skill 0, the chance a blow i
 inline constexpr float kHear = 1000;          // a noise's reach
 inline constexpr float kSoundNear = 64;       // near enough the noise: it stands there
 inline constexpr double kSoundForget = 5;     // s at the noise before it forgets it
+inline constexpr double kHeardFor = 0.2;      // s a noise stays to be heard (two frames)
+
+// Whether it may hear where a shot landed (his shot itself any may hear).
+constexpr bool hears_impact(bool ambush, bool has_enemy) { return !ambush && !has_enemy; }
 
 constexpr Range range_of(float dist) {
   return dist < kMelee  ? Range::melee

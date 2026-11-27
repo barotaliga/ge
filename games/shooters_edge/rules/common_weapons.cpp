@@ -276,6 +276,9 @@ void blast_at(A& q, int32_t spare) {
                 q.i(me, f_deathtype));
   const int32_t snd = weapon_word(q, q.f(q.self(), q.L.f.weapon), 14);
   if (!q.is(snd, "-")) q.sound(q.self(), kChanVoice, snd, 1, kAttnNorm);
+#if defined(SE_RULES_CAMPAIGN)
+  sq_note_impact(q, me, q.v(me, q.L.f.origin));  // Quake II's monsters may hear where it blew
+#endif
   effect_explosion(q, q.v(q.self(), q.L.f.origin));
   q.remove(q.self());
 }
@@ -444,6 +447,9 @@ void spike_touch(A& q) {
     q.set_i(q.other(), f_deathtype, q.s(s_nailed));
     damage(q, q.other(), me, q.i(me, q.L.f.owner), q.f(me, f_dmg));
   } else {
+#if defined(SE_RULES_CAMPAIGN)
+    sq_note_impact(q, me, q.v(me, q.L.f.origin));  // Quake II's monsters may hear where it landed
+#endif
     effect_head(q, kTeSpike);
     write_vec(q, q.v(q.self(), q.L.f.origin));
     effect_send(q, q.v(q.self(), q.L.f.origin), kMulticastPhs);

@@ -90,6 +90,8 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_ducked, kTypeFloat)      \
   X(sq_duck_still, kTypeFloat)  \
   X(sq_run_step, kTypeFloat)    \
+  X(sq_impact, kTypeFloat)      \
+  X(sq_impact_at, kTypeVector)  \
   X(coop_taken, kTypeFloat)
 
 // QUAKE II'S MONSTERS the campaign runs (classic remix, campaign_q2.hpp): each kind's
@@ -402,6 +404,7 @@ void sq_trail_frame(A& q);
 bool sq_hear(A& q);
 bool sq_to_sound(A& q);
 void sq_offer_dodge(A& q, int32_t missile);
+void sq_note_impact(A& q, int32_t by, Vec3 at);
 bool sq_busy(A& q);
 // campaign_monsters
 void leap_off(A& q, float fwd, float up, Fn touch);
