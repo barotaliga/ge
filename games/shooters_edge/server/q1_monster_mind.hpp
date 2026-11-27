@@ -17,11 +17,14 @@
 //   knight strikes within 80 and charges within 250 on his level (within 20, 2 s between), else
 //   the usual test; the spawn jumps at a foe it sees near.
 // - **Hurt by another monster**: it turns on one of another kind (a rifleman on its own too).
-// - **Pain**: at the hardest skill no more than every 5 s.
+// - **Pain**: each kind its wait (most 1 s, the brute 1.5, the shambler 2, the vore 3) and its
+//   flinch; a shambler above 400 health shrugs off half its blows; at the hardest skill every
+//   pain puts the next 5 s off.
 //
 // ge:summary Quake's monsters' decisions as any rules run them: ranges, sight, attacks, leaps
 // ge:keywords q1 monster-mind monster-ai cr_monsters remix real-ai check-attack attack-chance
-// ge:keywords sight in-front infighting dog-leap fiend-leap knight-charge q1_check_attack
+// ge:keywords sight in-front infighting dog-leap fiend-leap knight-charge q1_check_attack pain
+// ge:keywords pain-wait flinch shambler-shrug
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_q1_monster_mind_test.cpp
 #pragma once
@@ -110,6 +113,34 @@ constexpr Test test_of(std::string_view classname) {
 
 // Hurt by another monster: whether it turns on it.
 constexpr bool turns_on(bool other_kind, bool rifleman) { return other_kind || rifleman; }
+
+// Its pain: how long before the next (`wait`, s) and how many frames its flinch holds it (0:
+// none, 0.1 s each). A kind with neither feels none.
+struct Pain {
+  float wait = 0, frames = 0;
+};
+inline constexpr float kShamblerStrong = 400;  // above this health a shambler may shrug a blow
+inline constexpr float kShamblerShrug = 0.5f;  // off, at this chance
+constexpr Pain pain_of(std::string_view classname) {
+  if (classname == "monster_ogre" || classname == "monster_ogre_marksman") return {1.5f, 4};
+  if (classname == "monster_wizard" || classname == "monster_fish") return {1, 2};
+  if (classname == "monster_shambler") return {2, 4};
+  if (classname == "monster_shalrath") return {3, 4};
+  if (classname == "monster_zombie") return {1, 0};
+  if (classname == "monster_army" || classname == "monster_dog" || classname == "monster_knight" ||
+      classname == "monster_demon1" || classname == "monster_enforcer" ||
+      classname == "monster_hell_knight")
+    return {1, 3};
+  return {};
+}
+// Whether a blow is shrugged off: a strong shambler's, by one draw (taken for a shambler only).
+template <class Roll>
+bool shrugs(std::string_view classname, float health, Roll&& roll) {
+  if (classname != "monster_shambler") return false;
+  const bool strong = health > kShamblerStrong;
+  const bool shrug = roll() < kShamblerShrug;  // drawn either way
+  return strong && shrug;
+}
 
 // Whether a kind of the roster is one of Quake's (its model one of Quake's).
 constexpr bool runs(const roster::Kind& k) {

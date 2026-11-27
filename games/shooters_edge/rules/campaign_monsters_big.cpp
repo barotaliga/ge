@@ -105,11 +105,11 @@ bool demon_decides(A& q) {
 
 void demon_check(A& q) { q.ret_f(demon_decides(q) ? 1.0f : 0.0f); }
 
-void demon_flinch(A& q) { flinch(q, fn_demon_flinch, 3); }
+void demon_flinch(A& q) { flinch(q, fn_demon_flinch, q1_mind::pain_of("monster_demon1").frames); }
 
 void demon_pain(A& q) {
   if (q.i(q.self(), q.L.f.touch) == q.fn(fn_demon_leap_touch)) return;  // no flinch in the air
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_demon1").wait);
   q.sound(q.self(), kChanVoice, q.s(s_demon_dpain1_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   demon_flinch(q);
@@ -194,14 +194,15 @@ void shambler_missile(A& q) {
   shambler_bolt(q);
 }
 
-void shambler_flinch(A& q) { flinch(q, fn_shambler_flinch, 4); }
+void shambler_flinch(A& q) {
+  flinch(q, fn_shambler_flinch, q1_mind::pain_of("monster_shambler").frames);
+}
 
 // Only a hit that takes a good share of it makes it flinch, and at most every 2 s.
 void shambler_pain(A& q) {
-  const bool strong = q.f(q.self(), q.L.f.health) > 400;
-  const bool shrug = q.random() < 0.5f;  // drawn either way
-  if (strong & shrug) return;
-  hold_pain(q, 2);
+  if (q1_mind::shrugs("monster_shambler", q.f(q.self(), q.L.f.health), [&q] { return q.random(); }))
+    return;
+  hold_pain(q, q1_mind::pain_of("monster_shambler").wait);
   q.sound(q.self(), kChanVoice, q.s(s_shambler_shurt2_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   shambler_flinch(q);
@@ -282,10 +283,12 @@ void caster_missile(A& q) {
   caster_cast(q);
 }
 
-void caster_flinch(A& q) { flinch(q, fn_caster_flinch, 4); }
+void caster_flinch(A& q) {
+  flinch(q, fn_caster_flinch, q1_mind::pain_of("monster_shalrath").frames);
+}
 
 void caster_pain(A& q) {
-  hold_pain(q, 3);
+  hold_pain(q, q1_mind::pain_of("monster_shalrath").wait);
   q.sound(q.self(), kChanVoice, q.s(s_shalrath_pain_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   caster_flinch(q);
@@ -335,10 +338,12 @@ void enforcer_missile(A& q) {
   enforcer_fire(q);
 }
 
-void enforcer_flinch(A& q) { flinch(q, fn_enforcer_flinch, 3); }
+void enforcer_flinch(A& q) {
+  flinch(q, fn_enforcer_flinch, q1_mind::pain_of("monster_enforcer").frames);
+}
 
 void enforcer_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_enforcer").wait);
   if (q.random() < 0.5f)
     q.sound(q.self(), kChanVoice, q.s(s_enforcer_pain1_wav), 1, kAttnNorm);
   else
@@ -544,10 +549,12 @@ bool hknight_decides(A& q) {
 
 void hknight_check(A& q) { q.ret_f(hknight_decides(q) ? 1.0f : 0.0f); }
 
-void hknight_flinch(A& q) { flinch(q, fn_hknight_flinch, 3); }
+void hknight_flinch(A& q) {
+  flinch(q, fn_hknight_flinch, q1_mind::pain_of("monster_hell_knight").frames);
+}
 
 void hknight_pain(A& q) {
-  hold_pain(q, 1);
+  hold_pain(q, q1_mind::pain_of("monster_hell_knight").wait);
   q.sound(q.self(), kChanVoice, q.s(s_hknight_pain1_wav), 1, kAttnNorm);
   anim_begin(q, q.v(q.self(), f_fr_pain));
   hknight_flinch(q);
