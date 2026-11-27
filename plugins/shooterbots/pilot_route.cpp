@@ -68,6 +68,19 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
     const Vec3f d = platform_at(*rest, *now) - rest->stops[static_cast<size_t>(l->stop)];
     return aboard(p, s, l->mover) && d.x * d.x + d.y * d.y + d.z * d.z <= kPlatformAt * kPlatformAt;
   }
+  // The step to a moving platform's rim is passed aboard it already, at the stop the next link
+  // boards it at: walked on over the rim onto boss1's lift, he turned back for the rim node and
+  // stood on the lift's edge as it rose, lifted into the lintel and held there.
+  if (l2 && l2->mover >= 0 && l2->stop >= 0 && l2->kind != NavKind::ride &&
+      node(g, p.route[k + 2]).mover == l2->mover && node(g, b).mover != l2->mover &&
+      aboard(p, s, l2->mover)) {
+    const NavMover* rest = mover_of(g.movers, l2->mover);
+    const NavMover* now = mover_of(s.movers, l2->mover);
+    if (rest != nullptr && now != nullptr && moving_platform(*rest)) {
+      const Vec3f d = platform_at(*rest, *now) - rest->stops[static_cast<size_t>(l2->stop)];
+      if (d.x * d.x + d.y * d.y + d.z * d.z <= kPlatformAt * kPlatformAt) return true;
+    }
+  }
   // A scripted way is passed when its keys say its last step is reached.
   if (l && l->kind == NavKind::script)
     return p.script_from == a && p.script_to == b && p.script_done;
@@ -92,6 +105,13 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
     return across(s.origin, node(g, b).origin) <= p.set.arrive + lane ||
            (f >= 1 && off <= p.set.corner + lane);
   }
+  // A moving platform's top node the way leaves it from (a jump or a step off at its stop) is
+  // reached at its place, not anywhere aboard: boarded at its near end, he jumped for boss1's
+  // ledge from there, 200 units short, into the lava.
+  const NavNode& nb = node(g, b);
+  if (l2 && nb.stop >= 0 && l2->kind != NavKind::ride &&
+      node(g, p.route[k + 2]).mover != nb.mover && across(s.origin, nb.origin) > p.set.arrive)
+    return false;
   return reached(p, s, b);
 }
 

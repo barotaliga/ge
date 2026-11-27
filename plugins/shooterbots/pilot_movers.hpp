@@ -54,6 +54,9 @@ bool aboard(const Pilot& p, const PilotSense& s, int32_t ent);
 // Whether the link a -> b's mover keeps the pilot at its start now.
 // Where moving platform `rest` (the nav's) stands now, `now` its box as the player sees it.
 Vec3f platform_at(const NavMover& rest, const NavMover& now);
+// Whether a moving platform rises or falls between its stops (more than a step): if so, `lo` and
+// `hi` are its box over its whole way, from its lowest stop to its highest.
+bool rises(const NavMover& m, Vec3f& lo, Vec3f& hi);
 bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b);
 // (`under_plat`) The ridden mover (at its rest in the graph) on its way, away from its rest, whose
 // box takes the player's place now, or within `margin` of it (units): one coming down on him,

@@ -558,6 +558,7 @@ bool start_map(Listen& l, std::string& error) {
   const bool lobby = l.opt.lobby && !wants_campaign(l.opt);
   h->lobby = lobby;
   h->lobby_settings = l.opt.lobby_settings;
+  h->bots_background = l.opt.bots_background;
   h->player = l.opt.player;
   h->speedjump = kListenSpeedJump;
   h->tap = host_tap;
@@ -622,6 +623,16 @@ bool campaign_map(void* ctx, const std::string& name, sv::MapSpec& out, std::str
     if (!m) return false;
     if (!said.empty()) say(l, said);
   }
+  // The program the window has for the campaign now (classic remix's `remix_campaign`): the next
+  // map's server runs it, the players' parms carried into it as into any map.
+  if (const pg::Progs* program = campaign_program(l.opt);
+      l.campaign_host && program != nullptr && program != l.campaign_host->progs) {
+    l.campaign_host->progs = program;
+    l.progs = program;
+  }
+  // The weapon and armour rows as the window has them now (`cr_items` may have changed during the
+  // last map): the next map's rules fire what its hand shows.
+  if (l.campaign_host) l.campaign_host->opt.every_map = l.opt.arsenal;
   l.map = std::move(m);
   out = l.map->spec;
   l.map_changed = true;
@@ -722,6 +733,7 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   co.registered = opt.registered;
   co.episodes = opt.episodes;
   co.settings = opt.arsenal;
+  co.every_map = opt.arsenal;
   co.settings.push_back("sv_rjump 1");  // the rocket jump helpers, as on the window's match
   co.settings.push_back("sv_rrjump 1");
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
@@ -1353,6 +1365,10 @@ bool listen_lobby(Listen& l, std::string_view line) {
 }
 
 bool listen_is_q2(const Listen& l) { return l.rules != nullptr && sv::q2_of(*l.rules) != nullptr; }
+
+const pg::Progs* campaign_program(const ListenOptions& o) {
+  return remix_campaign(o.remix, o.pack_campaign, o.own_campaign);
+}
 
 bool listen_q2_arms(const Listen& l) {
   if (l.rules == nullptr || listen_is_q2(l)) return false;

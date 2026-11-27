@@ -592,6 +592,7 @@ void hit(const WallHit& w, uint32_t seed, Particles* births) {
   // lightmap's light (the enhanced texels, the light's overbright and the picture's key): measured
   // on e1m1's walls from se-weapon-fx's side camera, the pieces read darker than soot without it.
   constexpr float kWallSeen = 3.0f;
+  constexpr float kShadowed = 0.35f;  // a piece seen on its dark side
   const bool lit = w.light[0] >= 0;
   const auto fresh = [&](Particle& q, float by) {
     q.albedo = std::clamp(q.albedo * by, 0.1f, 0.85f);
@@ -650,7 +651,9 @@ void hit(const WallHit& w, uint32_t seed, Particles* births) {
     q.albedo = float(k.chip_albedo);
     q.bounce = 0.3f;
     paint(q);
-    fresh(q, 1.4f);
+    // Half the chips turn their shadowed side or their sooty inside to the eye: dark against the
+    // wall they came out of, so the burst reads from across a room.
+    fresh(q, (i & 1) != 0 ? kShadowed : 1.4f);
     births->push_back(q);
   }
   // DIRT: a spray of fine grains, the fastest of it, that rains straight down and lies still.
@@ -665,8 +668,28 @@ void hit(const WallHit& w, uint32_t seed, Particles* births) {
     q.streak = 0.012f;
     q.albedo = float(k.grit_albedo);
     paint(q);
-    fresh(q, 1.1f);  // grains of what is under the face: duller than a chip's break
+    // Grains of what is under the face, burnt and in shadow: darker than the face, half of them
+    // near black, so the spray shows against the wall's own colour.
+    fresh(q, (i % 2) != 0 ? 0.25f : 0.6f);
     births->push_back(q);
+  }
+  // THE STRIKE: a hot flick where the round bites, gone in a few hundredths of a second, so each
+  // pellet's hit marks its place even far off (no smoke: the hit is its debris).
+  const double mouth[3] = {w.at[0] + w.normal[0] * 0.02, w.at[1] + w.normal[1] * 0.02,
+                           w.at[2] + w.normal[2] * 0.02};
+  {
+    Particle f = at(mouth);
+    constexpr float kStrike[3] = {1.0f, 0.78f, 0.5f};
+    for (int i = 0; i < 3; ++i) f.tint[i] = kStrike[i];
+    f.kelvin = -float(w.nail ? 3.0 : 2.4);
+    f.albedo = 0.2f;
+    f.cool_s = 0.02f;
+    f.life = float(rnd(r, 0.07, 0.1));
+    f.size = float(w.nail ? 0.1 : 0.08) * float(rnd(r, 0.85, 1.15));
+    f.fall = 0;
+    f.opacity = 1;
+    f.glow = 1;
+    births->push_back(f);
   }
 }
 

@@ -608,9 +608,12 @@ NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, 
 struct NavHardenCounts {
   int64_t over = 0, removed = 0, proofs = 0;
 };
+// A jump off a moving platform's top (a link with its mover and stop) is flown again with the
+// platform where it stops, one of `movers` (without it the flight starts over the drop it spans).
 NavHardenCounts nav_harden_jumps(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
                                  std::span<const uint8_t> harm, float slow = 0.9f, float risk_s = 2,
-                                 float beside = 192, float overshoot = 48);
+                                 float beside = 192, float overshoot = 48,
+                                 std::span<const NavMover> movers = {});
 
 // The nodes from which a way leads, on foot (or swimming, riding, teleported: anything but a
 // rocket jump), to a node `mark` marks; one byte a node.

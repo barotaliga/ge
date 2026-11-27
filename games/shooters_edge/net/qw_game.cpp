@@ -441,6 +441,10 @@ bool open_room(Game& g, std::string& error, bool asked = false) {
   g.room = std::make_unique<cl::Room>();
   cl::Room& r = *g.room;
   r.seats.seed = c.seed;
+  // The window's own server builds the bots' nav on a thread of its own, so adding one (or a map
+  // change with bots in) never holds the picture for seconds; elsewhere it is built at once and a
+  // run stays the same frame by frame.
+  r.seats.background = g.host != nullptr && g.host->bots_background;
   r.lobby.settings.humans = 1;  // bots alone warm up until a player joins
   r.lobby.settings.countdown_s = c.countdown_s;
   r.lobby.settings.intermission_s = c.intermission_s;
