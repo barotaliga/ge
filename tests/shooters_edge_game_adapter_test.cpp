@@ -51,6 +51,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/q2_combat.hpp"
 #include "vfs/pak.hpp"
 
 namespace cl = shooters_edge::client;
@@ -590,6 +591,32 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
       CHECK(c.first == 1 + k * (firing / takes) && c.count == firing / takes);
     }
   }
+}
+
+TEST(q2_s_own_held_weapons_load_from_its_packs_with_no_quake_weapon_asked_for) {
+  // Quake II's packs hold its own view models and palette, never Quake's: the set loads, one a
+  // row of its rules' weapon table, Quake's rows (worn only under remix) kept by the blaster's.
+  const pf::GameProfile& g = *pf::find_game("q2");
+  ge::assets::IndexedImage colormap;
+  colormap.width = colormap.height = 1;
+  colormap.indices = {0};
+  colormap.palette.assign(768, 90);
+  const std::vector<uint8_t> model = ge::morph::write_model2(ge::morph::sample_model());
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> listed = {
+      {"pics/colormap.pcx", ge::assets::encode_pcx(colormap)}};
+  for (const std::string_view name : g.held_weapons) listed.push_back({std::string(name), model});
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak(listed, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::q2_adapter();
+  std::vector<ge::viewmodel::HeldModel> held;
+  std::string why;
+  CHECK_MSG(a.held_weapons(a, files, held, why), why);
+  CHECK_MSG(held.size() == size_t(shooters_edge::server::kSqWeaponCount),
+            std::to_string(held.size()));
+  for (const ge::viewmodel::HeldModel& h : held) CHECK(!h.frames.empty());
 }
 
 TEST(a_games_menu_modes_and_hud_are_its_own) {

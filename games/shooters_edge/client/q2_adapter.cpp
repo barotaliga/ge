@@ -285,9 +285,10 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     OpenedModel m;
     std::string error;
     if (!open_model(self, files, name, m, error) || m.form != ModelForm::morph) {
-      // A mission pack's weapon is held only under that pack, whose files have it: elsewhere
-      // its place in the order is kept by the blaster's model, never drawn.
-      if (server::kSqWeapons[w].pack != server::Q2Pack::base &&
+      // A mission pack's weapon is held only under that pack, whose files have it, and Quake's
+      // weapons only while the rules wear them, whose files have those: elsewhere its place in
+      // the order is kept by the blaster's model, never drawn.
+      if ((server::kSqWeapons[w].pack != server::Q2Pack::base || server::kSqWeapons[w].quake) &&
           (!worn || w >= self.game->held_weapons.size())) {
         out.emplace_back();
         continue;
