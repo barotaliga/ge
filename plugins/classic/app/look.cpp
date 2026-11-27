@@ -215,18 +215,28 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                 "smaller, smoothed over time and upscaled, faster and a little softer.",
         .min = 0.25,
         .max = 1,
-        .values = "1: the window's size (the default); 0.25..1: that share of it a side "
-                  "(0.75 draws about half the pixels)"},
+        .values = "1: the window's size (the default); 0.5: half of it a side, a quarter of the "
+                  "pixels; 0.25: a quarter a side (any other value draws at the nearest of these)"},
        &picture.render_scale);
+  bind(
+      cv,
+      {.name = "r_scale_sharpen",
+       .flags = gc::kArchive,
+       .help = "How much the picture is sharpened after it is smoothed and upscaled (r_scale under "
+               "1, r_scale_smooth 1), most "
+               "where it is flat and least at edges already sharp.",
+       .min = 0,
+       .max = 1,
+       .values = "0.5: about the detail r_scale 1 shows (the default); 0: none; 1: the most"},
+      &picture.scale_sharpen);
   bind(cv,
-       {.name = "r_scale_sharpen",
+       {.name = "r_scale_smooth",
         .flags = gc::kArchive,
-        .help = "How much the picture is sharpened after it is upscaled (r_scale under 1), most "
-                "where it is flat and least at edges already sharp.",
-        .min = 0,
-        .max = 1,
-        .values = "0.5: about the detail r_scale 1 shows (the default); 0: none; 1: the most"},
-       &picture.scale_sharpen);
+        .help = "With r_scale under 1, whether the smaller picture is smoothed as it is enlarged "
+                "or each of its pixels is shown as a crisp square.",
+        .kind = gc::CvarKind::boolean,
+        .values = "0: crisp squares (the default); 1: smoothed over time and sharpened"},
+       &picture.scale_smooth);
   bind(cv,
        {.name = "ce_water_specks",
         .flags = gc::kArchive,
@@ -995,7 +1005,14 @@ gr::PostSettings post_settings(Look look, const Picture& picture) {
 }
 
 double upscale_sharpen(const Picture& picture) {
-  return picture.render_scale < 1 ? std::clamp(picture.scale_sharpen, 0.0, 1.0) : 0.0;
+  return render_step(picture) < 1 && picture.scale_smooth
+             ? std::clamp(picture.scale_sharpen, 0.0, 1.0)
+             : 0.0;
+}
+
+double render_step(const Picture& picture) {
+  const double s = picture.render_scale;
+  return s >= 0.7071 ? 1.0 : s >= 0.3536 ? 0.5 : 0.25;
 }
 
 double world_light_scale(const Picture& picture) {

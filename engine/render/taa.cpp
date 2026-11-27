@@ -18,7 +18,7 @@ namespace {
 // taa.wgsl's `TaaParams`.
 struct Params {
   float output[4];  // width, height, 1/width, 1/height
-  float blend[4];   // alpha, clip gamma, 0, 0
+  float blend[4];   // alpha, clip gamma, blocks (1) or not (0), 0
 };
 
 double halton(uint32_t i, uint32_t base) {
@@ -98,6 +98,7 @@ void encode_taa(gpu::Device& device, Taa& taa, const gpu::PipelineSet& pipelines
   p.output[3] = 1.0f / static_cast<float>(taa.height);
   p.blend[0] = static_cast<float>(std::max(taa.settings.alpha, 1.0 / (taa.age + 1)));
   p.blend[1] = static_cast<float>(kTaaClipGamma);
+  p.blend[2] = taa.settings.blocks ? 1.0f : 0.0f;
   device.queue.WriteBuffer(taa.params, 0, &p, sizeof p);
   const int k = 1 - taa.written;
   wgpu::ComputePassEncoder pass = rec.compute(encoder, "taa");

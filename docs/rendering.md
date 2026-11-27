@@ -1972,16 +1972,23 @@ jittered frame against it (0.78 levels, 2.3 %). At 50 % scale the `world` lab's 
 hard to tell from full size by eye; what each scale costs on a real GPU waits for `profile`.
 
 **Shooter's Edge** draws at the window's size with no temporal pass by default. Its `r_scale`
-(0.25 to 1; `plugins/classic/app/look.hpp`) under 1 draws the 3D picture at that share of the
-window a side and resolves it with the same TAA-U to the window, before the bloom and post; the
-HUD is drawn after, at the window's size. The resolve's pipeline is made at the load, so the
-setting changes live (the targets are made again). A view that moves more than 3 m between two
-frames (a teleport, a respawn, a demo's jump) is a cut: the history starts over
-(`client/world_draw.cpp`). The post pass then sharpens the upscaled picture by its contrast
-(the CAS, `r_scale_sharpen`, 0.5 by default): on dm3 at 0.75 the picture's edge energy is
-about 80% of r_scale 1's unsharpened, about 90% at 0.3 and 93 to 100% at 0.6. It is compiled into the post pass
-always and its strength set live, 0 at r_scale 1, where the post pass skips it and the picture
-is the same, byte for byte.
+(`plugins/classic/app/look.hpp`) draws the 3D picture at 1, 0.5 or 0.25 of the window a side
+(any other value at the nearest of them by ratio, `render_step`): whole ratios only, so every
+drawn pixel covers a whole square of the window's (2x2, 4x4). The HUD is drawn after, at the
+window's size. The picture reaches the window through TAA-U's resolve, before the bloom and
+post, in one of two ways (`r_scale_smooth`):
+
+- **Crisp squares** (0, the default): `TaaSettings::blocks`. Each window pixel takes the drawn
+  pixel it lies in, as it is: no jitter, no history, no filter. The cheapest upscale, and the
+  pixels stay as sharp as the classic games' own low resolutions, stair-steps and all.
+- **Smoothed** (1): the jittered TAA-U, then the post pass sharpens the result by its contrast
+  (the CAS, `r_scale_sharpen`, 0.5 by default). The sharpen is compiled into the post pass
+  always and its strength set live, 0 otherwise, where the post pass skips it.
+
+The resolve's pipeline is made at the load, so both settings change live (the targets are made
+again for r_scale; the history starts over for r_scale_smooth). A view that moves more than 3 m
+between two frames (a teleport, a respawn, a demo's jump) is a cut: the history starts over
+(`client/world_draw.cpp`). At r_scale 1 neither runs and the picture is the same, byte for byte.
 
 **4× MSAA with no temporal pass** is the fallback for the lowest tier, where a phone's
 tile memory resolves MSAA almost for free.
