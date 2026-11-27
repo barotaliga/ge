@@ -85,6 +85,7 @@
 #include "net/voice_codec.hpp"
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
+#include "platform/menu_keys.hpp"
 #include "platform/pacing.hpp"
 #include "platform/reveal.hpp"
 #include "platform/window.hpp"
@@ -1188,15 +1189,8 @@ int run_main(int argc, char** argv) {
       using ge::platform::Key;
       ge::ui::MenuInput mi;
       if (!con_keys.held && was_open) {
-        mi.up = input.tapped(Key::up) || input.tapped(Key::w);
-        mi.down = input.tapped(Key::down) || input.tapped(Key::s);
-        mi.left = input.tapped(Key::left) || input.tapped(Key::a);
-        mi.right = input.tapped(Key::right) || input.tapped(Key::d);
-        mi.accept = input.tapped(Key::enter) || input.tapped(Key::space);
-        mi.back = input.tapped(Key::escape);
-        mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
-        mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
-        mi.letter = input.tapped_letter("efmnopy");  // filters, the quit box's Y/N, shots' O (show)
+        // the browser's filters, the quit box's Y and N, the screenshots page's O (show in Finder)
+        ge::platform::menu_keys(input, "efmnopy", mi);
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;
