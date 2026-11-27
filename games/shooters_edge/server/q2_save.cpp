@@ -32,7 +32,7 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 14;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
+constexpr uint16_t kChunkVersion = 15;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
                                         // dropped silencer's shots; 5: a corpse's box; 6: a
                                         // monster's liquid; 7: the trail, a monster's hunt and
                                         // calls; 8: a soldier's run-and-shoot and head shot; 9:
@@ -42,7 +42,11 @@ constexpr uint16_t kChunkVersion = 14;  // 2: a monster's duck; 3: a coop weapon
                                         // (a pack's rows), dual fire, the trap's think; 13:
                                         // Ground Zero's mines, tesla and disruptor stages,
                                         // double damage, the IR goggles, the chainfist's swing; 14:
-                                        // Ground Zero's disguise, a monster's anger target
+                                        // Ground Zero's disguise, a monster's anger target;
+                                        // 15: the rest of a monster's mind (the packs' kinds,
+                                        // Ground Zero's AI and bosses, hint paths, its pose's
+                                        // footstep and shown frame), a player's time budget,
+                                        // noise and shots' marks monsters read, his hand's throw
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -118,6 +122,49 @@ void entity(Io& io, Q2Entity& e) {
     io(*b);
   io.since(3, e.coop_taken, false);
   io.since(5, e.corpse, false);
+}
+
+// A boss's own (Ground Zero's, q2_gz_bosses.cpp).
+template <class Io>
+void boss_mind(Io& io, Q2Boss& b) {
+  for (int* n : {&b.move, &b.frame}) io(*n);
+  for (double* d : {&b.timer, &b.rail_at, &b.rockets_at, &b.blaster_end, &b.tongue_at, &b.coop_at})
+    io(*d);
+  for (bool* f : {&b.blind, &b.bias, &b.angered, &b.manual}) io(*f);
+  v3(io, b.saved);
+  v3(io, b.beam_last);
+  for (int* n : {&b.step, &b.brood[0], &b.brood[1], &b.multiplier}) io(*n);
+  for (double* d : {&b.invulnerable_until, &b.quad_until, &b.double_until}) io(*d);
+  for (int* n : {&b.dying, &b.legs}) io(*n);
+  io(b.legs_at);
+}
+
+// The rest of a monster's mind (chunk version 15): what a loaded game left at its defaults
+// before, so a monster of a mission pack, a Ground Zero boss or one weighing its footsteps went
+// its own way after a load.
+template <class Io>
+void more_mind(Io& io, Q2Monster& m) {
+  for (bool* f : {&m.start_solid, &m.spat, &m.swimming, &m.chant, &m.beam_heal, &m.call_back,
+                  &m.blind, &m.revived})
+    io(*f);
+  for (double* d : {&m.screen_flash, &m.shield_flash, &m.beam_until, &m.job_since, &m.job_until,
+                    &m.repair_rest, &m.grow_until, &m.stage_until, &m.dodge_until, &m.next_duck,
+                    &m.blind_delay, &m.jump_at, &m.patient_since, &m.hint_check, &m.hint_wait})
+    io(*d);
+  for (int* n : {&m.shield, &m.beam, &m.job, &m.job_target, &m.still, &m.called, &m.call,
+                 &m.commander, &m.stage, &m.turret_frame, &m.strafe, &m.bad_medic[0],
+                 &m.bad_medic[1], &m.hint_node, &m.hint_goal})
+    io(*n);
+  for (sh::Vec3f* v : {&m.beam_from[0], &m.beam_from[1], &m.beam_to[0], &m.beam_to[1], &m.job_goal,
+                       &m.still_at, &m.mount, &m.blind_at})
+    v3(io, *v);
+  boss_mind(io, m.boss);
+  SqMonsterPose& p = m.pose;
+  io(p.shown);
+  io(p.shown_run.first);
+  io(p.shown_run.last);
+  io(p.cue_fidget);
+  io(p.heard);
 }
 
 template <class Io>
@@ -198,6 +245,7 @@ void monster(Io& io, Q2Monster& m) {
   io.since(8, m.pose.pain_run.last, int16_t{-1});
   io.since(11, m.lost_combat, std::string());
   io.since(14, m.anger, -1);
+  if (io.version() >= 15) more_mind(io, m);
 }
 
 template <class Io>
@@ -325,12 +373,20 @@ void level(Io& io, Q2Server& s) {
           !within(io, m.enemy, -1 - n, sh::kMaxClients - 1, "a monster's enemy") ||
           !within(io, m.old_enemy, -1 - n, sh::kMaxClients - 1, "a monster's enemy") ||
           !within(io, m.corner, -1, n - 1, "a monster's path") ||
-          !within(io, m.combat, -1, n - 1, "a monster's combat point"))
+          !within(io, m.combat, -1, n - 1, "a monster's combat point") ||
+          !within(io, m.beam, -1, n - 1, "a monster's beam") ||
+          !within(io, m.job_target, -1, n - 1, "a repair bot's target") ||
+          !within(io, m.hint_node, -1, n - 1, "a monster's hint node") ||
+          !within(io, m.hint_goal, -1, n - 1, "a monster's hint goal"))
         return;
   }
   if constexpr (Io::kReading)
     for (const Q2Monster& m : s.monsters)
-      if (!within(io, m.patient, -1, int64_t(s.monsters.size()) - 1, "a medic's patient")) return;
+      if (!within(io, m.patient, -1, int64_t(s.monsters.size()) - 1, "a medic's patient") ||
+          !within(io, m.commander, -1, int64_t(s.monsters.size()) - 1, "a monster's commander") ||
+          !within(io, m.boss.brood[0], -1, int64_t(s.monsters.size()) - 1, "a boss's brood") ||
+          !within(io, m.boss.brood[1], -1, int64_t(s.monsters.size()) - 1, "a boss's brood"))
+        return;
   for (Q2Missile& m : s.missiles) missile(io, m);
   for (Q2Drop& d : s.drops) drop(io, d);
   for (Q2Body& b : s.bodies) corpse(io, b);
@@ -369,6 +425,34 @@ void level(Io& io, Q2Server& s) {
       io(s.trail_yaw[i]);
     }
     io(s.trail_head);
+  }
+  if (io.version() >= 15) {  // the frames into this tenth (`sv_fps` past 10)
+    io(s.sub);
+    io(s.tenth);
+    io(s.fast_number);
+  }
+  if (io.version() >= 15) {  // the pieces flying and lying (gibs and debris)
+    for (Q2Gib& g : s.gibs) {
+      for (bool* f : {&g.live, &g.metal, &g.resting, &g.debris}) io(*f);
+      io(g.model);
+      io(g.skin);
+      for (sh::Vec3f* v : {&g.origin, &g.velocity, &g.angles, &g.spin}) v3(io, *v);
+      io(g.dies_at);
+      if (!within(io, g.model, 0, int64_t(s.models.size()) - 1, "a piece's model")) return;
+    }
+    io(s.next_gib);
+    if (!within(io, s.next_gib, 0, kQ2Gibs - 1, "the next piece")) return;
+  }
+  if (io.version() >= 15) {  // Ground Zero's bad areas monsters keep out of
+    sized(io, s.bad_areas);
+    for (Q2BadArea& a : s.bad_areas) {
+      v3(io, a.lo);
+      v3(io, a.hi);
+      v3(io, a.at);
+      io(a.until);
+      io(a.plat);
+      if (!within(io, a.plat, -1, n - 1, "a bad area's plat")) return;
+    }
   }
 }
 
@@ -495,6 +579,17 @@ void player(Io& io, Q2Player& p) {
   io(p.said_next);
   io(p.quiet_until);
   io(p.load_asked_at);
+  if (io.version() >= 15) {  // what monsters read of him, his move's time budget, his hand's throw
+    io(p.time_budget_ms);
+    io(p.hostile_until);
+    v3(io, p.trail_last);
+    io(p.impact_frame);
+    v3(io, p.impact_at);
+    io(h.throw_speed);
+    uint64_t seen = p.taken_seen;
+    io(seen);
+    p.taken_seen = static_cast<size_t>(seen);
+  }
 }
 
 // SQPL: every slot's client and body.
