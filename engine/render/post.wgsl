@@ -317,7 +317,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     base = textureSampleLevel(hdr, lin, clamp(at, vec2f(0.0), vec2f(1.0)), 0.0).rgb;
   }
   var c = base;
-  if (kSharpen) {
+  if (kSharpen && look.a.x > 0.0) {  // compiled, and a strength of 0 is off
     c = sharpened(p, base, e);
   }
   if (kChromatic) {

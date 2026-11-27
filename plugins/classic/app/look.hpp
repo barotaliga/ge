@@ -194,6 +194,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // drawn smaller, then smoothed over time and upscaled to the window (the HUD stays sharp).
   // Either look.
   double render_scale = 1;
+  // r_scale_sharpen: how much the upscaled picture is sharpened by its contrast (the post pass's
+  // CAS), 0..1, while r_scale is under 1; at r_scale 1 nothing is sharpened. Either look.
+  double scale_sharpen = 0.5;
   // scr_centertime: how long a centre message stays on the screen, s.
   double centre_time = 2;
   // gl_polyblend: 0 the view never tinted (below).
@@ -346,6 +349,9 @@ constexpr bool far_land_at(Stop skies) { return skies == Stop::high; }
 double effects_glow(Look look, const Picture& picture = {});
 // The post pass's settings in `look`.
 ge::render::PostSettings post_settings(Look look, const Picture& picture = {});
+// The sharpen's strength this frame: r_scale_sharpen while r_scale is under 1, else 0 (off). A
+// window that upscales compiles the sharpen into its post pass and sets this strength live.
+double upscale_sharpen(const Picture& picture);
 // The maps' light's scale over the default (`light_intensity` x `light_modulate` / 2): 1 at the
 // defaults.
 double light_scale(const Picture& picture);
