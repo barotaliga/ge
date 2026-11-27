@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include "shooters_edge/rules/campaign_decl.hpp"
+#include "shooters_edge/server/q1_monster_mind.hpp"
 
 namespace shooters_edge::server::rules::campaign {
 
@@ -178,12 +179,10 @@ bool dog_decides(A& q) {
     }
   }
   const Vec3 delta = enemy_origin(q) - q.v(me, q.L.f.origin);
-  if (q.fabs(delta.z) > 32) return false;
-  const float d = q.vlen(delta);
-  if ((d < 80) | (d > 150)) return false;
+  if (!q1_mind::leaps(q1_mind::kHoundLeap, q.fabs(delta.z), q.vlen(delta))) return false;
   if (q.time() < q.f(me, f_attack_finished)) return false;
   if (!can_see(q, q.i(me, q.L.f.enemy))) return false;
-  q.set_f(me, f_attack_finished, q.time() + 1);
+  q.set_f(me, f_attack_finished, q.time() + q1_mind::kHoundLeap.refire);
   dog_leap(q);
   return true;
 }
@@ -254,7 +253,7 @@ void knight_melee(A& q) {
 // The swordsman's own decision: the swing once the enemy is within 80 units and seen.
 void knight_check(A& q) {
   bool yes = false;
-  if (enemy_distance(q) <= 80 && can_see(q, q.i(q.self(), q.L.f.enemy))) {
+  if (enemy_distance(q) <= q1_mind::kKnightReach && can_see(q, q.i(q.self(), q.L.f.enemy))) {
     q.set_f(q.self(), f_attack_state, kAsMelee);
     yes = true;
   }

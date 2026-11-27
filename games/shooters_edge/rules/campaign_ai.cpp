@@ -18,6 +18,7 @@
 #include <cstdint>
 
 #include "shooters_edge/rules/campaign_decl.hpp"
+#include "shooters_edge/server/q1_monster_mind.hpp"
 
 namespace shooters_edge::server::rules::campaign {
 
@@ -170,12 +171,9 @@ void set_think(A& q, int32_t e, Fn fn, float at) {
 }  // namespace
 
 // THE SENSES.
+// Quake's ranges (server/q1_monster_mind.hpp) as the campaign's codes, kRangeMelee to kRangeFar.
 float range_to(A& q, int32_t targ) {
-  const float r = q.vlen(eye(q, q.self()) - eye(q, targ));
-  if (r < 120) return kRangeMelee;
-  if (r < 500) return kRangeNear;
-  if (r < 1000) return kRangeMid;
-  return kRangeFar;
+  return static_cast<float>(q1_mind::range_of(q.vlen(eye(q, q.self()) - eye(q, targ))));
 }
 
 // A line from eye to eye that ignores monsters, and does not cross into or out of water.
@@ -254,14 +252,13 @@ bool look_for_target(A& q) {
   if (on(band(q.f(client, q.L.f.flags), kFlNotarget))) return false;
   if (sq_runs(q, me)) {  // Quake II's monster: Quake II's sight (a monster that saw him: no look)
     if (is_player(q, client) && !sq_sees(q, client)) return false;
-  } else if (const float r = range_to(q, client); (r == kRangeFar) || !can_see(q, client)) {
-    return false;
-  } else if (r == kRangeNear) {
-    const bool quiet = q.f(client, f_show_hostile) < q.time();
-    const bool ahead = in_front(q, client);  // asked either way
-    if (quiet & !ahead) return false;
-  } else if (r == kRangeMid) {
-    if (!in_front(q, client)) return false;
+  } else {  // Quake's sight (server/q1_monster_mind.hpp)
+    q1_mind::Sighting look;
+    look.range = static_cast<q1_mind::Range>(range_to(q, client));
+    look.clear = (look.range != q1_mind::Range::far) && can_see(q, client);
+    look.fired = !(q.f(client, f_show_hostile) < q.time());
+    look.ahead = look.clear && (look.range != q1_mind::Range::melee) && in_front(q, client);
+    if (!q1_mind::sees(look)) return false;
   }
   q.set_i(me, q.L.f.enemy, client);
   if (!is_player(q, q.i(me, q.L.f.enemy))) {
@@ -283,25 +280,19 @@ bool check_attack(A& q) {
   q.traceline(eye(q, me), eye(q, enemy), 0, me);
   if ((q.gf(q.L.g.trace_inopen) != 0) & (q.gf(q.L.g.trace_inwater) != 0)) return false;
   if (q.gi(q.L.g.trace_ent) != q.i(me, q.L.f.enemy)) return false;
-  const float r = range_to(q, q.i(me, q.L.f.enemy));
-  if ((r == kRangeMelee) & (q.i(me, f_th_melee) != 0)) {
+  q1_mind::Shot shot;
+  shot.range = static_cast<q1_mind::Range>(range_to(q, q.i(me, q.L.f.enemy)));
+  shot.has_melee = q.i(me, f_th_melee) != 0;
+  shot.has_missile = q.i(me, f_th_missile) != 0;
+  shot.ready = !(q.time() < q.f(me, f_attack_finished));
+  const q1_mind::Act act = q1_mind::check_attack(shot, [&q] { return q.random(); });
+  if (act == q1_mind::Act::melee) {
     q.set_f(me, f_attack_state, kAsMelee);
     return true;
   }
-  if (q.i(me, f_th_missile) == 0) return false;
-  if (q.time() < q.f(me, f_attack_finished)) return false;
-  if (r == kRangeFar) return false;
-  const bool melee = q.i(me, f_th_melee) != 0;
-  float chance = 0;
-  if (r == kRangeMelee)
-    chance = 0.9f;
-  else if (r == kRangeNear)
-    chance = melee ? 0.2f : 0.4f;
-  else
-    chance = melee ? 0.05f : 0.1f;
-  if (q.random() < chance) {
+  if (act == q1_mind::Act::missile) {
     q.set_f(me, f_attack_state, kAsMissile);
-    q.set_f(me, f_attack_finished, q.time() + 2 * q.random());
+    q.set_f(me, f_attack_finished, q.time() + q1_mind::kRefire * q.random());
     return true;
   }
   return false;
@@ -394,15 +385,15 @@ void monster_hurt(A& q) {
     sq_hurt_by_monster(q, a);
   } else if ((a != me) & (a != q.i(me, q.L.f.enemy)) & (q.f(a, q.L.f.takedamage) != 0) &
              (band(q.f(a, q.L.f.flags), static_cast<float>(kFlClient | kFlMonster)) != 0)) {
-    if (!q.same(q.i(a, q.L.f.classname), q.i(me, q.L.f.classname)) |
-        q.is(q.i(me, q.L.f.classname), "monster_army")) {
+    if (q1_mind::turns_on(!q.same(q.i(a, q.L.f.classname), q.i(me, q.L.f.classname)),
+                          q.is(q.i(me, q.L.f.classname), "monster_army"))) {
       if (is_player(q, q.i(me, q.L.f.enemy))) q.set_i(me, f_oldenemy, q.i(me, q.L.f.enemy));
       q.set_i(me, q.L.f.enemy, a);
       found_target(q);
     }
   }
   if (q.time() < q.f(me, f_pain_finished)) return;
-  if (q.cvar(q.s(s_skill)) >= 3) q.set_f(me, f_pain_finished, q.time() + 5);
+  if (q.cvar(q.s(s_skill)) >= 3) q.set_f(me, f_pain_finished, q.time() + q1_mind::kPainEveryHard);
   if (q.i(me, f_th_pain) != 0) run_field(q, me, f_th_pain);
 }
 

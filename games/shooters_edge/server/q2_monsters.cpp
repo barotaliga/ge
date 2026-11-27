@@ -17,6 +17,7 @@
 #include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
+#include "shooters_edge/server/q1_monster_mind.hpp"
 #include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_fight_kit.hpp"
@@ -315,7 +316,13 @@ void fall(Q2Server& s, Q2Monster& m) {
     m.struck = true;
   }
   e.origin = t.end;
-  if (t.fraction < 1 && t.normal.z * sky > 0.7f) {
+  // One of Quake's leaps lodged against a player (its box in his, no step made: Quake's hound leaps
+  // from 80): it drops off him as if landed, rather than hanging there for good. (Quake II's own
+  // leapers keep their landing; the Reckoning's gekk can lodge the same way,
+  // se-reckoning-monsters.)
+  const bool lodged = m.leaping && q1_mind::runs(k) && t.fraction <= 0 && t.entity >= 1 &&
+                      t.entity <= sh::kMaxClients;
+  if ((t.fraction < 1 && t.normal.z * sky > 0.7f) || lodged) {
     m.on_ground = true;
     m.velocity = {};
     if (m.leaping) {  // down again: the thud, and free to attack
@@ -405,10 +412,20 @@ bool in_dark(const Q2Server& s, int slot) {
   return 150.0f * std::max({rgb[0], rgb[1], rgb[2]}) <= 5.0f;
 }
 
-// Whether monster `m` sees `foe` now.
+// Whether monster `m` sees `foe` now. One of Quake's (classic remix's `cr_monsters q1`) by Quake's
+// sight (q1_monster_mind.hpp): eye to eye, in front a cosine above 0.3 over the whole line.
 bool sees(const Q2Server& s, const Q2Monster& m, int foe) {
   const Q2Entity& e = s.entities[size_t(m.entity)];
   const sh::Vec3f at = foe_at(s, foe);
+  if (q1_mind::runs(kind(m))) {
+    q1_mind::Sighting look;
+    look.range = q1_mind::range_of(sh::length(foe_eye(s, foe) - eye(e, kind(m))));
+    look.clear = look.range != q1_mind::Range::far && reaches(s, m, foe, kOpaque);
+    look.fired = foe >= 0 && s.level_time < s.players[foe].hostile_until;
+    sh::Vec3f to = at - e.origin;
+    look.ahead = sh::normalize(to) == 0 || sh::dot(to, forward_of(e.angles.y)) > q1_mind::kInFront;
+    return q1_mind::sees(look);
+  }
   q2_mind::Sighting look;
   look.range = range_to(e.origin, at);
   if (look.range == Range::far) return false;  // (no line traced that far)
@@ -437,7 +454,7 @@ void notice(Q2Server& s, Q2Monster& m) {
   // 2. a player's noise heard (hearable, through open doors; an ambusher must see where), within
   // 1000; 3. his shot's impact, by one with no enemy and no ambush. It goes to where it was.
   const Q2Entity& e = body(s, m);
-  bool heard = false;
+  bool heard = q1_mind::runs(kind(m));  // one of Quake's hears nothing
   for (int pass = 0; pass < 2 && !heard; pass++) {
     if (pass == 1 && (m.ambush || m.enemy != -1)) break;
     for (int i = 0; i < sh::kMaxClients; i++) {
@@ -462,7 +479,8 @@ void notice(Q2Server& s, Q2Monster& m) {
   }
   // 4. the frame's player in turn, seen (not in the dark).
   const int slot = s.sight_client;
-  if (targetable(s, slot) && sees(s, m, slot) && !in_dark(s, slot)) found(s, m, slot, true);
+  if (targetable(s, slot) && sees(s, m, slot) && (q1_mind::runs(kind(m)) || !in_dark(s, slot)))
+    found(s, m, slot, true);  // (Quake's see him in the dark too)
 }
 
 // Whole frames in `seconds` (the timings are whole tenths; the hundredth absorbs float error).
@@ -573,6 +591,71 @@ bool leap_test(Q2Server& s, const Q2Monster& m) {
 
 // The attack chosen this frame, if any (q2-monsters.md § Choosing to attack;
 // q2-monsters-full.md for the kinds with their own test).
+// One of Quake's choosing (q1_monster_mind.hpp), facing him: its own test, else the usual one, by
+// Quake's ranges and chances; a blow, a leap (its ranged slot) or a shot. A blow is begun only
+// where this world's blow lands (within 80, origin to origin): short of that it runs on at him, as
+// Quake's close in while they strike; the death knight's charge is that run.
+void quake_choose(Q2Server& s, Q2Monster& m) {
+  const Q2Entity& e = body(s, m);
+  const Kind& k = kind(m);
+  const sh::Vec3f at = foe_at(s, m.enemy);
+  const float dist = sh::length(at - e.origin);
+  const float rise = std::abs(at.z - e.origin.z);
+  const bool ready = !(s.level_time + 0.001 < m.attack_finished);
+  const q1_mind::Range r = q1_mind::range_of(sh::length(foe_eye(s, m.enemy) - eye(e, k)));
+  const auto roll = [&] { return static_cast<float>(random01(s)); };
+  const auto blow = [&](int i) {
+    if (dist < q2_mind::kMelee) begin_attack(s, m, i);
+  };
+  switch (q1_mind::test_of(k.classname)) {
+    case q1_mind::Test::hound:
+    case q1_mind::Test::fiend: {
+      if (r == q1_mind::Range::melee) {
+        blow(0);
+        return;
+      }
+      const q1_mind::Leap& l = q1_mind::test_of(k.classname) == q1_mind::Test::hound
+                                   ? q1_mind::kHoundLeap
+                                   : q1_mind::kFiendLeap;
+      if (!q1_mind::leaps(l, rise, dist) || !ready) return;
+      m.attack_finished = s.level_time + l.refire;
+      begin_attack(s, m, 2);
+      return;
+    }
+    case q1_mind::Test::knight:
+      if (dist <= q1_mind::kKnightReach) blow(0);
+      return;
+    case q1_mind::Test::death_knight:
+      if (dist <= q1_mind::kKnightReach) {
+        blow(0);
+        return;
+      }
+      if (!ready) return;
+      if (dist <= q1_mind::kChargeReach && rise <= q1_mind::kChargeRise) {  // the charge: at him
+        m.attack_finished = s.level_time + q1_mind::kChargeRefire;
+        return;
+      }
+      break;
+    case q1_mind::Test::spawn:
+      if (r <= q1_mind::Range::near) begin_attack(s, m, 2);
+      return;
+    case q1_mind::Test::usual:
+      break;
+  }
+  q1_mind::Shot shot;
+  shot.range = r;
+  shot.has_melee = k.melee[0].fire != Fire::none;
+  shot.has_missile = k.missile[0].fire != Fire::none;
+  shot.ready = ready;
+  const q1_mind::Act act = q1_mind::check_attack(shot, roll);
+  if (act == q1_mind::Act::melee) {
+    if (dist < q2_mind::kMelee) begin_attack(s, m, q2_mind::pick_blow(k, roll));
+  } else if (act == q1_mind::Act::missile) {
+    m.attack_finished = s.level_time + q1_mind::kRefire * roll();
+    begin_attack(s, m, pick_ranged(s, m, dist));
+  }
+}
+
 void choose(Q2Server& s, Q2Monster& m) {
   if (s.level_time + 0.001 < m.busy_until) return;
   Q2Entity& e = body(s, m);
@@ -591,6 +674,10 @@ void choose(Q2Server& s, Q2Monster& m) {
   const float want = yaw_to(at - e.origin);
   if (!q2_mind::faces(e.angles.y, want)) {
     turn(e, k, want);
+    return;
+  }
+  if (q1_mind::runs(k)) {  // one of Quake's: Quake's choice
+    quake_choose(s, m);
     return;
   }
   const float dist = sh::length(at - e.origin);
@@ -1020,7 +1107,10 @@ void think(Q2Server& s, Q2Monster& m) {
     gz_seen(s, m);  // blind fire's mark
   } else {
     if (gz_hints(s, m)) return;  // Ground Zero's hint paths toward him
-    pursue(s, m);  // out of sight: the last sighting, then his trail; it never gives him up
+    if (q1_mind::runs(k))
+      m.lost = m.on_trail = false;  // one of Quake's makes for him, seen or not
+    else
+      pursue(s, m);  // out of sight: the last sighting, then his trail; it never gives him up
   }
   if (s.level_time + 0.001 < m.pain_hold) return;  // flinching
   if (gz_dodge_step(s, m)) return;                 // Ground Zero's side-step
@@ -1516,6 +1606,13 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
   // Shots between a boss (or a monster a spawner brought) and another start no fight.
   if (ak.ignore_shots || k.ignore_shots || a->commander >= 0 || m.commander >= 0) return;
   if (gz_ignores_shots(s, *a) || gz_ignores_shots(s, m)) return;  // Ground Zero's flag
+  if (q1_mind::runs(k)) {  // one of Quake's: on any of another kind (a rifleman on its own too)
+    if (!q1_mind::turns_on(std::string_view(ak.classname) != k.classname, named(m, "monster_army")))
+      return;
+    if (m.enemy >= 0) m.old_enemy = m.enemy;
+    found(s, m, attacker, false);
+    return;
+  }
   q2_mind::Attacker by;
   by.alike = ak.flies == k.flies && ak.swims == k.swims;
   by.same_kind = std::string_view(ak.classname) == k.classname;
