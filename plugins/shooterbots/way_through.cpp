@@ -329,6 +329,21 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const char* map = sb::block_value(b, "map");
       st.name = map ? map : "";
       if (avoided(st.name)) continue;  // a secret level the run leaves for its own
+      // One the mode never spawns is no exit (hip2m2's deathmatch way out beside the start, the
+      // campaign's down through the floor: he stood at the first for minutes). A trigger keeps no
+      // model once spawned, so it is known by its box.
+      if (!spec.models.empty()) {
+        const sh::Vec3f lo = spec.models[static_cast<size_t>(m)].mins,
+                        hi = spec.models[static_cast<size_t>(m)].maxs;
+        bool live = false;
+        for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts && !live; e++) {
+          const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+          live = !d.free && std::fabs(d.absmin.x - lo.x) < 2 && std::fabs(d.absmin.y - lo.y) < 2 &&
+                 std::fabs(d.absmin.z - lo.z) < 2 && std::fabs(d.absmax.x - hi.x) < 2 &&
+                 std::fabs(d.absmax.y - hi.y) < 2 && std::fabs(d.absmax.z - hi.z) < 2;
+        }
+        if (!live) continue;
+      }
     } else if (w.complete && std::strcmp(cn, "trigger_secret") == 0 && brush) {
       st.kind = WayKind::secret;  // Quake's: walked into, it counts
       st.name = cn;
@@ -765,7 +780,15 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       for (int32_t k = 0; k < n.links; k++) {
         const int32_t li = n.first_link + k;
         const sb::NavLink& l = g.links[static_cast<size_t>(li)];
-        if (hits(n.origin, g.nodes[static_cast<size_t>(l.to)].origin))
+        const sh::Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
+        // A fall (a drop's, a jump's) runs out at its height and then down: the straight line
+        // under its arc missed hip2m2's floor over the pit to the exit, shut till its button far
+        // off drops it (a jump from the start's floor down past its lip to the exit below).
+        const bool falls = (l.kind == sb::NavKind::drop || l.kind == sb::NavKind::jump) &&
+                           to.z < n.origin.z;
+        if (hits(n.origin, to) ||
+            (falls && (hits(n.origin, {to.x, to.y, n.origin.z}) ||
+                       hits({to.x, to.y, n.origin.z}, to))))
           w.crossings.push_back({li, static_cast<int32_t>(a), e});
       }
     }
