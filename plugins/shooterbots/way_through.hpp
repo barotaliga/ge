@@ -74,6 +74,10 @@ constexpr double kWayTour_s = 30;     // (`complete`) the tour worked out again 
 constexpr int kWayTourMax = 96;       // and over the nearest this many stops at most
 constexpr float kWayStill = 96;       // (`complete`) no further than this, units, in
 constexpr double kWayStill_s = 15;    // this long with work to do: what he is on is left
+// (`complete`) A step given up for good is tried once more, with nothing else to do, from a node
+// this far from where it was given up (hangar1's secret wall, left twice from the pool under it
+// while the climb out failed, never tried from the floor beside it once he was out).
+constexpr float kWayGivenFar = 256;
 constexpr double kWayHopeful_s = 20;  // (`complete`) and for this long the doors taken as open
 constexpr int kWayTries = 2;  // (`complete`) a step or a monster left this often is given up
 constexpr double kWayForever = 1e30;  // the time a thing given up for good is left until
@@ -111,6 +115,8 @@ struct WayStep {
                           // blown up 22 s on): pressed last, then straight out by the exit
   bool ever = false;      // (`complete`) done once: a lift's button shut again is not pressed again
   int tries = 0;          // (`complete`) times it was left
+  int32_t given_from = -1;  // (`complete`) the node he stood on when it was given up for good
+  bool forgiven = false;    // (`complete`) and given one more try once, from somewhere else
   bool first = false;     // (`complete`) taken before the tour's stops (a blast weapon)
   bool reach_in = false;  // (`complete`) its node lies by it, not in it: the last stretch is
                           // walked or swum into its box (`way_reach_in`)
@@ -128,6 +134,7 @@ struct WayStats {
   int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
   int64_t given_up = 0;  // (`complete`) steps and monsters given up for good
   int64_t forgiven = 0;  // (`complete`) times the jumps he gave up on were given another try
+  int64_t forgiven_steps = 0;  // (`complete`) steps given up for good tried once more elsewhere
   int64_t retried = 0;   // (`complete`) times nothing was left to do and the left was tried again
   int64_t hopeful = 0;   // (`complete`) times every door was taken as open with nothing to do
   int64_t stood = 0;     // (`complete`) steps and monsters left for standing still on the way

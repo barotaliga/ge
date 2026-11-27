@@ -345,6 +345,7 @@ struct FighterStats {
   int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
   int64_t kept_off = 0;     // commands backing off a monster that bites (BotArsenal::keep_off)
   int64_t ledge_kept = 0;   // a fight's keys given up for the route's at a ledge (`ledge_guard`)
+  int64_t climbs_yielded = 0;  // climbs out of the water given up for the aim a while
   int64_t dodging = 0;      // commands spent stepping across an enemy's line (dodge.hpp)
   int64_t brink = 0;        // commands whose keys the brink changed (shooterbots/brink.hpp)
   int64_t dodge_turns = 0;  // and the times it turned the step back
@@ -499,6 +500,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double ready_at = 0;          // the held weapon ready again (fighter_command: its rhythm)
   double impulse_at = -1;       // when the last impulse went
   double reach_at = -1;         // when `reach` was worked out (-1: never)
+  double climb_since = -1;      // when `climb_out` began its try at the edge (-1: none)
+  double climb_rest_until = -1;  // and the view the aim's again till then (the edge held)
   int32_t reach_from = -1;      // and the node it was worked out from (where it stood)
   double said_at = -1e9;        // its last team message
   double called_at = -1e9;      // its last enemy callout
@@ -758,5 +761,14 @@ constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate t
 bool blast_bursts_near(const Fighter& f, const ge::shooterbots::BotView& s, int me,
                        sh::Vec3f angles, float reach);
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int slot, int msec);
+
+// A climb out of the water he fights in, held at the edge (a hover sat on hangar1's lip over the
+// spot, out of the shot's line while the view is on the edge, lived through ten minutes of climbs),
+// is tried kClimbOutTry_s, then the view is the aim's for kClimbOutRest_s.
+constexpr double kClimbOutTry_s = 3;
+constexpr double kClimbOutRest_s = 1.5;
+// Whether the climb has the view at `t`, on its clock: `since` the try began (-1: none) and
+// `rest_until` the aim's turn ends; a try run out starts the rest and counts in `yielded`.
+bool climb_turn(double& since, double& rest_until, double t, int64_t& yielded);
 
 }  // namespace ge::shooterbots
