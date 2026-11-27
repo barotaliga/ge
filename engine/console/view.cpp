@@ -421,6 +421,7 @@ void ConsoleView::type(std::string_view text) {
     input_.insert(cursor_++, 1, ch);
   }
   selected_ = -1;
+  history_at_ = -1;  // a recalled line edited is the line typed: its list shows again
 }
 
 void ConsoleView::key(EditKey k) {
@@ -445,10 +446,12 @@ void ConsoleView::key(EditKey k) {
     case EditKey::backspace:
       if (cursor_ > 0) input_.erase(--cursor_, 1);
       selected_ = -1;
+      history_at_ = -1;
       break;
     case EditKey::del:
       if (cursor_ < input_.size()) input_.erase(cursor_, 1);
       selected_ = -1;
+      history_at_ = -1;
       break;
     case EditKey::left:
       if (cursor_ > 0) --cursor_;
@@ -463,22 +466,25 @@ void ConsoleView::key(EditKey k) {
       cursor_ = input_.size();
       break;
     case EditKey::tab:
-      if (list_mode >= 0)
+      if (list_mode >= 0 && selected_ < 0)  // a row the arrows chose: Tab takes it in any mode
         tab_list();
       else
         accept();
       break;
     case EditKey::up:
     case EditKey::down: {
-      // Over a list of suggestions the arrows move through it; else they walk the history.
-      const int n = history_at_ < 0 ? static_cast<int>(suggestions().size()) : 0;
-      if (n > 0) {
+      // Over a list of suggestions Down steps into it and down it (stopping at its last row), Up
+      // back up it and, from its first row, out to the typed line to go on typing. With no row
+      // selected, Up walks the history as it does with no list.
+      const int n = static_cast<int>(suggestions().size());
+      if (n > 0 && (k == EditKey::down || selected_ >= 0)) {
         if (k == EditKey::down)
-          selected_ = selected_ + 1 >= n ? -1 : selected_ + 1;
+          selected_ = std::min(selected_ + 1, n - 1);
         else
-          selected_ = selected_ < 0 ? n - 1 : selected_ - 1;
+          --selected_;
         break;
       }
+      selected_ = -1;
       if (history_.empty()) break;
       if (history_at_ < 0) typed_ = input_;
       const int last = static_cast<int>(history_.size()) - 1;
@@ -627,7 +633,7 @@ size_t ConsoleView::suggest_at() const {
 
 std::vector<Suggestion> ConsoleView::suggestions() const {
   std::vector<Suggestion> out;
-  if (suggest_ <= 0) return out;
+  if (suggest_ <= 0 || history_at_ >= 0) return out;  // a recalled line: the arrows walk on
   const Cvar* typed = nullptr;
   std::vector<std::string> choices;
   std::string part;
