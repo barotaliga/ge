@@ -165,10 +165,12 @@ struct WallHit {
 // axis (the face's normal leaning toward the round's glance): CHUNKS (two or three, 2.4 to 3.6
 // times a chip of the surface across, slow, hopping on the floor and lying a few seconds), CHIPS
 // (the surface's count, smaller and faster) and DIRT (fine grains, the fastest, raining down); all
-// in the wall's own colour, a little muted (a fresh break paler than the face) and, where the hit's
+// in the wall's own colour, a little muted (a fresh break paler than the face, half the chips and
+// most of the grains dark: their shadowed side, soot), and, where the hit's
 // baked light is known, shining in it as the wall does (unlit by the particles' lamps and sky,
 // which indoors are a dim blue), all falling, none growing. Every solid face breaks: at least two
-// chunks, six chips and twenty grains, more where the surface's look throws more. Of the engine's
+// chunks, six chips and twenty grains, more where the surface's look throws more; and a hot flick
+// of light where the round bites, a few hundredths of a second, so a far hit shows. Of the engine's
 // burst for the surface (render/impact.hpp) only a nail's sparks off metal and a splash's beads;
 // its dust puff and its grit are not thrown. A liquid splashes and throws no debris; the sky,
 // nothing.

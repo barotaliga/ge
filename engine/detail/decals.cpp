@@ -68,13 +68,13 @@ MaskSample scorch(uint32_t var, double x, double y, double r, double a) {
 
 MaskSample bullet(uint32_t var, double x, double y, double r, double a) {
   const double seed = 211 + var * 11;
-  const double hole = 0.07 + 0.015 * round_noise(a, 1, seed);
+  const double hole = 0.09 + 0.02 * round_noise(a, 1, seed);
   if (r < hole) return {1, -1};
-  // The crater: dark falling to a pale rim, ragged.
-  const double rim = 0.17 + 0.05 * round_noise(a, 0.8, seed + 1);
+  // The crater: its walls in shadow, dark falling to a broken rim.
+  const double rim = 0.2 + 0.05 * round_noise(a, 0.8, seed + 1);
   if (r < rim) {
     const double k = (r - hole) / (rim - hole);
-    return {1, -0.7 + 1.1 * k};
+    return {1, -0.85 + 0.9 * k};
   }
   // Cracks: a few rays, each a thin wedge of angle that thins out with distance.
   core::Rng rng = core::make_rng(var * 2654435761u + 7);
@@ -82,16 +82,17 @@ MaskSample bullet(uint32_t var, double x, double y, double r, double a) {
   double crack = 0;
   for (int i = 0; i < cracks; ++i) {
     const double ca = core::range(rng, 0, core::kTau);
-    const double len = core::range(rng, 0.28, 0.46);
+    const double len = core::range(rng, 0.3, 0.48);
     const double d = std::fabs(
         core::angle_diff(a, ca + 0.25 * (r - rim) * (fbm(r * 10, ca, 1, seed + i) - 0.5) * 4));
-    const double width = 0.06 * (1 - (r - rim) / (len - rim));
+    const double width = 0.07 * (1 - (r - rim) / (len - rim));
     if (r < len && width > 0 && d < width) crack = std::max(crack, 1 - d / width);
   }
-  // The dust the round threw: a faint pale halo.
-  const double halo = 0.35 * ramp(0.42, 0.2, r) * fbm(x * 12, y * 12, 1, seed + 5);
-  const double cover = std::max(crack * 0.85, halo);
-  return {cover, crack > halo ? -0.5 : 0.35};
+  // The soot and grime the round drove into the face round the hole: a dark smudge, densest at
+  // the rim and frayed at its edge, so the hole reads from across a room and not only up close.
+  const double soot = 0.7 * ramp(0.44, rim, r) * (0.65 + 0.35 * fbm(x * 9, y * 9, 1, seed + 5));
+  const double cover = std::max(crack * 0.9, soot);
+  return {cover, crack > soot ? -0.6 : -0.3};
 }
 
 MaskSample blood(uint32_t var, double x, double y, double r, double a) {
@@ -302,7 +303,7 @@ DecalLook look_at(DecalKind kind, double age_s, double ember_s, double life_s, d
       return {0.035, 0.03, 0.025, 0.92, 0, 2.6 * k, 0.9 * k * hot, 0.2 * k * hot * hot};
     }
     case DecalKind::bullet_hole:
-      return {0.09, 0.085, 0.08, 1, 0};
+      return {0.03, 0.028, 0.026, 1, 0};  // soot-black: it must read against any wall
     case DecalKind::burn_line:
     case DecalKind::melt: {
       // White-hot where the beam has just been, through orange and red to black soot over

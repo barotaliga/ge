@@ -152,8 +152,13 @@ TEST(a_hit_tears_debris_in_the_walls_colour_with_no_smoke_and_nothing_off_the_sk
   fx::hit(pool, 5, &water);
   CHECK(!stone.empty() && !metal.empty() && sky.empty() && !sand.empty());
   float big = 0, small = 1;
-  int fine = 0, browned = 0, hop = 0;
+  int fine = 0, browned = 0, hop = 0, flicks = 0;
   for (const auto& p : stone) {
+    if (p.glow > 0) {  // the strike's hot flick where the round bit: brief, small, no light
+      ++flicks;
+      CHECK(p.life < 0.11f && p.size <= 0.1f && p.kelvin < 0);
+      continue;
+    }
     CHECK(p.v[2] <= 1e-6f);     // off the face, back toward the shooter
     CHECK(p.grow == 0);         // nothing spreads: no smoke, no dust cloud
     CHECK(p.fall == 1);         // everything falls on its arc
@@ -167,9 +172,11 @@ TEST(a_hit_tears_debris_in_the_walls_colour_with_no_smoke_and_nothing_off_the_sk
     browned += p.tint[0] > p.tint[2] ? 1 : 0;               // the wall's own colour
     CHECK(p.tint[2] < p.tint[1] && p.tint[1] < p.tint[0]);  // brown, as the wall is
   }
+  CHECK(flicks == 1);
   CHECK(big >= 0.04f && small < 0.011f);  // big chunks and fine dirt
   CHECK(fine >= 8 && hop >= 4 && browned >= 4);
-  for (const auto& p : sand) CHECK(p.size < 0.011f && p.grow == 0);  // sand sprays grains alone
+  for (const auto& p : sand)  // sand sprays grains alone (and the strike's flick)
+    CHECK(p.glow > 0 || (p.size < 0.011f && p.grow == 0));
   for (const auto& p : water) CHECK(p.grow == 0 && p.size < 0.03f);  // a splash's beads
   int sparks = 0, metal_pieces = 0;
   for (const auto& p : metal) {
@@ -186,6 +193,7 @@ TEST(a_hit_tears_debris_in_the_walls_colour_with_no_smoke_and_nothing_off_the_sk
   fx::hit(dim, 5, &in_dim);
   CHECK(in_bright.size() == in_dim.size() && in_bright.size() == stone.size());
   for (size_t i = 0; i < in_bright.size(); ++i) {
+    if (in_bright[i].glow > 0) continue;  // the flick is its own light
     CHECK(in_bright[i].kelvin == -1 && in_dim[i].kelvin == -1);
     CHECK(std::abs(in_bright[i].tint[1] - 4 * in_dim[i].tint[1]) < 1e-5f);
   }
