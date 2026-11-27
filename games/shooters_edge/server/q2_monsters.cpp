@@ -456,7 +456,7 @@ void notice(Q2Server& s, Q2Monster& m) {
   const Q2Entity& e = body(s, m);
   bool heard = q1_mind::runs(kind(m));  // one of Quake's hears nothing
   for (int pass = 0; pass < 2 && !heard; pass++) {
-    if (pass == 1 && (m.ambush || m.enemy != -1)) break;
+    if (pass == 1 && !q2_mind::hears_impact(m.ambush, m.enemy != -1)) break;
     for (int i = 0; i < sh::kMaxClients; i++) {
       if (!targetable(s, i)) continue;
       const Q2Player& p = s.players[i];
@@ -639,6 +639,17 @@ void quake_choose(Q2Server& s, Q2Monster& m) {
     case q1_mind::Test::spawn:
       if (r <= q1_mind::Range::near) begin_attack(s, m, 2);
       return;
+    case q1_mind::Test::scrag: {  // straight or sliding, and its own chances
+      if (!ready) return;
+      const q1_mind::ScragTurn t = q1_mind::scrag_check(r, true, roll);
+      if (t.mode != q1_mind::Mode::keep) m.slide = t.mode == q1_mind::Mode::slide;
+      if (!t.attack) return;
+      const bool sliding = m.slide;
+      begin_attack(s, m, pick_ranged(s, m, dist));
+      m.slide = sliding;  // its mode is set again when the spit ends
+      m.spat = true;
+      return;
+    }
     case q1_mind::Test::usual:
       break;
   }
@@ -660,6 +671,15 @@ void choose(Q2Server& s, Q2Monster& m) {
   if (s.level_time + 0.001 < m.busy_until) return;
   Q2Entity& e = body(s, m);
   const Kind& k = kind(m);
+  if (m.spat &&
+      m.enemy !=
+          -1) {  // a Quake scrag's spit just ended: its flat wait, and slide if he is near and seen
+    m.spat = false;
+    const q1_mind::Range r = q1_mind::range_of(sh::length(foe_eye(s, m.enemy) - eye(e, k)));
+    const bool seen = reaches(s, m, m.enemy, kShotMask);
+    m.slide = q1_mind::scrag_after_spit(r, seen) == q1_mind::Mode::slide;
+    m.attack_finished = s.level_time + (skill(s) >= 3 ? 0.0 : double(q1_mind::kScragWait));
+  }
   const bool boss = k.test == Test::hover || k.test == Test::rider;
   if (!reaches(s, m, m.enemy, boss ? kShotMask & ~sh::kSqWindow : kShotMask)) {
     if (gz_blind_fire(s, m)) {  // Ground Zero's: at where he was last seen
@@ -1154,7 +1174,8 @@ void think(Q2Server& s, Q2Monster& m) {
     const float to = yaw_to(m.last_sight - e.origin);
     turn(e, k, to);
     m.ideal_yaw = to;
-    const float step_len = gz_slide_step(s, m, k.run * kStep);
+    const float step_len =
+        q1_mind::runs(k) ? q1_mind::kScragSlide : gz_slide_step(s, m, k.run * kStep);
     for (int tries = 0; tries < 2; tries++) {
       const sh::Vec3f side = forward_of(to + (m.slide_left ? 90.0f : -90.0f)) * step_len;
       if (step(s, m, side)) return;
@@ -1631,7 +1652,7 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
 // A Quake kind's pain: none while its last one's wait lasts; at the hardest skill each puts the
 // next 5 s off; a strong shambler may shrug the blow; else its wait, its cry and its flinch.
 // `m.pain_at` keeps the time its wait ends less Quake II's `kPainEvery`, which the rest reads.
-void quake_pain(Q2Server& s, Q2Monster& m, int e, float health, bool waiting) {
+void quake_pain(Q2Server& s, Q2Monster& m, int e, float health, float damage, bool waiting) {
   if (waiting) return;
   const roster::Kind& k = kind(m);
   const double now = s.level_time;
@@ -1643,7 +1664,7 @@ void quake_pain(Q2Server& s, Q2Monster& m, int e, float health, bool waiting) {
   until = std::max(until, now + double(p.wait));
   m.pain_at = until - kPainEvery;
   if (k.pain != nullptr) sound(s, e, k.pain);
-  if (p.frames > 0) {  // the flinch cuts what it was doing
+  if (p.frames > 0 && q1_mind::flinches(k.classname, damage, draw(s))) {  // it cuts what it did
     m.pose.cue_pain = true;
     m.pain_hold = now + 0.1 * double(p.frames);
     m.run_shoot = -1;
@@ -1718,7 +1739,7 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   if (gz_base_pain(s, m)) return true;     // and its base kinds' (none in the air)
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
   if (q1_mind::runs(k)) {  // Quake's kinds: Quake's pains (q1_monster_mind.hpp)
-    quake_pain(s, m, e, static_cast<float>(ent.health), waiting);
+    quake_pain(s, m, e, static_cast<float>(ent.health), float(damage), waiting);
     return true;
   }
   if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;

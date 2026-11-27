@@ -8,6 +8,7 @@
 #include "console/view.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -469,7 +470,7 @@ void ConsoleView::key(EditKey k) {
       if (list_mode >= 0 && selected_ < 0)  // a row the arrows chose: Tab takes it in any mode
         tab_list();
       else
-        accept();
+        tab();
       break;
     case EditKey::up:
     case EditKey::down: {
@@ -632,8 +633,15 @@ size_t ConsoleView::suggest_at() const {
 }
 
 std::vector<Suggestion> ConsoleView::suggestions() const {
+  std::vector<Suggestion> out = matches();
+  if (suggest_ <= 0) out.clear();
+  if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
+  return out;
+}
+
+std::vector<Suggestion> ConsoleView::matches() const {
   std::vector<Suggestion> out;
-  if (suggest_ <= 0 || history_at_ >= 0) return out;  // a recalled line: the arrows walk on
+  if (history_at_ >= 0) return out;  // a recalled line: the arrows walk on
   const Cvar* typed = nullptr;
   std::vector<std::string> choices;
   std::string part;
@@ -650,7 +658,6 @@ std::vector<Suggestion> ConsoleView::suggestions() const {
       }
       out.push_back(std::move(s));
     }
-    if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
     return out;
   }
   const std::string h = head();
@@ -707,16 +714,53 @@ std::vector<Suggestion> ConsoleView::suggestions() const {
     if (a.name.size() != b.name.size()) return a.name.size() < b.name.size();
     return a.name < b.name;
   });
-  if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
   return out;
+}
+
+std::string ConsoleView::shared() const {
+  const std::vector<Suggestion> all = matches();
+  if (all.empty()) return "";
+  std::string common = all[0].name;
+  for (const Suggestion& m : all) {
+    size_t n = 0;
+    while (n < common.size() && n < m.name.size() &&
+           std::tolower(static_cast<unsigned char>(common[n])) ==
+               std::tolower(static_cast<unsigned char>(m.name[n])))
+      ++n;
+    common.resize(n);
+  }
+  return common;
 }
 
 std::string ConsoleView::hint() const {
   const std::vector<Suggestion> s = suggestions();
   if (s.empty()) return "";
-  const std::string& name = s[static_cast<size_t>(std::max(selected_, 0))].name;
   const size_t typed = input_.size() - std::min(input_.size(), suggest_at());
+  // What Tab adds: the selected row's rest, else the rest every match shares.
+  const std::string name =
+      selected_ >= 0
+          ? s[static_cast<size_t>(std::min<int>(selected_, static_cast<int>(s.size()) - 1))].name
+          : shared();
   return name.size() > typed ? name.substr(typed) : "";
+}
+
+void ConsoleView::tab() {
+  const std::vector<Suggestion> all = matches();
+  if (all.empty()) return;
+  if (selected_ >= 0 || all.size() == 1) {  // a row chosen, or the one match: taken
+    accept();
+    return;
+  }
+  // Several: the word completed to what every match shares, the list kept open; with nothing
+  // more to add, Tab steps into the list (Tab again takes the row, Down walks on).
+  const std::string common = shared();
+  const size_t at = std::min(input_.size(), suggest_at());
+  if (common.size() > input_.size() - at) {
+    input_ = input_.substr(0, at) + common;
+    cursor_ = input_.size();
+  } else {
+    selected_ = 0;
+  }
 }
 
 bool ConsoleView::accept() {

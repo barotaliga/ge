@@ -5,17 +5,17 @@
 // a hound on a path walks it corner to corner. The kinds that fight up close and in the air: a
 // swordsman and a brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down
 // by a big one and gets up again whole, and only its whole health in one blow ends it; a flyer
-// keeps its height and spits at the player. The big and late kinds: each counts at spawn and hurts
-// a player in front of it, the giant takes half of a blast, and a spawn bursts when it dies. The
-// bosses: the lava boss rises when used, throws, and falls to three strikes; arriving inside the
-// final boss kills it and ends the game; a teleport train rides its path. A rifleman shows its
-// model's frames for standing, shooting and falling.
+// keeps its height and spits at the player. Quake II's guard hears where a shot lands. The big and
+// late kinds: each counts at spawn and hurts a player in front of it, the giant takes half of a
+// blast, and a spawn bursts when it dies. The bosses: the lava boss rises when used, throws, and
+// falls to three strikes; arriving inside the final boss kills it and ends the game; a teleport
+// train rides its path. A rifleman shows its model's frames for standing, shooting and falling.
 //
 // ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
 // ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
 // ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
-// ge:keywords teleport-train event-lightning animation-frames death-frames
+// ge:keywords teleport-train event-lightning animation-frames death-frames impact-heard
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <string>
@@ -74,6 +74,38 @@ TEST(a_rifleman_facing_away_notices_only_a_noisy_player) {
     CHECK_MSG(g.frame(0, 1), g.error);
   CHECK(g.entity_of(army, g.f().enemy) == 1);
   CHECK(g.s().q.faults == 0);
+}
+
+// Quake II's guard (classic remix) facing away from where the player's shot lands near it, in a
+// clear line from there: it hears the impact and goes to it; lying in ambush it does not.
+TEST(a_q2_guard_hears_where_a_shot_lands_unless_in_ambush) {
+  for (const bool ambush : {false, true}) {
+    Game g(std::string(R"({
+"classname" "monster_soldier_light"
+"origin" "-100 0 24"
+"angle" "0"
+)") + (ambush ? "\"spawnflags\" \"1\"\n" : "") +
+           "}\n");
+    const int guard = g.find("monster_soldier_light");
+    CHECK(guard > 0);
+    for (int i = 0; i < kFrames; i++) CHECK_MSG(g.frame(), g.error);
+    CHECK(g.named(guard, "sq_sound") == 0);
+    const pg::Def* when = pg::find_field(mod(), "sq_impact");
+    const pg::Def* at = pg::find_field(mod(), "sq_impact_at");
+    CHECK(when != nullptr && at != nullptr);
+    if (when == nullptr || at == nullptr) return;
+    // His shot lands 120 behind it, no shot heard (none fired).
+    g.set(1, at->offset, -220);
+    g.set(1, at->offset + 1, 0);
+    g.set(1, at->offset + 2, 40);
+    for (int i = 0; i < 4 && g.named(guard, "sq_sound") == 0; i++) {
+      g.set(1, when->offset, g.global("time"));
+      CHECK_MSG(g.frame(), g.error);
+    }
+    CHECK_MSG((g.named(guard, "sq_sound") > 0) == !ambush, std::to_string(ambush));
+    if (!ambush) CHECK(g.named(guard, "sq_sound_at_x") == -220);
+    CHECK(g.s().q.faults == 0);
+  }
 }
 
 TEST(a_death_counts_and_fires_the_monsters_targets) {
