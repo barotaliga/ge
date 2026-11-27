@@ -417,11 +417,32 @@ struct SqStep {
 SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool infinite = false,
                     int swap = 1, uint32_t idle_draw = ge::classic::kQ2PauseRests);
 
-// The idle run's pause frames of weapon `w`: the base game's own, none for a pack's.
+// The packs' weapons' idle pause frames, in SqWeapon order from the ion ripper (porting notes
+// q2-reckoning-rules.md, gz-weapons.md). The ion ripper's 36 is its last idle frame, so it never
+// holds; the trap rests on 48 before its wrap, as the hand grenade it steps like.
+inline constexpr ge::classic::Q2ArmPauses kSqPackPauses[] = {
+    {{36, 0, 0, 0}},           // ion ripper
+    {{29, 42, 55, 0}},         // phalanx
+    {{29, 34, 39, 48}, true},  // trap
+    {{0, 0, 0, 0}},            // chainfist
+    {{18, 28, 0, 0}},          // ETF rifle
+    {{34, 51, 59, 0}},         // prox launcher
+    {{35, 0, 0, 0}},           // plasma beam
+    {{14, 19, 23, 0}},         // disruptor
+    {{21, 0, 0, 0}},           // tesla
+};
+inline constexpr int kSqPackPauseCount =
+    static_cast<int>(sizeof(kSqPackPauses) / sizeof(kSqPackPauses[0]));
+
+// The idle run's pause frames of weapon `w`: the base game's own and the packs' (none for Quake's).
 constexpr const ge::classic::Q2ArmPauses& sq_pauses(int w) {
-  return w >= 0 && w < ge::classic::kQ2ArmCount ? ge::classic::kQ2ArmPauses[w]
-                                                : ge::classic::kQ2NoPauses;
+  if (w >= 0 && w < ge::classic::kQ2ArmCount) return ge::classic::kQ2ArmPauses[w];
+  const int pack = w - ge::classic::kQ2ArmCount;
+  return pack >= 0 && pack < kSqPackPauseCount ? kSqPackPauses[pack] : ge::classic::kQ2NoPauses;
 }
+static_assert(int(SqWeapon::ion_ripper) == ge::classic::kQ2ArmCount &&
+                  int(SqWeapon::tesla) == ge::classic::kQ2ArmCount + kSqPackPauseCount - 1,
+              "kSqPackPauses follows SqWeapon's pack rows");
 
 // A match server's faster weapon switch (`g_fast_weap_switch`), before the hand's step: `mode` 1
 // skips the lowering (the swap is this step's), 2 also the raising (ready the step after the swap);

@@ -189,3 +189,37 @@ TEST(the_hand_grenade_is_lit_at_eleven_and_thrown_faster_the_longer_it_is_held) 
   CHECK(fired == 1 && speed == 0 && b.ammo[int(sv::SqAmmo::grenades)] == 0);
   CHECK(!sv::sq_holds(b, int(sv::SqWeapon::hand_grenade)));
 }
+
+// The packs' weapons rest on their own idle pause frames as the base game's do: a ready hand
+// reaches its first pause and holds there while the draw says rest; the ion ripper's only pause
+// is its last idle frame and the chainfist has none, so both loop on.
+TEST(the_packs_weapons_rest_on_their_idle_pause_frames) {
+  struct Want {
+    sv::SqWeapon w;
+    int first_pause;  // 0: none that holds
+  };
+  for (const Want& want : {Want{sv::SqWeapon::ion_ripper, 0}, Want{sv::SqWeapon::phalanx, 29},
+                           Want{sv::SqWeapon::trap, 29}, Want{sv::SqWeapon::chainfist, 0},
+                           Want{sv::SqWeapon::etf_rifle, 18}, Want{sv::SqWeapon::prox_launcher, 34},
+                           Want{sv::SqWeapon::plasma_beam, 35}, Want{sv::SqWeapon::disruptor, 14},
+                           Want{sv::SqWeapon::tesla, 21}}) {
+    const sv::SqWeaponRow& row = sv::kSqWeapons[int(want.w)];
+    sv::SqBody b = sv::sq_new_body();
+    b.counts[sv::sq_item(row.item, row.pack)] = 1;
+    if (row.ammo != sv::SqAmmo::none) b.ammo[int(row.ammo)] = 50;
+    sv::SqHand h = ready(want.w, b);
+    int held_on = -1, longest = 0, run = 0, last = h.frame;
+    for (int i = 0; i < 200; i++) {
+      sv::sq_hand_step(h, b, false, 1 + i * 0.1, false, 1, ge::classic::kQ2PauseRests);
+      run = h.frame == last ? run + 1 : 0;
+      if (run > longest) longest = run, held_on = h.frame;
+      last = h.frame;
+    }
+    const std::string name = row.name;
+    if (want.first_pause == 0)
+      CHECK_MSG(longest == 0, name + " held on " + std::to_string(held_on));
+    else
+      CHECK_MSG(held_on == want.first_pause && longest > 100,
+                name + " held on " + std::to_string(held_on) + " for " + std::to_string(longest));
+  }
+}
