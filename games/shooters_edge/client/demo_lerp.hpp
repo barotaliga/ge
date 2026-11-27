@@ -60,6 +60,8 @@ struct DemoPose {
   bool intermission = false;
   uint32_t set_angles = 0;
   sh::Vec3f eye, angles;
+  sh::Vec3f velocity;  // the player's, when `velocity_read` (drawn between, as the eye is)
+  bool velocity_read = false;
   float fov = 0;              // Quake II's field of view sent (drawn between, as a zoom eases in)
   bool teleport_bit = false;  // Quake II's view toggle (DemoState::teleport_bit)
   std::vector<DemoEntity> entities, players;
