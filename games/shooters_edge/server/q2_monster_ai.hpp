@@ -50,6 +50,10 @@ int kind_of(const Q2Server& s, std::string_view classname);
 bool deathmatch(const Q2Server& s);
 int skill(const Q2Server& s);
 double random01(Q2Server& s);
+// The world's draw as the shared mind takes it (q2_monster_mind.hpp).
+inline auto draw(Q2Server& s) {
+  return [&s] { return random01(s); };
+}
 float crandom(Q2Server& s);
 sh::Vec3f unpack(const int32_t v[3]);
 void event(Q2Server& s, NetEvent ev);
