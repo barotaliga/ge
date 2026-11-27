@@ -239,6 +239,11 @@ struct ListenOptions {
   // level's exit, the start map's skill gates) reads the next map through it, so its monsters are
   // `cr_monsters`'s as a map the console asked for is (outlives the listen).
   const RemixFiles* remix = nullptr;
+  // The game's campaign programs (GameContent's `campaign` and `own_campaign`), or null: which one
+  // a campaign's map runs is classic remix's `remix_campaign` (`campaign_program`), taken at NEW
+  // GAME and at each change of map (they outlive the listen).
+  const ge::progs::Progs* pack_campaign = nullptr;
+  const ge::progs::Progs* own_campaign = nullptr;
   // Called before a campaign's own change of map reads the next one: the window takes the cr_
   // settings changed during the map here (remix.hpp's `remix_waits`), as it does before a map
   // the console asked for. Null: nothing to take.
@@ -479,6 +484,11 @@ bool listen_is_q2(const Listen& l);
 // the classic rules, rules/common_q2_arms.cpp): their hits, blasts and trails are drawn as Quake
 // II's.
 bool listen_q2_arms(const Listen& l);
+
+// The program a campaign's next map runs: the engine's own campaign rules while classic remix
+// wears what the packs' program cannot run (remix.hpp's `remix_campaign`), else the packs'; null
+// when the options name no campaign programs (the one running stays).
+const ge::progs::Progs* campaign_program(const ListenOptions& o);
 // The rules draw their own screens (a scoreboard, an inventory): the window draws none of its own.
 bool listen_own_screens(const Listen& l);
 // A console line the window does not know, given to the rules of a game whose client passes its

@@ -19,8 +19,12 @@
 
 #include "check.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
+#include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
@@ -28,6 +32,7 @@ namespace {
 
 namespace cl = shooters_edge::client;
 namespace sv = shooters_edge::server;
+namespace pf = shooters_edge::profiles;
 using Bytes = std::vector<uint8_t>;
 
 std::unique_ptr<cl::LoadedMap> stub_map(const std::string& name) {
@@ -302,4 +307,101 @@ TEST(the_server_lines_say_which_game_a_map_starts) {
   CHECK(cl::wants_campaign(o));
   o.console.emplace_back("deathmatch 2");
   CHECK(!cl::wants_campaign(o));
+}
+
+// Classic remix's `cr_items q2` (Quake II's weapons in the campaign's slots) steps Quake II's hand,
+// and the intermission still takes the weapon out of view, as it does for Quake's own.
+TEST(the_intermission_hides_q2_s_weapon_held_in_the_campaign) {
+  ge::progs::Progs stub;
+  std::string error;
+  CHECK_MSG(sv::build_campaign_stub(stub, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0"};
+  opt.arsenal = pf::arsenal_lines(pf::remix_arsenal("q1", "q2")->arsenal);
+  CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
+  CHECK(cl::listen_q2_arms(l));
+  cl::ViewState shown;
+  cl::HeldState held;
+  const auto step = [&] {
+    cl::frame_view(l, shown, 1, l.server->sv.time, 0.013);
+    return cl::step_held(l, shown, held, {}, {}, l.server->sv.time, 0.013);
+  };
+  cl::listen_frame(l, {});
+  CHECK(step().drawn);
+  l.server->out.all = {30};  // the intermission
+  cl::listen_frame(l, {});
+  CHECK(l.campaign.end == cl::LevelEnd::intermission);
+  CHECK(!step().drawn);
+}
+
+// The rows the window has when the campaign changes map (`cr_items` changed during the last one)
+// are the next map's server's, over the settings it carried.
+TEST(a_campaign_s_next_map_runs_the_rows_the_window_has_then) {
+  ge::progs::Progs stub;
+  std::string error;
+  CHECK_MSG(sv::build_campaign_stub(stub, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0"};
+  opt.arsenal = pf::arsenal_lines(pf::kQ1Arsenal);
+  CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
+  const auto row = [&] {
+    const ge::console::Cvar* v = l.server->cvars.find("arsenal_weapon2");
+    return v != nullptr ? v->value : std::string();
+  };
+  CHECK(row().starts_with("pellets"));
+  l.opt.arsenal = pf::arsenal_lines(pf::remix_arsenal("q1", "q2")->arsenal);
+  l.next = stub_map("second");
+  for (int frames = 0; !l.map_changed && frames < 400; frames++) cl::listen_frame(l, {});
+  CHECK(l.map_changed && l.map->name == "second");
+  CHECK_MSG(row().starts_with("q2_shotgun"), row());
+}
+
+// Classic remix in a base game's campaign: while it wears the other game's weapons or monsters,
+// which the packs' program cannot run (it has no spawn for Quake II's monsters: a map of them
+// stood empty), the next map runs the engine's own campaign rules; with the remix's parts the
+// game's own again, the packs' program comes back. A mod's rules or a mission pack keep theirs.
+TEST(a_remix_campaign_s_next_map_runs_the_rules_that_wear_it) {
+  ge::progs::Progs pack, own;
+  std::string error;
+  CHECK_MSG(sv::build_campaign_stub(pack, error), error);
+  CHECK_MSG(sv::build_campaign_stub(own, error), error);
+  cl::RemixFiles remix;
+  remix.state.on = true;
+  remix.state.other = "q2";
+  remix.played = "q1";
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0"};
+  opt.remix = &remix;
+  opt.pack_campaign = &pack;
+  opt.own_campaign = &own;
+  CHECK(cl::campaign_program(opt) == &pack);
+  CHECK_MSG(cl::listen_start(l, pack, stub_map("first"), opt, error), error);
+  CHECK(l.campaign_host->progs == &pack);
+  const auto next_map = [&](const char* name) {
+    l.next = stub_map(name);
+    for (int frames = 0; !l.map_changed && frames < 400; frames++) cl::listen_frame(l, {});
+    CHECK(l.map_changed && l.map->name == name);
+    l.map_changed = false;
+  };
+  remix.monsters = "q2";  // cr_monsters q2, set during the map
+  next_map("second");
+  CHECK(l.campaign_host->progs == &own && l.progs == &own);
+  CHECK(l.failed.empty());
+  remix.monsters = "";
+  remix.worn = pf::remix_arsenal("q1", "q2");  // cr_items q2: the same
+  CHECK(cl::campaign_program(l.opt) == &own);
+  remix.worn = nullptr;
+  CHECK(cl::campaign_program(l.opt) == &pack);
+  remix.monsters = "q2";
+  remix.mod_rules = true;
+  CHECK(cl::campaign_program(l.opt) == &pack);
+  remix.mod_rules = false;
+  remix.pack = "hipnotic";
+  CHECK(cl::campaign_program(l.opt) == &pack);
+  remix.pack.clear();
+  remix.state.on = false;
+  CHECK(cl::campaign_program(l.opt) == &pack);
 }

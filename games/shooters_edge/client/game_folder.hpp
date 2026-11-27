@@ -98,6 +98,10 @@ struct GameContent {
   std::string native_library;
   ge::progs::Progs pack_progs;  // the packs' single-player program, when `progs` is not one
   const ge::progs::Progs* campaign = nullptr;  // what NEW GAME runs; null: no campaign
+  // The engine's own campaign rules for the game's campaign (Quake's), when it has one: what a
+  // campaign runs in place of `campaign` while classic remix wears what that program cannot run
+  // (remix.hpp's `remix_campaign`); empty (no functions) when there are none.
+  ge::progs::Progs own_campaign;
   // No campaign program, but the game's own rules keep one (profiles::GameProfile's
   // `rules_campaign`): NEW GAME and `coopgame` start the multiplayer program's game with
   // `deathmatch` 0 on the start map.
