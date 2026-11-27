@@ -12,9 +12,12 @@
 // `%APPDATA%\gameengine2\shooters_edge\data\`. Only when that cannot be written is it `data/`
 // beside the game (the folder it was placed in: the one holding the app on a Mac). A game taken in
 // once is not copied again: a second launch pointed at the same unchanged source opens the copy at
-// once (import.hpp § Taken in once). A game the window was started inside, or placed above, is
-// still played where it is (client/install_search.hpp): that install is the game's home, its
-// configs and place names with it.
+// once (import.hpp § Taken in once). An install found beside the game (client/install_search.hpp)
+// is taken in the same way when `games <n>` loads it.
+//
+// THE COPY RUNS ON ITS OWN THREAD (`TakeIn`): the window goes on drawing, the console held down
+// with the copy's bar on its foot ("Copying Quake", the share of the files' bytes; then "Taking
+// Quake's music", the share of its tracks), as a map downloading is shown.
 //
 // A MISSION PACK comes in with its game (beside its base folder) or alone (its disc, its folder):
 // the line says which, how to start it (`-game <folder>`), and when the game itself is still to be
@@ -29,20 +32,25 @@
 // ge:summary The window's games taken in: a folder, volume or disc image copied into data/ first
 // ge:keywords import take-in data-folder copy iso cue disc volume basedir load-game data_root
 // ge:keywords take_in import-command soundtrack take_in_basedir take_in_ask add_take_in_commands
-// ge:keywords level_music cd bgmvolume prefs taken-once adopt_placed_settings homedir home-dir
+// ge:keywords level_music cd bgmvolume prefs taken-once homedir home-dir
 // ge:keywords mission-pack take_in_words pack-music offer_words find_offers offered
 // ge:skill shooter
 // ge:test tests/shooters_edge_take_in_test.cpp
 #pragma once
 
 #include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "audio/music_console.hpp"
 #include "classic/content/import.hpp"
 #include "console/console.hpp"
+#include "console/view.hpp"
+#include "shooters_edge/client/installs.hpp"
 
 namespace shooters_edge::client {
 
@@ -62,19 +70,17 @@ std::string take_home_dir(std::vector<std::string>* plus);
 // `homedir` in the console: the data folder in use (`root`), read only.
 void add_home_dir(ge::console::Console& con, const std::string& root);
 
-// The series' settings (settings.hpp) a build that kept its data beside the game wrote there,
-// copied into `root` when `root` has none yet; true when one was copied.
-bool adopt_placed_settings(const std::string& placed, const std::string& root);
-
 // Whether `path` lies inside `root` (both as they resolve on disk).
 bool inside(const std::string& path, const std::string& root);
 
 // `from` taken in: true with the folder to open in `*basedir` (`from` itself when it is already in
 // `root`, else the game's copy under it) and what was done in `*summary` (a line for the console);
-// false with what failed in the game's words in `*error`. `progress` gets a line before each file.
+// false with what failed in the game's words in `*error`. `progress` gets a line before each file,
+// `share` what is being done and its share done for a bar (import.hpp's `ImportOptions::share`).
 bool take_in(const std::string& from, const std::string& root, std::string* basedir,
              std::string* summary, std::string* error,
-             const std::function<void(const std::string&)>& progress = {});
+             const std::function<void(const std::string&)>& progress = {},
+             const std::function<void(const std::string&, double)>& share = {});
 
 // The console line saying what `take_in` did (`r`, from the source `from`): the game, the game
 // with its mission packs, or the packs alone; how a pack is started (`-game <folder>`); and, for
@@ -89,10 +95,13 @@ std::string offer_words(const ge::classic::content::Offer& o);
 // `con` (none when `data_root` is empty).
 void offer_packs(ge::console::Console& con, const std::string& data_root);
 
-// The played game's `fs_basedir_<id>` taken in before the window chooses its install: `*basedir`
-// becomes the copy (left as it is when empty or already in `root`); false, said on the error
-// stream, when it cannot be.
-bool take_in_basedir(std::string* basedir, const std::string& root);
+// The played game's `fs_basedir_<id>` (`base`'s, none for Shooter's Edge's own) before the window
+// chooses its install: left as it is when empty or already in `root`, else the copy when it was
+// taken in before and has not changed since. Any other folder, with `later` (a window a player sits
+// at), is returned, still to be taken in (`TakeIn`, with its bar, once the window is up); without,
+// it is taken in now, a line a file on the output, left as it is when it cannot be. "" when nothing
+// is left to take in.
+std::string take_in_basedir(BaseGame* base, const std::string& root, bool later);
 
 // The console's `import <folder or disc image>`: sets `*ask`, which the window takes in and opens.
 // With `music`, its tracks read from the game playing's folder (`*basedir`); with `remap` true
@@ -108,8 +117,38 @@ void level_music(ge::audio::MusicConsole& music, std::string_view entities);
 void demo_music(ge::audio::MusicConsole& music, const DemoState& s);
 
 // The folder or image in `*ask` taken in, `*ask` set to the copy; `print` gets each step and the
-// result. False with the refusal in `*error` (printed too).
+// result, `share` the bar's words and share (`take_in`). False with the refusal in `*error`
+// (printed too).
 bool take_in_ask(std::string* ask, const std::string& root, std::string* error,
-                 const std::function<void(const std::string&)>& print);
+                 const std::function<void(const std::string&)>& print,
+                 const std::function<void(const std::string&, double)>& share = {});
+
+// A take-in on its own thread, the window's frame asking how far it is.
+class TakeIn {
+ public:
+  TakeIn() = default;
+  TakeIn(const TakeIn&) = delete;
+  TakeIn& operator=(const TakeIn&) = delete;
+  ~TakeIn();  // waits for a copy running: a copy is never left half written by the window closing
+  // `*from` taken into `root` (`take_in_ask`'s work) and cleared, started when none is running;
+  // false when one is or `*from` is empty. `from_menu`: the menu was open when it was asked, kept
+  // for the window's start once done.
+  bool start(std::string* from, const std::string& root, bool from_menu);
+  bool running() const { return thread_.joinable(); }
+  // The window's frame: the lines said since the last call into `con`; once the copy has ended,
+  // true with the folder to open in `*folder` ("" with the refusal in `*error`), and nothing runs.
+  bool finished(ge::console::Console& con, std::string* folder, std::string* error);
+  // The copy's words and share on the console's foot, which is held down while it runs.
+  void show(ge::console::ConsoleView& view);
+  bool from_menu() const { return from_menu_; }
+
+ private:
+  std::thread thread_;
+  mutable std::mutex mu_;
+  std::vector<std::string> lines_;
+  std::string what_, folder_, error_;
+  double share_ = -1;
+  bool done_ = false, ok_ = false, from_menu_ = false, held_ = false;
+};
 
 }  // namespace shooters_edge::client

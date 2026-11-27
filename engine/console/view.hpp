@@ -6,8 +6,8 @@
 // lines show at the top of the screen for a few seconds (the notify lines).
 //
 // THE INPUT LINE. Typed text is edited in place (left, right, home, end, backspace, delete), Tab
-// completes a command, alias or cvar name (twice: lists every match), Up and Down walk the
-// history, Page Up and Page Down scroll the lines. Enter submits it:
+// completes a name (twice: lists every match), Down and Up walk the suggestions (AUTOCOMPLETE)
+// or else the history, Page Up and Page Down scroll the lines. Enter submits it:
 //   - a line starting with `/` or `\` is a command (that character dropped): `/r_bloom 0`;
 //   - a line starting with `//` is a note: shown in the scrollback, never run or said;
 //   - any other line is a CHAT message (`say <line>`) while `con_chat` is 1 (a multiplayer game
@@ -248,10 +248,14 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // submitted first (then the shortest, then by name), at most con_suggest of them; a cvar with a
   // few values lists them (`choices`), and a synonym and its setting name each other (`note`).
   // Once a cvar with a few values is typed and a space, its values are the suggestions instead
-  // (those the typed text starts, in their own order, each with what it does). Up and Down move
-  // through them, Tab takes the selected one (the top one when none is), Enter on a cvar fills it
-  // in for a value and on a command or a value runs it. `hint` is the rest of the word Tab would
-  // take, drawn after the cursor; `suggest_at` is where in the input line that word starts.
+  // (those the typed text starts, in their own order, each with what it does). Down steps into
+  // them and down them (stopping at the last), Up back up and, from the first, out to the typed
+  // line, where typing goes on; Up with none selected walks the history, and a line recalled
+  // from it lists nothing until it is edited. Tab takes the selected one (the top one when none
+  // is; under a game's own Tab, `list_mode`, only a selected one), Enter on a cvar fills it in
+  // for a value and on a command or a value runs it. Typing lets the selection go. `hint` is the
+  // rest of the word Tab would take, drawn after the cursor; `suggest_at` is where in the input
+  // line that word starts.
   std::vector<Suggestion> suggestions() const;
   size_t suggest_at() const;
   int selected() const { return selected_; }

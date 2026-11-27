@@ -64,10 +64,17 @@ std::vector<std::string> setting_flags() {
   return out;
 }
 
-// The series config the window keeps its settings in (client/settings.hpp).
+// The series config's files the window reads, the program's own last (client/settings.hpp).
+std::vector<fs::path> series_files(const gc::Ctx& ctx) {
+  return cl::series_settings_files(
+      cl::data_root(cl::placed_folder(ctx.self_dir), gc::prefs_dir("gameengine2", "shooters_edge")),
+      cl::placed_folder(ctx.self_dir));
+}
+
+// The one of them the window writes its settings to.
 fs::path series_file(const gc::Ctx& ctx) {
-  return cl::series_settings_file(cl::data_root(cl::placed_folder(ctx.self_dir),
-                                                gc::prefs_dir("gameengine2", "shooters_edge")));
+  const std::vector<fs::path> files = series_files(ctx);
+  return files.empty() ? fs::path() : files.back();
 }
 
 // The window's game and install (client/installs.hpp): its settings as the series config keeps
@@ -76,7 +83,9 @@ cl::BaseGame base_game(const gc::Ctx& ctx) {
   std::vector<std::string> plus;
   for (const std::string& name : setting_flags())
     if (ctx.has(name)) plus.insert(plus.end(), {"+set", name, ctx.flag(name)});
-  return cl::read_base_game(series_file(ctx), plus);
+  cl::BaseGame base = cl::read_base_game(series_files(ctx), plus);
+  base.from = cl::placed_folder(ctx.self_dir);  // a relative install: from the programs' folder
+  return base;
 }
 
 // The window's choice of install and game folder, as it chooses them (`--game` its `-game`). Where

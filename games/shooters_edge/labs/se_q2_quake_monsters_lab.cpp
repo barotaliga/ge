@@ -3,10 +3,12 @@
 // stands alone in a hall built here (no game files) with the player 400 units off. Facing him: when
 // it notices him, when its first attack lands, how often it hits him in 20 s, and his health at its
 // lowest. Facing away 600 off while he fires the other way for a second: whether it heard him (one
-// of Quake II's walks to the noise; one of Quake's hears nothing). Every number is deterministic.
+// of Quake II's walks to the noise; one of Quake's hears nothing). Facing him while he fires the
+// blaster at it: how often it flinches. Every number is deterministic.
 //
 // ge:summary Lab: Quake's monsters under Quake II's rules, each kind's notice, hits and hearing
-// ge:keywords lab q2 cr_monsters remix quake-monsters q1-mind se-q2-quake-monsters hearing
+// ge:keywords lab q2 cr_monsters remix quake-monsters q1-mind se-q2-quake-monsters hearing pain
+// ge:keywords flinch
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_q2_monsters_test.cpp
 #include <algorithm>
@@ -90,10 +92,11 @@ constexpr const char* kKinds[] = {"monster_army",   "monster_dog",         "mons
 void run(gl::Lab& lab) {
   const std::string skill = lab.arg("skill");
   const int seconds = static_cast<int>(lab.arg_num("seconds"));
-  gl::LabTable t{"each of Quake's kinds alone with the player under Quake II's rules",
-                 {"kind", "noticed (s)", "first hit (s)", "hits", "lowest health", "heard"},
-                 {}};
-  int total_hits = 0, heard_any = 0;
+  gl::LabTable t{
+      "each of Quake's kinds alone with the player under Quake II's rules",
+      {"kind", "noticed (s)", "first hit (s)", "hits", "lowest health", "heard", "flinches"},
+      {}};
+  int total_hits = 0, heard_any = 0, total_flinches = 0;
   for (const char* kind : kKinds) {
     std::string error;
     auto h = open({{"classname", kind}, {"origin", "-200 0 24"}, {"angle", "180"}}, skill, error);
@@ -127,13 +130,33 @@ void run(gl::Lab& lab) {
     for (int i = 0; i < kSecond; i++) tick(*away, sh::kButtonAttack, 180);
     const sv::Q2Monster& m = away->s().monsters[0];
     const bool heard = m.enemy != -1 || m.sound_target;
+    // Facing him 400 off while he fires the blaster at it: how often it flinches.
+    auto shot =
+        open({{"classname", kind}, {"origin", "-200 0 24"}, {"angle", "180"}}, skill, error);
+    if (!shot) {
+      lab.fail("se-q2-quake-monsters: " + error, "next: read the reason above");
+      return;
+    }
+    int flinches = 0;
+    bool was = false;
+    for (int i = 0; i < 10; i++) tick(*shot, 0, 0);
+    for (int i = 0; i < seconds * kSecond && shot->s().players[0].alive; i++) {
+      tick(*shot, sh::kButtonAttack, 0);
+      if (shot->s().monsters.empty() || shot->s().monsters[0].dead) break;
+      const bool now = shot->s().monsters[0].pain_hold > shot->s().level_time;
+      flinches += (now && !was) ? 1 : 0;
+      was = now;
+    }
+    total_flinches += flinches;
     total_hits += hits;
     heard_any += heard ? 1 : 0;
     const auto secs = [](float v) {
       return v < 0 ? std::string("never") : ge::core::num::to_fixed(v, 2);
     };
     t.rows.push_back({kind, secs(noticed), secs(first), std::to_string(hits),
-                      std::to_string(static_cast<int>(lowest)), heard ? "yes" : "no"});
+                      std::to_string(static_cast<int>(lowest)), heard ? "yes" : "no",
+                      std::to_string(flinches)});
+    lab.metric(std::string("quake_monsters.") + kind + ".flinches", flinches, "count");
     lab.metric(std::string("quake_monsters.") + kind + ".hits", hits, "count");
     lab.metric(std::string("quake_monsters.") + kind + ".first_hit", first, "s");
     lab.metric(std::string("quake_monsters.") + kind + ".noticed", noticed, "s");
@@ -141,6 +164,7 @@ void run(gl::Lab& lab) {
   lab.table(t);
   lab.metric("quake_monsters.hits", total_hits, "count");
   lab.metric("quake_monsters.heard", heard_any, "count");
+  lab.metric("quake_monsters.flinches", total_flinches, "count");
 }
 
 const gl::LabSpec kSpec{
@@ -149,7 +173,7 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "games/shooters_edge/server (q2_monsters.cpp over q1_monster_mind.hpp)",
     "shooter",
-    "Do Quake's monsters under Quake II's rules notice, attack and hear as Quake's do?",
+    "Do Quake's monsters under Quake II's rules notice, attack, hear and flinch as Quake's do?",
     {
         {"skill", "1", "the skill (1: medium)"},
         {"seconds", "20", "how long each kind faces the player, s"},

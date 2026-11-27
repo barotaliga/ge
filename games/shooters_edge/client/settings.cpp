@@ -31,6 +31,20 @@ std::filesystem::path series_settings_file(const std::string& data_root) {
   return std::filesystem::path(data_root) / "settings" / std::string(ge::console::kConfigFile);
 }
 
+std::vector<std::filesystem::path> series_settings_files(const std::string& data_root,
+                                                         const std::string& placed) {
+  std::vector<std::filesystem::path> out;
+  if (data_root.empty()) return out;
+  out.push_back(series_settings_file(data_root));
+  if (placed.empty()) return out;
+  const std::filesystem::path own =
+      series_settings_file((std::filesystem::path(placed) / "data").string());
+  std::error_code ec;
+  if (std::filesystem::is_regular_file(own, ec) && !std::filesystem::equivalent(own, out[0], ec))
+    out.push_back(own);
+  return out;
+}
+
 namespace {
 
 bool write_series(const std::filesystem::path& file, const std::string& text) {
@@ -70,6 +84,22 @@ bool save_settings(ge::console::Console& con, const std::filesystem::path& serie
   ge::core::output::status("shooters_edge: the settings were not saved: " + file.string() +
                            " cannot be written; next: check the game folder's permissions");
   return false;
+}
+
+void add_save_global_command(ge::console::Console& con,
+                             const std::vector<std::filesystem::path>& series) {
+  con.add_command("cfg_save_global",
+                  "cfg_save_global: write the settings to your own config, the one every copy of "
+                  "the game reads, even when this copy keeps its own beside it",
+                  [&series](ge::console::Console& c, const ge::console::Args&) {
+                    if (series.empty()) {
+                      c.print("There is no folder of your own to save the settings in.");
+                    } else if (save_settings(c, series.front())) {
+                      c.print("Saved the settings to " + series.front().string() + ".");
+                    } else {
+                      c.print("Couldn't save the settings to " + series.front().string() + ".");
+                    }
+                  });
 }
 
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {

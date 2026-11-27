@@ -559,6 +559,10 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
       return true;
     }
   }
+  if (opts.taken_only) {
+    *error = from + " has not been taken in, or changed since it was";
+    return false;
+  }
   out->packs.clear();
   const std::vector<FoundPack> packs = find_packs(tree, game, identify);
   if (game == nullptr && packs.empty()) {
@@ -618,7 +622,13 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
     out->copied.push_back(rel);
     return true;
   };
-  std::vector<std::pair<std::string, std::vector<uint8_t>>> base_packs;  // for music
+  // Every file to copy and its size first, so the share copied is by bytes.
+  struct Pick {
+    std::string rel;
+    const TreeFile* file;
+    bool base_pack;  // a pack of the base folder: its music is read below
+  };
+  std::vector<Pick> picks;
   for (const TreeFile& f : tree.files) {
     const std::string l = lower(f.path);
     for (const Root& root : roots) {
@@ -628,17 +638,26 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
       const bool keep = slash == std::string::npos ? root.archives && archive_name(rest)
                                                    : content_folder(rest.substr(0, slash));
       if (!keep) continue;
-      const std::string rel = root.name + "/" + rest;
-      std::vector<uint8_t> bytes;
-      if (!f.read(&bytes, error) || !put(rel, bytes)) return false;
-      if (out->base && root.at == roots[0].at && ext_of(rest) == ".pak")
-        base_packs.emplace_back(rel, std::move(bytes));
+      picks.push_back({root.name + "/" + rest, &f,
+                       out->base && root.at == roots[0].at && ext_of(rest) == ".pak"});
       break;
     }
   }
-  for (const auto& [rel, f] : singles) {
+  for (const auto& [rel, f] : singles) picks.push_back({rel, f, false});
+  uint64_t total = 0, done = 0;
+  for (const Pick& p : picks) total += p.file->size;
+  const std::string copying = "Copying " + std::string(game->what);
+  const auto share = [&](const std::string& what, double v) {
+    if (opts.share) opts.share(what, v);
+  };
+  share(copying, 0);
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> base_packs;  // for music
+  for (const Pick& p : picks) {
     std::vector<uint8_t> bytes;
-    if (!f->read(&bytes, error) || !put(rel, bytes)) return false;
+    if (!p.file->read(&bytes, error) || !put(p.rel, bytes)) return false;
+    done += p.file->size;
+    share(copying, total == 0 ? 1.0 : static_cast<double>(done) / static_cast<double>(total));
+    if (p.base_pack) base_packs.emplace_back(p.rel, std::move(bytes));
   }
   if (!out->base)
     out->notes.push_back(std::string(game->what) + " itself was not in " + from +
@@ -696,22 +715,6 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
     }
     out->tracks.push_back(t);
   };
-  // The disc's own audio tracks first: the best source there is.
-  if (tree.disc && (out->base || !out->music_folder.empty())) {
-    for (const vfs::DiscTrack& t : tree.disc->tracks) {
-      if (t.kind != vfs::TrackKind::audio) continue;
-      say("taking track " + std::to_string(t.number) + " off the disc");
-      std::vector<int16_t> pcm;
-      std::string why;
-      if (!tree.disc->read_audio(t, &pcm, &why)) {
-        out->notes.push_back("disc track " + std::to_string(t.number) + ": " + why);
-        continue;
-      }
-      Samples s;
-      s.data.assign(pcm.begin(), pcm.end());
-      keep_track(t.number, s, MusicSource::disc, "", "disc track " + std::to_string(t.number));
-    }
-  }
   // Music files: in a music folder at the game's top or beside its base folder, and in its packs.
   struct Found {
     std::string path;
@@ -752,9 +755,40 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   names.reserve(found.size());
   for (const Found& f : found) names.push_back(last_part(f.path));
   const std::vector<int> numbers = track_numbers(names);
+  // The share of the music taken, by its tracks: the disc's audio tracks, then the files.
+  const bool from_disc = tree.disc && (out->base || !out->music_folder.empty());
+  size_t tracks_total = found.size(), tracks_done = 0;
+  if (from_disc)
+    for (const vfs::DiscTrack& t : tree.disc->tracks)
+      tracks_total += t.kind == vfs::TrackKind::audio ? 1 : 0;
+  const std::string music_words = "Taking " + std::string(game->what) + "'s music";
+  const auto track_taken = [&] {
+    tracks_done++;
+    share(music_words, static_cast<double>(tracks_done) / static_cast<double>(tracks_total));
+  };
+  if (tracks_total > 0) share(music_words, 0);
+  // The disc's own audio tracks first: the best source there is.
+  if (from_disc) {
+    for (const vfs::DiscTrack& t : tree.disc->tracks) {
+      if (t.kind != vfs::TrackKind::audio) continue;
+      say("taking track " + std::to_string(t.number) + " off the disc");
+      std::vector<int16_t> pcm;
+      std::string why;
+      if (!tree.disc->read_audio(t, &pcm, &why)) {
+        out->notes.push_back("disc track " + std::to_string(t.number) + ": " + why);
+        track_taken();
+        continue;
+      }
+      Samples s;
+      s.data.assign(pcm.begin(), pcm.end());
+      keep_track(t.number, s, MusicSource::disc, "", "disc track " + std::to_string(t.number));
+      track_taken();
+    }
+  }
   for (size_t i = 0; i < found.size(); i++) {
     if (numbers[i] == 0) {
       out->notes.push_back(found[i].path + ": its name gives no track number; left out");
+      track_taken();
       continue;
     }
     say("taking track " + std::to_string(numbers[i]) + " from " + found[i].path);
@@ -763,9 +797,11 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
     std::string why;
     if (!found[i].read(&bytes, &why) || !decode_music(bytes, found[i].kind, &s, &why)) {
       out->notes.push_back(found[i].path + ": " + why);
+      track_taken();
       continue;
     }
     keep_track(numbers[i], s, found[i].kind, assets::sha256_hex(bytes), found[i].path);
+    track_taken();
   }
   std::stable_sort(out->tracks.begin(), out->tracks.end(),
                    [](const StoredTrack& a, const StoredTrack& b) { return a.track < b.track; });

@@ -64,7 +64,7 @@ bool take_setting(BaseGame& base, std::string_view name, const std::string& valu
   }
   for (auto& [id, dir] : base.dirs)
     if (n == basedir_setting(id)) {
-      dir = value.empty() ? value : expand_home(value);
+      dir = value;
       return true;
     }
   return false;
@@ -81,7 +81,14 @@ BaseGame::BaseGame() {
 
 std::string BaseGame::dir(std::string_view id) const {
   const auto it = dirs.find(id);
-  return it != dirs.end() ? it->second : std::string();
+  return it != dirs.end() ? resolve_basedir(it->second, from) : std::string();
+}
+
+std::string resolve_basedir(const std::string& value, const std::string& from) {
+  if (value.empty()) return value;
+  const fs::path p(expand_home(value));
+  if (p.is_absolute() || from.empty()) return p.string();
+  return (fs::path(from) / p).lexically_normal().string();
 }
 
 std::string set_base_game(ge::console::Cvars& cvars, const BaseGame& base) {
@@ -277,10 +284,12 @@ std::vector<shooters_edge::menu::GameRow> game_rows(const BaseGame& base, std::s
   return rows;
 }
 
-BaseGame read_base_game(const std::filesystem::path& file, const std::vector<std::string>& plus) {
+BaseGame read_base_game(const std::vector<std::filesystem::path>& files,
+                        const std::vector<std::string>& plus) {
   std::string text;
-  if (std::ifstream f(file, std::ios::binary); f)
-    text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+  for (const std::filesystem::path& file : files)
+    if (std::ifstream f(file, std::ios::binary); f)
+      text.append(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()) += '\n';
   return read_base_game(std::string_view(text), plus);
 }
 

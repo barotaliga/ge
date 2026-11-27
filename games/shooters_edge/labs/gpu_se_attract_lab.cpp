@@ -385,6 +385,50 @@ void run(gl::Lab& lab) {
          "maps/dm4.bsp, the bar's two ends and the knob two fifths along it, then 40%",
          [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
     con_view.set_foot("");
+    // The suggestions under the input line walked with the arrows (console/view.hpp): Down into
+    // the list and down it; a line recalled from the history and edited lists again and Down
+    // steps into that list; Up from the first row back out to the typed line.
+    namespace ck = ge::console;
+    const auto draw_con = [&](ge::ui::DrawList& dl) {
+      sm::draw_game_console(dl, con_view, con_look, t);
+    };
+    con_view.type("/con_notify 1");
+    con_view.key(ck::EditKey::enter);
+    con.run();
+    con_view.type("/con_");
+    con_view.key(ck::EditKey::down);
+    con_view.key(ck::EditKey::down);
+    lab.metric("suggest.selected", con_view.selected(), "row", det);
+    shot("suggest-down", "SUGGESTIONS: DOWN TWICE",
+         "/con_ typed and Down pressed twice: the arrows go into the list of settings it starts "
+         "and down it, the hint after the cursor following the row lit.",
+         "the second row lit; its name's rest drawn dim after the typed /con_", draw_con);
+    con_view.key(ck::EditKey::up);
+    con_view.key(ck::EditKey::up);
+    lab.metric("suggest.after-up", con_view.selected(), "row", det);
+    shot("suggest-up", "SUGGESTIONS: UP BACK TO THE LINE",
+         "Up twice from the second row: back up the list and, from its first row, out to the "
+         "typed line, where typing goes on.",
+         "no row lit; /con_ on the line with the cursor after it", draw_con);
+    con_view.key(ck::EditKey::escape);
+    con_view.key(ck::EditKey::up);  // "/con_notify 1" recalled
+    for (int k = 0; k < 6; ++k) con_view.key(ck::EditKey::backspace);
+    con_view.key(ck::EditKey::down);
+    lab.metric("suggest.recalled-down", con_view.selected(), "row", det);
+    shot("suggest-recalled", "SUGGESTIONS: A RECALLED LINE EDITED",
+         "Up recalls /con_notify 1 from the history, Backspace edits it to /con_no, and Down goes "
+         "into the list it now shows, not on through the history.",
+         "/con_no on the line; con_notify and its kin listed, the first row lit", draw_con);
+    con_view.key(ck::EditKey::escape);
+    con_view.type("/con_s");
+    con_view.key(ck::EditKey::up);  // no row selected: the history, the typed line kept for Down
+    shot("suggest-history", "SUGGESTIONS: UP ON THE TYPED LINE",
+         "/con_s typed and Up pressed with no row lit: the last line sent comes back from the "
+         "history (Down brings /con_s back), and a recalled line lists nothing.",
+         "/con_notify 1 on the line; no list under it", draw_con);
+    con_view.key(ck::EditKey::down);
+    lab.metric("suggest.history-back", con_view.input() == "/con_s" ? 1 : 0, "bool", det);
+    con_view.key(ck::EditKey::escape);
     con_view.set_open(false);
     for (int k = 0; k < 60; k++) con_view.frame(1 / 30.0);
     menu.show(host, "demos");

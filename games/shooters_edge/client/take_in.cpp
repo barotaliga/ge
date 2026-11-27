@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <utility>
 
 #include "classic/content/import.hpp"
 #include "classic/content/soundtrack.hpp"
@@ -74,18 +75,6 @@ void add_home_dir(ge::console::Console& con, const std::string& root) {
                            "screenshots, recordings and downloads. Choose it with +set homedir on "
                            "the command line.",
                    .kind = ge::console::CvarKind::text});
-}
-
-bool adopt_placed_settings(const std::string& placed, const std::string& root) {
-  if (placed.empty() || root.empty()) return false;
-  const fs::path old_root = fs::path(placed) / "data";
-  std::error_code ec;
-  if (fs::equivalent(old_root, root, ec)) return false;
-  const fs::path from = series_settings_file(old_root.string());
-  const fs::path to = series_settings_file(root);
-  if (!fs::is_regular_file(from, ec) || fs::exists(to, ec)) return false;
-  fs::create_directories(to.parent_path(), ec);
-  return fs::copy_file(from, to, ec) && !ec;
 }
 
 bool inside(const std::string& path, const std::string& root) {
@@ -163,7 +152,8 @@ void offer_packs(ge::console::Console& con, const std::string& data_root) {
 
 bool take_in(const std::string& from, const std::string& root, std::string* basedir,
              std::string* summary, std::string* error,
-             const std::function<void(const std::string&)>& progress) {
+             const std::function<void(const std::string&)>& progress,
+             const std::function<void(const std::string&, double)>& share) {
   if (!root.empty() && inside(from, root)) {
     *basedir = from;
     summary->clear();
@@ -178,6 +168,7 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
   content::ImportReport r;
   content::ImportOptions opts;
   opts.progress = progress;
+  opts.share = share;
   std::string why;
   if (!content::import_game(from, root, &r, &why, opts)) {
     *error = "Could not take the game in from " + from + ": " + why;
@@ -193,19 +184,26 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
   return true;
 }
 
-bool take_in_basedir(std::string* basedir, const std::string& root) {
+std::string take_in_basedir(BaseGame* base, const std::string& root, bool later) {
   namespace out = ge::core::output;
-  if (basedir->empty()) return true;
-  std::string taken, said, why;
-  if (!take_in(expand_home(*basedir), root, &taken, &said, &why,
-               [](const std::string& line) { out::info("shooters_edge: " + line); })) {
+  const auto at = base->dirs.find(base->game);
+  if (at == base->dirs.end()) return "";
+  std::string* basedir = &at->second;
+  *basedir = base->dir(base->game);  // a relative folder from the program's (installs.hpp)
+  if (basedir->empty() || root.empty() || inside(*basedir, root)) return "";
+  content::ImportReport r;
+  content::ImportOptions opts;
+  opts.taken_only = later;
+  opts.progress = [](const std::string& line) { out::info("shooters_edge: " + line); };
+  std::string why;
+  if (!content::import_game(expand_home(*basedir), root, &r, &why, opts) || !has_game(r)) {
+    if (later) return *basedir;
     out::error("shooters_edge: the install " + *basedir + " was not copied into the data folder " +
                root + ": " + why + "; next: give your game's folder, its disc or its disc image");
-    return false;
+    return "";
   }
-  *basedir = taken;
-  if (!said.empty()) out::info("shooters_edge: " + said);
-  return true;
+  *basedir = r.game_dir;
+  return "";
 }
 
 void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
@@ -240,15 +238,80 @@ void add_take_in_commands(ge::console::Console& con, std::string* ask, const std
 }
 
 bool take_in_ask(std::string* ask, const std::string& root, std::string* error,
-                 const std::function<void(const std::string&)>& print) {
+                 const std::function<void(const std::string&)>& print,
+                 const std::function<void(const std::string&, double)>& share) {
   std::string taken, said;
-  if (!take_in(*ask, root, &taken, &said, error, print)) {
+  if (!take_in(*ask, root, &taken, &said, error, print, share)) {
     print(*error);
     return false;
   }
   if (!said.empty()) print(said);
   *ask = taken;
   return true;
+}
+
+TakeIn::~TakeIn() {
+  if (thread_.joinable()) thread_.join();
+}
+
+bool TakeIn::start(std::string* ask, const std::string& root, bool from_menu) {
+  if (thread_.joinable() || ask->empty()) return false;
+  const std::string from = std::exchange(*ask, {});
+  done_ = ok_ = false;
+  share_ = -1;
+  what_.clear();
+  from_menu_ = from_menu;
+  thread_ = std::thread([this, from, root] {
+    std::string folder = from, error;
+    const bool ok = take_in_ask(
+        &folder, root, &error,
+        [this](const std::string& line) {
+          const std::lock_guard<std::mutex> lock(mu_);
+          lines_.push_back(line);
+        },
+        [this](const std::string& what, double share) {
+          const std::lock_guard<std::mutex> lock(mu_);
+          what_ = what;
+          share_ = share;
+        });
+    const std::lock_guard<std::mutex> lock(mu_);
+    folder_ = ok ? folder : std::string();
+    error_ = ok ? std::string() : error;
+    ok_ = ok;
+    done_ = true;
+  });
+  return true;
+}
+
+bool TakeIn::finished(ge::console::Console& con, std::string* folder, std::string* error) {
+  if (!thread_.joinable()) return false;
+  std::vector<std::string> lines;
+  bool done = false;
+  {
+    const std::lock_guard<std::mutex> lock(mu_);
+    lines.swap(lines_);
+    done = done_;
+  }
+  for (const std::string& line : lines) con.print(line);
+  if (!done) return false;
+  thread_.join();
+  *folder = folder_;
+  *error = error_;
+  return true;
+}
+
+void TakeIn::show(ge::console::ConsoleView& view) {
+  const bool copying = thread_.joinable();
+  if (copying) {
+    const std::lock_guard<std::mutex> lock(mu_);
+    if (!what_.empty())
+      view.set_foot(what_, share_);  // once the copy has begun: a source taken in before has none
+  }
+  if (copying != held_) {
+    held_ = copying;
+    view.set_full(copying);
+    if (!copying) view.set_foot("");
+  }
 }
 
 void demo_music(ge::audio::MusicConsole& music, const DemoState& s) {
