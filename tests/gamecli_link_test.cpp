@@ -36,8 +36,9 @@ fs::path fresh(const char* name) {
 }
 
 int run(std::vector<std::string> args, std::string& out, const fs::path& root) {
-  args.insert(args.begin(), {"--basedir=" + root.string(), "--state=" + (root / "state").string(),
-                             "--logs=" + (root / "logs").string()});
+  args.insert(args.begin(),
+              {"--fs_basegame=q1", "--fs_basedir_q1=" + root.string(),
+               "--state=" + (root / "state").string(), "--logs=" + (root / "logs").string()});
   return gc::run(shooters_edge::cli::spec(), args, out, (root / "bin").string());
 }
 

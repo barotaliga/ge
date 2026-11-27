@@ -1,6 +1,7 @@
 // The shooters_edge window's command line: flags read wherever they stand, a `+` console line
 // running to the next flag, an unknown flag refused with the line it followed named, -benchmark
-// naming -timedemo, a negative number kept as a console word, and the first command with no `+`.
+// naming -timedemo, a negative number kept as a console word, the first command with no `+`, and
+// the game picked by a setting, not a flag.
 //
 // ge:summary Tests: the window's command line, its flags anywhere and its refusals
 // ge:keywords test command-line args parse unknown-flag plus-commands timedemo
@@ -80,26 +81,23 @@ TEST(the_first_command_needs_no_plus) {
   CHECK(a.game == "id1" && a.game_set);
 }
 
-TEST(the_game_is_picked_by_its_id_and_a_mod_by_its_folder) {
+TEST(the_game_is_a_setting_and_a_mod_its_folder) {
+  // The game and its install are settings (`fs_basegame`, `fs_basedir_<id>`) like any other: a
+  // console line, read by client/installs.hpp. A mod's folder is still a flag.
   cl::Args a;
   std::string why;
-  CHECK(a.game_number == 0);
-  CHECK(parse_words({"-classic", "q1"}, a, why));
-  CHECK(a.game_number == 1 && !a.game_set);
-  cl::Args b;
-  CHECK(parse_words({"--classic=q2", "-game", "ctf"}, b, why));
-  CHECK(b.game_number == 2 && b.game == "ctf" && b.game_set);
+  CHECK(parse_words({"+set", "fs_basegame", "q2", "-game", "ctf"}, a, why));
+  CHECK((a.plus == std::vector<std::string>{"+set", "fs_basegame", "q2"}));
+  CHECK(a.game == "ctf" && a.game_set);
   cl::Args e;
   CHECK(parse_words({"--game=rogue"}, e, why));
-  CHECK(e.game == "rogue" && e.game_set && e.game_number == 0);
-  // An id no game has, or a number, is refused with the games there are and where a mod goes.
-  cl::Args c;
-  CHECK(!parse_words({"-classic", "q3"}, c, why));
-  CHECK(why.find("-classic q3 is no game") != std::string::npos);
-  CHECK(why.find("q1 (Quake)") != std::string::npos);
-  CHECK(why.find("-game <folder>") != std::string::npos);
-  cl::Args d;
-  CHECK(!parse_words({"-classic", "1"}, d, why));
+  CHECK(e.game == "rogue" && e.game_set);
+  // The flags the settings replaced are gone: refused as any unknown flag.
+  for (const char* gone : {"-classic", "-basedir"}) {
+    cl::Args c;
+    CHECK(!parse_words({gone, "q2"}, c, why));
+    CHECK_MSG(why.find(std::string("unknown flag ") + gone) != std::string::npos, why);
+  }
 }
 
 TEST(sizes_by_name_or_width_and_height) {
@@ -137,6 +135,6 @@ TEST(help_asks_for_the_usage_instead_of_being_refused) {
   }
   cl::Args b;
   std::string why;
-  CHECK(parse_words({"-classic", "q2"}, b, why));
+  CHECK(parse_words({"+set", "fs_basegame", "q2"}, b, why));
   CHECK(!b.help);
 }

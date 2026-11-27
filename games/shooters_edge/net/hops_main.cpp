@@ -6,7 +6,7 @@
 //           connect's `prx`), or a fixed route to one server (fixed.hpp)
 //   seproxy the near or far proxy (engine/proxy), or both with a lossy link between them
 //   setv    a TV node (qw_tv.hpp) relaying a server's stream port to QuakeWorld viewers, or with
-//           -classic q2 Quake II's TV (q2_tv_relay.hpp, q2_tv_demo.hpp)
+//           +set fs_basegame q2: Quake II's TV (q2_tv_relay.hpp, q2_tv_demo.hpp)
 //
 // Each runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes
 // a status line every `--status` seconds.
@@ -32,9 +32,9 @@
 //        [--server-password=<pw>] [--delay=7] [--name=<name>]   a spectator on any server
 //        broadcast live on our TV wire: game windows (se -tv) and browsers (the hub's Watch)
 //        (qw_watch_tv.hpp)
-//   setv -classic q2 --port=27911 --server=<q2 host:port> [--server-password=<pw>]
+//   setv +set fs_basegame q2 --port=27911 --server=<q2 host:port> [--server-password=<pw>]
 //        [--password=<pw>] [--delay=7] [--name=tv]   (q2_tv_relay.hpp)
-//   setv -classic q2 --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
+//   setv +set fs_basegame q2 --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
 //        a recording played round and round instead   (q2_tv_demo.hpp)
 //
 // voice: agent (a command-line tool's main: its errors are for whoever runs it;
@@ -124,7 +124,7 @@ void usage() {
         "  seproxy far --port=<p> --allow=<host[:port],...> | --open\n");
   else
     std::printf(
-        "setv [-classic q1|q2] [flags]: our TV node (-classic q2: Quake II's)\n"
+        "setv [+set fs_basegame q1|q2] [flags]: our TV node (fs_basegame q2: Quake II's)\n"
         "  setv --port=27900 --watch=<server host:port> [--web=<tcp port>]\n"
         "      [--master=<host[:port],...>] [--server-password=<pw>] [--delay=7] [--name=<n>]:\n"
         "      a spectator on any server, its view broadcast live to game windows\n"
@@ -139,7 +139,7 @@ void usage() {
         "      player's view, chosen with the track keys or fire, the hottest player's\n"
         "      followed until then (--autotrack=0: the lowest slot's); the same recording\n"
         "      to single-player clients as a netgame on --netgame-port=26000 (0: none)\n"
-        "  setv -classic q2 --port=27911 --server=<host:port> [--server-password=<pw>]\n"
+        "  setv +set fs_basegame q2 --port=27911 --server=<host:port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
         "      Quake II, its match served to Quake II's own clients\n"
         "      or --demo=<file.dm2> in place of --server: a recording, played round and\n"
@@ -370,12 +370,12 @@ int run(int argc, char** argv) {
     } else if (flag(a, "allow", v)) {
       if (!addresses(v, o.allow))
         return fail("--allow=" + v + " holds no address", "host:port,...");
-    } else if (kHop == Hop::tv && (a == "-classic" || a.rfind("--classic=", 0) == 0)) {
-      if (a == "-classic" && i + 1 >= argc)
-        return fail("-classic needs a game", "-classic q1 or -classic q2");
-      const std::string n = a == "-classic" ? argv[++i] : a.substr(10);
+    } else if (kHop == Hop::tv && a == "+set" && i + 2 < argc &&
+               std::string(argv[i + 1]) == "fs_basegame") {
+      const std::string n = argv[i + 2];
+      i += 2;
       if (n != "q1" && n != "q2")
-        return fail("-classic " + n + " is no game", "-classic q1 or -classic q2");
+        return fail("fs_basegame " + n + " is no game", "+set fs_basegame q1 or q2");
       o.kind = n == "q2" ? "q2-tv" : "tv";
     } else if (flag(a, "master", v)) {
       if (!addresses(v, o.masters))

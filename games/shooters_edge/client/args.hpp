@@ -1,5 +1,6 @@
-// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-classic q1` Quake, `-classic q2` Quake II,
-// `-game <folder>` a mod's folder over it, as each classic game names one), read into `Args`. The
+// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-game <folder>` a mod's folder over the game
+// played, as each classic game names one), read into `Args`. The game played and its install are
+// settings (`+set fs_basegame q2`, `+set fs_basedir_q2 <folder>`: client/installs.hpp). The
 // flags are read wherever they stand; a `+` word starts a console line that runs to the next flag
 // or `+`, so
 // `+r_look modern -timedemo demo1` is a look and a benchmark, and the first line needs no `+`
@@ -10,7 +11,7 @@
 //
 // ge:summary The shooters_edge window's command line: its flags read anywhere, unknown ones refused
 // ge:keywords command-line args parse flags plus-commands console-line unknown-flag expand_home
-// ge:keywords size_named flag_like timedemo benchmark-renamed game-number mod-folder
+// ge:keywords size_named flag_like timedemo benchmark-renamed mod-folder
 // ge:skill shooter
 // ge:test tests/shooters_edge_args_test.cpp
 #pragma once
@@ -25,15 +26,13 @@
 namespace shooters_edge::client {
 
 struct Args {
+  // The install opened (client/game_folder.hpp's `choose_folder`, from `fs_basedir_<id>`).
   std::string basedir = ".";
   // The game folder played over the install (`-game <folder>`; else the profile's own).
   std::string game{ge::classicenhance::q1_profile().base_dir};
-  bool basedir_set = false, game_set = false;  // given on the command line (not the defaults)
-  // `-classic <id>`: that classic game (classicenhance/profile.hpp's `kProfiles`, counted from 1),
-  // opened from the install kept for it (client/installs.hpp); 0: none named.
-  int game_number = 0;
-  // Set by `choose_folder` when game `game_number` has no install kept that still checks: the
-  // window asks for the folder it is installed in and checks it is that game.
+  bool game_set = false;  // `-game` given on the command line (not the default)
+  // Set by `choose_folder` when the game `fs_basegame` names (`profile`) has no install set that
+  // still checks: the window asks for the folder it is installed in and checks it is that game.
   bool ask_install = false;
   // The content profile the install is (classicenhance/profile.hpp's `kProfiles` row id), found
   // by its folders (client/game_folder.hpp's `install_of`); the first row's until one is found.
@@ -71,15 +70,12 @@ struct Args {
 
 // THE FLAGS, as data: `parse` refuses a flag-like word no row names, so a flag added to `parse`
 // without its row here is refused (its test fails), and the reference manual and the usage line
-// list every one. `name` as typed ("-classic", or "--fps=" for the ones whose value follows an
+// list every one. `name` as typed ("-game", or "--fps=" for the ones whose value follows an
 // `=`); a single-dash name is taken with two dashes too; `also` another spelling of it.
 struct Flag {
   std::string_view name, arg, help, also = {};
 };
 inline constexpr Flag kFlags[] = {
-    {"-classic", "<id>", "Play that classic game: q1 (Quake and QuakeWorld) or q2 (Quake II).",
-     "--classic="},
-    {"-basedir", "<dir>", "The folder that holds the game's folders (id1, baseq2 and mods)."},
     {"-game", "<folder>", "Play a mod: its folder over the game's own.", "--game="},
     {"-progs", "<file>", "Run a mod's progs file in place of the game's own rules."},
     {"-models", "<dir>", "Take the held weapons from this folder."},

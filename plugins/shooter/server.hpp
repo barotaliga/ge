@@ -222,6 +222,11 @@ void set_origin(Server& sv, int e, Vec3f origin);
 void set_size(Server& sv, int e, Vec3f mins, Vec3f maxs);
 // Gives an entity a brush model: its index and its bounds as its box.
 void set_brush_model(Server& sv, int e, int modelindex);
+// Whether a solid entity is traced through its brush model's hulls: a brush solid whose
+// `modelindex` names one of `Server::models` past the none at [0]. A brush solid naming none (a
+// program that made a model in its own file or an alias model solid as a brush) is traced as its
+// box, never read past the models.
+bool traced_by_brush(const Server& sv, const Edict& e);
 
 // Runs program function `fn` (nothing for kNoFunc) with the globals as they are.
 void call_program(Server& sv, Func fn);

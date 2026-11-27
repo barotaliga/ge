@@ -354,7 +354,7 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     return false;
   }
   if (files.folder.empty()) {
-    error = "record: there is no game folder to keep recordings in (start the game with -basedir)";
+    error = "record: there is no game folder to keep recordings in (pick the game's folder first)";
     return false;
   }
   if (l.server == nullptr || l.campaign_host) {

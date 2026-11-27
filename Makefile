@@ -21,7 +21,8 @@ setup:
 
 # A game in its window: make run:<game> builds only that game's executable, on the release preset
 # (RUN_PRESET=debug for the sanitizers), then runs it with ARGS: make run:fall_line ARGS=--bot,
-# make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6". `make run` lists the games.
+# make run:shooters_edge ARGS="+set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic +map dm6".
+# `make run` lists the games.
 # A game whose window has a short name of its own sits at the build's root under it (RUN_EXE_<game>).
 GAMES := $(notdir $(wildcard games/*))
 RUN_EXE_shooters_edge := se

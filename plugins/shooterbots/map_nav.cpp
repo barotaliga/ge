@@ -1273,6 +1273,144 @@ int64_t mark_crusher_harm(const NavGraph& g, const std::vector<NavMover>& movers
   return marked;
 }
 
+int64_t mark_hurt_harm(const NavGraph& g, const std::vector<HurtBox>& boxes,
+                       std::vector<uint8_t>& harm) {
+  int64_t marked = 0;
+  for (const HurtBox& b : boxes)
+    for (size_t n = 0; n < g.nodes.size() && n < harm.size(); n++) {
+      const Vec3f o = g.nodes[n].origin;
+      const float m = b.near ? kHurtMargin : 0;
+      const bool near = o.x + 16 + m > b.mins.x && o.x - 16 - m < b.maxs.x &&
+                        o.y + 16 + m > b.mins.y && o.y - 16 - m < b.maxs.y && o.z + 32 > b.mins.z;
+      // How high over its top: up to `kHurtLip` (the lip round a pit, the slope down into it;
+      // a bridge higher over it is free), a wheel's top stood on.
+      const float up = b.near ? kHurtLip : kHurtOnTop;
+      if (near && o.z - 24 < b.maxs.z + up && harm[n] == 0) {
+        harm[n] = 1;
+        marked++;
+      }
+    }
+  return marked;
+}
+
+bool push_carries_into(const HurtBox& push, int angle, const HurtBox& kill) {
+  if (angle < 0 || angle % 90 != 0) return false;  // up, down, or not along an axis
+  const int a = angle % 360;
+  const float dx = a == 0 ? 1.f : a == 180 ? -1.f : 0.f;
+  const float dy = a == 90 ? 1.f : a == 270 ? -1.f : 0.f;
+  const Vec3f len = push.maxs - push.mins;
+  const Vec3f on{dx * len.x, dy * len.y, 0};  // the box moved on by its own length
+  const Vec3f lo = push.mins + on, hi = push.maxs + on;
+  return lo.x <= kill.maxs.x && hi.x >= kill.mins.x && lo.y <= kill.maxs.y && hi.y >= kill.mins.y &&
+         lo.z <= kill.maxs.z && hi.z >= kill.mins.z;
+}
+
+int64_t cut_hurt_links(NavGraph& g, const std::vector<HurtBox>& boxes) {
+  if (boxes.empty()) return 0;
+  const auto meets = [&](Vec3f o) {
+    for (const HurtBox& b : boxes)
+      if (o.x + 16 > b.mins.x && o.x - 16 < b.maxs.x && o.y + 16 > b.mins.y &&
+          o.y - 16 < b.maxs.y && o.z + 32 > b.mins.z && o.z - 24 < b.maxs.z)
+        return true;
+    return false;
+  };
+  std::vector<NavLink> links;
+  links.reserve(g.links.size());
+  int64_t cut = 0;
+  for (NavNode& n : g.nodes) {
+    const int32_t first = static_cast<int32_t>(links.size());
+    for (int32_t k = 0; k < n.links; k++) {
+      const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      bool hit = false;
+      if (l.kind == NavKind::walk || l.kind == NavKind::drop || l.kind == NavKind::jump) {
+        const Vec3f A = n.origin, B = g.nodes[static_cast<size_t>(l.to)].origin;
+        const float dx = B.x - A.x, dy = B.y - A.y;
+        const int steps = 1 + static_cast<int>((dx < 0 ? -dx : dx) / 16 + (dy < 0 ? -dy : dy) / 16);
+        // Across at the higher end's height; a drop anywhere down to its floor's height under
+        // the line too (where the floor ends under it is not known here, and a fall carries on
+        // only so far: rboss's grinder pit, its strip under the lip, was dropped into).
+        const float top = A.z > B.z ? A.z : B.z;
+        for (int q = 0; q <= steps && !hit; q++) {
+          const float f = static_cast<float>(q) / static_cast<float>(steps);
+          hit = meets({A.x + dx * f, A.y + dy * f, top});
+          for (float z = top - 32; l.kind == NavKind::drop && !hit && z > B.z - 32; z -= 32)
+            hit = meets({A.x + dx * f, A.y + dy * f, z < B.z ? B.z : z});
+        }
+        // A fall lands past its node: on its floor up to `kDropCarry` on (rboss's grinder pit,
+        // its strip 100 units past the ring a drop off the lip was meant for).
+        const float len = std::sqrt(dx * dx + dy * dy);
+        for (float d = 16; l.kind == NavKind::drop && !hit && len > 1 && d <= kDropCarry; d += 16)
+          hit = meets({B.x + dx / len * d, B.y + dy / len * d, B.z});
+      }
+      if (hit) {
+        cut++;
+        continue;
+      }
+      links.push_back(l);
+    }
+    n.first_link = first;
+    n.links = static_cast<int32_t>(links.size()) - first;
+  }
+  g.links = std::move(links);
+  return cut;
+}
+
+namespace {
+
+// The killing triggers' boxes (`HurtBox`): a `trigger_hurt` brush whose `dmg` reaches
+// `kHurtKills`, not one that starts off (flag 1) waiting for its name.
+std::vector<sb::HurtBox> hurt_boxes(const ge::shooter::MapSpec& spec,
+                                    const std::vector<sb::EntityBlock>& blocks) {
+  std::vector<sb::HurtBox> out;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    if (!cn || std::strcmp(cn, "trigger_hurt") != 0) continue;
+    const char* dmg = sb::block_value(b, "dmg");
+    if (!dmg || std::atof(dmg) < sb::kHurtKills) continue;
+    const char* sf = sb::block_value(b, "spawnflags");
+    if (sf && (std::atoi(sf) & 1) && sb::block_value(b, "targetname")) continue;
+    const char* model = sb::block_value(b, "model");
+    if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (box.ok) out.push_back({box.mins, box.maxs});
+  }
+  // (`hurtbox`) A wheel that turns from the start (a `func_rotating` on, flag 1) is no floor: it
+  // throws whoever stands on it (rboss's grinders, turning over the strips in their pits). A node
+  // on its box at rest, which it never leaves, harms; one beside it does not (a fan in a wall).
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    if (!cn || std::strcmp(cn, "func_rotating") != 0) continue;
+    const char* sf = sb::block_value(b, "spawnflags");
+    const char* model = sb::block_value(b, "model");
+    if (!sf || !(std::atoi(sf) & 1) || !model || model[0] != '*' || std::atoi(model + 1) <= 0)
+      continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (box.ok) out.push_back({box.mins, box.maxs, false});
+  }
+  // (`hurtbox`) A current that carries whoever stands in it into one (rboss's: a `trigger_push`
+  // running 700 units south into its pit at the end): a level push, always on, at a right angle,
+  // whose box moved on along its push by its own length meets a killing box, kills as well.
+  const size_t kills = out.size();
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    if (!cn || std::strcmp(cn, "trigger_push") != 0 || sb::block_value(b, "targetname")) continue;
+    const char* angle = sb::block_value(b, "angle");
+    const char* model = sb::block_value(b, "model");
+    if (!angle || !model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (!box.ok) continue;
+    const sb::HurtBox push{box.mins, box.maxs};
+    for (size_t k = 0; k < kills; k++)
+      if (out[k].near && sb::push_carries_into(push, std::atoi(angle), out[k])) {
+        out.push_back(push);
+        break;
+      }
+  }
+  return out;
+}
+
+}  // namespace
+
 bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                    const sb::MapBook& book, const char* start_class, MapNav& out,
                    std::string& error, const sb::NavSettings& set) {
@@ -1473,6 +1611,11 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     // cannot die stood pinned under it the rest of the map. e1m3's ceiling comes down and goes
     // back up, and harms nothing here.
     sb::mark_crusher_harm(g, out.movers, out.harm);
+    const std::vector<sb::HurtBox> hurts = hurt_boxes(spec, blocks);
+    out.hurt.assign(g.nodes.size(), 0);
+    out.hurt_nodes = sb::mark_hurt_harm(g, hurts, out.hurt);
+    for (size_t n = 0; n < g.nodes.size(); n++) out.harm[n] = out.harm[n] || out.hurt[n] ? 1 : 0;
+    out.hurt_links = sb::cut_hurt_links(g, hurts);
     out.harm_links = sb::nav_close_entries(g, out.harm);
   }
   // Water: part of the graph (shooterbots/swim.hpp `nav_add_swim`): its cells are swim nodes, a
@@ -1489,6 +1632,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   out.swim_nav = sb::nav_add_swim(out.world, graph, out.wet, swim_set);
   out.wet.resize(graph.nodes.size(), 1);   // every swim node is wet
   out.harm.resize(graph.nodes.size(), 0);  // and none harms
+  out.hurt.resize(graph.nodes.size(), 0);
   // The map's main part: the most a start spot reaches.
   const auto find_main = [&] {
     out.main_n = 0;
@@ -1643,6 +1787,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   sb::build_swim(out.world, graph, exits, field_set, out.swim);
   // THE BRINK (shooterbots/brink.hpp): the harm kept on the graph, the walks along its lips marked.
   out.brink_links = sb::nav_mark_harm(graph, out.harm);
+  graph.hurt = out.hurt;
   out.side_brink_links = sb::nav_mark_side_harm(graph, out.world);
   sb::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =

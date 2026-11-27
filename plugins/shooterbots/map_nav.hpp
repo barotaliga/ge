@@ -116,6 +116,7 @@ struct MapNav {
   std::vector<ge::shooterbots::NavMover> movers;
   std::vector<uint8_t> wet;   // the nodes standing in water (swim nodes too)
   std::vector<uint8_t> harm;  // the floor nodes in lava or slime: no way leads into them
+  std::vector<uint8_t> hurt;  // those of them in or by a killing trigger (`mark_hurt_harm`)
   ge::shooterbots::SwimNavCounts swim_nav;        // the water in the graph
   ge::shooterbots::NavBridgeCounts bridges_made;  // the pockets bridged
   ge::shooterbots::NavTrickCounts tricks_made;    // the map's tricks proven into blast jumps
@@ -156,6 +157,8 @@ struct MapNav {
   };
   std::vector<Hatch> hatches;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
+  int64_t hurt_nodes = 0;        // floor nodes in a killing trigger (`mark_hurt_harm`)
+  int64_t hurt_links = 0;        // ways across one, cut (`cut_hurt_links`)
   int64_t ladder_links = 0;      // climbs up a ladder (Quake II's, `NavLink::ladder`)
   int64_t brink_links = 0;       // walks and drops along a lip over lava or slime (`nav_mark_harm`)
   int64_t side_brink_links = 0;  // walks and drops a side step off into it (`nav_mark_side_harm`)
@@ -181,6 +184,41 @@ std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView
 // passes harms nothing: whoever it pins goes free when it moves on. How many nodes it marked.
 int64_t mark_crusher_harm(const NavGraph& g, const std::vector<NavMover>& movers,
                           std::vector<uint8_t>& harm);
+// (`hurtbox`) A trigger that kills (a `trigger_hurt` of `kHurtKills` or more a touch: Ground
+// Zero's rboss has pits under its walkways that do 10000 through any protection): the box it is
+// touched in. One that starts off and is switched on by its name is left out (it may never be).
+constexpr float kHurtKills = 100;
+struct HurtBox {
+  ge::shooter::Vec3f mins, maxs;
+  bool near = true;  // its edges and lip harm too (`kHurtMargin`, `kHurtLip`); a wheel's, only it
+};
+// Marks in `harm` the nodes of `g` a standing player there comes within `kHurtMargin` of a
+// killing trigger's box with (`mark_crusher_harm`'s box: 16 round, 24 down, 32 up): rboss's pits
+// end corridors whose floor slopes in, so a node at the box's edge slid him in. How many nodes it
+// marked.
+constexpr float kHurtMargin = 32;
+// A pit's lip and sides: a node over a killing box or within `kHurtMargin` of it across harms up
+// to this high over its top (rboss's strips lie 64 to 150 under the floor round their pits; he
+// fell in off the lip and slid in down the side). A bridge higher over it is free.
+constexpr float kHurtLip = 96;
+// A wheel's top (`HurtBox::near` false): a node standing on it, up to this over its box.
+constexpr float kHurtOnTop = 8;
+int64_t mark_hurt_harm(const NavGraph& g, const std::vector<HurtBox>& boxes,
+                       std::vector<uint8_t>& harm);
+// Whether a level `trigger_push` (its box, its `angle` in degrees) carries whoever stands in it
+// into `kill`: its box moved on along the push by its own length meets it (one the push runs
+// away from, even touching its back, carries nobody in). Only pushes along an
+// axis are read (rboss's two run south into its pits); up, down and any other angle carry none.
+// Such a push kills as its pit does (`hurt_boxes` adds its box).
+bool push_carries_into(const HurtBox& push, int angle, const HurtBox& kill);
+// Cuts from `g` every walk, drop and jump whose line (every 16 units across, at its higher end's
+// height, and a drop anywhere down to its floor's height under that line) takes a standing
+// player's box into a killing box: rboss's electric strip in a pit's
+// floor lies between nodes on either side of it, and a walk across it killed him. How many cut.
+// A drop's landing too: on its floor up to `kDropCarry` on past its node, where a fall at a
+// run carries on.
+constexpr float kDropCarry = 96;
+int64_t cut_hurt_links(NavGraph& g, const std::vector<HurtBox>& boxes);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
 // is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
 // `book`: the game's people's tricks and routes by map (shooterbots/map_book.hpp), each proven by

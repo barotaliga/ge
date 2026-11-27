@@ -32,7 +32,7 @@ is the family of those games and the layers they share.
   (`tools/agents-index.mjs`, `BRANDING`). Where the window shows a game's name to a player, it says
   once that Shooter's Edge is not made or endorsed by id Software: SELECT GAME's foot
   (`menu/games_page.cpp`).
-- **The command line names games by id.** `-classic q1|q2` picks a game (a game added later is
+- **The command line names games by id.** `+set fs_basegame q1|q2` picks a game (a game added later is
   one more id); `-game <folder>` is a mod's folder, as each classic game names one.
 - **"Classic" before a client, server or protocol is the family.** "A classic client" is any
   client of one of these games as it shipped, or one built to it; where the text means one game's,
@@ -120,15 +120,15 @@ The `shooters_edge` window (`games/shooters_edge/client/`, M18h's first slice) i
 one machine: the baseline mod (compiled at start from the QC sources built into the game) runs
 as a LISTEN SERVER in the same process, and the player is its client, his commands handed to
 the server's frame with no network between. It reads the maps out of your own copy of the
-classic game's packs: point `-basedir` at the folder that holds `id1/pak0.pak` (and `pak1.pak`
-for the full game's maps). The packs are never copied or committed (§ Content and test data).
+classic game's packs: `fs_basedir_q1` names the folder that holds `id1/pak0.pak` (and `pak1.pak`
+for the full game's maps), and `fs_basegame q1` plays it (§ The game and its install). The packs are never copied or committed (§ Content and test data).
 
 **The short way, on any machine** (`make setup` once installs what the build needs; README.md §
 Run a game):
 
 ```sh
 make run:shooters_edge                                         # the built-in arena, no packs
-make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6"  # your packs' maps
+make run:shooters_edge ARGS="+set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic +map dm6"
 ```
 
 **Or load the game from the menu**: `make run:shooters_edge`, then ESCAPE ▸ OPTIONS ▸ CLASSIC
@@ -138,22 +138,36 @@ folder without `id1` and its first pack is refused, and LOAD GAME's line says wh
 game is opened in place of the arena at once (its start map), its packs are enhanced in the
 background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
 with the menu closed), and when the run ends having written anything the world is made again
-from the cache, behind the one drawn. The folder
-is kept (`game_folder.txt` in the platform's per-user folder) and opened at the next start when
-`-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
-console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
+from the cache, behind the one drawn. Loading it sets `fs_basegame` and the game's
+`fs_basedir_<id>`, which the series config keeps, so the next start opens it again
+(`client/installs.hpp`, `client/game_folder.hpp`). Then `map dm3` plays that map.
+
+**The game and its install** (`client/installs.hpp`). Two kinds of setting pick what the window
+plays, in the shell's layer and kept in the series config (`<data folder>/settings/config.cfg`):
+
+| Setting | Values | What it does |
+| --- | --- | --- |
+| `fs_basegame` | `""` (the default), `q1`, `q2` | The game played: `""` is Shooter's Edge's own, else that classic game from its install. Set in the console, it opens that game |
+| `fs_basedir_q1`, `fs_basedir_q2` | a folder, `""` (the default) | Where each classic game is installed: the folder holding `id1` or `baseq2`. SELECT GAME, LOAD GAME and `games <n>` set it |
+
+They are read before any config runs (the series config, then the command line's `+set` words), so
+`se +set fs_basegame q2` plays Quake II from its `fs_basedir_q2`. With that empty, or its folder no
+longer holding the game, the folder chooser asks for it. A dedicated server takes the same words
+(docs/servers.md), the CLI takes them as `--fs_basegame=<id>` and `--fs_basedir_<id>=<dir>`, and classic
+remix reads the other game's install from its own `fs_basedir_<id>`. There is nothing else: no
+folder detection picks a game, and no file beside the settings remembers one.
 
 **Dropped into an install, or beside several** (`client/install_search.hpp`). Started inside a
 classic install (the folder the game runs in, or the folder its executable or app was placed in,
 is an install or lies inside one: its base folder, its multiplayer folder, the bundled client's
-folder), the game plays that install at once, ahead of the one kept. Placed in a folder ABOVE
+folder), the game finds that install. Placed in a folder ABOVE
 installs, it finds each folder right under it that is one: the folders named like a classic
 install first, in any case (the two games' own names, with or without a space or a 2, their
 multiplayer client's names, the bundles' names, Quake II's short name), then any other folder
 that holds a game. Each one's release is told by its packs' sizes (Quake's shareware or
-registered packs, Quake II's demo or full game; any other size is your own copy); the game
-loaded last is played when it is one of them, else the first full game. `games` in the console
-lists them and `games <n>` loads one.
+registered packs, Quake II's demo or full game; any other size is your own copy). They are only
+listed, never played on their own: `games` in the console lists them and `games <n>` loads one,
+which sets `fs_basegame` and its `fs_basedir_<id>`.
 
 **An install's configs, in its own order** (`client/install_configs.hpp`). The bundled client's
 configs come with the install: `default.cfg` on disk, then, when the bundled client's folder holds
@@ -213,23 +227,22 @@ timedemo) waits for its map before its first frame.
 brew install cmake ninja                 # once
 make build PRESET=release                # or only the window: cmake --preset release &&
                                          #   cmake --build --preset release --target shooters_edge
-build/release/se -basedir ~/Games/classic +map dm6
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic +map dm6
 ```
 
 **On Linux (Vulkan through Dawn; `sudo tools/setup-ubuntu.sh` installs what the build needs):**
 
 ```sh
 make build PRESET=release
-build/release/se -basedir ~/games/classic +map dm6
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/games/classic +map dm6
 ```
 
-- **`-classic q1`** plays Quake and **`-classic q2`** Quake II, each from the install kept
-  for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
-  the window not started inside one, the folder chooser asks for the folder the game is installed
-  in, checks that it is that game's install (asking again, with the reason, when it is not) and
-  keeps it, so the next `-classic q1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
-- **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
-  with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). When the install has the
+- **`+set fs_basegame q1`** plays Quake and **`+set fs_basegame q2`** Quake II, each from its
+  `fs_basedir_<id>`. With that empty or gone, the folder chooser asks for the folder the game is
+  installed in, checks that it is that game's install (asking again, with the reason, when it is
+  not) and sets it, so the next start opens at once (`client/game_folder.hpp`'s `choose_folder`).
+- **`+set fs_basedir_q1 <dir>`**: the folder holding the game folder; `~` is your home folder, and
+  a path with spaces goes in quotes (`+set fs_basedir_q1 "/Volumes/Old Games/classic"`). When the install has the
   multiplayer client's folder (its player skins, its multiplayer program), that folder is
   played over `id1` unless `-game` names another. **`-game <folder>`**
   plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
@@ -300,7 +313,7 @@ build/release/se -basedir ~/games/classic +map dm6
   showing its save's line. On a Mac:
 
   ```sh
-  build/release/se -basedir ~/Games/classic
+  build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic
   # then ESCAPE, SINGLE PLAYER, NEW GAME; later the console: save s1 ... load s1
   ```
 - **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
@@ -406,10 +419,10 @@ as one of the line's words; `-benchmark` says it is now `-timedemo`. A negative 
 a word:
 
 ```sh
-build/release/se -basedir ~/Games/classic -timedemo demo1
-build/release/se -basedir ~/Games/classic +vid_display 2 \
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic -timedemo demo1
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic +vid_display 2 \
     +vid_fullscreen 1 +r_look modern -timedemo demo1
-build/release/se -basedir ~/Games/classic --size=2560x1600 \
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic --size=2560x1600 \
     -timedemo ~/Downloads/match.dem
 ```
 
@@ -484,7 +497,7 @@ their colours, the items, the missiles, the level's statics), as `-demovideo` dr
 
 **The demo's game folder.** A multiplayer recording names the game folder its server ran
 (`fortress` for a team mod). When the window was opened on the base folder (no `-mod`) and that
-folder is beside it under `-basedir`, the demo plays from it, the base under it, so the mod's own
+folder is beside it in the install, the demo plays from it, the base under it, so the mod's own
 models, skins and maps are found; a `-mod` you pass always wins. A folder that is not there is
 named in the console with what to do.
 
@@ -504,7 +517,7 @@ coloured letters and the colour marks clients write into chat taken out), and a 
 the HUD's centre for two seconds. A seek plays nothing of what it skipped.
 
 ```sh
-build/release/se -basedir ~/Games/classic \
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic \
     -playdemo ~/Downloads/match.mvd.gz +demo_track 2 +cl_demospeed 2
 ```
 
@@ -689,13 +702,13 @@ GIF (no sound, `--gif-width=N` wide, 480 by default; `--fps=15` keeps it small) 
 encoder; `.webm`, `.mp4` and `.mkv` are videos with sound as above.
 
 ```sh
-build/release/se -basedir ~/Games/classic \
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic \
     -demovideo demo1 ~/Movies/demo1.mp4
-build/release/se -basedir ~/Games/classic \
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic \
     -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
-build/release/se -basedir ~/Games/classic \
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic \
     -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.webm --highlight=3 +demo_track 2
-build/release/se -basedir ~/Games/classic \
+build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic \
     -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.gif --from=4:31 --to=4:39 --fps=15
 ```
 
@@ -1875,10 +1888,10 @@ why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places
 menu's first row, so ENTER on a fresh start goes straight to it (`menu_games`;
 `menu/games_page.hpp`). It shows each classic game the content profiles know by a picture of its
 name (`menu/art/<id>.png`, embedded; the names are pictures, never words in the tree), the
-install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line a game) and that
+install its `fs_basedir_<id>` names (`client/installs.hpp`) and that
 install's edition, read from its packs the moment it is picked (the profile's `full_game` file
-found or not: Shareware or Registered, Quake II's Demo or Full game). ENTER on a game with a
-kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
+found or not: Shareware or Registered, Quake II's Demo or Full game). ENTER on a game with an
+install set opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
 and the folder is taken by whichever game's base folder it holds (`install_of`). Picked, a game starts as the
 classic games start (`client/game_start.hpp`): the menu goes, the console covers the screen with the
 packs added, and once the game's first recording plays (or its first map has loaded) the console

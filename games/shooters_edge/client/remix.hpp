@@ -111,9 +111,9 @@ struct RemixState {
   std::string why;            // when off but enabled: what is missing, in the game's words
 };
 
-// The classic games this computer knows: the played one at `played_basedir`, the others from the
-// installs kept in `prefs` (installs.hpp), each with its edition.
-std::vector<KnownGame> known_games(const std::string& prefs, std::string_view played,
+// The classic games this computer knows: the played one at `played_basedir`, the others from
+// their `fs_basedir_<id>` in `base` (installs.hpp), each with its edition.
+std::vector<KnownGame> known_games(const BaseGame& base, std::string_view played,
                                    const std::string& played_basedir);
 
 // Whether the remix is on while `played` is played, from the games the window knows.
@@ -300,9 +300,9 @@ std::string_view heard_game(const RemixSettings& s, const RemixState& state,
 bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
                 const std::string& basedir, const std::string& game, std::string& error);
 
-// The remix `s` asks for checked against the games the window knows (`prefs`, installs.hpp) and
+// The remix `s` asks for checked against the games the window knows (`base`, installs.hpp) and
 // opened into `r` (`remix_check`, `open_remix`); the console's line about it, "" when none.
-std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const std::string& prefs,
+std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const BaseGame& base,
                            std::string_view played, const std::string& basedir,
                            const std::string& game);
 

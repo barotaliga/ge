@@ -1,7 +1,8 @@
-// Each classic game's install kept by game, and its edition (installs.hpp).
+// The game played and each classic game's install as settings, and their editions (installs.hpp).
 //
-// ge:summary Keeps each classic game's install and reads its edition off its packs
-// ge:keywords installs remember_install remembered_installs edition_of shareware registered
+// ge:summary The game played and each game's install as settings; an install's edition
+// ge:keywords installs fs_basegame fs_basedir bind_base_game read_base_game edition_of shareware
+// ge:keywords registered
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/installs.hpp"
@@ -9,11 +10,13 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <system_error>
 #include <utility>
 #include <vector>
 
 #include "classic/content/load_order.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "vfs/search.hpp"
@@ -24,40 +27,154 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kInstallsFile = "installs.txt";
-
-}  // namespace
-
-std::map<std::string, std::string, std::less<>> remembered_installs(const std::string& prefs) {
-  std::map<std::string, std::string, std::less<>> out;
-  if (prefs.empty()) return out;
-  std::ifstream f(fs::path(prefs) / kInstallsFile);
-  std::string line;
-  while (std::getline(f, line)) {
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    const size_t space = line.find(' ');
-    if (space == std::string::npos || space == 0 || space + 1 >= line.size()) continue;
-    out[line.substr(0, space)] = line.substr(space + 1);
+// A config line's or the command line's words: quoted words whole, `//` ending the line.
+std::vector<std::string> words_of(std::string_view line) {
+  std::vector<std::string> out;
+  size_t i = 0;
+  while (i < line.size()) {
+    while (i < line.size() && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r')) i++;
+    if (i >= line.size() || line.compare(i, 2, "//") == 0) break;
+    std::string w;
+    if (line[i] == '"') {
+      const size_t end = line.find('"', i + 1);
+      w = std::string(line.substr(i + 1, end == std::string_view::npos ? end : end - i - 1));
+      i = end == std::string_view::npos ? line.size() : end + 1;
+    } else {
+      while (i < line.size() && line[i] != ' ' && line[i] != '\t' && line[i] != '\r')
+        w += line[i++];
+    }
+    out.push_back(std::move(w));
   }
   return out;
 }
 
-bool remember_install(const std::string& prefs, std::string_view id, const std::string& basedir) {
-  if (prefs.empty() || id.empty() || basedir.empty()) return false;
-  auto kept = remembered_installs(prefs);
-  kept[std::string(id)] = basedir;
-  std::error_code ec;
-  fs::create_directories(prefs, ec);
-  const fs::path file = fs::path(prefs) / kInstallsFile;
-  const fs::path tmp = fs::path(prefs) / (std::string(kInstallsFile) + ".tmp");
-  {
-    std::ofstream f(tmp, std::ios::trunc);
-    if (!f) return false;
-    for (const auto& [game, folder] : kept) f << game << ' ' << folder << '\n';
-    if (!f) return false;
+std::string lower(std::string_view s) {
+  std::string out(s);
+  for (char& c : out)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return out;
+}
+
+// `name value` into `base` when `name` is one of its settings; false when not.
+bool take_setting(BaseGame& base, std::string_view name, const std::string& value) {
+  const std::string n = lower(name);
+  if (n == kBaseGame) {
+    base.game = value;
+    return true;
   }
-  fs::rename(tmp, file, ec);
-  return !ec;
+  for (auto& [id, dir] : base.dirs)
+    if (n == basedir_setting(id)) {
+      dir = value.empty() ? value : expand_home(value);
+      return true;
+    }
+  return false;
+}
+
+}  // namespace
+
+std::string basedir_setting(std::string_view id) { return "fs_basedir_" + std::string(id); }
+
+BaseGame::BaseGame() {
+  for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
+    dirs[std::string(p.id)];
+}
+
+std::string BaseGame::dir(std::string_view id) const {
+  const auto it = dirs.find(id);
+  return it != dirs.end() ? it->second : std::string();
+}
+
+std::string set_base_game(ge::console::Cvars& cvars, const BaseGame& base) {
+  for (const auto& [id, dir] : base.dirs)
+    if (!dir.empty()) cvars.set(basedir_setting(id), dir, ge::console::Source::code);
+  cvars.set(std::string(kBaseGame), base.game, ge::console::Source::code);
+  return base.game + "\n" + base.dir(base.game);
+}
+
+BaseGame bind_base_game(ge::console::Cvars& cvars, BaseGame* out) {
+  const BaseGame held = *out;                        // binding writes the fallbacks
+  ge::console::CvarLayer shell(cvars, kLayerShell);  // every game's (cvar_layers.hpp)
+  std::string ids = "\"\": Shooter's Edge's own game (the default)";
+  for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
+    ids += "; " + std::string(p.id) + ": " + std::string(p.what);
+  cvars.bind({.name = std::string(kBaseGame),
+              .fallback = "",
+              .flags = ge::console::kArchive,
+              .help = "The game you play. Its install is the folder its own fs_basedir setting "
+                      "names; setting this opens it.",
+              .kind = ge::console::CvarKind::text,
+              .values = ids},
+             &out->game);
+  for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
+    cvars.bind(
+        {.name = basedir_setting(p.id),
+         .fallback = "",
+         .flags = ge::console::kArchive,
+         .help = "The folder " + std::string(p.what) + " is installed in: the one holding its " +
+                 std::string(p.base_dir) + " folder. Opening the game sets it.",
+         .kind = ge::console::CvarKind::text,
+         .values = "\"\": not added (the default); FOLDER: that install"},
+        &out->dirs[std::string(p.id)]);
+  set_base_game(cvars, held);
+  return held;
+}
+
+void keep_base_game(ge::console::Cvars& cvars, const BaseGame& base, std::string_view id,
+                    const std::string& basedir, std::string* seen) {
+  cvars.set(basedir_setting(id), basedir, ge::console::Source::code);
+  cvars.set(std::string(kBaseGame), std::string(id), ge::console::Source::code);
+  *seen = base.game + "\n" + base.dir(base.game);
+}
+
+void ask_base_game(const BaseGame& base, std::string* seen, std::string* folder,
+                   ge::console::Console& con) {
+  std::string why;
+  if (std::string asked = base_game_asked(base, seen, &why); !asked.empty())
+    *folder = std::move(asked);
+  else if (!why.empty())
+    con.print(why);
+}
+
+std::string base_game_asked(const BaseGame& base, std::string* seen, std::string* why) {
+  why->clear();
+  const std::string now = base.game + "\n" + base.dir(base.game);
+  if (now == *seen) return "";
+  *seen = now;
+  const ge::classicenhance::Profile* p = ge::classicenhance::find_profile(base.game);
+  if (base.game.empty()) {
+    *why = "Shooter's Edge's own game opens at the next start.";
+  } else if (p == nullptr) {
+    *why = std::string(kBaseGame) + " " + base.game + " is no game here. The games are " +
+           ge::classicenhance::profile_ids() + ".";
+  } else if (base.dir(base.game).empty()) {
+    *why = std::string(p->what) + " has no install set. Add it in SELECT GAME, or set " +
+           basedir_setting(p->id) + " to its folder.";
+  }
+  return why->empty() ? base.dir(base.game) : "";
+}
+
+BaseGame read_base_game(std::string_view config, const std::vector<std::string>& plus) {
+  BaseGame base;
+  size_t at = 0;
+  while (at < config.size()) {
+    const size_t nl = config.find('\n', at);
+    const std::string_view line =
+        config.substr(at, nl == std::string_view::npos ? std::string_view::npos : nl - at);
+    at = nl == std::string_view::npos ? config.size() : nl + 1;
+    std::vector<std::string> w = words_of(line);
+    if (!w.empty() && (lower(w[0]) == "set" || lower(w[0]) == "seta")) w.erase(w.begin());
+    if (w.size() >= 2) take_setting(base, w[0], w[1]);
+  }
+  for (size_t i = 0; i < plus.size(); i++) {
+    const std::string w = lower(plus[i]);
+    if ((w == "+set" || w == "+seta") && i + 2 < plus.size()) {
+      if (take_setting(base, plus[i + 1], plus[i + 2])) i += 2;
+    } else if (w.size() > 1 && w[0] == '+' && i + 1 < plus.size() &&
+               take_setting(base, w.substr(1), plus[i + 1])) {
+      i++;
+    }
+  }
+  return base;
 }
 
 Edition edition_of(const std::string& basedir, const ge::classicenhance::Profile& content) {
@@ -117,17 +234,15 @@ std::vector<const ge::classicenhance::MissionPack*> packs_of(
   return out;
 }
 
-std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
-                                                    std::string_view playing,
+std::vector<shooters_edge::menu::GameRow> game_rows(const BaseGame& base, std::string_view playing,
                                                     const std::string& playing_install,
                                                     std::string_view remixed,
                                                     std::string_view playing_folder) {
   std::vector<shooters_edge::menu::GameRow> rows;
-  const auto kept = remembered_installs(prefs);
   for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles) {
     shooters_edge::menu::GameRow g;
     g.id = std::string(p.id);
-    if (const auto it = kept.find(p.id); it != kept.end()) g.install = it->second;
+    g.install = base.dir(p.id);
     if (playing == p.id && !playing_install.empty()) {
       g.playing = true;
       g.install = playing_install;
@@ -160,6 +275,13 @@ std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
     }
   }
   return rows;
+}
+
+BaseGame read_base_game(const std::filesystem::path& file, const std::vector<std::string>& plus) {
+  std::string text;
+  if (std::ifstream f(file, std::ios::binary); f)
+    text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+  return read_base_game(std::string_view(text), plus);
 }
 
 }  // namespace shooters_edge::client

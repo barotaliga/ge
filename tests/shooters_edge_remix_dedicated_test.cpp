@@ -1,9 +1,9 @@
 // Classic remix on a dedicated server (M18u13c): `sesv` reads the cr_ settings as its rules and
-// the other game's install from cr_basedir, plays the other game's map on its own rules wearing the
-// other game's things, and tells every client the remix in its server info.
+// the other game's install from its fs_basedir_<id>, plays the other game's map on its own rules
+// wearing the other game's things, and tells every client the remix in its server info.
 //
-// ge:summary Tests classic remix on a dedicated server: cr_ rules, cr_basedir, the server info
-// ge:keywords test remix dedicated-server sesv cr_basedir remix_rules open_server_remix
+// ge:summary Tests classic remix on a dedicated server: cr_ rules, fs_basedir_<id>, the server info
+// ge:keywords test remix dedicated-server sesv fs_basedir fs_basegame remix_rules open_server_remix
 // ge:skill shooter testing
 #include <filesystem>
 #include <fstream>
@@ -90,24 +90,26 @@ struct Installs {
 
 }  // namespace
 
-// Every cr_ setting a server takes explains itself, the player's own cr_menu left out; the
-// window's defaults hold for a rule left unset.
+// Every cr_ setting a server takes explains itself, the player's own cr_menu left out, with the
+// game served and each game's install; the window's defaults hold for a rule left unset.
 TEST(the_server_takes_every_cr_setting_but_the_menu) {
-  bool basedir = false, items = false, menu = false;
+  bool basegame = false, basedir = false, items = false, menu = false;
   for (const gs::GameRule& r : cl::remix_rules()) {
     CHECK_MSG(r.help != nullptr && r.values != nullptr, r.name);
-    basedir = basedir || std::string(r.name) == "cr_basedir";
+    basegame = basegame || std::string(r.name) == "fs_basegame";
+    basedir = basedir || std::string(r.name) == "fs_basedir_q2";
     items = items || std::string(r.name) == "cr_items";
     menu = menu || std::string(r.name) == "cr_menu";
   }
-  CHECK(basedir && items && !menu);
+  CHECK(basegame && basedir && items && !menu);
   CHECK(cl::is_remix_rule("cr_physics") && !cl::is_remix_rule("fraglimit"));
   const cl::RemixSettings s = cl::remix_of_rules({{"cr_enabled", "1"}, {"cr_items", "q2"}});
   CHECK(s.enabled && s.items == "q2" && s.expansions && s.balance.strong_min == 1);
   CHECK(!cl::remix_of_rules({}).enabled);
 }
 
-// Off, with the reason in the game's words, until cr_basedir names the other full game.
+// Off, with the reason in the game's words, until the other game's fs_basedir_<id> names its full
+// game; the served game's own setting is not the other's.
 TEST(the_server_s_remix_says_why_it_stays_off) {
   const Installs in;
   cl::RemixFiles r;
@@ -115,11 +117,14 @@ TEST(the_server_s_remix_says_why_it_stays_off) {
   const std::string q1 = in.q1.string(), base(ce::q1_profile().base_dir);
   CHECK(cl::open_server_remix(r, {}, "q1", q1, base, false).empty());
   std::string line = cl::open_server_remix(r, rules, "q1", q1, base, false);
-  CHECK_MSG(!r.state.on && line.find("cr_basedir") != std::string::npos, line);
-  rules["cr_basedir"] = q1;  // the played game's own install
+  CHECK_MSG(!r.state.on && line.find("fs_basedir") != std::string::npos, line);
+  rules["fs_basedir_q1"] = q1;  // the served game's own install: still no other game
   line = cl::open_server_remix(r, rules, "q1", q1, base, false);
-  CHECK_MSG(!r.state.on && line.find("the game this server plays") != std::string::npos, line);
-  rules["cr_basedir"] = in.q2.string();
+  CHECK_MSG(!r.state.on && line.find("other classic game") != std::string::npos, line);
+  rules["fs_basedir_q2"] = in.q1.string();  // not Quake II
+  line = cl::open_server_remix(r, rules, "q1", q1, base, false);
+  CHECK_MSG(!r.state.on && line.find("fs_basedir_q2") != std::string::npos, line);
+  rules["fs_basedir_q2"] = in.q2.string();
   rules["cr_items"] = "q2";
   line = cl::open_server_remix(r, rules, "q1", q1, base, false);
   CHECK_MSG(r.state.on && r.state.other == "q2" && r.worn != nullptr, line);
@@ -139,7 +144,7 @@ TEST(sesv_plays_the_other_game_s_map_and_tells_its_remix) {
   c.maxclients = 8;
   c.seed = 1;
   c.root = in.q1.string();
-  c.rules = {{"cr_enabled", "1"}, {"cr_items", "q2"}, {"cr_basedir", in.q2.string()}};
+  c.rules = {{"cr_enabled", "1"}, {"cr_items", "q2"}, {"fs_basedir_q2", in.q2.string()}};
   gn::LinkConditions lan;
   gn::SimNetwork net = gn::make_sim_network(c.seed, lan);
   gn::Transport server_port, client_port;
@@ -182,7 +187,7 @@ TEST(sesv_q2_plays_quake_s_map_on_quake_ii_s_rules) {
   gs::Server off;
   std::string error;
   CHECK(!gs::server_open(off, se::q2_game(), c, nullptr, nullptr, error));
-  c.rules = {{"cr_enabled", "1"}, {"cr_items", "q1"}, {"cr_basedir", in.q1.string()}};
+  c.rules = {{"cr_enabled", "1"}, {"cr_items", "q1"}, {"fs_basedir_q1", in.q1.string()}};
   gs::Server s;
   error.clear();
   CHECK_MSG(gs::server_open(s, se::q2_game(), c, nullptr, nullptr, error), error);
