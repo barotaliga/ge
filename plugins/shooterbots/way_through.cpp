@@ -350,7 +350,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.kind = WayKind::trigger;  // one fired by something else is not walked into, but one
       st.target = target;          // made live by it is, once it is
       st.repeats = std::strcmp(cn, "trigger_multiple") == 0;
-      if (fired(name)) way_gate_names(st, name, blocks);
+      if (fired(name)) way_gate_names(st, name, blocks, s);
       st.opens = opens(target, st.doors);
       st.keyed = keyed(target);
     } else if (std::strcmp(cn, "item_key1") == 0 || std::strcmp(cn, "item_key2") == 0) {
@@ -689,6 +689,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
           st.drains || (target != nullptr && name != nullptr && cls != nullptr &&
                         std::strcmp(name, target) == 0 && std::strcmp(cls, "func_water") == 0);
     }
+    // One whose target, or what that fires in turn, is a killbox or a blast no one lives through
+    // (biggun's: two relays 22 s on, then the whole base): pressed last, and then out (`dooms`).
+    st.dooms = button_dooms(blocks, target);
     if (st.doors.empty() && bs.doors.size() == 1 && bs.doors[0] == bs.ent) {  // a shot wall
       st.doors = bs.doors;
       st.opens = true;
@@ -934,6 +937,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       const bool now = pressed || all || (bs.doors.empty() && st.done);
       if (now && !st.done) w.stats.steps_done++;
       st.done = now;
+      // One that blows the place up, pressed, is let go of at once: the poke's hold on it kept him
+      // at biggun's for 3 s of the 22 he has to get out.
+      if (st.dooms && st.done && f.poke == st.button) f.poke_until = t;
       continue;
     }
     const bool again = st.kind == WayKind::trigger && w.complete && st.opens && !st.doors.empty();
@@ -974,7 +980,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       w.crawl_out_at = t;
     }
   }
-  way_wake_gates(w);
+  way_wake_gates(w, s);
   // A waiting plat once moved runs for good: never locked again (where it stood is put out of
   // reach).
   for (size_t k = 0; k < w.locked.size(); k++) {
@@ -1296,6 +1302,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     if (left_to_do) w.busy_at = t;
     left_to_do = left_to_do || t - w.busy_at < kWayDone_s;
   }
+  // A button pressed that blows the place up (`dooms`, pressed last): nothing is left but the exit,
+  // the monsters too (biggun's base: he went after one and then a trigger, and was in it at 22 s).
+  for (const WayStep& st : w.steps)
+    if (st.dooms && st.done) {
+      left_to_do = false;
+      prey = -1;
+    }
   // The exit; else the nearest step not done; else the nearest place not seen.
   int pick = -1;
   double best = 0;
@@ -1379,7 +1392,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   for (const WayStep& st : w.steps)
     last_open = last_open ||
                 (w.complete && !way_exit(st) && !st.done && st.node >= 0 && t >= st.left_until &&
-                 reach(st.node) && ((!me_trapped && trapped_in(st.node)) || st.drains));
+                 reach(st.node) && ((!me_trapped && trapped_in(st.node)) || st.drains || st.dooms));
   for (int pass = 0; pass < (w.complete ? 4 : 3) && pick < 0; pass++) {
     // Nothing left but the steps taken last: a way back to a map he has played comes first, before
     // any place not yet seen (he knows the map: the steps are all he needs to find).
@@ -1402,7 +1415,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       for (const int c : st.covers)
         covered = covered || !locked_moved(w, s, static_cast<size_t>(c));
       if (covered) continue;
-      const bool last = (!me_trapped && trapped_in(st.node)) || st.drains;
+      const bool last = (!me_trapped && trapped_in(st.node)) || st.drains || st.dooms;
       if (pass == 3) {
         if (roam || prey >= 0 || !way_back(st)) continue;
       } else if (pass < 2 ? last : !last || roam) {
@@ -1451,8 +1464,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       // A car's button is the way out (pressed on the way to the exit, after the rest): a tour
       // that took it with monsters left rode him out of base2 on his way back through it.
       if (st.done || st.ever || t < st.left_until || st.node < 0 || !reach(st.node) ||
-          (st.keyed && !key_held) || st.drains || (!me_trapped && trapped_in(st.node)) ||
-          carries(st) || held_step(st))
+          (st.keyed && !key_held) || st.drains || st.dooms ||
+          (!me_trapped && trapped_in(st.node)) || carries(st) || held_step(st))
         return -1;
       for (const int c : st.covers)
         if (!locked_moved(w, s, static_cast<size_t>(c))) return -1;

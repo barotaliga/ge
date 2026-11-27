@@ -2,6 +2,7 @@
 //
 // ge:summary Triggers a button wakes: the names that wake one, touch doors, the near side's node
 // ge:keywords way_gate_names way_wake_gates way_touch_opened way_trigger_sides triggered gate
+// ge:keywords deathtarget gate_dead
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooterbots/way_gates.hpp"
@@ -12,6 +13,7 @@
 
 #include "shooter/trace.hpp"
 #include "shooterbots/buttons.hpp"
+#include "shooterbots/way_parts.hpp"
 
 namespace ge::shooterbots {
 
@@ -22,7 +24,8 @@ bool trigger_waits(const EntityBlock& b) {
   return sf != nullptr && (std::atoi(sf) & kTriggerWaits) != 0;
 }
 
-void way_gate_names(WayStep& st, const char* name, const std::vector<EntityBlock>& blocks) {
+void way_gate_names(WayStep& st, const char* name, const std::vector<EntityBlock>& blocks,
+                    const BotView& s) {
   constexpr size_t kMostNames = 8;  // a chain of wakers is a few names long
   st.gate.emplace_back(name);
   for (size_t k = 0; k < st.gate.size() && st.gate.size() < kMostNames; k++)
@@ -34,15 +37,45 @@ void way_gate_names(WayStep& st, const char* name, const std::vector<EntityBlock
       for (const std::string& gn : st.gate) known = known || gn == bn;
       if (!known) st.gate.emplace_back(bn);
     }
+  // A monster whose death fires one of the names (biggun's boss: its death wakes the strip by the
+  // only door north), found by its spot among the monsters standing at the start.
+  constexpr float kSpawnNear = 64;  // a monster this near its block's spot is that block's, units
+  for (const EntityBlock& by : blocks) {
+    const char* dt = block_value(by, "deathtarget");
+    const char* org = block_value(by, "origin");
+    if (!dt || !org) continue;
+    bool gates = false;
+    for (const std::string& gn : st.gate) gates = gates || gn == dt;
+    if (!gates) continue;
+    const sh::Vec3f at = way_parts::origin_of(org);
+    int best = -1;
+    float best_d = kSpawnNear;
+    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      const bool monster = (d.flags & sh::kFlagMonster) != 0 || d.solid == sh::kSolidSlidebox;
+      if (d.free || !monster || d.health <= 0) continue;
+      const sh::Vec3f dd = d.origin - at;
+      const float far = sh::length(dd);
+      if (far < best_d) {
+        best = e;
+        best_d = far;
+      }
+    }
+    if (best >= 0) st.gate_dead.push_back(best);
+  }
   st.left_until = kWayForever;
 }
 
-void way_wake_gates(WayThrough& w) {
+void way_wake_gates(WayThrough& w, const BotView& s) {
   for (WayStep& st : w.steps) {
     if (st.gate.empty()) continue;
     bool live = false;
     for (const WayStep& o : w.steps)
       for (const std::string& gn : st.gate) live = live || ((o.done || o.ever) && o.target == gn);
+    for (const int e : st.gate_dead) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      live = live || d.free || d.health <= 0;
+    }
     if (live) {
       st.gate.clear();
       st.left_until = -1;
