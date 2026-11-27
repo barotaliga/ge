@@ -153,6 +153,7 @@ class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by
   // The folder the game's screenshots are written to: what OPTIONS ▸ SCREENSHOTS shows.
   void set_screenshots(std::string dir) { gallery_.set_dir(std::move(dir)); }
   ge::capture::Gallery& gallery() { return gallery_; }
+  GalleryPage& gallery_page() { return gallery_page_; }
   // Whether the screenshots page is the one up.
   bool in_gallery() const { return in_gallery_; }
   // OPTIONS ▸ SERVER SETTINGS (server_page.hpp): its pages live in `main()`, filled from the

@@ -86,6 +86,7 @@
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
 #include "platform/pacing.hpp"
+#include "platform/reveal.hpp"
 #include "platform/window.hpp"
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
@@ -351,7 +352,8 @@ int run_main(int argc, char** argv) {
       "shooters_edge", &shot_settings);
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
-  game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
+  ge::platform::add_reveal_command(console);  // the screenshots page's SHOW IN FINDER
+  game_menu.set_screenshots(shots.dir());     // OPTIONS > SCREENSHOTS looks through them
   game_menu.servers().set_query(shooters_edge::net::qw_query());         // JOIN A GAME
   game_menu.servers().set_routes(shooters_edge::net::qw_route_query());  // sb_findroutes
   game_menu.servers().set_cache_dir(
@@ -1184,7 +1186,7 @@ int run_main(int argc, char** argv) {
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
-        mi.letter = input.tapped_letter("efmnpy");  // the browser's filters, the quit box's Y and N
+        mi.letter = input.tapped_letter("efmnopy");  // filters, the quit box's Y/N, shots' O (show)
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;

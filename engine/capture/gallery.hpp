@@ -13,7 +13,8 @@
 //   `set_grid`), `viewer` (one picture at full size) and `confirm` (asked whether to delete the
 //   selected one). `input` takes one frame's presses (arrows, accept, back, delete, the cell under
 //   the pointer and a click) and says what they did (`GalleryAction`), so the game plays a sound
-//   or leaves its page on `leave`.
+//   or leaves its page on `leave`, or shows `reveal_target` in the system's file manager on
+//   `reveal` (the selected file, or the folder when it is empty: platform/reveal.hpp).
 // - THE LOADS: a worker thread of its own reads and decodes the files the page shows
 //   (`decode_still`), the grid's page and the pages either side of it as thumbnails shrunk to
 //   `thumb_px` across, the viewer's picture and its neighbours at full size, most wanted first.
@@ -28,7 +29,7 @@
 // ge:keywords gallery screenshot screenshots-folder thumbnail thumb viewer grid page browse
 // ge:keywords delete confirm navigate select list_stills taken_of size_text gallery_cells
 // ge:keywords gallery_entry gallery-input poll settle stamp worker decode
-// ge:keywords photo-mode album pictures-taken
+// ge:keywords photo-mode album pictures-taken reveal_target show-in-finder open-folder
 // ge:skill replay ui
 // ge:test tests/capture_gallery_test.cpp
 #pragma once
@@ -83,6 +84,8 @@ struct GalleryInput {
   bool accept = false;  // grid: view the selected; viewer: back to the grid; confirm: delete
   bool back = false;    // grid: leave the gallery; viewer: back to the grid; confirm: keep it
   bool del = false;     // grid or viewer: ask to delete the selected
+  bool reveal = false;  // grid or viewer: show the selected in the system's file manager (none:
+                        // the folder)
   int pointed = -1;     // the entry under the pointer when it moved this frame; -1 none
   bool click = false;   // the pointer's button released over `pointed`: viewed (grid)
 };
@@ -98,6 +101,7 @@ enum class GalleryAction : uint8_t {
   kept,     // the delete was called off
   failed,   // the delete failed: `error` says why
   leave,    // back on the grid: the game leaves the gallery
+  reveal,   // show `reveal_target` in the system's file manager (platform/reveal.hpp)
 };
 
 // A picture the gallery holds, and a stamp that changes each time its pixels do.
@@ -128,6 +132,8 @@ class Gallery {
   // The selected entry's index, -1 when there is none; its entry, null then.
   int selected() const { return selected_; }
   const GalleryEntry* current() const;
+  // What REVEAL shows: the selected file's path, or the folder when there is none.
+  std::string reveal_target() const;
   // The selection set (clamped to the list) or moved by `step` (clamped, no wrap).
   void select(int index);
   void step(int by);
