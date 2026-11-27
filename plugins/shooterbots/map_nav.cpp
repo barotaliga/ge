@@ -1744,7 +1744,8 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     for (size_t n = 0; n < risk.size(); n++)
       risk[n] =
           (n < out.harm.size() && out.harm[n]) || (n < out.trap.size() && out.trap[n]) ? 1 : 0;
-    out.hardened = sb::nav_harden_jumps(out.world, out.move, graph, risk);
+    out.hardened =
+        sb::nav_harden_jumps(out.world, out.move, graph, risk, 0.9f, 2, 192, 48, out.movers);
   }
   // THE GAP TRICKS (the book's): people's speed jumps over a pit as jump links at a hopper's
   // speed, landing where a way back on foot leads to the main part; after the hardening, which

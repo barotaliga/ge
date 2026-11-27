@@ -215,13 +215,19 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const char* dc = sb::block_value(d, "classname");
       const char* dn = sb::block_value(d, "targetname");
       const char* dt = sb::block_value(d, "target");
-      if (!dc || !dn || !dt || std::strcmp(dn, t) != 0) continue;
+      const char* dk = sb::block_value(d, "killtarget");
+      if (!dc || !dn || (!dt && !dk) || std::strcmp(dn, t) != 0) continue;
       // (A door that fires its own target as it opens passes it on too: base2's lever is a
       // `func_door_rotating` whose target is the exit's door.)
-      if (std::strcmp(dc, "trigger_counter") == 0 || std::strcmp(dc, "trigger_relay") == 0 ||
-          std::strcmp(dc, "trigger_key") == 0 || std::strcmp(dc, "func_door_rotating") == 0 ||
-          std::strcmp(dc, "func_door") == 0)
+      const bool relays = std::strcmp(dc, "trigger_counter") == 0 ||
+                          std::strcmp(dc, "trigger_relay") == 0 ||
+                          std::strcmp(dc, "trigger_key") == 0;
+      if (dt && (relays || std::strcmp(dc, "func_door_rotating") == 0 ||
+                 std::strcmp(dc, "func_door") == 0))
         any = names_door(dt, out) || any;
+      // What a counter or a relay removes opens too (boss1's wall before the lift up to
+      // the boss: its two buttons' counter kills it).
+      if (dk && relays) any = names_door(dk, out) || any;
     }
     return any;
   };

@@ -171,6 +171,25 @@ TEST(a_counter_counts_down_to_its_targets) {
   CHECK(g->s().help_changed == 1);
 }
 
+TEST(a_counter_removes_what_its_killtarget_names_when_it_completes) {
+  // Two buttons into a counter whose killtarget is a wall (boss1's way up to the boss).
+  auto g = open_game({relay("go", "count"),
+                      {{"classname", "trigger_counter"},
+                       {"targetname", "count"},
+                       {"count", "2"},
+                       {"killtarget", "birdy"}},
+                      {{"classname", "func_wall"}, {"targetname", "birdy"}, {"model", "*4"}}});
+  run(*g, 10);
+  const int wall = g->named("birdy");
+  CHECK(wall >= 0 && !g->at(wall).gone);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  run(*g, 1);
+  CHECK(!g->at(wall).gone);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  run(*g, 1);
+  CHECK(g->at(wall).gone);
+}
+
 TEST(a_barrel_shot_blows_a_moment_later_and_hurts_who_stands_by) {
   auto g = open_game({{{"classname", "misc_explobox"}, {"origin", "-500 0 0"}}});
   run(*g, 10);

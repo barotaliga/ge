@@ -671,6 +671,11 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       }
   }
 
+  // How many columns from a moving platform's top node a jump across a gap on or off it reaches,
+  // the run-up it needs (a short ledge's), and how near a node of its top a jump onto it lands.
+  constexpr int32_t kDockSpan = 3;
+  constexpr float kDockRunUp = 16, kDockLand = 24;
+  constexpr float kDockRisk_s = 2;  // its price over a walk on: a miss is a fall (into lava there)
   // MOVING PLATFORMS: each placed at every stop in turn; the columns over its top there traced
   // for its floor, a node on each where the player's whole box stands on it, walked or jumped
   // onto from the nodes beside it and off to them (links kept for that stop: the pilot waits for
@@ -739,6 +744,83 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
             }
           });
         }
+    }
+    // Across a gap at each stop: a running jump off its top to a floor a few columns off that
+    // nothing else reaches, and back onto its top, landing anywhere on it (boss1's ferries over
+    // lava to the two buttons' ledges: each ledge stands 72 units off the ferry's end, its one node
+    // three columns from the ferry's last; a ledge 48 units deep leaves a short run).
+    for (size_t k = 0; k < ns; k++) {
+      MoveWorld there = world;
+      if (there.count >= kMaxSolids) break;
+      there.solids[there.count++] = mover_solid(m, m.stops[k]);
+      const Vec3f shift = m.stops[k] - m.rest;
+      const Vec3f lo = m.absmin + shift, hi = m.absmax + shift;
+      const float stand = hi.z - kPlayerMins.z;
+      // The top's node nearest where a jump came down on it, or -1 when it came down elsewhere.
+      const auto landed_on = [&](Vec3f end) {
+        if (end.z < stand - 2 || end.z > stand + 2 || end.x < lo.x || end.x > hi.x ||
+            end.y < lo.y || end.y > hi.y)
+          return int32_t{-1};
+        int32_t best = -1;
+        float best_d = kDockLand * kDockLand;
+        for (const auto& [spot, c] : tops[k]) {
+          const Vec3f d = g.nodes[static_cast<size_t>(c)].origin - end;
+          const float dd = d.x * d.x + d.y * d.y;
+          if (dd < best_d) {
+            best_d = dd;
+            best = c;
+          }
+        }
+        return best;
+      };
+      for (const auto& [spot, ti] : tops[k]) {
+        const NavNode t = g.nodes[static_cast<size_t>(ti)];
+        each_column(t, kDockSpan, [&](int32_t ci, int32_t cj, int32_t b) {
+          if (ci >= t.col - 1 && ci <= t.col + 1 && cj >= t.row - 1 && cj <= t.row + 1) return;
+          const NavNode& nb = g.nodes[static_cast<size_t>(b)];
+          if (nb.mover >= 0 || nb.origin.z - t.origin.z > kStepHeight ||
+              t.origin.z - nb.origin.z > kStepHeight)
+            return;
+          // Walked across where the floor it docks at keeps its top's nodes in (boss1's ferry
+          // slides out from under the floor's edge: the top's first node under that edge, the
+          // walk on stood on the floor and never reached it). Jumped only to and from a floor no
+          // other way reaches (a ledge the platform alone serves): a jump onto it from the floor
+          // it docks at, flown faster than proven, carried a bot past its end into the lava.
+          bool island = true;
+          for (const NavLink& l : out[static_cast<size_t>(b)])
+            island = island && g.nodes[static_cast<size_t>(l.to)].mover == m.ent;
+          for (int dir = 0; dir < 2; dir++) {
+            const size_t from = dir == 0 ? static_cast<size_t>(b) : static_cast<size_t>(ti);
+            const Vec3f a0 = g.nodes[from].origin;
+            const Vec3f to = dir == 0 ? t.origin : nb.origin;
+            for (int q = -1; q < (island ? njumps : 0); q++) {
+              const bool walking = q < 0;
+              const float speed = walking ? 0.f : jumps[q].speed;
+              const NavProof pr = prove_link(there, move, a0, to,
+                                             walking ? NavKind::walk : NavKind::jump, speed, set);
+              g.counts.proofs++;
+              g.counts.commands += pr.commands;
+              const int32_t land = pr.reached             ? (dir == 0 ? ti : b)
+                                   : dir == 0 && !walking ? landed_on(pr.end)
+                                                          : -1;
+              if (land < 0 || (!walking && !room_to_run_up(there, a0, to, kDockRunUp))) continue;
+              bool have = false;
+              for (const NavLink& l : out[from]) have = have || l.to == land;
+              if (have) break;
+              NavLink l;
+              l.to = land;
+              l.kind = walking ? NavKind::walk : NavKind::jump;
+              l.time_s = pr.time_s + (walking ? 0.f : kDockRisk_s);
+              l.speed = speed;
+              l.mover = m.ent;
+              l.stop = static_cast<int32_t>(k);
+              out[from].push_back(l);
+              g.counts.by_kind[static_cast<int>(l.kind)]++;
+              break;
+            }
+          }
+        });
+      }
     }
     // Across its top at each stop: its nodes walked between (the platform there).
     for (size_t k = 0; k < ns; k++) {
@@ -1733,90 +1815,6 @@ NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, 
       }
   }
   nav_add_links(g, extra);
-  return out;
-}
-
-NavHardenCounts nav_harden_jumps(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
-                                 std::span<const uint8_t> harm, float slow, float risk_s,
-                                 float beside, float overshoot) {
-  NavHardenCounts out;
-  if (harm.size() != g.nodes.size()) return out;
-  // Whether a harm node stands in a grid column under the line from `a` to `b`, below both.
-  const auto over_harm = [&](Vec3f a, Vec3f b) {
-    const float len = across(a, b);
-    const int steps = static_cast<int>(len / (g.set.spacing * 0.5f)) + 1;
-    const float low = (a.z < b.z ? a.z : b.z) - kStepHeight;
-    for (int i = 1; i < steps; i++) {
-      const Vec3f p = a + (b - a) * (static_cast<float>(i) / static_cast<float>(steps));
-      const auto ci = static_cast<int32_t>((p.x - g.lo.x) / g.set.spacing);
-      const auto cj = static_cast<int32_t>((p.y - g.lo.y) / g.set.spacing);
-      if (ci < 0 || ci >= g.cols || cj < 0 || cj >= g.rows) continue;
-      const size_t c =
-          static_cast<size_t>(ci) * static_cast<size_t>(g.rows) + static_cast<size_t>(cj);
-      for (int32_t k = 0; k < g.col_n[c]; k++) {
-        const int32_t n = g.col_first[c] + k;
-        if (harm[static_cast<size_t>(n)] && g.nodes[static_cast<size_t>(n)].origin.z < low)
-          return true;
-      }
-    }
-    return false;
-  };
-  // Whether a harm node lower than `p` stands within `beside` across of it (a landing at an edge
-  // over it: the momentum carries a jumper on past where the proof stood still).
-  const auto harm_beside = [&](Vec3f p) {
-    bool found = false;
-    floor_near(g, p, beside, [&](int32_t m) {
-      const Vec3f o = g.nodes[static_cast<size_t>(m)].origin;
-      found = found ||
-              (harm[static_cast<size_t>(m)] && o.z < p.z - kStepHeight && across(o, p) <= beside);
-    });
-    return found;
-  };
-  std::vector<NavLink> links;
-  links.reserve(g.links.size());
-  for (size_t a = 0; a < g.nodes.size(); a++) {
-    NavNode& n = g.nodes[a];
-    const int32_t first = static_cast<int32_t>(links.size());
-    for (int32_t k = 0; k < n.links; k++) {
-      NavLink l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-      // An updraft's ride is the push's, not the jump's: nothing to overshoot.
-      const bool leap = (l.kind == NavKind::jump && !l.updraft) || nav_blast(l.kind);
-      const Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
-      if (leap && (over_harm(n.origin, to) || harm_beside(to))) {
-        out.over++;
-        // Flown again at a point `overshoot` past the target: a flight that ends in the harm, or
-        // falls well below the target, lands at an edge over it.
-        Vec3f dir{to.x - n.origin.x, to.y - n.origin.y, 0};
-        normalize(dir);
-        const NavProof past =
-            prove_link(world, move, n.origin, to + dir * overshoot,
-                       l.kind == NavKind::jump ? NavKind::jump : NavKind::walk, l.speed, g.set);
-        out.proofs++;
-        const int c = water_contents(world, {past.end.x, past.end.y, past.end.z - 22});
-        if (l.kind == NavKind::jump &&
-            (c == kContentsLava || c == kContentsSlime || past.end.z < to.z - 2 * kStepHeight)) {
-          out.removed++;
-          continue;
-        }
-        if (l.kind == NavKind::jump && l.speed > 0) {
-          NavProof pr;
-          if (slow > 0) {
-            out.proofs++;
-            pr = prove_link(world, move, n.origin, to, NavKind::jump, l.speed * slow, g.set);
-          }
-          if (!pr.reached) {
-            out.removed++;
-            continue;
-          }
-        }
-        l.time_s += risk_s;
-      }
-      links.push_back(l);
-    }
-    n.first_link = first;
-    n.links = static_cast<int32_t>(links.size()) - first;
-  }
-  g.links = std::move(links);
   return out;
 }
 
