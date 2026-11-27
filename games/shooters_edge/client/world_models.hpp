@@ -307,7 +307,7 @@ struct Worn {
 using models::SkinChoice;
 
 struct WorldModels {
-  std::vector<ModelKind> kinds;    // by modelindex
+  std::vector<ModelKind> kinds;  // by modelindex
   // A vertex-animated model's pitch tips its nose up (Quake's entities), so it is drawn reversed;
   // false for a game whose every entity pitches nose-down (Quake II: GameAdapter::pitch_down).
   bool alias_pitch_up = true;

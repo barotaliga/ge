@@ -439,8 +439,7 @@ void warp_dust(const Warp& w, const fx::Dust& d, double was, double age, uint32_
   fx::dust_off(d, warp_shown(w, std::max(was, 0.0)), warp_shown(w, age), seed, out);
 }
 
-fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entity,
-                     bool pitch_up) {
+fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entity, bool pitch_up) {
   fx::Dust d;
   const ge::camera::Vec3 at = engine_point(origin);
   put(at, d.at);
