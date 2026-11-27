@@ -10,8 +10,10 @@
 // (the format's tracer bits) give the same kind to a mod's own model that carries them. The kinds:
 //
 // - ACID (`acid`): a flier's spit, a green-yellow glob. Classic: green specks either side of its
-//   line. Modern: dripping glowing acid and a sickly green light round it; it splashes where it
-//   lands, droplets running off the wall and a hissing green haze.
+//   line. Modern: the same two rows, as soft round glowing drops thrown left and right in turn
+//   that drift off, dim and sag, a faint vapour along the line, a green-hot core in a soft green
+//   halo round the pack's glob and a green light; where it lands, a green flash, drops splashed
+//   along the face, specks that fizz on the spot and a rising green haze.
 // - FLAME (`flame`): a knight's fire bolt. Classic: orange specks either side. Modern: a short
 //   flame streaming back off it, embers shed, a flickering orange light; a burst of fire and embers
 //   where it lands.

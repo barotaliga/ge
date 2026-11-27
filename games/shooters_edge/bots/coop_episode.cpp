@@ -522,7 +522,14 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       }
     }
     em.seconds = static_cast<double>(frame) / 72;
-    if (!changed) em.end = "the time ran out";
+    // An intermission that leads to no map is the game's end (Scourge's hipend: Armagon dead, the
+    // finale): the map is finished.
+    if (!changed && em.exit_s >= 0) {
+      em.finished = true;
+      em.end = "the game's end";
+    } else if (!changed) {
+      em.end = "the time ran out";
+    }
     em.near_share = counted > 0 ? static_cast<double>(near) / static_cast<double>(counted) : 0;
     em.helper_near_share =
         helper_counted > 0 ? static_cast<double>(helper_near) / static_cast<double>(helper_counted)

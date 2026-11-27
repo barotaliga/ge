@@ -804,6 +804,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.lifts.clear();
   for (const int e : w.locked)
     if (is_lift(w, f, e)) w.lifts.push_back(e);
+  // (`complete`) A breakable lid over a way (`way_shot_currents`): shut to him till it is gone.
+  for (const ButtonSpot& bs : f.button_spots)
+    if (bs.lid) gates.push_back(bs.ent);
   for (const int e : gates) {
     if (is_lift(w, f, e)) continue;
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
@@ -1010,8 +1013,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
                            (!bs.model.empty() && (be.free || be.solid == sh::kSolidNot));
       bool all = !bs.doors.empty();
       for (const int d : bs.doors) all = all && door_open(d);
-      // A breakable that calms a current (`way_shot_currents`) is done once it is gone.
-      const bool calms = bs.calm_lo.x != bs.calm_hi.x;
+      // A breakable that calms a current or lids a way (`way_shot_currents`) is done once it is
+      // gone.
+      const bool calms = bs.calm_lo.x != bs.calm_hi.x || bs.lid;
       const sh::WorldEntity& bw = s.world.entities[static_cast<size_t>(bs.ent)];
       const bool now =
           calms ? bw.free || bw.modelindex <= 0 : pressed || all || (bs.doors.empty() && st.done);
@@ -1020,7 +1024,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       // One that blows the place up, pressed, is let go of at once: the poke's hold on it kept him
       // at biggun's for 3 s of the 22 he has to get out. So is one shot open: the hold kept him
       // still before hangar1's secret wall through the 3 s it stood open, and it shut on him.
-      if ((st.dooms || way_shot_door(f, bs.ent)) && st.done && f.poke == st.button)
+      if ((st.dooms || bs.lid || way_shot_door(f, bs.ent)) && st.done && f.poke == st.button)
         f.poke_until = t;
       continue;
     }
@@ -1091,11 +1095,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     held = held || way_touch_opened(w, s.sv.edicts[static_cast<size_t>(w.locked[k])], w.locked[k]);
     if (!held && (t >= w.hopeful_until || keyed)) w.barred.push_back(w.locked[k]);
   }
-  // A current a breakable still standing calms (`way_shot_currents`): barred till it is shot.
+  // A current a breakable still standing calms, and a lid over a way (`way_shot_currents`):
+  // barred till it is shot.
   for (const WayStep& st : w.steps)
     if (st.kind == WayKind::button && !st.done) {
       const ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
-      if (bs.calm_lo.x != bs.calm_hi.x) w.barred.push_back(bs.ent);
+      if (bs.calm_lo.x != bs.calm_hi.x || bs.lid) w.barred.push_back(bs.ent);
     }
   // His own routes never through them either (a secret wall by its crossings, below: its sweep's
   // movers stood him still in front of it).

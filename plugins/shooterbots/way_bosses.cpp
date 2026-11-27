@@ -198,10 +198,29 @@ void way_shot_currents(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
     sh::Vec3f calm_lo{0, 0, 0}, calm_hi{0, 0, 0};
     const char* push = way_calmed_push(blocks, sb::block_value(b, "target"));
     if (push) box_of(push, calm_lo, calm_hi);
-    if (calm_lo.x == calm_hi.x) continue;  // it calms no current
     const int e = edict_of(s, model);
     if (e < 0) continue;
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    // A lid: flat (no thicker than kLidThick) with a link of the nav climbing through it, the nav
+    // leaving breakables out of its world (xship's pod, shut by a hatch over the start).
+    bool lid = false;
+    if (calm_lo.x == calm_hi.x && d.absmax.z - d.absmin.z <= kLidThick) {
+      const float mid_z = (d.absmin.z + d.absmax.z) * 0.5f;
+      for (size_t a = 0; a < g.nodes.size() && !lid; a++) {
+        const sb::NavNode& n = g.nodes[a];
+        for (int32_t k = 0; k < n.links && !lid; k++) {
+          const sh::Vec3f p = n.origin;
+          const int32_t li = n.first_link + k;
+          const sh::Vec3f q =
+              g.nodes[static_cast<size_t>(g.links[static_cast<size_t>(li)].to)].origin;
+          if ((p.z - mid_z) * (q.z - mid_z) >= 0) continue;
+          const float u = (mid_z - p.z) / (q.z - p.z);
+          const float x = p.x + (q.x - p.x) * u, y = p.y + (q.y - p.y) * u;
+          lid = x > d.absmin.x && x < d.absmax.x && y > d.absmin.y && y < d.absmax.y;
+        }
+      }
+    }
+    if (calm_lo.x == calm_hi.x && !lid) continue;  // it calms no current and lids no way
     ButtonSpot bs;
     bs.ent = e;
     bs.at = (d.absmin + d.absmax) * 0.5f;
@@ -210,6 +229,7 @@ void way_shot_currents(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
     bs.doors = {e};
     bs.calm_lo = calm_lo;
     bs.calm_hi = calm_hi;
+    bs.lid = lid;
     // Shot from the nearest node whose eye line reaches it.
     float best_d = kWayShotTriggerFrom;
     for (size_t n = 0; n < g.nodes.size(); n++) {
