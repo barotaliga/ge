@@ -273,6 +273,23 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     return nullptr;
   };
+  // The level change a trigger's target reaches through relays and key locks (rboss's last exit:
+  // a trigger, a `trigger_key` wanting the nuke, a relay, then the end), up to four hops.
+  const auto level_change_via = [&](const char* t) -> const char* {
+    for (int hop = 0; t != nullptr && hop < 4; hop++) {
+      if (const char* to = level_change(t)) return to;
+      const char* next = nullptr;
+      for (const sb::EntityBlock& d : blocks) {
+        const char* dc = sb::block_value(d, "classname");
+        const char* dn = sb::block_value(d, "targetname");
+        if (dc && dn && std::strcmp(dn, t) == 0 &&
+            (std::strcmp(dc, "trigger_relay") == 0 || std::strcmp(dc, "trigger_key") == 0))
+          next = sb::block_value(d, "target");
+      }
+      t = next;
+    }
+    return nullptr;
+  };
   bool quake_keys = false;  // the map's keys are Quake's (items), whose doors open to a touch
   for (const sb::EntityBlock& b : blocks) {
     const char* cn = sb::block_value(b, "classname");
@@ -350,7 +367,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     } else if (w.complete && trigger && brush && target && !name && fires_secret(target)) {
       st.kind = WayKind::secret;
       st.name = "secret";
-    } else if (const char* to = trigger && brush && target ? level_change(target) : nullptr) {
+    } else if (const char* to = trigger && brush && target ? level_change_via(target) : nullptr) {
       st.kind = WayKind::exit;  // Quake II's: walked through, it fires the level change
       st.name = to;
       // The way back to a map he has played (base2's start: the car up to base1) is taken only

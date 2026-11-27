@@ -16,3 +16,12 @@ concepts: [harm, trigger-hurt, god-mode, rboss, nav, brink, nav-hurt-at, trigger
   bit-identical, the fault is not on the graph: stop marking and find what drives the keys.
 - Print the graph around the spot once (node origins, harm, link counts) before guessing: it
   showed every pit node marked and the walkway's links into it cut.
+- The guard reads the killing boxes themselves (`NavGraph::hurt_boxes`), never the node marks:
+  the marks carry margins, so down in a pit every way round was "harm" and he stood still for
+  600 s. Switching the guard off on marked nodes switched it off on the lips too. Keep the
+  margins on the plan (no way leads there) and the exact box on the keys.
+- "out no" at 900 s with every objective done can be the plan or the runner: rboss's exit
+  reaches the end through a `trigger_key` and a relay (`level_change_via`), and the game's last
+  exit asks for no map (`Q2Server::game_over`), which the unit lab only watched `pending_map` for.
+- One rboss rerun is ~3 min; small guard changes flipped the end (finish, freeze, death). Judge
+  a rule by what it reads (box or margin), not by one lucky run.

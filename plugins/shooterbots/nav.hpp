@@ -266,6 +266,11 @@ struct NavCounts {
   int64_t by_kind[kNavKinds] = {};  // links kept, by NavKind
 };
 
+// A box in the world, `mins` to `maxs`.
+struct NavBox {
+  Vec3f mins, maxs;
+};
+
 struct NavGraph {
   NavSettings set;
   MoveSettings move;  // the move its links were proven with; the pilot flies with it
@@ -292,9 +297,9 @@ struct NavGraph {
   std::vector<NavEscape> escapes;
   // Each node's: a floor in lava or slime (`nav_mark_harm`); empty: none known.
   std::vector<uint8_t> harm;
-  // Each node's: in or by a trigger that kills (`mark_hurt_harm`), a pit the world's contents do
-  // not show (the brink guard reads it, `nav_hurt_at`); empty: none.
-  std::vector<uint8_t> hurt;
+  // The boxes of the triggers that kill (map_nav.hpp's `hurt_boxes`): pits the world's contents do
+  // not show, which the brink guard keeps off (`nav_hurt_at`); empty: none.
+  std::vector<NavBox> hurt_boxes;
 };
 
 // One proof's result.
@@ -479,8 +484,8 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
 int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach = 40);
 // Whether a harm node lies within `reach` across of `p` and a step or more under it.
 bool nav_harm_near(const NavGraph& g, Vec3f p, float reach);
-// Whether a `NavGraph::hurt` node stands where a player at `p` stands: within 24 across and 32 up
-// or down (the floor of a pit a killing trigger fills, which no contents show).
+// Whether a player standing at `p` (16 round, 24 down, 32 up) touches one of `NavGraph::hurt_boxes`
+// (a pit a killing trigger fills, which no contents show).
 bool nav_hurt_at(const NavGraph& g, Vec3f p);
 // Whether the move's air keys carry a flight (an air acceleration with no cap on the wish: Quake
 // II's): forward in the air gains speed toward the way, and a key let go there is a flight lost.
