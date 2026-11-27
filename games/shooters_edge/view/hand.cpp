@@ -329,6 +329,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   // the last shot. The barrel is picked before the flash is placed, so both stand on it.
   if (static_cast<size_t>(hand.held) < models.size()) {
     const vm::HeldModel& m = models[static_cast<size_t>(hand.held)];
+    f.frame_a = f.frame_b = m.rest;  // at rest unless a shot's frames say otherwise
     const int clip = vm::find_held_clip(m, "fire");
     const vm::HeldClip* c = clip >= 0 ? &m.clips[static_cast<size_t>(clip)] : nullptr;
     if (c != nullptr && c->frame_a_shot && c->count > 0) {
@@ -337,7 +338,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
         // (the rest frame itself once settled).
         hand.shot_from = hand.fire_t >= 0 && hand.shot_frame >= 0 ? c->first + hand.shot_frame
                          : hand.settle_t >= 0                     ? hand.settle_from
-                                                                  : 0;
+                                                                  : m.rest;
         hand.settle_t = -1;
         hand.shot_frame = (hand.shot_frame + 1) % c->count;
         hand.fire_t = 0;
@@ -382,9 +383,9 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     // Back to rest over a frame's time from the frame the clip ended on.
     if (hand.fire_t < 0 && hand.settle_t >= 0) {
       const double fps = c != nullptr ? c->fps : 10.0;
-      if (hand.settle_t * fps < 1 && hand.settle_from != 0) {
+      if (hand.settle_t * fps < 1 && hand.settle_from != m.rest) {
         f.frame_a = hand.settle_from;
-        f.frame_b = 0;
+        f.frame_b = m.rest;
         f.frame_t = hand.settle_t * fps;
         hand.settle_t += dt;
       } else {

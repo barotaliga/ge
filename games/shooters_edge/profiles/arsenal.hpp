@@ -90,6 +90,9 @@ struct WeaponRow {
   // Another game's weapon (classic remix): how much of its ammunition is carried by that game's
   // own rules (0: the played rules' own limit).
   int32_t ammo_most = 0;
+  // Another game's weapon lying on the map: how far above the floor its model's origin stands,
+  // units (that game's pickups are measured from their middle); 0 on the floor.
+  int32_t lift = 0;
 };
 
 struct ArmourRow {
@@ -102,6 +105,7 @@ struct ArmourRow {
   // Quake II's take rule (plugins/classic/q2_body.hpp): the most it holds, a picked-up one adding
   // onto the worn one up to it; 0: Quake's, the better armour replacing the worn one outright.
   int32_t most = 0;
+  int32_t lift = 0;  // as a weapon row's: how far above the floor its model's origin stands
 };
 
 // Another game's look for one of the rules' own items (classic remix): the server setting that
@@ -194,7 +198,8 @@ inline std::string weapon_text(const WeaponRow& w) {
     if (!t.empty()) t += ' ';
     t += f;
   }
-  if (w.ammo_most > 0) t += ' ' + number_text(float(w.ammo_most));
+  if (w.ammo_most > 0 || w.lift > 0) t += ' ' + number_text(float(w.ammo_most));
+  if (w.lift > 0) t += ' ' + number_text(float(w.lift));
   return t;
 }
 
@@ -202,7 +207,8 @@ inline std::string weapon_text(const WeaponRow& w) {
 inline std::string armour_text(const ArmourRow& a) {
   return number_text(a.absorb) + " " + number_text(float(a.amount)) + " " +
          number_text(float(a.skin)) + " " + std::string(a.model) + " " + std::string(a.sound) +
-         (a.most > 0 ? " " + number_text(float(a.most)) : "");
+         (a.most > 0 || a.lift > 0 ? " " + number_text(float(a.most)) : "") +
+         (a.lift > 0 ? " " + number_text(float(a.lift)) : "");
 }
 
 // The server's console lines that give the program `arsenal`.

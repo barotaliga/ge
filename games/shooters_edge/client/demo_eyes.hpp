@@ -44,6 +44,7 @@
 #include "render/view.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/q2_arms_kick.hpp"
 
 namespace shooters_edge::client {
 
@@ -74,6 +75,7 @@ struct DemoEyes {
   float kick = 0, kick_to = 0;      // the gun kick and where it ramps to, units (negative: back)
   const bool* gun_kick = nullptr;   // v_gunkick: the kick drawn when on (kept across a cut)
   const bool* view_kick = nullptr;  // Quake II's cl_kickangles: the server's kick angles drawn
+  ArmsKick arms_kick{};   // Quake II's weapons on other rules: their kick (q2_arms_kick.hpp)
   float behind = 0;       // cam_thirdperson's distance behind the player, units (0: his own eyes)
   float side = 0;         // cam_side: units to the player's left (negative: his right)
   float up = 0;           // cam_up: units above his eye
