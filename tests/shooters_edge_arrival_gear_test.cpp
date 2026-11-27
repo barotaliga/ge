@@ -97,12 +97,18 @@ TEST(quake_ii_order_follows_the_unit_before_the_next_unit) {
   CHECK(order == (std::vector<std::string>{"a", "b", "c", "d"}));
 }
 
-TEST(quake_ii_arrives_with_the_earlier_maps_guns_and_what_their_monsters_left) {
+TEST(quake_ii_arrives_with_the_earlier_maps_guns_keys_and_what_their_monsters_left) {
   Maps maps;
   maps["a"] = room({{{"classname", "weapon_shotgun"}, {"origin", "0 100 16"}},
                     {{"classname", "ammo_shells"}, {"origin", "0 -100 16"}},
                     {{"classname", "item_health"}, {"origin", "100 0 16"}},
-                    {{"classname", "monster_soldier_light"}, {"origin", "300 0 24"}}});
+                    {{"classname", "monster_soldier_light"}, {"origin", "300 0 24"}},
+                    {{"classname", "key_blue_key"}, {"origin", "-100 100 16"}},
+                    {{"classname", "key_red_key"}, {"origin", "-100 -100 16"}},
+                    {{"classname", "trigger_key"},
+                     {"targetname", "lock"},
+                     {"item", "key_blue_key"},
+                     {"target", "gate"}}});
   maps["b"] = room({});
   sv::SqBody body;
   std::vector<bt::GearLeg> legs;
@@ -113,7 +119,9 @@ TEST(quake_ii_arrives_with_the_earlier_maps_guns_and_what_their_monsters_left) {
   if (legs.size() != 1) return;
   const int shotgun = sv::sq_item("weapon_shotgun");
   CHECK(body.counts[shotgun] == 1);
-  CHECK_MSG(legs[0].pickups == 2, "the gun and the shells; never the health");
+  CHECK_MSG(legs[0].pickups == 4, "the gun, the shells and the two keys; never the health");
+  CHECK_MSG(body.counts[sv::sq_item("key_blue_key")] == 0, "the map's lock took its blue key");
+  CHECK_MSG(body.counts[sv::sq_item("key_red_key")] == 1, "the red key carries on");
   CHECK(legs[0].monster_health > 0);
   const int shells = body.ammo[static_cast<int>(sv::SqAmmo::shells)];
   const int held = 2 * ge::classic::kQ2AmmoShells;  // the gun's and the box's, as both give
