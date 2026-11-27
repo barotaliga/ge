@@ -1735,6 +1735,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   const bool takes_first = w.step >= 0 && w.steps[static_cast<size_t>(w.step)].first;
   const int32_t arm = takes_first ? -1 : way_arm(w, f, s, stats_now, !preys.empty(), t, reach);
   const int32_t was = f.objective;
+  // Something to do is no idle time (`way_idle`).
+  if (arm >= 0 || w.step >= 0 || w.prey >= 0) w.idle_since = way_idle(w.idle_since, true, t);
   if (arm >= 0) {
     w.kind = WayKind::arm;
     f.objective = arm;
@@ -1786,7 +1788,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     // Nothing left to do from where he stands for kWayIdle_s (out of a pool onto a ledge whose
     // doors only open from the other side): back into the water, where the swim field leads him
     // out to the map's main part.
-    if (far >= 0 || w.idle_since < 0) w.idle_since = far >= 0 ? -1 : t;
+    w.idle_since = way_idle(w.idle_since, far >= 0, t);
     // (`complete`) Nothing at all to do for kWayIdle_s: what was left for a while is tried again
     // now rather than at its time (e1m1's lift button, pressed once, left while its car stood at
     // the top: the rest of the map lay below it, and he stood up there for a minute and a half).
