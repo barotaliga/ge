@@ -647,7 +647,8 @@ int run_main(int argc, char** argv) {
   if (next_map.empty() && !attract_at_start && !remote.active) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
-  listen_opt.remix = &remix;  // a campaign's own map changes read through it (cr_monsters)
+  listen_opt.remix = &remix;          // a campaign's own map changes read through it (cr_monsters)
+  listen_opt.bots_background = true;  // no frame waits for the bots' nav (bots/bot_seats.hpp)
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
     listen_opt.player = n->value;
   cl::take_console_settings(listen_opt, listen.opt);  // the lobby, sv_port, sv_hostname, sv_login

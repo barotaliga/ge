@@ -143,6 +143,8 @@ struct ListenHost {
   // a map change after the remix changed starts the match afresh, its items the remix's new ones.
   std::vector<std::string> worn, worn_over, worn_info;
   bool lobby = false;
+  // The bots' nav built on a thread of its own (bots/bot_seats.hpp's `background`): the window's.
+  bool bots_background = false;
   sv::LobbySettings lobby_settings;
   std::string player = "player";  // slot 0, the window's own player: a local seat
   float speedjump = 0;            // pm_speedjump on each map's server (the easy jump allowed)
@@ -275,6 +277,9 @@ struct ListenOptions {
   // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
   // countdown, then the map restarted for the match. Off: the match starts with the map.
   bool lobby = false;
+  // The bots' nav built on a thread of its own, so adding a bot or a map change with bots in never
+  // holds a frame while it builds (the window's; off, a run is the same frame by frame: tests).
+  bool bots_background = false;
   // A match relays its players' voices (`sv_voip 1`), the window's player among them
   // (`listen_mic`, `Listen::voices`).
   bool voice = true;

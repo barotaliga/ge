@@ -558,6 +558,7 @@ bool start_map(Listen& l, std::string& error) {
   const bool lobby = l.opt.lobby && !wants_campaign(l.opt);
   h->lobby = lobby;
   h->lobby_settings = l.opt.lobby_settings;
+  h->bots_background = l.opt.bots_background;
   h->player = l.opt.player;
   h->speedjump = kListenSpeedJump;
   h->tap = host_tap;
