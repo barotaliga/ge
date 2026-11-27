@@ -1,11 +1,14 @@
 // Quake II's monsters in the classic campaign (classic remix's `cr_monsters q2`): each kind of
 // campaign_q2.hpp spawned with the roster's health, box, speeds and attacks, Quake II's
-// model, frames and sounds, over the campaign's minds (campaign_ai.cpp: sight, the chase, pain
-// and death). An attack is the roster's: a wind-up, shots on a loop `every` s apart, another loop
-// at its odds while the enemy is in sight, then the recovery; the shots are the campaign's own
-// kinds of harm (bolts, pellets, bullets, blows, grenades, rockets, a rail, a drain, a zap, a
-// leap). A medic raises the dead it finds while it hunts; a power screen is armour that takes a
-// third of each blow until it has taken 100 (from any side: the campaign's harm has no front).
+// model, frames and sounds. They decide by Quake II's mind (server/q2_monster_mind.hpp, the same
+// code Quake II's own rules decide by): whom they see, when they attack and with which attack,
+// whether an attack goes on, the mutant's leap and whom they turn on when another monster hurts
+// them; the campaign's states carry the rest (the chase, pain and death, campaign_ai.cpp). An
+// attack is the roster's: a wind-up, shots on a loop `every` s apart, another loop at its odds
+// while the enemy is in sight, then the recovery; the shots are the campaign's own kinds of harm
+// (bolts, pellets, bullets, blows, grenades, rockets, a rail, a drain, a zap, a leap). A medic
+// raises the dead it finds while it hunts; a power screen is armour that takes a third of each blow
+// until it has taken 100 (from any side: the campaign's harm has no front).
 //
 // ge:summary Quake II's monsters run by the classic campaign: roster numbers, frames, attacks
 // ge:keywords campaign cr_monsters remix q2-monsters monster-swap attack-loop roster
@@ -17,6 +20,7 @@
 
 #include "shooters_edge/rules/campaign_decl.hpp"
 #include "shooters_edge/rules/campaign_q2.hpp"
+#include "shooters_edge/server/q2_monster_mind.hpp"
 #include "shooters_edge/server/q2_monster_poses.hpp"
 
 namespace shooters_edge::server::rules::campaign {
@@ -49,6 +53,30 @@ const SqMonsterPoses* poses_of(int run) {
 }
 
 Vec3 eye_of(A& q, int32_t e) { return q.v(e, q.L.f.origin) + q.v(e, q.L.f.view_ofs); }
+
+int skill_of(A& q) { return static_cast<int>(q.cvar(q.s(s_skill))); }
+
+// The campaign's random numbers as Quake II's mind draws them.
+auto roll_of(A& q) {
+  return [&q] { return static_cast<double>(q.random()); };
+}
+
+float distance_to(A& q, int32_t e) {
+  return q.vlen(q.v(e, q.L.f.origin) - q.v(q.self(), q.L.f.origin));
+}
+
+// A clear line from its eye to `foe`'s: nothing solid between (monsters ignored), as Quake II's
+// sight looks (water does not hide him).
+bool clear_to(A& q, int32_t foe) {
+  q.traceline(eye_of(q, q.self()), eye_of(q, foe), 1, q.self());
+  return q.gf(q.L.g.trace_fraction) >= 1;
+}
+
+// A clear shot at `foe`: the line from its eye to his stopped by nothing, or by him.
+bool shot_at(A& q, int32_t foe) {
+  q.traceline(eye_of(q, q.self()), eye_of(q, foe), 0, q.self());
+  return (q.gf(q.L.g.trace_fraction) >= 1) | (q.gi(q.L.g.trace_ent) == foe);
+}
 
 float points(A& q, const roster::Attack& a) {
   return static_cast<float>(a.damage) + q.random() * static_cast<float>(a.damage_max - a.damage);
@@ -196,7 +224,7 @@ void spawn(A& q, int run) {
   q.set_f(me, f_walk_step, k.walk * 0.1f);
   q.set_f(me, f_run_step, k.run * 0.1f);
   q.set_f(me, q.L.f.skin, static_cast<float>(k.skin));
-  if (k.medic) q.set_i(me, f_th_check, q.fn(fn_sq_medic_check));
+  q.set_i(me, f_th_check, q.fn(k.medic ? fn_sq_medic_check : fn_sq_check));
   if (k.screen) {
     q.set_f(me, q.L.f.armortype, 1.0f / 3.0f);
     q.set_f(me, q.L.f.armorvalue, 100);
@@ -265,7 +293,7 @@ void sq_medic_check(A& q) {
     nearest = d;
   }
   if (best == 0) {
-    q.ret_f(check_attack(q) ? 1.0f : 0.0f);
+    q.ret_f(sq_choose(q) ? 1.0f : 0.0f);
     return;
   }
   const float yaw = q.vectoyaw(q.v(best, q.L.f.origin) - at);
@@ -281,30 +309,123 @@ void sq_medic_check(A& q) {
   q.ret_f(1);
 }
 
-// A blow: the second at even odds where the kind has two.
+// A blow: the second at even odds where the kind has two (Quake II's pick).
 void sq_melee(A& q) {
-  const roster::Kind& k = kind_of(run_of(q, q.self()));
-  start_attack(q, ((k.melee[1].fire != Fire::none) & (q.random() < 0.5f)) ? 1 : 0);
+  start_attack(q, q2_mind::pick_blow(kind_of(run_of(q, q.self())), roll_of(q)));
 }
 
-// A ranged attack: the first always nearer than the kind's `close`, else one by the weights.
+// A ranged attack by Quake II's pick (the first nearer than the kind's `close`, the tank's by
+// range, else by weight within each attack's reach).
 void sq_missile(A& q) {
+  start_attack(q,
+               q2_mind::pick_ranged(kind_of(run_of(q, q.self())), enemy_distance(q), roll_of(q)));
+}
+
+// THE DECISION TO ATTACK, Quake II's (q2_monster_mind.hpp): a clear shot, facing him within 45
+// degrees, then at melee range a blow (or its shot, for a kind with none), else by the chance a
+// frame of its range and the skill once its wait is spent; the attack starts at once.
+bool sq_choose(A& q) {
   const int32_t me = q.self();
+  const int32_t enemy = q.i(me, q.L.f.enemy);
+  if (!shot_at(q, enemy)) return false;
+  const Vec3 to = q.v(enemy, q.L.f.origin) - q.v(me, q.L.f.origin);
+  if (!q2_mind::faces(q.v(me, q.L.f.angles).y, q.vectoyaw(to))) return false;  // the run turns it
   const roster::Kind& k = kind_of(run_of(q, me));
-  int pick = 0;
-  if (!(k.close > 0 && enemy_distance(q) < k.close)) {
-    float total = 0;
-    for (const roster::Attack& a : k.missile)
-      if (a.fire != Fire::none) total += a.weight;
-    float r = q.random() * total;
-    for (int i = 0; i < 3; i++) {
-      if (k.missile[i].fire == Fire::none) break;
-      pick = i;
-      r -= k.missile[i].weight;
-      if (r < 0) break;
+  const auto roll = roll_of(q);
+  const int skill = skill_of(q);
+  const float dist = q.vlen(to);
+  const q2_mind::Range r = q2_mind::range_of(dist);
+  const bool has_missile = k.missile[0].fire != Fire::none;
+  const bool has_melee = k.melee[0].fire != Fire::none;
+  if (k.test == roster::Test::mutant) {
+    if (r == q2_mind::Range::melee) {
+      start_attack(q, 0);
+      return true;
+    }
+    const float z = q.v(me, q.L.f.origin).z;
+    const float bottom = q.v(enemy, q.L.f.origin).z + q.v(enemy, q.L.f.mins).z;
+    const float height = q.v(enemy, q.L.f.maxs).z - q.v(enemy, q.L.f.mins).z;
+    if (!q2_mind::leap_test(z + k.mins.z, z + k.maxs.z, bottom, height, q.vlen({to.x, to.y, 0}),
+                            roll))
+      return false;
+    start_attack(q, 2);
+    return true;
+  }
+  if (r == q2_mind::Range::melee) {
+    if (q2_mind::blow_skipped(k.test, skill, roll)) return false;
+    if (has_melee) {
+      start_attack(q, q2_mind::pick_blow(k, roll));
+      return true;
+    }
+    if (has_missile) {  // no blow: the ranged attack, always
+      const int i = q2_mind::pick_ranged(k, dist, roll);
+      if (dist < attack_of(k, i).closest) return false;
+      start_attack(q, i);
+      return true;
     }
   }
-  start_attack(q, 2 + pick);
+  if (!has_missile || r == q2_mind::Range::far || q.time() < q.f(me, f_attack_finished))
+    return false;
+  if (roll() >= q2_mind::attack_chance(k.test, false, r, skill)) return false;
+  const int i = q2_mind::pick_ranged(k, dist, roll);
+  q.set_f(me, f_attack_finished, q.time() + static_cast<float>(q2_mind::kRefire * roll()));
+  if (dist < attack_of(k, i).closest) return false;  // too near for it: keeps closing
+  start_attack(q, i);
+  return true;
+}
+
+void sq_check(A& q) { q.ret_f(sq_choose(q) ? 1.0f : 0.0f); }
+
+// Whether entity `e` is one of Quake II's monsters the campaign runs.
+bool sq_runs(A& q, int32_t e) { return (e != 0) && q.i(e, f_th_pain) == q.fn(fn_sq_pain); }
+
+// Quake II's sight of `foe`: never far or through anything solid; at melee range whichever way it
+// faces; near, the foe it hunts or a player who fired in the last second; else only in front.
+bool sq_sees(A& q, int32_t foe) {
+  const int32_t me = q.self();
+  q2_mind::Sighting look;
+  Vec3 to = q.v(foe, q.L.f.origin) - q.v(me, q.L.f.origin);
+  look.range = q2_mind::range_of(q.vlen(to));
+  if (look.range == q2_mind::Range::far) return false;
+  look.clear = clear_to(q, foe);
+  if (!look.clear) return false;
+  look.hunted = foe == q.i(me, q.L.f.enemy);
+  look.fired = q.f(foe, f_show_hostile) >= q.time();
+  to.z = 0;
+  const float across = q.vlen(to);
+  if (across == 0) {
+    look.ahead = true;
+  } else {
+    q.makevectors(Vec3{0, q.v(me, q.L.f.angles).y, 0});
+    const Vec3 f = q.v_forward();
+    look.ahead = q2_mind::in_front(to.x / across, to.y / across, f.x, f.y);
+  }
+  return q2_mind::sees(look);
+}
+
+// Hurt by monster `a`: Quake II's rule of whom it turns on (one unlike it that moves as it does,
+// not a heavy kind, or one aiming at it; else it joins `a` against `a`'s foe).
+bool sq_hurt_by_monster(A& q, int32_t a) {
+  const int32_t me = q.self();
+  const auto flags = [&](int32_t e, int f) { return on(band(q.f(e, q.L.f.flags), float(f))); };
+  q2_mind::Attacker by;
+  by.alike = flags(a, kFlFly) == flags(me, kFlFly) && flags(a, kFlSwim) == flags(me, kFlSwim);
+  by.same_kind = q.same(q.i(a, q.L.f.classname), q.i(me, q.L.f.classname));
+  for (std::string_view h : q2_mind::kHeavy)
+    by.heavy = by.heavy || q.is(q.i(a, q.L.f.classname), h);
+  const int32_t his = q.i(a, q.L.f.enemy);
+  by.aiming_at_me = his == me;
+  by.has_live_foe = (his != 0) && (q.f(his, q.L.f.health) > 0);
+  const q2_mind::Turn t = q2_mind::infight(by);
+  const int32_t foe = t == q2_mind::Turn::attacker        ? a
+                      : t == q2_mind::Turn::attackers_foe ? his
+                                                          : 0;
+  if ((foe == 0) || (foe == q.i(me, q.L.f.enemy)) || (foe == me)) return false;
+  if (q.is(q.i(q.i(me, q.L.f.enemy), q.L.f.classname), "player"))
+    q.set_i(me, f_oldenemy, q.i(me, q.L.f.enemy));
+  q.set_i(me, q.L.f.enemy, foe);
+  found_target(q);
+  return true;
 }
 
 // A step of an attack: the shots that fall in it, then another loop or the recovery.
@@ -330,9 +451,15 @@ void sq_attack_step(A& q) {
   }
   if (q.time() + 0.001f < q.f(me, f_sq_end)) return;
   const float loops = q.f(me, f_sq_loops);
-  const bool more = (a.again > 0) & (q.f(enemy, q.L.f.health) > 0) && can_see(q, enemy) &&
-                    (a.again_max == 0 || loops < static_cast<float>(a.again_max)) &&
-                    q.random() < a.again;
+  q2_mind::Loop l;
+  l.loops = static_cast<int>(loops);
+  l.skill = skill_of(q);
+  l.foe_alive = q.f(enemy, q.L.f.health) > 0;
+  l.blow = slot < 2;
+  l.range = q2_mind::range_of(distance_to(q, enemy));
+  l.mutant = kind_of(run).test == roster::Test::mutant;
+  l.clear = l.foe_alive && !l.blow && shot_at(q, enemy);
+  const bool more = q2_mind::goes_on(a, l, roll_of(q));
   if (more) {
     q.set_f(me, f_sq_loops, loops + 1);
     begin_loop(q, a, false);
