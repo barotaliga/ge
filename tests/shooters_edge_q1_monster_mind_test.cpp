@@ -89,6 +89,32 @@ TEST(each_kind_waits_and_flinches_its_own_and_a_strong_shambler_shrugs) {
   CHECK(d.used == 3);
 }
 
+TEST(the_scrag_slides_near_him_goes_straight_far_and_fires_by_its_own_chances) {
+  Draws d{{0.59f, 0.61f, 0.19f, 0.21f, 0.5f, 0.0f, 0.2f}};
+  auto t = q1_mind::scrag_check(Range::near, true, d);
+  CHECK(t.attack && t.mode == q1_mind::Mode::keep);  // 0.6 near
+  t = q1_mind::scrag_check(Range::near, true, d);
+  CHECK(!t.attack && t.mode == q1_mind::Mode::slide);
+  t = q1_mind::scrag_check(Range::mid, true, d);
+  CHECK(t.attack);  // 0.2 mid
+  t = q1_mind::scrag_check(Range::mid, true, d);
+  CHECK(!t.attack && t.mode == q1_mind::Mode::straight);
+  CHECK(d.used == 4);
+  t = q1_mind::scrag_check(Range::far, true, d);
+  CHECK(!t.attack && t.mode == q1_mind::Mode::straight);
+  t = q1_mind::scrag_check(Range::melee, false, d);
+  CHECK(!t.attack && t.mode == q1_mind::Mode::straight);
+  CHECK(d.used == 4);  // no draw without a clear shot in range
+  CHECK(q1_mind::scrag_after_spit(Range::melee, true) == q1_mind::Mode::slide);
+  CHECK(q1_mind::scrag_after_spit(Range::near, false) == q1_mind::Mode::straight);
+  CHECK(q1_mind::scrag_after_spit(Range::mid, true) == q1_mind::Mode::straight);
+  CHECK(q1_mind::test_of("monster_wizard") == q1_mind::Test::scrag);
+  CHECK(!q1_mind::flinches("monster_wizard", 30, d));  // 0.5 × 70 = 35 > 30
+  CHECK(q1_mind::flinches("monster_wizard", 1, d));    // 0
+  CHECK(q1_mind::flinches("monster_ogre", 1, d));      // no draw
+  CHECK(d.used == 6);
+}
+
 TEST(the_kinds_with_tests_of_their_own_and_who_turns_on_whom) {
   CHECK(q1_mind::test_of("monster_dog") == q1_mind::Test::hound);
   CHECK(q1_mind::test_of("monster_hell_knight") == q1_mind::Test::death_knight);

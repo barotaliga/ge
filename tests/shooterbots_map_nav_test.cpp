@@ -153,6 +153,15 @@ TEST(a_walk_across_a_killing_strip_is_cut_and_one_beside_it_stays) {
   CHECK(g.links[0].to == 2);
   CHECK(g.links[1].to == 3);
   CHECK(sb::cut_hurt_links(g, {}) == 0);
+  // The pit's floor round the strip, 60 off it at its own height, harms too; a floor at the lip's
+  // height as far off does not.
+  sb::NavGraph ring;
+  ring.nodes.resize(2);
+  ring.nodes[0].origin = {-200, 748, 504};
+  ring.nodes[1].origin = {-200, 748, 616};
+  std::vector<uint8_t> harm(2, 0);
+  CHECK(sb::mark_hurt_harm(ring, strip, harm) == 1);
+  CHECK(harm[0] == 1 && harm[1] == 0);
   // A drop from the lip over the strip to the pit's floor past it falls through the strip.
   sb::NavGraph pit;
   pit.nodes.resize(2);

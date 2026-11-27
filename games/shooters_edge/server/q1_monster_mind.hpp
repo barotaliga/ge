@@ -15,16 +15,19 @@
 // - **Its own tests**: the hound leaps at a foe 80 to 150 away within 32 of its height (1 s
 //   between), the fiend 100 to 350 within 64 (2 s); the knight only strikes, within 80; the death
 //   knight strikes within 80 and charges within 250 on his level (within 20, 2 s between), else
-//   the usual test; the spawn jumps at a foe it sees near.
+//   the usual test; the spawn jumps at a foe it sees near; the scrag hunts straight or slides
+//   square to him and fires by its own chances (0.9, 0.6, 0.2), a flat 2 s apart. So far only
+//   Quake II's rules run the scrag's test; the campaign's scrag keeps the usual one.
 // - **Hurt by another monster**: it turns on one of another kind (a rifleman on its own too).
 // - **Pain**: each kind its wait (most 1 s, the brute 1.5, the shambler 2, the vore 3) and its
-//   flinch; a shambler above 400 health shrugs off half its blows; at the hardest skill every
+//   flinch (a scrag's only when 70 × a draw is within the blow, under Quake II's rules); a
+//   shambler above 400 health shrugs off half its blows; at the hardest skill every
 //   pain puts the next 5 s off.
 //
 // ge:summary Quake's monsters' decisions as any rules run them: ranges, sight, attacks, leaps
 // ge:keywords q1 monster-mind monster-ai cr_monsters remix real-ai check-attack attack-chance
 // ge:keywords sight in-front infighting dog-leap fiend-leap knight-charge q1_check_attack pain
-// ge:keywords pain-wait flinch shambler-shrug
+// ge:keywords pain-wait flinch shambler-shrug scrag-slide flyer slide strafe scrag_check
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_q1_monster_mind_test.cpp
 #pragma once
@@ -101,14 +104,47 @@ inline constexpr float kChargeRise = 20;    // on his level
 inline constexpr float kChargeRefire = 2;
 
 // The kinds with a test of their own.
-enum class Test : uint8_t { usual, hound, fiend, knight, death_knight, spawn };
+enum class Test : uint8_t { usual, hound, fiend, knight, death_knight, spawn, scrag };
 constexpr Test test_of(std::string_view classname) {
   if (classname == "monster_dog") return Test::hound;
   if (classname == "monster_demon1") return Test::fiend;
   if (classname == "monster_knight") return Test::knight;
   if (classname == "monster_hell_knight") return Test::death_knight;
   if (classname == "monster_tarbaby") return Test::spawn;
+  if (classname == "monster_wizard") return Test::scrag;
   return Test::usual;
+}
+
+// THE SCRAG'S OWN TEST. It hunts straight at him or slides square to him; only this test (its
+// wait spent, him in sight) changes which. Out of range or with no clear shot: straight. Else one
+// draw: an attack at 0.9 (melee), 0.6 (near), 0.2 (mid); failing it, mid range straight, nearer a
+// slide. After its spit (on the spit's last frame) it waits a flat 2 s (none at the hardest skill)
+// and slides if he is near and seen, else goes straight. A slide is 8 a frame (straight 16), 90
+// degrees from the line to him, its first to the right; only a blocked step turns it about.
+enum class Mode : uint8_t { keep, straight, slide };
+struct ScragTurn {
+  bool attack = false;
+  Mode mode = Mode::keep;
+};
+constexpr float scrag_chance(Range r) {
+  return r == Range::melee ? 0.9f : r == Range::near ? 0.6f : r == Range::mid ? 0.2f : 0.0f;
+}
+template <class Roll>
+ScragTurn scrag_check(Range r, bool clear, Roll&& roll) {
+  if (r == Range::far || !clear) return {false, Mode::straight};
+  if (roll() < scrag_chance(r)) return {true, Mode::keep};
+  return {false, r == Range::mid ? Mode::straight : Mode::slide};
+}
+constexpr Mode scrag_after_spit(Range r, bool seen) {
+  return seen && r <= Range::near ? Mode::slide : Mode::straight;
+}
+inline constexpr float kScragWait = 2;   // s after its spit, none at the hardest skill
+inline constexpr float kScragSlide = 8;  // a slide's step a frame
+// A scrag flinches only when 70 × a draw is no more than the blow (taken for a scrag only).
+template <class Roll>
+bool flinches(std::string_view classname, float damage, Roll&& roll) {
+  if (classname != "monster_wizard") return true;
+  return !(roll() * 70 > damage);
 }
 
 // Hurt by another monster: whether it turns on it.

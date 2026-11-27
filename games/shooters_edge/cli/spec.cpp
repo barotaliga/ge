@@ -57,18 +57,23 @@ using ge::core::json_num;
 using ge::core::json_obj;
 using ge::core::json_str;
 
-// The flags named for the window's settings: fs_basegame and each fs_basedir_<id>.
+// The flags named for the window's settings: fs_basegame, fs_artifacts_basedir and each
+// fs_basedir_<id>.
 std::vector<std::string> setting_flags() {
-  std::vector<std::string> out = {std::string(cl::kBaseGame)};
+  std::vector<std::string> out = {std::string(cl::kBaseGame), std::string(cl::kArtifactsBasedir)};
   for (const auto& [id, dir] : cl::BaseGame().dirs) out.push_back(cl::basedir_setting(id));
   return out;
 }
 
+// The window's data folder (client/take_in.hpp).
+std::string data_folder(const gc::Ctx& ctx) {
+  return cl::data_root(cl::placed_folder(ctx.self_dir),
+                       gc::prefs_dir("gameengine2", "shooters_edge"));
+}
+
 // The series config's files the window reads, the program's own last (client/settings.hpp).
 std::vector<fs::path> series_files(const gc::Ctx& ctx) {
-  return cl::series_settings_files(
-      cl::data_root(cl::placed_folder(ctx.self_dir), gc::prefs_dir("gameengine2", "shooters_edge")),
-      cl::placed_folder(ctx.self_dir));
+  return cl::series_settings_files(data_folder(ctx), cl::placed_folder(ctx.self_dir));
 }
 
 // The one of them the window writes its settings to.
@@ -98,7 +103,7 @@ cl::Args folders(const gc::Ctx& ctx) {
     a.game_set = true;
   }
   const cl::BaseGame base = base_game(ctx);
-  cl::choose_folder(a, base);
+  cl::choose_folder(a, base, cl::own_game_folder(data_folder(ctx)));
   if (const std::string named = base.dir(base.game); a.ask_install && !named.empty()) {
     a.basedir = named;
     if (!a.game_set) a.game = cl::game_of(named, *ge::classicenhance::find_profile(base.game));
@@ -221,11 +226,15 @@ void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::s
   w.insert(w.end(), {"+map", map});
 }
 
-// The recordings in the game folder and its demos/ folder, by name.
-std::vector<fs::path> demo_files(const cl::Args& a) {
+// The recordings in the game folder, its demos/ folder and the player's own folder
+// (client/installs.hpp's `own_files`: the install's with fs_artifacts_basedir 1), by name.
+std::vector<fs::path> demo_files(const gc::Ctx& ctx, const cl::Args& a) {
   std::vector<fs::path> out;
   const fs::path game = fs::path(a.basedir) / a.game;
-  for (const fs::path& dir : {game, game / "demos"}) {
+  std::vector<fs::path> dirs = {game, game / "demos"};
+  if (const fs::path own = base_game(ctx).own_files(a.profile, a.basedir, a.game); own != game)
+    dirs.push_back(own);
+  for (const fs::path& dir : dirs) {
     std::error_code ec;
     for (const auto& e : fs::directory_iterator(dir, ec)) {
       const std::string ext = e.path().extension().string();
@@ -244,10 +253,7 @@ int cmd_import(gc::Ctx& ctx) {
     return gc::refuse(ctx, 2, "import takes one folder, disc image or release archive",
                       "secli import <folder, .iso, .cue, .mdf, .zip or .7z>");
   const auto data = ctx.flags.find("data");
-  const std::string root = data != ctx.flags.end()
-                               ? data->second
-                               : cl::data_root(cl::placed_folder(ctx.self_dir),
-                                               gc::prefs_dir("gameengine2", "shooters_edge"));
+  const std::string root = data != ctx.flags.end() ? data->second : data_folder(ctx);
   if (ctx.words.empty()) {  // the packs on this machine not yet taken in, as the window offers
     const auto from = ctx.flags.find("from");
     const std::vector<std::string> roots = from != ctx.flags.end()
@@ -302,7 +308,7 @@ int cmd_demos(gc::Ctx& ctx) {
   const cl::Args a = folders(ctx);
   std::vector<std::string> rows;
   std::string text;
-  for (const fs::path& f : demo_files(a)) {
+  for (const fs::path& f : demo_files(ctx, a)) {
     std::error_code ec;
     const auto bytes = fs::file_size(f, ec);
     rows.push_back(json_obj({{"name", json_str(f.stem().string())},
@@ -322,7 +328,7 @@ int cmd_demos_play(gc::Ctx& ctx) {
   if (!gc::need_places(ctx)) return 1;
   const cl::Args a = folders(ctx);
   fs::path file;
-  for (const fs::path& f : demo_files(a))
+  for (const fs::path& f : demo_files(ctx, a))
     if (f.stem() == ctx.words[0] || f.filename() == ctx.words[0]) file = f;
   if (file.empty())
     return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
@@ -345,7 +351,7 @@ int cmd_demos_play(gc::Ctx& ctx) {
 
 // The recording a name or a file names: one of `demos`' list, else a path.
 fs::path find_demo_file(const gc::Ctx& ctx, const std::string& word) {
-  for (const fs::path& f : demo_files(folders(ctx)))
+  for (const fs::path& f : demo_files(ctx, folders(ctx)))
     if (f.stem() == word || f.filename() == word) return f;
   std::error_code ec;
   return fs::is_regular_file(word, ec) ? fs::path(word) : fs::path();
@@ -592,6 +598,8 @@ gc::Spec make() {
   s.flags = {{"fs_basegame", "q1|q2", "the game: Quake or Quake II (default: the window's)"},
              {"fs_basedir_q1", "<dir>", "Quake's install (default: the window's)"},
              {"fs_basedir_q2", "<dir>", "Quake II's install (default: the window's)"},
+             {"fs_artifacts_basedir", "0|1",
+              "1: the player's saves and recordings in the install (default: the window's)"},
              {"game", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
       "Shooter's Edge plays the player's own classic packs: `--fs_basedir_q1` and "

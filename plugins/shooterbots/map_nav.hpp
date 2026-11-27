@@ -114,9 +114,9 @@ struct MapNav {
   ge::shooterbots::NavGraph graph;
   ge::shooterbots::SwimField swim;
   std::vector<ge::shooterbots::NavMover> movers;
-  std::vector<uint8_t> wet;   // the nodes standing in water (swim nodes too)
-  std::vector<uint8_t> harm;  // the floor nodes in lava or slime: no way leads into them
-  std::vector<uint8_t> hurt;  // those of them in or by a killing trigger (`mark_hurt_harm`)
+  std::vector<uint8_t> wet;        // the nodes standing in water (swim nodes too)
+  std::vector<uint8_t> harm;       // the floor nodes in lava or slime: no way leads into them
+  std::vector<NavBox> hurt_boxes;  // the killing triggers' boxes (`hurt_boxes`), for the guard
   ge::shooterbots::SwimNavCounts swim_nav;        // the water in the graph
   ge::shooterbots::NavBridgeCounts bridges_made;  // the pockets bridged
   ge::shooterbots::NavTrickCounts tricks_made;    // the map's tricks proven into blast jumps
@@ -203,6 +203,11 @@ constexpr float kHurtMargin = 32;
 constexpr float kHurtLip = 96;
 // A wheel's top (`HurtBox::near` false): a node standing on it, up to this over its box.
 constexpr float kHurtOnTop = 8;
+// A pit's floor round a killing strip (a box 32 or less high; feet under its top and a step):
+// within this across of it
+// harms too, so no way leads down there (rboss's grinder pits: their rings, 16 over the strip and
+// 60 off it, were explored and every way out of them passed it).
+constexpr float kHurtFloor = 128;
 int64_t mark_hurt_harm(const NavGraph& g, const std::vector<HurtBox>& boxes,
                        std::vector<uint8_t>& harm);
 // Whether a level `trigger_push` (its box, its `angle` in degrees) carries whoever stands in it

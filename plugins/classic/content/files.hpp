@@ -53,7 +53,10 @@ struct FileLinks {
 };
 
 struct SearchPath {
-  std::string folder;       // the game folder on disk, the mod's when one is named ("" none)
+  std::string folder;  // the game folder on disk, the mod's when one is named ("" none)
+  // The folder the player's own files are written to and read from first (saves, recordings,
+  // screenshots): "" the game folder (`own_folder`).
+  std::string own;
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
   bool loose_first = true;  // the game folder's loose files on disk win (client/load_order.hpp)
   // The map and sky groups the lookups fall back through (map_groups.hpp), kept when the path is
@@ -148,9 +151,12 @@ std::vector<std::span<const uint8_t>> content_packs_with_mission(const SearchPat
 // else the base game's own, else an empty path.
 std::filesystem::path content_cache(const SearchPath& path, const std::filesystem::path& root = {});
 
-// THE SAVES: ours `<game folder>/saves/<name>.save`; with `classic`, the classic text save
-// `<game folder>/<name>.sav`, where Quake keeps its own (the name letters, digits, `_`
-// and `-` only). Written whole to a temporary file and renamed over the old one, so a save is
+// The folder the player's own files go in: `path.own`, else the game folder.
+std::string own_folder(const SearchPath& path);
+
+// THE SAVES: ours `<own folder>/saves/<name>.save`; with `classic`, the classic text save
+// `<own folder>/<name>.sav` (`own_folder`), where Quake keeps its own (the name letters, digits,
+// `_` and `-` only). Written whole to a temporary file and renamed over the old one, so a save is
 // never half written. False with the reason and the next step.
 bool write_save(const SearchPath& path, const std::string& name, std::span<const uint8_t> bytes,
                 std::string& error, bool classic = false);

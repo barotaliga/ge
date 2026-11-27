@@ -62,6 +62,10 @@ bool take_setting(BaseGame& base, std::string_view name, const std::string& valu
     base.game = value;
     return true;
   }
+  if (n == kArtifactsBasedir) {
+    base.artifacts = !value.empty() && value != "0";
+    return true;
+  }
   for (auto& [id, dir] : base.dirs)
     if (n == basedir_setting(id)) {
       dir = value;
@@ -84,6 +88,13 @@ std::string BaseGame::dir(std::string_view id) const {
   return it != dirs.end() ? resolve_basedir(it->second, from) : std::string();
 }
 
+std::string BaseGame::own_files(std::string_view id, const std::string& basedir,
+                                const std::string& folder) const {
+  const std::string install = artifacts ? dir(id) : std::string();
+  return (fs::path(install.empty() ? (basedir.empty() ? "." : basedir) : install) / folder)
+      .string();
+}
+
 std::string resolve_basedir(const std::string& value, const std::string& from) {
   if (value.empty()) return value;
   const fs::path p(expand_home(value));
@@ -94,6 +105,7 @@ std::string resolve_basedir(const std::string& value, const std::string& from) {
 std::string set_base_game(ge::console::Cvars& cvars, const BaseGame& base) {
   for (const auto& [id, dir] : base.dirs)
     if (!dir.empty()) cvars.set(basedir_setting(id), dir, ge::console::Source::code);
+  cvars.set(std::string(kArtifactsBasedir), base.artifacts ? "1" : "0", ge::console::Source::code);
   cvars.set(std::string(kBaseGame), base.game, ge::console::Source::code);
   return base.game + "\n" + base.dir(base.game);
 }
@@ -122,6 +134,15 @@ BaseGame bind_base_game(ge::console::Cvars& cvars, BaseGame* out) {
          .kind = ge::console::CvarKind::text,
          .values = "\"\": not added (the default); FOLDER: that install"},
         &out->dirs[std::string(p.id)]);
+  cvars.bind(
+      {.name = std::string(kArtifactsBasedir),
+       .fallback = "0",
+       .flags = ge::console::kArchive,
+       .help = "Where your saves, screenshots and recordings go: under each game in the data "
+               "folder, or in the game's own install. Takes hold when a game opens.",
+       .kind = ge::console::CvarKind::boolean,
+       .values = "0: the data folder (the default); 1: the game's install (its fs_basedir)"},
+      &out->artifacts);
   set_base_game(cvars, held);
   return held;
 }

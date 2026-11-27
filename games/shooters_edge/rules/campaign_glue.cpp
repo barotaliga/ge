@@ -56,6 +56,7 @@ void effect_impact(A& q, Vec3 org, float count, float bleeds) {
     q.particle(org, way, 73, count * 8);
     return;
   }
+  sq_note_impact(q, q.self(), org);  // Quake II's monsters may hear where it landed
   q.WriteByte(kMsgBroadcast, kSvcTempentity);
   q.WriteByte(kMsgBroadcast, kTeGunshot);
   q.WriteCoord(kMsgBroadcast, org.x);

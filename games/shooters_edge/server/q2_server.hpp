@@ -263,6 +263,7 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   int stomp = -1;          // a tank stamping on its dead enemy: the step of its run, -1 none
   // A flier sliding sideways round its enemy instead of closing (`slide_left` its side).
   bool slide = false, slide_left = false;
+  bool spat = false;    // a Quake scrag whose spit is playing: its wait and mode set at its end
   double flies_at = 0;  // flies on its corpse from then for 60 s (level time); 0 not yet, -1 none
   // A mission pack's kinds (q2_reckoning_monsters.cpp): a power shield's points left and its
   // shell shown till then; an amphibian swimming; chanting (spawn flag 8) till its first blow;

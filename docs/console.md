@@ -26,7 +26,7 @@ prefix comes the thing in one word, abbreviated when it is long: `r_shadowsize`,
 | `con_` | the drop-down console | `con_height`, `con_speed`, `con_chat` |
 | `hud_` | the HUD | `hud_scale` |
 | `scr_` | the screen as a whole: its overlays and the screenshots taken of it | `scr_levelstats`, `scr_format`, `scr_quality` |
-| `fs_` | the files: which game is played, where each is installed, the shell's own config files | `fs_basegame`, `fs_basedir_q1`, `fs_autoexec` |
+| `fs_` | the files: which game is played, where each is installed, where the player's own files go, the shell's own config files | `fs_basegame`, `fs_basedir_q1`, `fs_artifacts_basedir`, `fs_autoexec` |
 | none | a few names everyone knows | `name`, `rate`, `sensitivity`, `volume` |
 
 `ge cvar ls <prefix>` lists a game's cvars with a prefix; a new name matches its neighbours'
@@ -408,16 +408,23 @@ While a game loads, the game can hold the console over the whole screen (`set_fu
 classic games start); let go, it slides up at `con_speed` to where it was.
 
 The input line edits in place (left, right, home, end, backspace, delete). Page Up and Page
-Down scroll the lines. Up and Down walk the history while no list of suggestions is showing.
+Down scroll the lines. Up and Down walk the history while no list of suggestions is showing
+(and Up while the list shows with no row selected); a line recalled from the history lists
+nothing until it is edited.
 
 **Autocomplete.** While the first word is typed (after a `/` or `\`, or bare while `con_chat` is not 1),
 every command, alias and cvar it starts is listed under the input line: the one submitted most
 often from this console first, then the shortest, then by name, at most `con_suggest` of them.
 Each row shows a cvar's value after `=`, an alias's body after `:` or a command's help. The rest
-of the top name is drawn dim after the cursor, and Tab takes it: `/sv_dea` and Tab gives
-`/sv_deathmatch `, ready for `1`. Up and Down move through the list (the hint follows the
-selected row), Tab takes the selected one, and Enter on it fills in a cvar's name for its value
-or runs a command or an alias. A blank after the word ends the list, unless the word is a setting
+of the word that Tab would add is drawn dim after the cursor. Tab takes the only match: `/sv_dea`
+and Tab gives `/sv_deathmatch `, ready for `1`. With several matches Tab completes the word to
+what they all start with and keeps the list open (`/r_part` and Tab gives `/r_particle` while
+`r_particles` and `r_particle_scale` both match); when that adds nothing, Tab selects the first
+row, and Tab again takes it. Down steps into the list and down it, stopping at its last
+row; Up goes back up it and, from its first row, out to the typed line, where typing goes on (the
+hint follows the selected row; a key typed lets the selection go). Tab takes the selected one,
+also under a game's own Tab (Quake II's `com_completion_mode`), and Enter on it fills in a
+cvar's name for its value or runs a command or an alias. A blank after the word ends the list, unless the word is a setting
 of a few values.
 
 **A setting's few values.** A cvar that takes at most eight values (literal words in its values

@@ -210,3 +210,30 @@ The same baseline sources (`common/`) with a campaign variant (`campaign/progs.s
 these senses, states and numbers (each a free model and sound set), the campaign flow above, and
 the arena variant (`arena/progs.src`, today's deathmatch) unchanged. Our names and our code; the
 classnames are the maps' and stay.
+
+## The flyer and the swimmer while hunting (read 2026-11-27)
+
+A clean-room reader read the single-player game program as id released it with Quake-Tools under
+the GPL (labelled 1.01; no 1.06 copy was found; the Quake engine release has only the QuakeWorld
+program) and the engine's move step. Each fact read unless marked.
+
+- **Height, every flyer and swimmer** (the engine's move step): only while it has an enemy, each
+  move step also moves 8 down when its origin is more than 40 above the enemy's origin, 8 up when
+  less than 30 above; blocked, the step is tried once flat. No gravity. Settles 30 to 40 above
+  (derived). A swimmer's step fails where it would end in open air.
+- **The scrag hunts in two modes**, straight (the fly loop, 16 a frame) and sliding (the hover
+  loop, 8 a frame). Only its own attack test changes the mode, and only with the enemy in sight
+  and its wait spent: far range or no clear eye-to-eye line, straight; else one draw, an attack at
+  0.9 (melee), 0.6 (near), 0.2 (mid); failing it, straight at mid range, sliding nearer.
+- **The slide**: each frame turns toward the enemy by its turn rate (10 a frame) and steps 90
+  degrees from the bearing to him; the side starts on the right and flips only when a step is
+  blocked (the other side tried once in the same frame). The generic test's 0.3 flip after a
+  missile never reaches the scrag.
+- **Its attack**: turns in place until within 45 degrees, then a 10-frame spit; two spits at 600
+  units/s, 9 each, 0.3 s and 0.8 s in. At the spit's end a flat 2 s wait (none at skill 3), then
+  sliding if the enemy is near or closer and seen, else straight. No melee; no refusal across a
+  water surface.
+- **Its pain**: the cry on every hit; the 4-frame flinch only when 70 × a random number is no
+  more than the damage.
+- **No other monster slides.** The rotfish hunts straight at 12 a frame and bites (18 frames,
+  10 a frame toward him, bites on frames 3, 9 and 15 within 60, 0 to 6 damage).

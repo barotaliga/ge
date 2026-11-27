@@ -276,6 +276,80 @@ TEST(editing_and_history) {
   CHECK(v.input().empty());
 }
 
+// Down into the list, Up from its first row back to the typed line, typing on from there; Up on
+// the typed line and a recalled line walk the history; editing a recalled line lists again.
+TEST(arrows_leave_the_list_for_the_typed_line_and_the_history) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_bloom", .fallback = "0.04"});
+  c.cvars().add({.name = "r_taa", .fallback = "1"});
+  v.type("/r_b");
+  v.key(EditKey::down);
+  v.key(EditKey::enter);  // a cvar's name filled in, waiting for its value
+  v.type("0.1");
+  v.key(EditKey::enter);  // "/r_bloom 0.1" in the history
+  v.type("/r_");
+  v.key(EditKey::down);
+  CHECK(v.selected() == 0);
+  v.key(EditKey::up);  // out of the list: the typed line, as typed
+  CHECK(v.selected() == -1 && v.input() == "/r_");
+  v.type("t");  // typing goes on
+  CHECK(v.input() == "/r_t" && v.suggestions().size() == 1);
+  v.key(EditKey::down);
+  v.key(EditKey::down);
+  v.type("a");  // a key typed while a row is selected lets it go
+  CHECK(v.selected() == -1 && v.input() == "/r_ta");
+  v.key(EditKey::up);  // no row selected: the history
+  CHECK(v.input() == "/r_bloom 0.1" && v.suggestions().empty());
+  v.key(EditKey::down);  // back down to the line being typed, its list again
+  CHECK(v.input() == "/r_ta" && v.suggestions().size() == 1);
+  v.key(EditKey::up);
+  for (int i = 0; i < 4; ++i) v.key(EditKey::backspace);  // the recalled line edited: a list
+  CHECK(v.input() == "/r_bloom" && v.suggestions().size() == 1);
+  v.key(EditKey::down);
+  CHECK(v.selected() == 0);
+}
+
+// Tab with several matches completes to what they all start with and keeps the list open; with
+// nothing more to add it selects the first row, and Tab again takes it.
+TEST(tab_completes_to_the_shared_part_and_keeps_the_list) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_particles", .fallback = "1"});
+  c.cvars().add({.name = "r_particle_scale", .fallback = "1"});
+  c.cvars().add({.name = "r_taa", .fallback = "1"});
+  v.type("/r_part");
+  CHECK(v.hint() == "icle");  // what Tab adds
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/r_particle" && v.suggestions().size() == 2 && v.selected() == -1);
+  CHECK(v.hint().empty());
+  v.key(EditKey::tab);  // nothing more shared: into the list
+  CHECK(v.selected() == 0 && v.suggestions()[0].name == "r_particles");
+  v.key(EditKey::down);
+  CHECK(v.selected() == 1 && v.hint() == "_scale");
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/r_particle_scale ");
+  while (!v.input().empty()) v.key(EditKey::backspace);
+  v.type("/r_t");
+  v.key(EditKey::tab);  // the one match: taken
+  CHECK(v.input() == "/r_taa ");
+}
+
+// Under a game's own Tab (list_mode) a selected row is still what Tab takes.
+TEST(tab_takes_the_selected_row_under_a_games_own_tab) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_bloom", .fallback = "0.04"});
+  c.cvars().add({.name = "r_taa", .fallback = "1"});
+  v.list_mode = 1;
+  v.type("/r_");
+  v.key(EditKey::down);
+  v.key(EditKey::down);
+  const std::string second = v.suggestions()[1].name;
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/" + second + " ");
+}
+
 // con_history: only the newest typed lines are walked back through.
 TEST(con_history_keeps_the_newest_lines) {
   Console c;
@@ -299,8 +373,8 @@ TEST(suggestions_rank_by_use_then_length) {
   std::vector<Suggestion> s = v.suggestions();
   CHECK(s.size() == 3 && s[0].name == "sv_delay" && s[1].name == "sv_demotxt");
   CHECK(s[0].kind == Suggestion::Kind::cvar && s[0].detail == "5");
-  CHECK(v.hint() == "lay");
-  v.key(EditKey::enter);  // nothing selected: the line runs as typed (and fails, unknown)
+  CHECK(v.hint().empty());  // all three share only "sv_de": Tab would add nothing
+  v.key(EditKey::enter);    // nothing selected: the line runs as typed (and fails, unknown)
   for (int i = 0; i < 2; ++i) {
     v.type("/sv_deathmatch 1");
     v.key(EditKey::enter);
@@ -313,6 +387,9 @@ TEST(suggestions_rank_by_use_then_length) {
   v.key(EditKey::backspace);  // "/sv_d": the most used one is still on top
   s = v.suggestions();
   CHECK(s.size() == 3 && s[0].name == "sv_deathmatch" && s[0].uses == 2);
+  v.key(EditKey::tab);  // to the shared part, then into the list at the most used, then taken
+  CHECK(v.input() == "/sv_de" && v.selected() == -1);
+  v.key(EditKey::tab);
   v.key(EditKey::tab);
   CHECK(v.input() == "/sv_deathmatch " && v.suggestions().empty());
   c.execute("con_suggest 2");
@@ -341,7 +418,9 @@ TEST(arrows_select_and_enter_takes_the_selection) {
   v.key(EditKey::up);
   v.key(EditKey::up);
   CHECK(v.selected() == -1);
-  v.key(EditKey::up);  // past the top wraps to the bottom
+  v.key(EditKey::up);  // Up on the typed line: the history (none here), never the list's foot
+  CHECK(v.selected() == -1 && v.input() == "/r_");
+  for (int i = 0; i < 5; ++i) v.key(EditKey::down);  // Down stops at the last row
   CHECK(v.selected() == 2 && v.suggestions()[2].name == "r_bloom");
   v.key(EditKey::enter);
   CHECK(v.input() == "/r_bloom " && v.history().empty());  // waiting for the value
