@@ -279,6 +279,64 @@ TEST(a_game_saved_and_loaded_plays_on_as_the_game_never_saved) {
   CHECK(!h->s().obituaries.empty() || h->s().monsters_killed >= 0);
 }
 
+// Every piece of a monster's mind, a player's marks the monsters read, the pieces flying and
+// the bad areas come back from a save as they were: a load that left one at its default played on
+// differently (a monster's footstep roll on base1 within 6 ticks; Ground Zero's gibs at once).
+TEST(a_save_keeps_the_monsters_whole_minds_the_players_marks_and_the_pieces) {
+  const sv::MapSpec a =
+      spec("base1", {{{"classname", "monster_soldier"}, {"origin", "300 0 24"}, {"angle", "180"}}});
+  auto g = open_game(a);
+  run(*g, 1 * kSecond, 0);
+  sv::Q2Server& s = g->s();
+  CHECK(!s.monsters.empty());
+  sv::Q2Monster& m = s.monsters[0];
+  m.pose.heard = 7;
+  m.pose.cue_fidget = true;
+  m.dodge_until = 12.5;
+  m.hint_check = 3.25;
+  m.strafe = -1;
+  m.blind_at = {1, 2, 3};
+  m.boss.timer = 4.5;
+  m.boss.legs = 9;
+  sv::Q2Player& p = g->p();
+  p.hostile_until = 8.75;
+  p.impact_frame = 11;
+  p.impact_at = {4, 5, 6};
+  p.trail_last = {7, 8, 9};
+  p.time_budget_ms = 321;
+  s.gibs[3].live = true;
+  s.gibs[3].origin = {10, 20, 30};
+  s.gibs[3].dies_at = 6.5;
+  s.next_gib = 4;
+  s.bad_areas.push_back({{0, 0, 0}, {16, 16, 16}, {8, 8, 8}, 9.5, -1});
+  std::vector<uint8_t> file;
+  std::string error;
+  CHECK_MSG(sv::q2_save(s, file, error), error);
+  auto h = runner();
+  CHECK_MSG(sv::q2_load(h->r, a, file, "test", error), error);
+  const sv::Q2Server& b = h->s();
+  const sv::Q2Monster& n = b.monsters[0];
+  CHECK(n.pose.heard == 7);
+  CHECK(n.pose.cue_fidget);
+  CHECK(n.dodge_until == 12.5);
+  CHECK(n.hint_check == 3.25);
+  CHECK(n.strafe == -1);
+  CHECK(n.blind_at.y == 2);
+  CHECK(n.boss.timer == 4.5);
+  CHECK(n.boss.legs == 9);
+  const sv::Q2Player& q = b.players[0];
+  CHECK(q.hostile_until == 8.75);
+  CHECK(q.impact_frame == 11);
+  CHECK(q.impact_at.z == 6);
+  CHECK(q.trail_last.x == 7);
+  CHECK(q.time_budget_ms == 321);
+  CHECK(b.gibs[3].live);
+  CHECK(b.gibs[3].origin.y == 20);
+  CHECK(b.gibs[3].dies_at == 6.5);
+  CHECK(b.next_gib == 4);
+  CHECK(b.bad_areas.size() == 1 && b.bad_areas[0].until == 9.5);
+}
+
 TEST(a_save_is_refused_when_it_cannot_be_and_a_damaged_one_does_not_load) {
   std::vector<uint8_t> file;
   std::string error;

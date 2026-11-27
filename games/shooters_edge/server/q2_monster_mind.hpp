@@ -37,7 +37,8 @@
 //   after, the search restarts (5 s) and it takes the next mark of the players' trail newer than
 //   its last look, facing the way he went; 20 s past a search's start it makes one move straight
 //   at him. The trail is 8 marks: a player's place at the last frame is marked once his eye no
-//   longer sees the newest mark.
+//   longer sees the newest mark. A new goal its box cannot reach is stepped round first: a point
+//   16 to the clearer side, half way on to the block's far side, then on to the goal.
 // - **Dodging**: a player's bolt, rocket or BFG ball (at the easiest skill only one in four is
 //   offered) whose line meets it first, from a shooter in front of it, is dodged one time in four.
 //   A soldier above the easiest skill holds its duck to 0.3 s past the shot's arrival and shoots
@@ -52,7 +53,7 @@
 // ge:summary Quake II's monsters' decisions as any rules run them: sight, attack, pick, loop, fight
 // ge:keywords q2 monster-mind monster-ai cr_monsters remix real-ai attack-chance pick-ranged
 // ge:keywords sight in-front infighting leap-test attack-loop q2_attack_chance
-// ge:keywords chase pursue last-sighting player-trail trail-marks next-mark
+// ge:keywords chase pursue last-sighting player-trail trail-marks next-mark side-step side_point
 // ge:keywords dodge duck duck-shoot run-and-shoot
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_q2_monster_mind_test.cpp
@@ -278,6 +279,43 @@ int next_mark(const double (&times)[kTrailMarks], int head, double after, bool f
     return i;
   }
   return -1;
+}
+
+// THE SIDE STEP round what blocks a new goal (its box swept there at its own height). Two points
+// half way on to the block's far side and 16 to either side; the left when it gets at least as
+// far as the way ahead and farther than the right, else the right when it does; held to half of
+// what it reaches. `W` is the world: `sweep(to)` (the fraction its box gets from `origin`),
+// `length(v)` and `axes(dir, forward, right)` (the view axes along the plan's heading of `dir`).
+// Whether it steps aside, with the point in `side`; the caller keeps the goal and faces the side.
+inline constexpr float kSideStep = 16;
+template <class V, class W>
+bool side_point(V origin, V goal, W& w, V& side) {
+  V to = goal;
+  to.z = origin.z;
+  const float f = w.sweep(to);
+  if (f >= 1) return false;
+  const float d1 = w.length(to - origin);
+  if (d1 < 1) return false;
+  V forward{}, right{};
+  w.axes(to - origin, forward, right);
+  const float d2 = d1 * (f + 1) / 2;
+  const float centre = d1 * f / d2;
+  const V ahead = origin + forward * d2;
+  const V left = ahead - right * kSideStep, rightp = ahead + right * kSideStep;
+  const float lf = w.sweep(left);
+  const float rf = w.sweep(rightp);
+  float got;
+  if (lf >= centre && lf > rf) {
+    side = left;
+    got = lf;
+  } else if (rf >= centre) {
+    side = rightp;
+    got = rf;
+  } else {
+    return false;
+  }
+  if (got < 1) side = origin + (side - origin) * (got * 0.5f);
+  return true;
 }
 
 // One frame of the chase of a foe out of sight. `M` holds the chase's state (`lost`, `on_trail`,

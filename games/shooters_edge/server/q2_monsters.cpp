@@ -965,37 +965,24 @@ int next_mark(const Q2Server& s, const Q2Monster& m, bool first) {
                             [&](int i) { return sees_point(s, m, s.trail_at[i]); });
 }
 
-// A new goal blocked short of it (its box swept there): a side step first. Two points half way
-// on to the block's far side and 16 to either side; the left when it gets at least as far as the
-// way ahead and farther than the right, else the right when it does; held to half of what it
-// reaches. The goal is kept for after (`real_goal`), and it faces the side point.
+// A new goal blocked short of it: a side step first (q2_mind::side_point). The goal is kept for
+// after (`real_goal`), and it faces the side point.
 void correct(Q2Server& s, Q2Monster& m) {
   Q2Entity& e = body(s, m);
-  sh::Vec3f to = m.goal;
-  to.z = e.origin.z;
-  const float f = sweep(s, m, e.origin, to).fraction;
-  if (f >= 1) return;
-  const float d1 = sh::length(to - e.origin);
-  if (d1 < 1) return;
-  const sh::ViewAxes ax = sh::angle_vectors({0, yaw_to(to - e.origin), 0});
-  const float d2 = d1 * (f + 1) / 2;
-  const float centre = d1 * f / d2;
-  const sh::Vec3f ahead = e.origin + ax.forward * d2;
-  const sh::Vec3f left = ahead - ax.right * 16.0f, right = ahead + ax.right * 16.0f;
-  const float lf = sweep(s, m, e.origin, left).fraction;
-  const float rf = sweep(s, m, e.origin, right).fraction;
+  struct World {
+    Q2Server& s;
+    Q2Monster& m;
+    sh::Vec3f from;
+    float sweep(sh::Vec3f to) const { return monster_ai::sweep(s, m, from, to).fraction; }
+    static float length(sh::Vec3f v) { return sh::length(v); }
+    static void axes(sh::Vec3f dir, sh::Vec3f& forward, sh::Vec3f& right) {
+      const sh::ViewAxes ax = sh::angle_vectors({0, yaw_to(dir), 0});
+      forward = ax.forward;
+      right = ax.right;
+    }
+  } w{s, m, e.origin};
   sh::Vec3f side;
-  float got;
-  if (lf >= centre && lf > rf) {
-    side = left;
-    got = lf;
-  } else if (rf >= centre) {
-    side = right;
-    got = rf;
-  } else {
-    return;
-  }
-  if (got < 1) side = e.origin + (side - e.origin) * (got * 0.5f);
+  if (!q2_mind::side_point(e.origin, m.goal, w, side)) return;
   m.real_goal = m.goal;
   m.side_step = true;
   m.goal = side;

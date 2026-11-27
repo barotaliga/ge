@@ -1,8 +1,8 @@
 // What Shooter's Edge's navigation labs (`se-nav`, `se-pilot`) draw a map from above with: the
 // view to scale (a pixel a unit, x east, y north up the picture, a margin round it for a legend's
-// row) and the floor shaded by height, traced down the map's own point hull per pixel (solid at
-// the top: a wall, dark). Header-only, beside the labs (a lab's helper never goes into a library:
-// the labs skill).
+// row) and the floor shaded by height, traced down the map's world per pixel (its point hull, or
+// its brushes on a map that has none) (solid at the top: a wall, dark). Header-only, beside the
+// labs (a lab's helper never goes into a library: the labs skill).
 //
 // ge:summary The nav labs' top view: a map's floor from above to scale, shaded by height
 // ge:keywords lab nav top-view floor height-shade point-hull view margin clip-top roof cut-away
@@ -42,14 +42,16 @@ struct ClippedFloor {
   bool found = false, open = false;
   float z = 0;
 };
-inline ClippedFloor floor_below(const sh::Hull& hull, float x, float y, float top, float bottom) {
+inline ClippedFloor floor_below(const sh::MoveWorld& world, float x, float y, float top,
+                                float bottom) {
   constexpr float kThrough = 4;  // the solid stepped through this finely, units
   ClippedFloor out;
   float from = top;
-  while (from > bottom && sh::point_contents(hull, {x, y, from}) == sh::kContentsSolid)
+  while (from > bottom &&
+         sh::solid_point_contents(world.solids[0], {x, y, from}) == sh::kContentsSolid)
     from -= kThrough;
   if (from <= bottom) return out;
-  const sh::HullTrace tr = sh::trace_hull(hull, {x, y, from}, {x, y, bottom});
+  const sh::HullTrace tr = sh::point_trace(world, {x, y, from}, {x, y, bottom});
   out.found = !tr.startsolid;
   out.open = tr.fraction >= 1;
   out.z = tr.endpos.z;
@@ -65,7 +67,6 @@ inline gl::Picture floor_picture(const sh::MoveWorld& world, const TopView& v,
   const int w = static_cast<int>(v.hi.x - v.lo.x) + 2 * kTopMargin;
   const int h = static_cast<int>(v.hi.y - v.lo.y) + 2 * kTopMargin;
   gl::Picture p = gl::create_picture(w, h, {245, 245, 240, 255});
-  const sh::Hull& hull = world.solids[0].point_hull;
   const float span = v.hi.z - v.lo.z;
   for (int py = kTopMargin; py < h - kTopMargin; py++)
     for (int px = kTopMargin; px < w - kTopMargin; px++) {
@@ -73,14 +74,14 @@ inline gl::Picture floor_picture(const sh::MoveWorld& world, const TopView& v,
       const float y = v.hi.y - static_cast<float>(py - kTopMargin) - 0.5f;
       float z = 0;
       if (std::isnan(clip_top)) {
-        const sh::HullTrace tr = sh::trace_hull(hull, {x, y, v.hi.z - 1}, {x, y, v.lo.z});
+        const sh::HullTrace tr = sh::point_trace(world, {x, y, v.hi.z - 1}, {x, y, v.lo.z});
         if (tr.startsolid) {
           gl::set_pixel(p, px, py, {70, 74, 72, 255});
           continue;
         }
         z = tr.endpos.z;
       } else {
-        const ClippedFloor f = floor_below(hull, x, y, std::min(clip_top, v.hi.z - 1), v.lo.z);
+        const ClippedFloor f = floor_below(world, x, y, std::min(clip_top, v.hi.z - 1), v.lo.z);
         if (!f.found) {
           gl::set_pixel(p, px, py, {70, 74, 72, 255});
           continue;

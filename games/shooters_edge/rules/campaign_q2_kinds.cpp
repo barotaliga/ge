@@ -317,6 +317,8 @@ ChaseState chase_of(A& q, int32_t me) {
   ChaseState c;
   c.lost = on(q.f(me, f_sq_lost));
   c.on_trail = on(q.f(me, f_sq_on_trail));
+  c.side_step = on(q.f(me, f_sq_side_step));
+  c.real_goal = q.v(me, f_sq_real_goal);
   const int32_t g = q.i(me, f_sq_goal);
   c.goal = g != 0 ? q.v(g, q.L.f.origin) : q.v(me, f_sq_last_sight);
   c.search_time = q.f(me, f_sq_search);
@@ -792,9 +794,37 @@ void sq_chase(A& q) {
       q.set_v(me, q.L.f.angles, a);
       q.set_f(me, q.L.f.ideal_yaw, yaw);
     }
-    void correct() const {}  // the campaign's step finds its own way round what blocks it
-  } w{q, me, enemy};
+    // A side step round what blocks the new goal (q2_mind::side_point), its box swept against
+    // the world and every body but its own; the view axes kept round it.
+    ChaseState& c;
+    float sweep(Vec3 to) const {
+      q.tracebox(q.v(me, q.L.f.origin), q.v(me, q.L.f.mins), q.v(me, q.L.f.maxs), to, 0, me);
+      return q.gf(q.L.g.trace_fraction);
+    }
+    float length(Vec3 v) const { return q.vlen(v); }
+    void axes(Vec3 dir, Vec3& forward, Vec3& right) const {
+      q.makevectors({0, q.vectoyaw(dir), 0});
+      forward = q.v_forward();
+      right = q.gv(q.L.g.v_right);
+    }
+    void correct() const {
+      const Vec3 fwd = q.v_forward(), rt = q.gv(q.L.g.v_right), up = q.gv(q.L.g.v_up);
+      const Vec3 at = q.v(me, q.L.f.origin);
+      Vec3 side{};
+      const bool stepped = q2_mind::side_point(at, c.goal, *this, side);
+      q.set_gv(q.L.g.v_forward, fwd);
+      q.set_gv(q.L.g.v_right, rt);
+      q.set_gv(q.L.g.v_up, up);
+      if (!stepped) return;
+      c.real_goal = c.goal;
+      c.side_step = true;
+      c.goal = side;
+      face(q.vectoyaw(side - at));
+    }
+  } w{q, me, enemy, c};
   q2_mind::pursue(c, w);
+  q.set_f(me, f_sq_side_step, c.side_step ? 1.0f : 0.0f);
+  q.set_v(me, f_sq_real_goal, c.real_goal);
   q.set_f(me, f_sq_lost, c.lost ? 1.0f : 0.0f);
   q.set_f(me, f_sq_on_trail, c.on_trail ? 1.0f : 0.0f);
   q.set_f(me, f_sq_search, static_cast<float>(c.search_time));
