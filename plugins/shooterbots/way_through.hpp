@@ -90,6 +90,9 @@ struct WayStep {
   // it in turn (a trigger the button fires), left for good until a step with one as its target is
   // done.
   std::vector<std::string> gate;
+  // And the monsters whose death fires one of those names (a `deathtarget`: biggun's boss, whose
+  // death wakes the strip that opens the way north): any of them dead wakes it too.
+  std::vector<int> gate_dead;
   bool repeats = false;       // a trigger_multiple: it fires each time he walks in
   double shot_sought = -1e9;  // a shot button's place last sought among those he reaches, s
   int32_t node = -1;          // where it is reached from
@@ -104,6 +107,8 @@ struct WayStep {
   bool revisit = false;   // an exit to a map he has played: taken last
   bool leaves = false;    // a button that leads to a level change (base2's lift down to bunk1)
   bool drains = false;    // a button that moves water (it strands him in the pool): pressed last
+  bool dooms = false;     // a button that sets off a killbox or a lethal blast (biggun's, the base
+                          // blown up 22 s on): pressed last, then straight out by the exit
   bool ever = false;      // (`complete`) done once: a lift's button shut again is not pressed again
   int tries = 0;          // (`complete`) times it was left
   bool first = false;     // (`complete`) taken before the tour's stops (a blast weapon)

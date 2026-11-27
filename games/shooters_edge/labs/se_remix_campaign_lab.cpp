@@ -159,8 +159,8 @@ void run(gl::Lab& lab) {
   gl::LabTable t{"the campaign with cr_monsters set during the start map", {"step", "what"}, {}};
   std::string thrown;
   Eyes eyes;
-  int q2 = 0, q1 = 0, lift_dz = 0, frames_run = 0, deaths = 0;
-  float lowest_hp = 100;
+  int q2 = 0, q1 = 0, lift_dz = 0, frames_run = 0, deaths = 0, hits = 0, hunting = 0;
+  float lowest_hp = 100, first_hit = -1;
   try {
     std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(files, lab.arg("map"), &remix, error);
     if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
@@ -219,6 +219,7 @@ void run(gl::Lab& lab) {
       const float me0 = s->sv.edicts[1].origin.z;
       float me_low = me0;
       bool alive = true;
+      float last_hp = s->sv.edicts[1].health;
       for (int i = 0; i < frames && rules_of(l) != nullptr; i++, frames_run++) {
         frame(l, eyes);
         s = rules_of(l);
@@ -227,17 +228,34 @@ void run(gl::Lab& lab) {
         if (s != nullptr) me_low = std::min(me_low, s->sv.edicts[1].origin.z);
         if (s == nullptr) continue;
         const float hp = s->sv.edicts[1].health;
+        if (alive && hp < last_hp) {  // a blow or a shot landed on him this frame
+          hits++;
+          if (first_hit < 0) first_hit = float(i + 1) * float(sv::kCampaignStep);
+        }
+        last_hp = hp;
         if (hp <= 0 && alive) deaths++;
         alive = hp > 0;
         if (alive) lowest_hp = std::min(lowest_hp, hp);
       }
       lift_dz = static_cast<int>(lowest - z0);
+      // The monsters on the hunt at the end: an enemy of their own (the world's is none).
+      if (s = rules_of(l); s != nullptr) {
+        const int enemy = mv::field_of(progs, "enemy");
+        for (int e = 2; e < s->sv.num_edicts; e++)
+          if (!s->sv.edicts[size_t(e)].free && s->sv.edicts[size_t(e)].health > 0 &&
+              mv::string_at(*s, e, f.classname).rfind("monster_", 0) == 0 &&
+              mv::word_at(*s, e, enemy) != 0)
+            hunting++;
+      }
       t.rows.push_back({"lift ridden", "down " + std::to_string(-lift_dz) + " units, the map run " +
                                            std::to_string(frames_run) + " frames after"});
       t.rows.push_back({"the player", "rode down " + std::to_string(int(me0 - me_low)) +
                                           " units; health at its lowest " +
                                           std::to_string(int(lowest_hp)) + ", killed " +
-                                          std::to_string(deaths) + " time(s)"});
+                                          std::to_string(deaths) + " time(s); hit " +
+                                          std::to_string(hits) + " times, first after " +
+                                          std::to_string(first_hit).substr(0, 4) + " s"});
+      t.rows.push_back({"the monsters", std::to_string(hunting) + " hunting at the end"});
     }
   } catch (const std::exception& e) {
     thrown = e.what();
@@ -253,6 +271,9 @@ void run(gl::Lab& lab) {
   lab.metric("remix_campaign.frames_after_lift", frames_run, "frames");
   lab.metric("remix_campaign.player_lowest_health", lowest_hp, "");
   lab.metric("remix_campaign.player_killed", deaths, "count");
+  lab.metric("remix_campaign.hits_taken", hits, "count");
+  lab.metric("remix_campaign.first_hit", first_hit, "s");
+  lab.metric("remix_campaign.monsters_hunting", hunting, "count");
   if (!thrown.empty())
     lab.fail("se-remix-campaign: the game threw " + thrown,
              "next: run under gdb with `catch throw` to see where");

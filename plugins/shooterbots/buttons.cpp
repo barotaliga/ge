@@ -2,7 +2,7 @@
 //
 // ge:summary The map's buttons linked to doors and items; a novice's random shots and touches
 // ge:keywords buttons_init button_poke button_poke_cmd button_node door-keeps trigger_relay
-// ge:keywords relayed-button button_fires pressface into-face
+// ge:keywords relayed-button button_fires pressface into-face button_dooms killbox evacuate
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_footwork_test.cpp
 #include "shooterbots/buttons.hpp"
@@ -179,6 +179,20 @@ std::vector<std::string> button_fires(const std::vector<sb::EntityBlock>& blocks
       }
   }
   return names;
+}
+
+bool button_dooms(const std::vector<sb::EntityBlock>& blocks, const char* target) {
+  for (const std::string& n : button_fires(blocks, target))
+    for (const sb::EntityBlock& b : blocks) {
+      const char* cn = sb::block_value(b, "classname");
+      const char* tn = sb::block_value(b, "targetname");
+      if (!cn || !tn || n != tn) continue;
+      if (std::strcmp(cn, "func_killbox") == 0) return true;
+      const char* dmg = sb::block_value(b, "dmg");
+      if (std::strcmp(cn, "target_explosion") == 0 && dmg && std::atof(dmg) >= kDoomDmg)
+        return true;
+    }
+  return false;
 }
 
 std::vector<ge::shooterbots::NavErrand> field_errands(const Fighter& f, const sb::NavGraph& g,
