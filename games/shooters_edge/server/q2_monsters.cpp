@@ -143,10 +143,7 @@ void foe_box(const Q2Server& s, int foe, sh::Vec3f& mins, sh::Vec3f& maxs) {
   maxs = o != nullptr ? s.entities[size_t(o->entity)].maxs : sh::Vec3f{};
 }
 
-Range range_to(sh::Vec3f a, sh::Vec3f b) {
-  const float d = sh::length(b - a);
-  return d < kMelee ? Range::melee : d < kNear ? Range::near : d < kMid ? Range::mid : Range::far;
-}
+Range range_to(sh::Vec3f a, sh::Vec3f b) { return q2_mind::range_of(sh::length(b - a)); }
 
 sh::Vec3f forward_of(float yaw) { return sh::angle_vectors({0, yaw, 0}).forward; }
 
@@ -154,7 +151,8 @@ bool in_front(const Q2Entity& e, sh::Vec3f at) {
   sh::Vec3f to = at - e.origin;
   to.z = 0;
   if (sh::normalize(to) == 0) return true;
-  return sh::dot(to, forward_of(e.angles.y)) > kInFront;
+  const sh::Vec3f f = forward_of(e.angles.y);
+  return q2_mind::in_front(to.x, to.y, f.x, f.y);
 }
 
 float yaw_to(sh::Vec3f d) {
@@ -411,14 +409,15 @@ bool in_dark(const Q2Server& s, int slot) {
 bool sees(const Q2Server& s, const Q2Monster& m, int foe) {
   const Q2Entity& e = s.entities[size_t(m.entity)];
   const sh::Vec3f at = foe_at(s, foe);
-  const Range r = range_to(e.origin, at);
-  if (r == Range::far) return false;
-  if (!reaches(s, m, foe, kOpaque)) return false;
-  if (r == Range::melee) return true;                   // close by: seen whichever way it faces
-  if (r == Range::near && m.enemy == foe) return true;  // already found: no need to face him
-  // Near, a player who fired in the last second is seen behind it too.
-  if (r == Range::near && foe >= 0 && s.level_time < s.players[foe].hostile_until) return true;
-  return in_front(e, at);
+  q2_mind::Sighting look;
+  look.range = range_to(e.origin, at);
+  if (look.range == Range::far) return false;  // (no line traced that far)
+  look.clear = reaches(s, m, foe, kOpaque);
+  if (!look.clear) return false;
+  look.hunted = m.enemy == foe;
+  look.fired = foe >= 0 && s.level_time < s.players[foe].hostile_until;
+  look.ahead = in_front(e, at);
+  return q2_mind::sees(look);
 }
 
 void notice(Q2Server& s, Q2Monster& m) {
@@ -503,17 +502,19 @@ void begin_attack(Q2Server& s, Q2Monster& m, int i) {
 
 // Whether the attack in hand goes on for another loop.
 bool goes_on(Q2Server& s, Q2Monster& m, const Attack& a) {
-  if (a.again <= 0 || (a.again_max > 0 && m.loops >= a.again_max)) return false;
-  if (skill(s) < a.again_skill) return false;
-  if (!foe_alive(s, m.enemy)) return false;
-  const Q2Entity& e = body(s, m);
-  const Range r = range_to(e.origin, foe_at(s, m.enemy));
-  if (m.attack < 2) {  // a blow: while he is within reach (at skill 3 the mutant's, by chance)
-    if (r != Range::melee && !(skill(s) == 3 && kind(m).test == Test::mutant)) return false;
-  } else if (!reaches(s, m, m.enemy, kOpaque)) {
-    return false;
+  if (a.again <= 0 || (a.again_max > 0 && m.loops >= a.again_max)) return false;  // no traces
+  q2_mind::Loop l;
+  l.loops = m.loops;
+  l.skill = skill(s);
+  l.foe_alive = foe_alive(s, m.enemy);
+  if (l.foe_alive) {
+    l.blow = m.attack < 2;
+    l.range = range_to(body(s, m).origin, foe_at(s, m.enemy));
+    l.mutant = kind(m).test == Test::mutant;
+    l.clear = !l.blow && l.skill >= a.again_skill && reaches(s, m, m.enemy, kOpaque);
+    l.extra = gz_base_again(s, m);
   }
-  return random01(s) < a.again + gz_base_again(s, m);
+  return q2_mind::goes_on(a, l, [&] { return random01(s); });
 }
 
 // The attack in progress, this frame.
@@ -552,37 +553,11 @@ void attacking(Q2Server& s, Q2Monster& m) {
     begin_attack(s, m, a.follow);
 }
 
-int ranged_count(const Kind& k) {
-  int n = 0;
-  while (n < 3 && k.missile[n].fire != Fire::none) n++;
-  return n;
-}
+int ranged_count(const Kind& k) { return q2_mind::ranged_count(k); }
 
 // The ranged attack chosen by weight (the first one nearer than the kind's `close`).
 int pick_ranged(Q2Server& s, const Q2Monster& m, float dist) {
-  const Kind& k = kind(m);
-  const int n = ranged_count(k);
-  if (k.close > 0 && dist < k.close) return 2;
-  if (k.by_range && n == 3) {  // the tank: blaster or gun within 125 (60/40) and 250 (even)
-    const double roll = random01(s);
-    if (dist <= 125) return roll < 0.4 ? 4 : 2;
-    if (dist <= 250) return roll < 0.5 ? 4 : 2;
-    return roll < 1.0 / 3 ? 2 : roll < 2.0 / 3 ? 3 : 4;  // a third each farther
-  }
-  // An attack with a reach of its own (`farthest`) is left out beyond it.
-  const auto weight = [&](int i) {
-    const Attack& a = k.missile[i];
-    return a.farthest > 0 && dist > a.farthest ? 0.0f : a.weight;
-  };
-  float total = 0;
-  for (int i = 0; i < n; i++) total += weight(i);
-  const float roll = float(random01(s)) * total;
-  float sum = 0;
-  for (int i = 0; i < n; i++) {
-    sum += weight(i);
-    if (roll < sum) return 2 + i;
-  }
-  return 2 + n - 1;
+  return q2_mind::pick_ranged(kind(m), dist, [&] { return random01(s); });
 }
 
 // The mutant's leap test: the heights overlap and he is 100 or more away (then one time in ten).
@@ -591,13 +566,9 @@ bool leap_test(Q2Server& s, const Q2Monster& m) {
   const sh::Vec3f at = foe_at(s, m.enemy);
   sh::Vec3f lo, hi;
   foe_box(s, m.enemy, lo, hi);
-  const float height = hi.z - lo.z;
-  const float bottom = at.z + lo.z;
-  if (e.origin.z + e.mins.z > bottom + 0.75f * height) return false;
-  if (e.origin.z + e.maxs.z < bottom + 0.25f * height) return false;
   const sh::Vec3f d{at.x - e.origin.x, at.y - e.origin.y, 0};
-  if (sh::length(d) < 100) return false;
-  return random01(s) < 0.1;
+  return q2_mind::leap_test(e.origin.z + e.mins.z, e.origin.z + e.maxs.z, at.z + lo.z, hi.z - lo.z,
+                            sh::length(d), [&] { return random01(s); });
 }
 
 // The attack chosen this frame, if any (q2-monsters.md § Choosing to attack;
@@ -618,10 +589,7 @@ void choose(Q2Server& s, Q2Monster& m) {
   const sh::Vec3f at = foe_at(s, m.enemy);
   // It turns to him first: an attack only within 45 degrees of facing him.
   const float want = yaw_to(at - e.origin);
-  float off = e.angles.y - want;
-  while (off > 180) off -= 360;
-  while (off < -180) off += 360;
-  if (std::abs(off) > 45) {
+  if (!q2_mind::faces(e.angles.y, want)) {
     turn(e, k, want);
     return;
   }
@@ -641,10 +609,10 @@ void choose(Q2Server& s, Q2Monster& m) {
     return;
   }
   if (r == Range::melee) {
-    if (!boss && skill(s) == 0 && random01(s) < 0.75) return;
+    const auto roll = [&] { return random01(s); };
+    if (q2_mind::blow_skipped(k.test, skill(s), roll)) return;
     if (has_melee) {
-      const bool second = k.melee[1].fire != Fire::none && random01(s) < 0.5;
-      begin_attack(s, m, second ? 1 : 0);
+      begin_attack(s, m, q2_mind::pick_blow(k, roll));
       return;
     }
     if (has_missile) {  // no blow: the ranged attack, always
@@ -654,16 +622,7 @@ void choose(Q2Server& s, Q2Monster& m) {
     }
   }
   if (!has_missile || r == Range::far || s.level_time + 0.001 < m.attack_finished) return;
-  double chance;
-  if (k.test == Test::hover) {
-    chance = m.hold ? 0.4 : 0.8;
-  } else if (k.test == Test::rider) {
-    chance = m.hold ? 0.4 : r == Range::melee ? 0.8 : r == Range::near ? 0.4 : 0.2;
-  } else {
-    chance = m.hold ? 0.4 : r == Range::melee ? 0.2 : r == Range::near ? 0.1 : 0.02;
-    if (skill(s) == 0) chance *= 0.5;
-    if (skill(s) >= 2) chance *= 2;
-  }
+  double chance = q2_mind::attack_chance(k.test, m.hold, r, skill(s));
   if (gz_anger_point(s, m)) chance = 1;  // an anger's point target: at every chance
   if (random01(s) >= chance) {
     // A flier that did not fire slides sideways three times in ten, each such frame afresh
@@ -675,7 +634,7 @@ void choose(Q2Server& s, Q2Monster& m) {
     return;
   }
   const int i = pick_ranged(s, m, dist);
-  m.attack_finished = s.level_time + 2 * random01(s);
+  m.attack_finished = s.level_time + q2_mind::kRefire * random01(s);
   if (dist < attack_at(m, i).closest) return;            // too near for it: keeps closing
   if (gz_call_instead(s, m, r == Range::melee)) return;  // a medic commander's reinforcements
   const int gz = gz_base_pick(s, m, i, r);               // Ground Zero's checks before the shot
@@ -1587,17 +1546,16 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
   // Shots between a boss (or a monster a spawner brought) and another start no fight.
   if (ak.ignore_shots || k.ignore_shots || a->commander >= 0 || m.commander >= 0) return;
   if (gz_ignores_shots(s, *a) || gz_ignores_shots(s, m)) return;  // Ground Zero's flag
-  const bool alike = ak.flies == k.flies && ak.swims == k.swims;
-  const bool heavy =
-      !gz_ai(s) &&
-      (named(*a, "monster_tank") || named(*a, "monster_tank_commander") ||
-       named(*a, "monster_supertank") || named(*a, "monster_makron") || named(*a, "monster_jorg"));
-  int foe = -1;
-  if ((alike && std::string_view(ak.classname) != k.classname && !heavy) ||
-      a->enemy == foe_of_entity(m.entity))
-    foe = attacker;
-  else if (a->enemy != -1 && foe_alive(s, a->enemy))
-    foe = a->enemy;
+  q2_mind::Attacker by;
+  by.alike = ak.flies == k.flies && ak.swims == k.swims;
+  by.same_kind = std::string_view(ak.classname) == k.classname;
+  by.heavy = !gz_ai(s) && q2_mind::heavy(ak.classname);
+  by.aiming_at_me = a->enemy == foe_of_entity(m.entity);
+  by.has_live_foe = a->enemy != -1 && foe_alive(s, a->enemy);
+  const q2_mind::Turn t = q2_mind::infight(by);
+  const int foe = t == q2_mind::Turn::attacker        ? attacker
+                  : t == q2_mind::Turn::attackers_foe ? a->enemy
+                                                      : -1;
   if (foe == -1 || foe == m.enemy) return;
   if (m.enemy >= 0) m.old_enemy = m.enemy;
   found(s, m, foe, false);

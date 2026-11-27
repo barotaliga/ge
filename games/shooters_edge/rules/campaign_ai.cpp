@@ -244,10 +244,11 @@ bool look_for_target(A& q) {
   }
   if (client == q.i(me, q.L.f.enemy)) return false;
   if (on(band(q.f(client, q.L.f.flags), kFlNotarget))) return false;
-  const float r = range_to(q, client);
-  if (r == kRangeFar) return false;
-  if (!can_see(q, client)) return false;
-  if (r == kRangeNear) {
+  if (sq_runs(q, me)) {  // Quake II's monster: Quake II's sight (a monster that saw him: no look)
+    if (is_player(q, client) && !sq_sees(q, client)) return false;
+  } else if (const float r = range_to(q, client); (r == kRangeFar) || !can_see(q, client)) {
+    return false;
+  } else if (r == kRangeNear) {
     const bool quiet = q.f(client, f_show_hostile) < q.time();
     const bool ahead = in_front(q, client);  // asked either way
     if (quiet & !ahead) return false;
@@ -379,8 +380,12 @@ void monster_run(A& q) {
 void monster_hurt(A& q) {
   const int32_t me = q.self();
   const int32_t a = q.ge(g_damage_attacker);
-  if ((a != me) & (a != q.i(me, q.L.f.enemy)) & (q.f(a, q.L.f.takedamage) != 0) &
-      (band(q.f(a, q.L.f.flags), static_cast<float>(kFlClient | kFlMonster)) != 0)) {
+  const bool q2_fight = (a != me) && (a != q.i(me, q.L.f.enemy)) && sq_runs(q, me) &&
+                        on(band(q.f(a, q.L.f.flags), static_cast<float>(kFlMonster)));
+  if (q2_fight) {  // Quake II's monster hurt by another: Quake II's rule of whom it turns on
+    sq_hurt_by_monster(q, a);
+  } else if ((a != me) & (a != q.i(me, q.L.f.enemy)) & (q.f(a, q.L.f.takedamage) != 0) &
+             (band(q.f(a, q.L.f.flags), static_cast<float>(kFlClient | kFlMonster)) != 0)) {
     if (!q.same(q.i(a, q.L.f.classname), q.i(me, q.L.f.classname)) |
         q.is(q.i(me, q.L.f.classname), "monster_army")) {
       if (is_player(q, q.i(me, q.L.f.enemy))) q.set_i(me, f_oldenemy, q.i(me, q.L.f.enemy));
