@@ -17,7 +17,8 @@
 //
 // ge:summary Quake II's view and 2D settings: the server's field of view drawn, scale, HUD switches
 // ge:keywords q2 fov cl_adjustfov uf hor-plus field-of-view zoom scr_scale scr_draw2d scr_alpha
-// ge:keywords scr_lag_draw scr_lag_x scr_lag_y scr_lag_min scr_lag_max cl_kickangles q2_shown_fov q2_own_fov
+// ge:keywords scr_lag_draw scr_lag_x scr_lag_y scr_lag_min scr_lag_max cl_kickangles q2_shown_fov
+// ge:keywords q2_own_fov
 // ge:keywords gl_bilerp_pics gl_gamma_scale_pics scr_demobar
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
