@@ -1,13 +1,13 @@
-// ASKING FOR A GAME'S INSTALL: `se -classic <id>` when no install is kept for game N on this
-// computer (client/game_folder.hpp's `choose_folder` sets `Args::ask_install`). The desktop's
-// folder chooser opens at the start, titled with the game's number and name; the folder picked is
+// ASKING FOR A GAME'S INSTALL: when `fs_basegame` names a game whose `fs_basedir_<id>` is empty
+// or no longer opens (client/game_folder.hpp's `choose_folder` sets `Args::ask_install`). The
+// desktop's folder chooser opens at the start, titled with the game's name; the folder picked is
 // checked to be that game's install (`check_game_folder` against its content profile, so a folder
 // of the other game is refused too), refused with the reason and asked again until it is or the
-// player cancels. The folder that checks opens as LOAD GAME's would, which keeps it for the next
-// `-classic <id>`. Built into the `se` window alone: it asks the platform for the chooser.
+// player cancels. The folder that checks opens as LOAD GAME's would, which sets its
+// `fs_basedir_<id>`. Built into the `se` window alone: it asks the platform for the chooser.
 //
-// ge:summary The window asking for -classic <id>'s install folder and checking it is that game's
-// ge:keywords game-number install-ask folder-chooser pick_folder check_game_folder ask_install
+// ge:summary The window asking for the played game's install folder and checking it is that game's
+// ge:keywords fs_basegame install-ask folder-chooser pick_folder check_game_folder ask_install
 // ge:keywords answer_install select-game kept-install
 // ge:skill platform shooter
 #pragma once
@@ -25,10 +25,9 @@ namespace shooters_edge::client {
 
 struct InstallAsk {
   const ge::classicenhance::Profile* game = nullptr;  // asked for; null once answered or not asked
-  int number = 0;                                     // its `-game` number
 };
 
-// The chooser opened for `args.game_number`'s install when `args.ask_install` (and not `measured`,
+// The chooser opened for `args.profile`'s install when `args.ask_install` (and not `measured`,
 // a timed or recorded run, which asks nothing); what is asked, or nothing.
 InstallAsk ask_install(ge::platform::Window& window, const Args& args, bool measured);
 

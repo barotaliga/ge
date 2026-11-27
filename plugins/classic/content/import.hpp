@@ -33,7 +33,7 @@
 // of packs alone, beside it): a finished take-in writes the source's
 // fingerprint (where it is, and every file's path, size and last write time; a disc image's own
 // size and time) and each file it put in place with its size. Pointing at the same source again
-// (a second launch with `-basedir`) only lists it: when the fingerprint is the same and every file
+// (a second launch pointed at it) only lists it: when the fingerprint is the same and every file
 // is still there at its size, nothing is read, hashed, copied or decoded
 // (`ImportReport::unchanged`). A source that changed, or a copy that lost a file, is taken in again
 // as above. A taken file written before mission packs were known

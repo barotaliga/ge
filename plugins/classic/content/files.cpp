@@ -58,8 +58,8 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
   std::error_code ec;
   if (!fs::is_directory(root / game, ec)) {
     error = "the game folder " + (root / game).string() +
-            " does not exist. Start the game with -basedir <the folder that holds " + base + "/" +
-            ge::classicenhance::pack_name(content, 0) + ">.";
+            " does not exist. Point the game at the folder that holds " + base + "/" +
+            ge::classicenhance::pack_name(content, 0) + ".";
     return false;
   }
   std::string why;
@@ -380,7 +380,7 @@ fs::path save_file(const SearchPath& path, const std::string& name, bool classic
     return {};
   }
   if (path.folder.empty()) {
-    error = "There is no game folder to keep saves in (start the game with -basedir).";
+    error = "There is no game folder to keep saves in (pick the game's folder first).";
     return {};
   }
   return classic ? fs::path(path.folder) / (name + ".sav")

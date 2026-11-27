@@ -32,7 +32,7 @@ struct DedicatedHost {
   std::string root;     // the install folder the server reads (its --root)
   std::string state;    // where its record goes (`<prefs>/cli`)
   std::string logs;     // where its log goes (`<prefs>/logs`)
-  int game = 1;         // Quake's number (`-classic q2`: Quake II)
+  int game = 1;         // Quake's number (2: Quake II, `+set fs_basegame q2`)
   int port = 27500;
 };
 
@@ -46,8 +46,8 @@ ge::server::SpawnAsk dedicated_ask(
 void add_dedicated_commands(ge::console::Console& console, const DedicatedHost& host);
 
 // The window's: `sesv` beside it, the install `root`, the state and logs under the player's
-// `prefs` folder (`<prefs>/cli`, `<prefs>/logs`), `-classic q2` for Quake II's `game_id`; nothing
-// when there is no prefs folder.
+// `prefs` folder (`<prefs>/cli`, `<prefs>/logs`), `+set fs_basegame q2` for Quake II's `game_id`;
+// nothing when there is no prefs folder.
 void add_window_dedicated(ge::console::Console& console, const std::string& prefs,
                           const std::string& root, std::string_view game_id);
 

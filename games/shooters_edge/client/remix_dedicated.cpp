@@ -1,8 +1,8 @@
-// Classic remix on a dedicated server: the cr_ rules, cr_basedir, the remix opened (see the
+// Classic remix on a dedicated server: the cr_ rules, the installs, the remix opened (see the
 // header).
 //
-// ge:summary Classic remix on a dedicated server: the cr_ rules, cr_basedir, the remix opened
-// ge:keywords remix dedicated-server sesv cr_basedir open_server_remix
+// ge:summary Classic remix on a dedicated server: the cr_ rules, the games' installs, the remix
+// ge:keywords remix dedicated-server sesv fs_basedir fs_basegame open_server_remix
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_dedicated_test.cpp
 #include "shooters_edge/client/remix_dedicated.hpp"
@@ -22,8 +22,6 @@ namespace {
 
 namespace ce = ge::classicenhance;
 namespace gs = ge::server;
-
-constexpr std::string_view kBasedir = "cr_basedir";
 
 // The window's cr_ settings, bound once: their words and defaults are the rules'.
 struct Bound {
@@ -52,13 +50,23 @@ std::span<const gs::GameRule> remix_rules() {
                      v->fallback.empty() ? nullptr : v->fallback.c_str(), v->values.c_str(),
                      false});  // told by `remix_info_lines`, only while the remix is on
     }
-    out.push_back({kBasedir.data(),
-                   "The other classic game's install the server's classic remix reads: its maps, "
-                   "models and sounds.",
-                   nullptr,
-                   "\"\": none, so classic remix stays off (the default); FOLDER: the install of "
-                   "the full game the server does not play, such as the folder holding baseq2",
-                   false});
+    // The game served and each game's install (client/installs.hpp), the other's read by remix.
+    static const BaseGame base;
+    static std::vector<std::string> names, helps;
+    names.emplace_back(kBaseGame);
+    helps.emplace_back("The game the server serves, given on its command line.");
+    for (const auto& [id, dir] : base.dirs) {
+      names.push_back(basedir_setting(id));
+      const ce::Profile* p = ce::find_profile(id);
+      helps.push_back("The folder " + whose(p, id) +
+                      " is installed in: served from there when the command line names no root, "
+                      "and read by classic remix while the other game is served.");
+    }
+    out.push_back({names[0].c_str(), helps[0].c_str(), nullptr,
+                   "\"\" or q1: Quake (the default); q2: Quake II", false});
+    for (size_t i = 1; i < names.size(); i++)
+      out.push_back({names[i].c_str(), helps[i].c_str(), nullptr,
+                     "\"\": none (the default); FOLDER: that install", false});
     return out;
   }();
   return rules;
@@ -75,7 +83,7 @@ RemixSettings remix_of_rules(const std::map<std::string, std::string>& rules) {
   RemixSettings s;
   bind_remix(cvars, &s);
   for (const auto& [rule, value] : rules)
-    if (!value.empty() && rule != kBasedir && cvars.find(rule) != nullptr)
+    if (!value.empty() && cvars.find(rule) != nullptr)
       cvars.set(rule, value, ge::console::Source::local);
   s.menu.clear();
   return s;
@@ -93,26 +101,30 @@ std::string open_server_remix(RemixFiles& r, const std::map<std::string, std::st
   };
   if (!s.enabled) return off("");
   const ce::Profile* mine = ce::find_profile(played);
-  const auto at = rules.find(std::string(kBasedir));
-  const std::string other_at = at != rules.end() ? at->second : std::string();
-  if (other_at.empty())
-    return off(
-        "Classic remix stays off: the server needs the other classic game's install. Set "
-        "cr_basedir to its folder.");
-  std::string other_base;
-  const ce::Profile* other = install_of(other_at, &other_base, &why);
+  // The other game: the first whose install is set and is not the one served.
+  const ce::Profile* other = nullptr;
+  std::string other_at, other_base;
+  for (const ce::Profile& p : ce::kProfiles) {
+    const auto at = rules.find(basedir_setting(p.id));
+    if (p.id == played || at == rules.end() || at->second.empty()) continue;
+    other_at = at->second;
+    other = &p;
+    break;
+  }
   if (other == nullptr)
-    return off("Classic remix stays off: cr_basedir " + other_at + " holds no classic game. " +
-               why);
-  if (other->id == played)
-    return off("Classic remix stays off: cr_basedir holds " + whose(other, other->id) +
-               ", the game this server plays. Name the other game's install.");
+    return off(
+        "Classic remix stays off: the server needs the other classic game's install. Set its "
+        "fs_basedir setting to its folder.");
+  const std::string setting = basedir_setting(other->id);
+  if (!check_game_folder(other_at, &other_base, &why, *other))
+    return off("Classic remix stays off: " + setting + " " + other_at + " holds no " +
+               whose(other, other->id) + ". " + why);
   if (mine == nullptr || edition_of(root, *mine) != Edition::full)
     return off("Classic remix stays off: it needs the full game, and " + whose(mine, played) +
                " here is not. Serve its full game's files.");
   if (edition_of(other_base, *other) != Edition::full)
     return off("Classic remix stays off: it needs the full game, and the " +
-               whose(other, other->id) + " at cr_basedir is not.");
+               whose(other, other->id) + " at " + setting + " is not.");
   RemixState st;
   st.on = true;
   st.other = std::string(other->id);

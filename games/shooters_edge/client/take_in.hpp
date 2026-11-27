@@ -1,9 +1,9 @@
 // A GAME POINTED AT IS TAKEN IN, NEVER PLAYED FROM WHERE IT IS: a folder, a mounted disc or USB
-// stick, or a disc image named by `-basedir`, LOAD GAME, SELECT GAME's folder chooser, the
-// console's `basedir` or `import`, is copied into the game's own data folder by the shooter content
-// layer (plugins/classic/content/import.hpp: the packs, the loose game files, the soundtrack as
-// music/trackNN.flac), and the copy is what opens. Pointing at a game already in the data folder
-// opens it as it is.
+// stick, or a disc image named by `fs_basedir_<id>` (client/installs.hpp), LOAD GAME, SELECT
+// GAME's folder chooser or the console's `import`, is copied into the game's own data folder by
+// the shooter content layer (plugins/classic/content/import.hpp: the packs, the loose game files,
+// the soundtrack as music/trackNN.flac), and the copy is what opens. Pointing at a game already in
+// the data folder opens it as it is.
 //
 // The data folder is `data/` in the player's own settings folder, which outlives the game's
 // program (a rebuild, a new version, the app moved or deleted): on a Mac
@@ -89,14 +89,14 @@ std::string offer_words(const ge::classic::content::Offer& o);
 // `con` (none when `data_root` is empty).
 void offer_packs(ge::console::Console& con, const std::string& data_root);
 
-// `-basedir` taken in before the window chooses its install: `*basedir` becomes the copy (left as
-// it is when empty or already in `root`); false, said on the error stream, when it cannot be.
+// The played game's `fs_basedir_<id>` taken in before the window chooses its install: `*basedir`
+// becomes the copy (left as it is when empty or already in `root`); false, said on the error
+// stream, when it cannot be.
 bool take_in_basedir(std::string* basedir, const std::string& root);
 
-// The console's `basedir <folder>` (no folder: the one playing, `*basedir`) and `import <folder or
-// disc image>`: each sets `*ask`, which the window takes in and opens. With `music`, its tracks
-// read from the game playing's folder (`*basedir`); with `remap` true (Quake II's
-// `ogg_remap_tracks`), the mission pack in `*game` asks the digital release's numbers.
+// The console's `import <folder or disc image>`: sets `*ask`, which the window takes in and opens.
+// With `music`, its tracks read from the game playing's folder (`*basedir`); with `remap` true
+// (Quake II's `ogg_remap_tracks`), the mission pack in `*game` asks the digital release's numbers.
 void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
                           ge::audio::MusicConsole* music = nullptr,
                           const std::string* game = nullptr, const bool* remap = nullptr);

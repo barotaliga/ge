@@ -1,7 +1,7 @@
 // The game folder a player loads (game_folder.hpp).
 //
-// ge:summary The game folder a player loads: the install checked, its game folder, kept, programs
-// ge:keywords game-folder check_game_folder game_of remembered_game remember_game load_programs
+// ge:summary The game folder a player loads: the install checked, its game folder, programs
+// ge:keywords game-folder check_game_folder game_of choose_folder fs_basegame load_programs
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/game_folder.hpp"
@@ -33,8 +33,6 @@ namespace fs = std::filesystem;
 namespace out = ge::core::output;
 
 namespace {
-
-constexpr const char* kKeptFile = "game_folder.txt";
 
 std::string lower(std::string s) {
   for (char& c : s) c = c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
@@ -125,153 +123,38 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
   return std::string(content.base_dir);
 }
 
-namespace {
-
-void play_found(Args& args, const FoundInstall& f, const std::string& how) {
-  out::status("shooters_edge: " + std::string(f.content->what) + " (" + f.release + ") in " +
-              f.basedir + ", " + how + " (-basedir names another)");
-  args.basedir = f.basedir;
-  args.profile = std::string(f.content->id);
-  if (!args.game_set) args.game = game_of(f.basedir, *f.content);
-}
-
-}  // namespace
-
-void choose_folder(Args& args, const std::string& prefs, const std::vector<std::string>& places,
-                   std::vector<FoundInstall>* found) {
-  if (args.game_number > 0 && !args.basedir_set) {
-    // `-classic <id>`: that game's install kept on this computer, else the one the game was started
-    // inside when it is that game, else the window asks for its folder (`ask_install`).
-    const ge::classicenhance::Profile& want =
-        ge::classicenhance::kProfiles[static_cast<size_t>(args.game_number) - 1];
-    std::string basedir, why, kept_why;
-    const auto kept = remembered_installs(prefs);
-    const auto it = kept.find(want.id);
-    const std::string number = std::to_string(args.game_number);
-    if (it != kept.end() && check_game_folder(it->second, &basedir, &kept_why, want)) {
-      out::status("shooters_edge: game " + number + ", " + std::string(want.what) + " in " +
-                  basedir + " (-basedir names another)");
-    } else if (check_game_folder(args.basedir, &basedir, &why, want)) {
-      out::status("shooters_edge: game " + number + ", " + std::string(want.what) +
-                  " in the folder the game runs in, " + basedir);
-    } else {
-      if (!kept_why.empty())
-        out::warn("shooters_edge: the install kept for game " + number +
-                  " no longer opens: " + kept_why + "; next: pick its folder in the chooser");
-      else
-        out::status("shooters_edge: no install kept for game " + number + " (" +
-                    std::string(want.what) + "); asking for its folder");
-      args.ask_install = true;
-      if (!args.game_set) args.game = game_of(args.basedir, want);
-      return;
-    }
-    args.basedir = basedir;
-    args.profile = std::string(want.id);
-    if (!args.game_set) args.game = game_of(basedir, want);
+void choose_folder(Args& args, const BaseGame& base) {
+  const ge::classicenhance::Profile* want =
+      base.game.empty() ? nullptr : ge::classicenhance::find_profile(base.game);
+  if (!base.game.empty() && want == nullptr)
+    out::warn("shooters_edge: " + std::string(kBaseGame) + " " + base.game +
+              " is no game this build knows (it knows " + ge::classicenhance::profile_ids() +
+              "); next: set " + std::string(kBaseGame) + " to one of them, or \"\"");
+  if (want == nullptr) {
+    // Shooter's Edge's own game: the folder the game runs in.
+    args.basedir = ".";
+    if (!args.game_set) args.game = game_of(args.basedir);
     return;
   }
-  if (!args.basedir_set) {
-    const KeptGame kept = remembered_game(prefs);
-    // Started inside an install, or placed above some: played at once, ahead of the one kept.
-    std::vector<std::string> where{args.basedir};
-    where.insert(where.end(), places.begin(), places.end());
-    std::vector<FoundInstall> below;
-    for (const std::string& place : where) {
-      if (place.empty()) continue;
-      for (FoundInstall& f : installs_below(place)) {
-        std::error_code ec;
-        const bool seen = std::any_of(below.begin(), below.end(), [&](const FoundInstall& b) {
-          return fs::equivalent(b.basedir, f.basedir, ec);
-        });
-        if (!seen) below.push_back(std::move(f));
-      }
-    }
-    if (found != nullptr) *found = below;
-    for (const std::string& place : where) {
-      FoundInstall inside;
-      if (!place.empty() && install_around(place, inside)) {
-        std::error_code ec;
-        if (found != nullptr && std::none_of(found->begin(), found->end(), [&](const auto& b) {
-              return fs::equivalent(b.basedir, inside.basedir, ec);
-            }))
-          found->insert(found->begin(), inside);
-        play_found(args, inside, "the install the game was started in");
-        return;
-      }
-    }
-    if (const int pick = pick_install(below, kept.basedir); pick >= 0) {
-      play_found(args, below[static_cast<size_t>(pick)],
-                 below.size() == 1 ? "the install beside the game"
-                                   : "one of " + std::to_string(below.size()) +
-                                         " installs beside the game (games lists them)");
-      return;
-    }
-    const ge::classicenhance::Profile* content =
-        kept.basedir.empty() ? nullptr : ge::classicenhance::find_profile(kept.profile);
-    std::string basedir, why;
-    if (!kept.basedir.empty() && content == nullptr) {
-      out::warn("shooters_edge: the game loaded last is " + kept.profile +
-                ", which this build does not know (it knows " + ge::classicenhance::profile_ids() +
-                "); next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
-    } else if (content != nullptr && check_game_folder(kept.basedir, &basedir, &why, *content)) {
-      out::status("shooters_edge: the game loaded last, " + std::string(content->what) + " in " +
-                  basedir + " (-basedir names another)");
-      args.basedir = basedir;
-      args.profile = std::string(content->id);
-      if (!args.game_set) args.game = game_of(basedir, *content);
-      return;
-    } else if (content != nullptr) {
-      out::warn("shooters_edge: the game loaded last no longer opens: " + why +
-                "; so the folder the game runs in; next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
-    }
-  }
-  // The install named or the folder the game runs in: whichever game its folders say it is.
+  args.profile = std::string(want->id);
+  const std::string kept = base.dir(want->id);
   std::string basedir, why;
-  if (const ge::classicenhance::Profile* content = install_of(args.basedir, &basedir, &why)) {
-    args.profile = std::string(content->id);
-    if (!args.game_set) args.game = game_of(args.basedir, *content);
+  if (!kept.empty() && check_game_folder(kept, &basedir, &why, *want)) {
+    out::status("shooters_edge: " + std::string(want->what) + " in " + basedir + " (" +
+                basedir_setting(want->id) + ")");
+    args.basedir = basedir;
+    if (!args.game_set) args.game = game_of(basedir, *want);
     return;
   }
-  if (!args.game_set) args.game = game_of(args.basedir);
-}
-
-KeptGame remembered_game(const std::string& prefs) {
-  KeptGame kept;
-  if (prefs.empty()) return kept;
-  std::ifstream f(fs::path(prefs) / kKeptFile);
-  std::string line;
-  bool keyed = false;
-  while (f && std::getline(f, line)) {
-    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
-    if (line.rfind("profile ", 0) == 0) {
-      kept.profile = line.substr(8);
-      keyed = true;
-    } else if (line.rfind("basedir ", 0) == 0) {
-      kept.basedir = line.substr(8);
-      keyed = true;
-    } else if (!keyed && kept.basedir.empty() && !line.empty()) {
-      kept.basedir = line;  // the older form: the folder alone
-    }
-  }
-  if (!kept.basedir.empty() && kept.profile.empty())
-    kept.profile = std::string(ge::classicenhance::q1_profile().id);
-  return kept;
-}
-
-bool remember_game(const std::string& prefs, const std::string& basedir,
-                   const ge::classicenhance::Profile& content) {
-  if (prefs.empty()) return false;
-  const fs::path file = fs::path(prefs) / kKeptFile;
-  const fs::path tmp = fs::path(prefs) / (std::string(kKeptFile) + ".tmp");
-  {
-    std::ofstream f(tmp, std::ios::trunc);
-    if (!f) return false;
-    f << "profile " << content.id << "\nbasedir " << basedir << "\n";
-    if (!f) return false;
-  }
-  std::error_code ec;
-  fs::rename(tmp, file, ec);
-  return !ec;
+  if (!kept.empty())
+    out::warn("shooters_edge: " + basedir_setting(want->id) + " " + kept +
+              " does not open: " + why + "; next: pick its folder in the chooser");
+  else
+    out::status("shooters_edge: no install of " + std::string(want->what) + " is set (" +
+                basedir_setting(want->id) + "); asking for its folder");
+  args.ask_install = true;
+  args.basedir = ".";
+  if (!args.game_set) args.game = game_of(args.basedir, *want);
 }
 
 namespace {

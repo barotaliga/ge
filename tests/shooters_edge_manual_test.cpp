@@ -38,11 +38,10 @@ TEST(every_listed_flag_is_taken_as_a_flag_and_no_other) {
       if (n.back() == '=') {
         words[0] += n == "--size=" || n == "--resolution=" ? "720p"
                     : n == "--from=" || n == "--to="       ? "0:01"
-                    : n == "--classic="                    ? "q2"
                                                            : "1";
       } else {
         for (char ch : f.arg)
-          if (ch == '<') words.emplace_back(n == "-classic" ? "q2" : "x");
+          if (ch == '<') words.emplace_back("x");
       }
       CHECK(parse_words(words, a, why));
       CHECK(a.plus.empty());  // its value taken, nothing left over as a console line
@@ -51,7 +50,7 @@ TEST(every_listed_flag_is_taken_as_a_flag_and_no_other) {
   cl::Args a;
   std::string why;
   CHECK(!parse_words({"-nosuchflag"}, a, why));
-  CHECK(cl::known_flag("--classic") && cl::known_flag("-hidden") && !cl::known_flag("-nope"));
+  CHECK(cl::known_flag("--game") && cl::known_flag("-hidden") && !cl::known_flag("-nope"));
   const std::vector<con::FlagDoc> docs = cl::flag_docs();
   CHECK(docs.size() == std::size(cl::kFlags) + 2);  // -config and -logfile first
   CHECK(docs.front().name == "-config");

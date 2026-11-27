@@ -23,7 +23,7 @@ gs::SpawnAsk dedicated_ask(const DedicatedHost& host, const std::string& map,
   ask.logs = host.logs;
   ask.port = host.port;
   ask.map = map;
-  if (host.game != 1) ask.extra = {"-classic", host.game == 2 ? "q2" : "q1"};
+  if (host.game != 1) ask.extra = {"+set", "fs_basegame", host.game == 2 ? "q2" : "q1"};
   for (const auto& [name, value] : settings)
     ask.cfg.append(name).append(" \"").append(value).append("\"\n");
   return ask;

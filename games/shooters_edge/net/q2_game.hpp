@@ -1,7 +1,7 @@
 // QUAKE II'S DEDICATED SERVER GAME: the engine's server core (engine/server) running Quake II's
 // rules (server/q2_server.hpp) on a Quake II map and serving them over Quake II's own protocol
 // (q2_net_server.hpp, protocol 34) on the game's port, so an existing client of Quake II
-// connects to `sesv -classic q2` and plays.
+// connects to `sesv +set fs_basegame q2` and plays.
 //
 // THE MAP is `sv_map` (default `q2dm1`) read from Quake II's game folder under `--root`
 // (`baseq2`, loose or in its packs: the content row `q2`, classicenhance/profile.hpp). The

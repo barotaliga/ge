@@ -1,6 +1,7 @@
-// THE GAME FOLDER THE PLAYER POINTS AT: Quake's install, chosen with `-basedir`, with
-// OPTIONS ▸ CLASSIC ENHANCED ▸ LOAD GAME (the desktop's folder chooser) or the console's `basedir`,
-// and what the window reads out of it once it is open.
+// THE GAME FOLDER THE WINDOW OPENS: the install of the game `fs_basegame` names, the folder its
+// `fs_basedir_<id>` holds (client/installs.hpp), set by SELECT GAME, OPTIONS ▸ CLASSIC ENHANCED ▸
+// LOAD GAME (the desktop's folder chooser) or the console, and what the window reads out of it
+// once it is open.
 //
 // - **Which folder** (`check_game_folder`): the install's own folder, the one holding the content
 //   profile's base folder with its first numbered pack (`id1/pak0.pak`, or the content zip standing
@@ -8,18 +9,13 @@
 //   folder is refused with what it lacks: only a game the content profiles know is played.
 // - **Which game** (`install_of`): the first content profile whose base folder and first pack the
 //   folder holds, so an install of Quake II plays as Quake II with no switch to set.
-// - **Which game folder over it** (`game_of`): the profile's multiplayer folder (`multiplayer_dir`:
-// its player
-//   skins and its multiplayer program) when the install has one, else the base folder, so the
-//   install plays as the multiplayer client sees it.
-// - **The game kept** (`remembered_game`, `remember_game`): Quake loaded last, which
-//   one (its content profile's id) and its install, in `<prefs>/game_folder.txt` (`profile <id>`,
-//   `basedir <folder>`; the older single line of a folder reads as the first profile's). Kept
-//   whenever a game opens (at the start, LOAD GAME, `basedir`) and opened at the next start unless
-//   `-basedir` names another or the game was started inside an install or placed above some
-//   (`choose_folder`, client/install_search.hpp), so the game starts as that classic game (its
-//   pictures, menus, HUD, programs and maps) until another is loaded. With none kept, the folder
-//   the game runs in.
+// - **Which game folder over it** (`game_of`): the profile's multiplayer folder
+//   (`multiplayer_dir`: its player skins and its multiplayer program) when the install has one,
+//   else the base folder, so the install plays as the multiplayer client sees it.
+// - **Which install opens** (`choose_folder`): the game `fs_basegame` names, from its
+//   `fs_basedir_<id>`, or the window asks for its folder when that is empty or does not open; with
+//   `fs_basegame` "", Shooter's Edge's own game, from the folder the game runs in. The installs
+//   around the game (client/install_search.hpp) are only listed, for `games`.
 // - **What it holds** (`load_programs`): the multiplayer program (`-progs`, else the game's own
 //   program files, a mod's folder first, else the baseline mod), the single-player program the
 //   campaign runs, whether the packs are the full game, and the first map (the profile's start
@@ -29,7 +25,7 @@
 // ge:summary The game folder a player loads: the install checked, its game folder, programs
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
 // ge:keywords install_of which-game content-profile q2
-// ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
+// ge:keywords fs_basegame fs_basedir game-played load_programs first-map
 // ge:keywords campaign-program path-command search-path
 // ge:keywords choose_folder campaign_commands newgame coopgame save load new_game_level intro
 // ge:skill shooter classicenhance
@@ -46,7 +42,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
-#include "shooters_edge/client/install_search.hpp"
+#include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 
@@ -70,30 +66,11 @@ const ge::classicenhance::Profile* install_of(const std::string& folder, std::st
 std::string game_of(const std::string& basedir,
                     const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
-// The install the window opens, into `args`: `-basedir`; else the install the game was started
-// inside (client/install_search.hpp's `install_around` of the folder it runs in, `args.basedir`,
-// then of each of `places`: the folder its executable was placed in); else of the installs right
-// under those folders (`installs_below`), the game loaded last when it is one of them, else the
-// first full game; else the game loaded last (kept under `prefs`) while its install still checks;
-// else the folder the game runs in. Then the game folder over it, `-game`, else `game_of`. `found`
-// (when given) gets the installs found under those folders, for the console's `games`.
-void choose_folder(Args& args, const std::string& prefs,
-                   const std::vector<std::string>& places = {},
-                   std::vector<FoundInstall>* found = nullptr);
-
-// Quake loaded last: its content profile's id and its install.
-struct KeptGame {
-  std::string profile;  // a `ge::classicenhance::kProfiles` row's id
-  std::string basedir;  // the install's folder; "" when no game was kept
-};
-
-// The game loaded last, kept under `prefs` (the platform's per-user folder); an empty `basedir`
-// when none was kept or `prefs` is empty.
-KeptGame remembered_game(const std::string& prefs);
-// Keeps `basedir`, played as `content`, for the next start; false (nothing kept) when `prefs` is
-// empty or unwritable.
-bool remember_game(const std::string& prefs, const std::string& basedir,
-                   const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
+// The install the window opens, into `args`: the game `base.game` names, from its
+// `fs_basedir_<id>` when that still checks, else `args.ask_install` (the chooser asks for it);
+// `base.game` "" (or a game no profile knows) is Shooter's Edge's own, the folder the game runs
+// in. Then the game folder over it, `-game`, else `game_of`.
+void choose_folder(Args& args, const BaseGame& base);
 
 // What the window plays out of an open game folder. `campaign` points into this struct (at
 // `progs` or `pack_progs`) or is null, so it is filled in place and never moved.

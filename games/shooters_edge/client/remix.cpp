@@ -79,7 +79,7 @@ void write_block(const ge::progs::EntityBlock& b, std::string& out) {
 
 }  // namespace
 
-// What a cr_ switch naming a game takes: a game's id, as -classic and SELECT GAME know it.
+// What a cr_ switch naming a game takes: a game's id, as fs_basegame and SELECT GAME know it.
 constexpr std::string_view kWhoseValues =
     "\"\": the played game's own (the default); q1: Quake's; q2: Quake II's";
 
@@ -223,21 +223,17 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
              &out->balance.pool_radius);
 }
 
-std::vector<KnownGame> known_games(const std::string& prefs, std::string_view played,
+std::vector<KnownGame> known_games(const BaseGame& base, std::string_view played,
                                    const std::string& played_basedir) {
   std::vector<KnownGame> out;
-  const auto kept = remembered_installs(prefs);
   for (const ce::Profile& p : ce::kProfiles) {
     KnownGame g;
     g.id = std::string(p.id);
-    if (p.id == played)
-      g.basedir = played_basedir;
-    else if (const auto it = kept.find(p.id); it != kept.end())
-      g.basedir = it->second;
-    std::string base, why;
-    if (g.basedir.empty() || !check_game_folder(g.basedir, &base, &why, p)) continue;
-    g.basedir = base;
-    g.edition = edition_of(base, p);
+    g.basedir = p.id == played ? played_basedir : base.dir(p.id);
+    std::string found, why;
+    if (g.basedir.empty() || !check_game_folder(g.basedir, &found, &why, p)) continue;
+    g.basedir = found;
+    g.edition = edition_of(found, p);
     out.push_back(std::move(g));
   }
   return out;
@@ -878,10 +874,10 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
   return true;
 }
 
-std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const std::string& prefs,
+std::string open_remix_for(RemixFiles& r, const RemixSettings& s, const BaseGame& base,
                            std::string_view played, const std::string& basedir,
                            const std::string& game) {
-  const RemixState st = remix_check(s, played, known_games(prefs, played, basedir));
+  const RemixState st = remix_check(s, played, known_games(base, played, basedir));
   std::string why;
   if (!open_remix(r, st, played, basedir, game, why)) return why;
   if (!st.on) return st.why;

@@ -1,8 +1,8 @@
 // SHOOTER'S EDGE'S SELECT GAME PAGE (the main menu's first row, `menu_games`): the games added on
-// this computer (client/installs.hpp: ADD GAME, -basedir, any folder loaded), each named by a
-// picture of its name (`menu/art/<profile id>.png`, compiled in; the names are drawn, never
-// written) with its edition under it. The game playing is in colour, one classic remix plays with
-// half in colour, the rest grey. A game never added is not listed.
+// this computer (client/installs.hpp: each `fs_basedir_<id>` set by ADD GAME, any folder loaded, or
+// the console), each named by a picture of its name (`menu/art/<profile id>.png`, compiled in; the
+// names are drawn, never written) with its edition under it. The game playing is in colour, one
+// classic remix plays with half in colour, the rest grey. A game never added is not listed.
 //
 // - ENTER on a game: the game playing now goes back to the main menu; another opens its install at
 //   once (`GamesAction::open`, `chosen().install`).
@@ -39,7 +39,7 @@ namespace shooters_edge::menu {
 // One game the page offers.
 struct GameRow {
   std::string id = {};       // its content profile's id (classicenhance/profile.hpp)
-  std::string install = {};  // the folder of it loaded last on this computer
+  std::string install = {};  // its install, as its fs_basedir_<id> names it
   std::string edition = {};  // that install's edition in the game's words ("Shareware"), "" unknown
   bool playing = false;      // the game loaded now: its name in colour
   bool remixed = false;      // classic remix plays the loaded game with it: its name half in colour

@@ -2,7 +2,7 @@
 // defaults and the order video.cfg is read in) with this game's look as the defaults put it back:
 // `r_look modern`, the look's other `r_` cvars and every classic-enhance switch (`ce_<id>`), the
 // newer look whatever config.cfg chose for play. video.cfg is looked for in the game folder
-// (`-basedir`'s `-game` folder), then the current folder; `-demovideo` (demo_video.hpp) applies
+// (the install's `-game` folder), then the current folder; `-demovideo` (demo_video.hpp) applies
 // it, and its flags (`--resolution`, `--fps`, `--codec`) win over the cvars.
 //
 // ge:summary video.cfg in this game: the engine's video settings with the newer look as defaults

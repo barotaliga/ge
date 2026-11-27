@@ -110,8 +110,9 @@ TEST(the_players_cli_runs_the_mod_group) {
   const fs::path root = scratch("secli");
   // Every call names its own install, state and logs, never the machine's.
   const auto secli = [&](std::vector<std::string> args, std::string& out) {
-    args.insert(args.begin(), {"--basedir=" + root.string(), "--state=" + (root / "state").string(),
-                               "--logs=" + (root / "logs").string()});
+    args.insert(args.begin(),
+                {"--fs_basegame=q1", "--fs_basedir_q1=" + root.string(),
+                 "--state=" + (root / "state").string(), "--logs=" + (root / "logs").string()});
     return ge::gamecli::run(shooters_edge::cli::spec(), args, out, (root / "bin").string());
   };
   std::string out;
