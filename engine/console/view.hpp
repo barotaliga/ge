@@ -251,11 +251,12 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // (those the typed text starts, in their own order, each with what it does). Down steps into
   // them and down them (stopping at the last), Up back up and, from the first, out to the typed
   // line, where typing goes on; Up with none selected walks the history, and a line recalled
-  // from it lists nothing until it is edited. Tab takes the selected one (the top one when none
-  // is; under a game's own Tab, `list_mode`, only a selected one), Enter on a cvar fills it in
-  // for a value and on a command or a value runs it. Typing lets the selection go. `hint` is the
-  // rest of the word Tab would take, drawn after the cursor; `suggest_at` is where in the input
-  // line that word starts.
+  // from it lists nothing until it is edited. Tab takes the selected one, or the only match;
+  // with several it completes the word to what every match starts with and keeps the list open,
+  // and when that adds nothing it selects the first row (under a game's own Tab, `list_mode`, it
+  // only takes a selected one). Enter on a cvar fills it in for a value and on a command or a
+  // value runs it. Typing lets the selection go. `hint` is the rest Tab would add, drawn after the
+  // cursor; `suggest_at` is where in the input line that word starts.
   std::vector<Suggestion> suggestions() const;
   size_t suggest_at() const;
   int selected() const { return selected_; }
@@ -331,6 +332,9 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // Whether `line`'s first word names a command, alias or setting (con_chat 2).
   bool names_something(std::string_view line) const;
   bool accept();             // the selected or top suggestion into the input line; false: none
+  void tab();                // our Tab: the one match or the row chosen taken, else the shared part
+  std::vector<Suggestion> matches() const;  // every suggestion, uncapped (con_suggest cuts)
+  std::string shared() const;               // the part every match starts with
   void tab_list();           // list_mode's Tab (above)
   std::string tab_asked_;    // the line the last Tab asked about (list_threshold)
   std::string head() const;  // the first word being typed, or "" when no suggestion applies

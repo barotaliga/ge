@@ -416,8 +416,11 @@ nothing until it is edited.
 every command, alias and cvar it starts is listed under the input line: the one submitted most
 often from this console first, then the shortest, then by name, at most `con_suggest` of them.
 Each row shows a cvar's value after `=`, an alias's body after `:` or a command's help. The rest
-of the top name is drawn dim after the cursor, and Tab takes it: `/sv_dea` and Tab gives
-`/sv_deathmatch `, ready for `1`. Down steps into the list and down it, stopping at its last
+of the word that Tab would add is drawn dim after the cursor. Tab takes the only match: `/sv_dea`
+and Tab gives `/sv_deathmatch `, ready for `1`. With several matches Tab completes the word to
+what they all start with and keeps the list open (`/r_part` and Tab gives `/r_particle` while
+`r_particles` and `r_particle_scale` both match); when that adds nothing, Tab selects the first
+row, and Tab again takes it. Down steps into the list and down it, stopping at its last
 row; Up goes back up it and, from its first row, out to the typed line, where typing goes on (the
 hint follows the selected row; a key typed lets the selection go). Tab takes the selected one,
 also under a game's own Tab (Quake II's `com_completion_mode`), and Enter on it fills in a
