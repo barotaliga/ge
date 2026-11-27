@@ -34,6 +34,15 @@ struct Line {
 // A line from `from` to `to` through the walls and the living players (not those in `skip`, a
 // bit per slot; not map entity `skip_entity`).
 Line fight_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int skip_entity = -1);
+// A player's hitscan traced as he saw the others (lag compensation, `sv_antilag`), for its scope:
+// every `fight_line` inside meets the other players where player `slot` saw them; -1: as they are.
+struct FightLagScope {
+  Q2Server& s;
+  FightLagScope(Q2Server& sv, int slot);
+  ~FightLagScope();
+  FightLagScope(const FightLagScope&) = delete;
+  FightLagScope& operator=(const FightLagScope&) = delete;
+};
 // A sound on the weapon's channel of entity `ent` at `at`, heard by everyone.
 void fight_sound(Q2Server& s, int ent, sh::Vec3f at, const char* sample, float volume = 1);
 // A sound on player `slot`'s item channel.
