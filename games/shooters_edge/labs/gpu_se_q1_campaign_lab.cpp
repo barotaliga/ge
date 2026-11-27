@@ -55,6 +55,7 @@
 #include <string>
 #include <vector>
 
+#include "brush/read.hpp"
 #include "classicenhance/source.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
@@ -108,6 +109,7 @@ struct Leg {
   std::string first;
   std::vector<std::string> avoid;
   int maps = 8;
+  std::vector<std::string> before;  // the maps before it, for gear on arrival (`--gear=arrival`)
 };
 
 // A campaign's episodes: each one's maps in their order, its secret level among them (reached by
@@ -180,6 +182,48 @@ bool legs_of(const Campaign& c, const std::string& list, bool each, std::vector<
     }
   }
   return true;
+}
+
+// The level changes a map's exits name (its trigger_changelevel entities' `map`).
+std::vector<std::string> exits_of(PackMaps& packs, const std::string& name) {
+  sv::MapSpec spec;
+  std::string error;
+  std::vector<std::string> out;
+  if (!pack_map(&packs, name, spec, error)) return out;
+  std::vector<ge::brush::Entity> ents;
+  if (!ge::brush::parse_entities(spec.entities, &ents, &error)) return out;
+  for (const ge::brush::Entity& e : ents)
+    if (e.get("classname") == "trigger_changelevel" && !e.get("map").empty())
+      out.push_back(e.get("map"));
+  return out;
+}
+
+// GEAR ON ARRIVAL: the maps a playthrough plays before `map`, in order, from its episode's start
+// (each episode starts on a new game's gear: the start map takes it away). An episode's map: the
+// maps before it on the normal way. A secret level: the normal way up to and with the map whose
+// exit leads to it. The end: the same for a map that leads to it, else none (reached from the
+// start map). Any other map: none.
+std::vector<std::string> before_of(const Campaign& c, const std::string& map, PackMaps& packs) {
+  for (const Episode& e : c.episodes) {
+    std::vector<std::string> normal;
+    for (const std::string& m : e.maps)
+      if (m != e.secret) normal.push_back(m);
+    const auto at = std::find(normal.begin(), normal.end(), map);
+    if (at != normal.end()) return {normal.begin(), at};
+  }
+  for (const Episode& e : c.episodes) {
+    const bool secret = !e.secret.empty() && map == e.secret;
+    if (!secret && map != c.end) continue;
+    std::vector<std::string> normal;
+    for (const std::string& m : e.maps)
+      if (m != e.secret) normal.push_back(m);
+    for (size_t i = 0; i < normal.size(); i++) {
+      const std::vector<std::string> exits = exits_of(packs, normal[i]);
+      if (std::find(exits.begin(), exits.end(), map) != exits.end())
+        return {normal.begin(), normal.begin() + static_cast<std::ptrdiff_t>(i) + 1};
+    }
+  }
+  return {};
 }
 
 gl::Picture map_picture(const fb::EpisodeMap& m, int size) {
@@ -380,6 +424,13 @@ void run(gl::Lab& lab) {
                "next: --episodes=" + campaign.episodes_arg + " or map names");
       return;
     }
+    if (lab.arg("gear") == "arrival")
+      for (Leg& leg : legs) leg.before = before_of(campaign, leg.first, packs);
+  }
+  if (lab.arg("gear") != "new" && lab.arg("gear") != "arrival") {
+    lab.fail("se-q1-campaign: --gear=" + lab.arg("gear") + " is no gear",
+             "next: --gear=new (a new game's) or --gear=arrival (the earlier maps' pickups)");
+    return;
   }
   const In in = {{"game", game.empty() ? "(the coop hall)" : "the player's own"},
                  {"episodes", episodes},
@@ -402,6 +453,7 @@ void run(gl::Lab& lab) {
                   "given up", "plans: exit/button/key/trigger/explore/monster/secret/arm", "nodes",
                   "tricks: rocket/grenade/combo", "blast jumps", "faults"},
                  {}};
+  gl::LabTable gear{"gear on arrival (--gear=arrival)", {"map", "after", "arrived with"}, {}};
   std::vector<fb::EpisodeMap> maps;
   std::vector<int> sizes_of;  // each map's party size
   uint64_t digest = 1469598103934665603ull;
@@ -411,6 +463,7 @@ void run(gl::Lab& lab) {
       o.first = leg.first;
       o.avoid = leg.avoid;
       o.maps = leg.maps;
+      o.before = leg.before;
       // A party plays co-op (a party of one too, so the sizes compare on the same rules).
       o.single = !party_runs;
       o.partners.assign(static_cast<size_t>(size) - 1, sb::AimSkill::expert);
@@ -421,6 +474,13 @@ void run(gl::Lab& lab) {
                    size);
       std::fflush(stderr);
       fb::EpisodeReport r = fb::run_coop_episode(o);
+      if (!leg.before.empty()) {
+        std::string from;
+        for (const std::string& b : leg.before) from += (from.empty() ? "" : ",") + b;
+        std::fprintf(stderr, "se-q1-campaign: %s gear on arrival (after %s): %s\n",
+                     leg.first.c_str(), from.c_str(), r.arrived.c_str());
+        gear.rows.push_back({leg.first, from, r.arrived});
+      }
       for (const fb::EpisodeMap& m : r.maps)
         std::fprintf(
             stderr, "se-q1-campaign: %s done: out %s, kills %d/%d, secrets %d/%d, %.0f s, %s\n",
@@ -475,6 +535,7 @@ void run(gl::Lab& lab) {
     for (auto& row : t.rows) row.erase(row.begin() + 1);
   }
   lab.table(t);
+  if (!gear.rows.empty()) lab.table(gear);
   if (o.census) {
     // Every class name across the maps, in the order first seen; `--classes` keeps those alone.
     std::vector<std::string> keep;
@@ -603,6 +664,9 @@ const gl::LabSpec kSpec{
          "a map's time limit (its last quarter for the way out alone): one not "
          "left by then is a failure, s"},
         {"each", "0", "1: every map of the episodes on its own, from a fresh start"},
+        {"gear", "new",
+         "arrival: each map entered with the gear a playthrough brings (arrival_gear.hpp: the "
+         "earlier maps' pickups, less their monsters' cost and 20% more); new: a new game's"},
         {"skill", "1", "the campaign's skill (0..3)"},
         {"seed", "1", "the campaign's and the bot's seed"},
         {"god", "1", "0: the bot can die"},

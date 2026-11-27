@@ -263,11 +263,23 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   co.registered = opt.registered;
   co.settings = {"deathmatch 0", opt.single ? "coop 0" : "coop 1",
                  opt.single ? "teamplay 0" : "teamplay 1", "skill " + std::to_string(opt.skill)};
-  if (!sv::campaign_new_game(c, *progs, co, opt.first, r.error)) {
+  if (!sv::campaign_new_game(c, *progs, co, opt.before.empty() ? opt.first : opt.before[0],
+                             r.error)) {
     r.error = "run_coop_episode: " + r.error;
     return r;
   }
   sv::campaign_join(c, 0, "leader");
+  // Gear on arrival: each earlier map's pickups taken and its monsters paid for, then the level
+  // change on, as a playthrough arrives.
+  for (size_t b = 0; b < opt.before.size(); b++) {
+    r.gear.push_back(q1_take_map_gear(c, 0));
+    const std::string& to = b + 1 < opt.before.size() ? opt.before[b + 1] : opt.first;
+    if (!sv::campaign_change(c, sv::MapChange::change_level, to, r.error)) {
+      r.error = "run_coop_episode: gear on arrival, " + to + ": " + r.error;
+      return r;
+    }
+  }
+  if (!opt.before.empty()) r.arrived = q1_gear_text(c, 0);
   for (int k = 1; k <= mates; k++) sv::campaign_join(c, k, "mate" + std::to_string(k));
   const pg::Def* inter = pg::find_global(*progs, "intermission_running");
   const pg::Def* counts[4] = {
