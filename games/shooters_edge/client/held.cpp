@@ -259,7 +259,14 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
     return step_q2_held(*sq, p, v, s, settings, models, t, dt);
   if (const server::NativeQ2* ns = l.rules ? server::native_q2_of(*l.rules) : nullptr)
     return step_native_held(*ns, p, v, s, settings, models, t, dt);
-  if (listen_q2_arms(l)) return step_q2_arms_held(l, p, v, s, settings, models, t, dt);
+  // A single-player program's player: the weapon is gone at once when he dies, and is not drawn
+  // over the intermission's camera, whichever game's weapon he holds.
+  const bool hidden = l.campaign_host != nullptr && (p.dead || l.campaign.end != LevelEnd::none);
+  if (listen_q2_arms(l)) {
+    view::HandFrame f = step_q2_arms_held(l, p, v, s, settings, models, t, dt);
+    if (hidden) f.drawn = false;
+    return f;
+  }
   const auto game = static_cast<view::Weapon>(status_of(l, t).weapon);
   in.weapon = s.show >= 0 ? static_cast<view::Weapon>(s.show) : game;
   in.dead = p.dead;  // the weapon sinks out of view (view/hand.hpp)
@@ -282,9 +289,7 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   in.place.stride_s = s.stride_s;
   in.place.bob_m = v.eyes.bob;  // the stride's bob, the weapon pushed forward by its share
   view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
-  // A single-player program's player: the weapon is gone at once when he dies, and is not drawn
-  // over the intermission's camera.
-  if (l.campaign_host != nullptr && (p.dead || l.campaign.end != LevelEnd::none)) f.drawn = false;
+  if (hidden) f.drawn = false;
   return f;
 }
 
