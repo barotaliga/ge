@@ -925,7 +925,16 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
         for (const classicenhance::Profile& g : classicenhance::kProfiles) {
           const classicenhance::MissionPack* m = classicenhance::find_pack(g, name);
           if (m == nullptr || offered(m) || taken(g, *m)) continue;
-          if (child(dir, classicenhance::pack_name(g, 0)).empty()) continue;
+          const fs::path held = child(dir, classicenhance::pack_name(g, 0));
+          if (held.empty()) continue;
+          // Two games name a pack's folder alike (rogue): a first pack the size of another
+          // game's known release is that one, not this game's.
+          const uint64_t held_size = fs::file_size(held, ec);
+          bool known_other = false;
+          for (const classicenhance::Profile& o : classicenhance::kProfiles)
+            for (const classicenhance::MissionPack& p : o.packs)
+              known_other = known_other || (&p != m && held_size != m->size && p.size == held_size);
+          if (known_other) continue;
           // The pack beside this game's base folder: the install; another game's base folder
           // beside it: not this game's pack.
           const bool with_base = !child(dir.parent_path(), lower(g.base_dir)).empty();

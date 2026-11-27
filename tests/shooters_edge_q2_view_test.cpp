@@ -2,7 +2,7 @@
 // wide screen, and the cvars in its layer.
 //
 // ge:summary Tests Quake II's field of view as shown (sent, recorded, uf) and its view cvars
-// ge:keywords q2 fov cl_adjustfov uf scr_scale cl_kickangles q2_shown_fov
+// ge:keywords q2 fov cl_adjustfov uf scr_scale cl_kickangles q2_shown_fov q2_own_fov
 // ge:skill shooter
 #include "shooters_edge/client/q2_view.hpp"
 
@@ -28,6 +28,14 @@ TEST(a_joined_server_shows_the_field_of_view_it_sends) {
   CHECK(cl::q2_shown_fov(0, 110, false, 0) == 110);  // none sent: the player's own
   CHECK(cl::q2_shown_fov(0, 0, false, 0) == 90);     // under 1: 90
   CHECK(cl::q2_shown_fov(0, 300, false, 0) == 160);  // held to 160
+}
+
+TEST(the_rules_are_told_the_players_own_field_of_view_never_zero) {
+  // cl_fov 0 (the rig's own) is told as 90: the rules hold a 0 to one degree, a view a sliver wide.
+  CHECK(cl::q2_own_fov(0) == 90);
+  CHECK(cl::q2_own_fov(0.5) == 90);
+  CHECK(cl::q2_own_fov(110) == 110);
+  CHECK(cl::q2_own_fov(300) == 160);
 }
 
 TEST(a_recording_shows_the_players_own_unless_it_zooms_or_uf_says) {

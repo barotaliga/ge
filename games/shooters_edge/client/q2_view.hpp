@@ -17,7 +17,7 @@
 //
 // ge:summary Quake II's view and 2D settings: the server's field of view drawn, scale, HUD switches
 // ge:keywords q2 fov cl_adjustfov uf hor-plus field-of-view zoom scr_scale scr_draw2d scr_alpha
-// ge:keywords scr_lag_draw scr_lag_x scr_lag_y scr_lag_min scr_lag_max cl_kickangles q2_shown_fov
+// ge:keywords scr_lag_draw scr_lag_x scr_lag_y scr_lag_min scr_lag_max cl_kickangles q2_shown_fov q2_own_fov
 // ge:keywords gl_bilerp_pics gl_gamma_scale_pics scr_demobar
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
@@ -68,9 +68,12 @@ struct Q2ViewRect {
 };
 Q2ViewRect q2_view_rect(int width, int height, int percent);
 
-// The field of view shown, degrees: the server's `sent` (0: none sent, the player's `own`); in a
-// `recording` the player's own in place of one of 90 or more, as `uf_flags` asks. `own` under 1
-// is 90 and over 160 is 160.
+// The player's own field of view, degrees: `cl_fov` under 1 (0, the rig's own) is 90, over 160 is
+// 160. The rules are told this, never the 0, which they would hold to one degree.
+double q2_own_fov(double own);
+
+// The field of view shown, degrees: the server's `sent` (0: none sent, the player's own,
+// q2_own_fov); in a `recording` the player's own in place of one of 90 or more, as `uf_flags` asks.
 double q2_shown_fov(double sent, double own, bool recording, int uf_flags);
 // The vertical angle (rad) of an angle across of `fov_deg`: at 4:3 (`adjust`) or at `aspect`.
 double q2_fov_y(double fov_deg, bool adjust, double aspect);

@@ -27,8 +27,10 @@ constexpr int kRecordedFov = 32;  // uf: the recorded one, always
 
 }  // namespace
 
+double q2_own_fov(double own) { return own < 1 ? 90 : std::min(own, 160.0); }
+
 double q2_shown_fov(double sent, double own, bool recording, int uf_flags) {
-  const double mine = own < 1 ? 90 : std::min(own, 160.0);
+  const double mine = q2_own_fov(own);
   if (sent <= 0) return mine;
   if (!recording) return sent;
   if ((uf_flags & kOwnFov) != 0) return mine;

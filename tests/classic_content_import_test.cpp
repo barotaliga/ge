@@ -441,6 +441,22 @@ TEST(packs_on_this_machine_are_offered_until_taken_in) {
   CHECK(offers.size() == 1 && offers[0].pack->folder == "xatrix");
 }
 
+TEST(a_pack_folder_two_games_name_alike_is_offered_as_the_game_its_size_says) {
+  // Quake's Dissolution of Eternity and Quake II's Ground Zero are both in a folder named rogue.
+  // Alone (no base folder beside it), Dissolution's first pack at its release's size is offered
+  // as Quake's pack, never as Quake II's.
+  const fs::path lib = fresh("same_name"), data = fresh("same_name_data");
+  const auto* q1 = ge::classicenhance::find_profile("q1");
+  const auto* dissolution = ge::classicenhance::find_pack(*q1, "rogue");
+  save(lib / "quake1/rogue/pak0.pak", {'P'});
+  fs::resize_file(lib / "quake1/rogue/pak0.pak", dissolution->size);
+  const std::vector<content::Offer> offers = content::find_offers({lib.string()}, data.string());
+  CHECK_MSG(offers.size() == 1, std::to_string(offers.size()));
+  if (offers.size() != 1) return;
+  CHECK_MSG(offers[0].game == q1 && offers[0].pack == dissolution,
+            std::string(offers[0].game->id) + " " + std::string(offers[0].pack->name));
+}
+
 TEST(a_game_taken_in_before_packs_were_known_gets_them_offered_and_taken) {
   // A base game taken in by an older build (its taken file of the first form), its packs left
   // behind in the source: offered from the source the taken file names, and taken in again.
