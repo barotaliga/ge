@@ -1145,13 +1145,16 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   point tree's cells brushes (`brush/cells.hpp`). An item keeps the middle of its floor where it
   was (`profiles::item_foot`), and the map's textures are read by its own game's adapter.
 - **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
-  the rest of its weapons: fewer than `cr_strong_min` strong ones and the best weak one is raised
-  to the strong kind the map has fewest of; more than `cr_strong_share` of them strong and the
-  last are lowered to the best weak one the map has fewest of; and no more than `cr_strong_same`
+  the rest of its weapons: fewer than `cr_items_strong_min` strong ones and the best weak one is raised
+  to the strong kind the map has fewest of; more than `cr_items_strong_share` of them strong and the
+  last are lowered to the best weak one the map has fewest of; and no more than `cr_items_strong_same`
   copies of one strong weapon (two by default: three lightning guns leave a super nailgun), the
-  copy nearest a strong armour or the mega health lowered first so the power is spread out. Small pickups that the played game has no size for (the
-  Quake II's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
-  played game's packs by the total they held, a lone one left out.
+  copy nearest a strong armour or the mega health lowered first so the power is spread out. Health and armour the two games size
+  differently (Quake II's stimpacks, boxes of ten and twenty-five and its shards; Quake's fifteens
+  and twenty-fives) are gathered within `cr_items_pool_radius` units and laid down as the played
+  game's sizes whose sum comes nearest the total, both ways round: a pool needing more pickups
+  than it had spots stacks the rest on them (one of Quake's fifteens on Quake II's rules is a box of
+  ten and two stimpacks, fourteen), and a pool nearer nothing than the smallest size is left out.
 - **Another game's items** (`cr_items`: empty the played game's, `q1` Quake's, `q2`
   Quake II's): a game's own maps played with the other game's items, and the HUD that shows them is
   that game's (M18u4). The played game's rules keep their numbers and the map its class names;
@@ -1181,7 +1184,7 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   Quake II's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
   `sv_falldamage`; Quake II's by `sv_physics q1`), each move keeping its own code, and
   nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
-  `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
+  `cr_items_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
   `cr_expansions` (on by default) takes the mission packs in: the other game's installed packs
   are mounted under its base game, so their maps load too and their own weapons and items are
   read by role (profiles/remix.hpp's `kPackItems`); and a map remixed for a played pack gets the
