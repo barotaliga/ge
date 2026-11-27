@@ -394,6 +394,13 @@ void wear_lines(ListenOptions& opt, const RemixFiles& r, const std::vector<std::
     for (const std::string_view line : r.physics->lines) opt.over_mod.emplace_back(line);
 }
 
+std::string remix_off_line(const std::string& why) {
+  return !why.empty()
+             ? why
+             : "Classic remix is off, so the cr_ settings change nothing: set cr_enabled 1 "
+               "first, then start the map again.";
+}
+
 std::string worn_line(const RemixFiles& r) {
   const std::string_view items = r.worn != nullptr    ? r.worn->items
                                  : r.looks != nullptr ? r.looks->items
@@ -409,6 +416,8 @@ std::string worn_line(const RemixFiles& r) {
   line += r.physics == nullptr ? " and move as its own."
                                : " and move as " + whose(r.physics->physics) + ".";
   if (!r.heard.empty() && r.heard != r.played) line += " The sounds are " + whose(r.heard) + ".";
+  if (!r.monsters.empty() && r.monsters != r.played)
+    line += " The monsters are " + whose(r.monsters) + ".";
   return line;
 }
 

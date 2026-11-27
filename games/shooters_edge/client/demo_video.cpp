@@ -170,6 +170,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
+    p.turns_as_q2 = !q2;  // Quake II's items on other rules turn as its own do
     if (s.format == DemoFormat::q2) {
       q2_placed(e, p);
       if (q2_extended(s.protocol)) {  // a picture of the server's list worn as its skin
