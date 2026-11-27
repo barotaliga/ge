@@ -25,54 +25,65 @@ namespace shooters_edge::server::rules::campaign {
   X(intermission_exit, kTypeFloat)    \
   X(next_map, kTypeString)            \
   X(finale_words, kTypeString)        \
-  X(lava_boss, kTypeEntity)
+  X(lava_boss, kTypeEntity)           \
+  X(sq_trail, kTypeEntity)            \
+  X(sq_trail_head, kTypeFloat)
 
 // THE CAMPAIGN'S OWN FIELDS: a monster's mind and frames, then the map's keys (`map`, `count`,
 // `mangle`, `t_length`, `t_width`).
-#define SE_CAMPAIGN_FIELDS(X)  \
-  X(th_stand, kTypeFunction)   \
-  X(th_walk, kTypeFunction)    \
-  X(th_run, kTypeFunction)     \
-  X(th_melee, kTypeFunction)   \
-  X(th_missile, kTypeFunction) \
-  X(th_pain, kTypeFunction)    \
-  X(th_check, kTypeFunction)   \
-  X(movetarget, kTypeEntity)   \
-  X(oldenemy, kTypeEntity)     \
-  X(pausetime, kTypeFloat)     \
-  X(search_time, kTypeFloat)   \
-  X(attack_state, kTypeFloat)  \
-  X(walk_step, kTypeFloat)     \
-  X(run_step, kTypeFloat)      \
-  X(anim_step, kTypeFloat)     \
-  X(fr_stand, kTypeVector)     \
-  X(fr_walk, kTypeVector)      \
-  X(fr_run, kTypeVector)       \
-  X(fr_melee, kTypeVector)     \
-  X(fr_missile, kTypeVector)   \
-  X(fr_leap, kTypeVector)      \
-  X(fr_pain, kTypeVector)      \
-  X(fr_death, kTypeVector)     \
-  X(fr_now, kTypeVector)       \
-  X(fr_death2, kTypeVector)    \
-  X(death_solid, kTypeFloat)   \
-  X(drop_ammo, kTypeFloat)     \
-  X(gib_health, kTypeFloat)    \
-  X(head_model, kTypeString)   \
-  X(gib_model, kTypeString)    \
-  X(gib_first, kTypeFloat)     \
-  X(gib_noise, kTypeString)    \
-  X(claw_factor, kTypeFloat)   \
-  X(map, kTypeString)          \
-  X(count, kTypeFloat)         \
-  X(mangle, kTypeVector)       \
-  X(sq_kind, kTypeFloat)       \
-  X(sq_slot, kTypeFloat)       \
-  X(sq_next, kTypeFloat)       \
-  X(sq_every, kTypeFloat)      \
-  X(sq_end, kTypeFloat)        \
-  X(sq_loops, kTypeFloat)      \
-  X(sq_rest, kTypeFloat)       \
+#define SE_CAMPAIGN_FIELDS(X)   \
+  X(th_stand, kTypeFunction)    \
+  X(th_walk, kTypeFunction)     \
+  X(th_run, kTypeFunction)      \
+  X(th_melee, kTypeFunction)    \
+  X(th_missile, kTypeFunction)  \
+  X(th_pain, kTypeFunction)     \
+  X(th_check, kTypeFunction)    \
+  X(movetarget, kTypeEntity)    \
+  X(oldenemy, kTypeEntity)      \
+  X(pausetime, kTypeFloat)      \
+  X(search_time, kTypeFloat)    \
+  X(attack_state, kTypeFloat)   \
+  X(walk_step, kTypeFloat)      \
+  X(run_step, kTypeFloat)       \
+  X(anim_step, kTypeFloat)      \
+  X(fr_stand, kTypeVector)      \
+  X(fr_walk, kTypeVector)       \
+  X(fr_run, kTypeVector)        \
+  X(fr_melee, kTypeVector)      \
+  X(fr_missile, kTypeVector)    \
+  X(fr_leap, kTypeVector)       \
+  X(fr_pain, kTypeVector)       \
+  X(fr_death, kTypeVector)      \
+  X(fr_now, kTypeVector)        \
+  X(fr_death2, kTypeVector)     \
+  X(death_solid, kTypeFloat)    \
+  X(drop_ammo, kTypeFloat)      \
+  X(gib_health, kTypeFloat)     \
+  X(head_model, kTypeString)    \
+  X(gib_model, kTypeString)     \
+  X(gib_first, kTypeFloat)      \
+  X(gib_noise, kTypeString)     \
+  X(claw_factor, kTypeFloat)    \
+  X(map, kTypeString)           \
+  X(count, kTypeFloat)          \
+  X(mangle, kTypeVector)        \
+  X(sq_kind, kTypeFloat)        \
+  X(sq_slot, kTypeFloat)        \
+  X(sq_next, kTypeFloat)        \
+  X(sq_every, kTypeFloat)       \
+  X(sq_end, kTypeFloat)         \
+  X(sq_loops, kTypeFloat)       \
+  X(sq_rest, kTypeFloat)        \
+  X(sq_lost, kTypeFloat)        \
+  X(sq_on_trail, kTypeFloat)    \
+  X(sq_search, kTypeFloat)      \
+  X(sq_trail_time, kTypeFloat)  \
+  X(sq_last_sight, kTypeVector) \
+  X(sq_goal, kTypeEntity)       \
+  X(sq_trail_last, kTypeVector) \
+  X(sq_sound, kTypeFloat)       \
+  X(sq_sound_at, kTypeVector)   \
   X(coop_taken, kTypeFloat)
 
 // QUAKE II'S MONSTERS the campaign runs (classic remix, campaign_q2.hpp): each kind's
@@ -377,6 +388,11 @@ bool sq_runs(A& q, int32_t e);
 bool sq_choose(A& q);
 bool sq_sees(A& q, int32_t foe);
 bool sq_hurt_by_monster(A& q, int32_t attacker);
+void sq_found(A& q);
+void sq_chase(A& q);
+void sq_trail_frame(A& q);
+bool sq_hear(A& q);
+bool sq_to_sound(A& q);
 // campaign_monsters
 void leap_off(A& q, float fwd, float up, Fn touch);
 void ai_precache(A& q);

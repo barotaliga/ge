@@ -864,15 +864,8 @@ bool sees_point(const Q2Server& s, const Q2Monster& m, sh::Vec3f p) {
 // oldest on; from the last sighting (`first`), the one before it when only that one is in sight.
 // -1 when there is none.
 int next_mark(const Q2Server& s, const Q2Monster& m, bool first) {
-  for (int n = 0; n < 8; n++) {
-    const int i = (s.trail_head + n) % 8;
-    if (s.trail_time[i] <= m.trail_time) continue;
-    if (!first || sees_point(s, m, s.trail_at[i])) return i;
-    const int before = (i + 7) % 8;
-    if (n > 0 && s.trail_time[before] > 0 && sees_point(s, m, s.trail_at[before])) return before;
-    return i;
-  }
-  return -1;
+  return q2_mind::next_mark(s.trail_time, s.trail_head, m.trail_time, first,
+                            [&](int i) { return sees_point(s, m, s.trail_at[i]); });
 }
 
 // A new goal blocked short of it (its box swept there): a side step first. Two points half way
@@ -916,37 +909,25 @@ void correct(Q2Server& s, Q2Monster& m) {
 // after) the search restarts (5 s) and it takes the next mark of his trail, facing the way he went.
 // 20 s past the search's start it makes one move straight at him.
 void pursue(Q2Server& s, Q2Monster& m) {
-  Q2Entity& e = body(s, m);
-  if (!m.lost) {
-    m.lost = true;
-    m.on_trail = m.side_step = false;
-    m.goal = m.last_sight;
-    correct(s, m);
-    return;
-  }
-  if (m.search_time > 0 && s.level_time > m.search_time + 20) {
-    m.goal = foe_at(s, m.enemy);
-    m.side_step = false;
-    m.search_time = 0;
-    return;
-  }
-  sh::Vec3f d = m.goal - e.origin;
-  d.z = 0;
-  if (sh::length(d) > kind(m).run * kStep + 1) return;  // not there yet
-  m.search_time = s.level_time + 5;
-  if (m.side_step) {  // round the obstacle: on to the point it was making for
-    m.side_step = false;
-    m.goal = m.real_goal;
-    correct(s, m);
-    return;
-  }
-  const int i = next_mark(s, m, !m.on_trail);
-  if (i < 0) return;
-  m.on_trail = true;
-  m.goal = s.trail_at[i];
-  m.trail_time = s.trail_time[i];
-  e.angles.y = m.ideal_yaw = s.trail_yaw[i];
-  correct(s, m);
+  struct World {
+    Q2Server& s;
+    Q2Monster& m;
+    double now() const { return s.level_time; }
+    sh::Vec3f last_sight() const { return m.last_sight; }
+    sh::Vec3f foe_at() const { return monster_ai::foe_at(s, m.enemy); }
+    bool far_from(sh::Vec3f goal) const {
+      sh::Vec3f d = goal - body(s, m).origin;
+      d.z = 0;
+      return sh::length(d) > kind(m).run * kStep + 1;
+    }
+    int next_mark(bool first) const { return monster_ai::next_mark(s, m, first); }
+    sh::Vec3f mark_at(int i) const { return s.trail_at[i]; }
+    double mark_time(int i) const { return s.trail_time[i]; }
+    float mark_yaw(int i) const { return s.trail_yaw[i]; }
+    void face(float yaw) const { body(s, m).angles.y = m.ideal_yaw = yaw; }
+    void correct() const { monster_ai::correct(s, m); }
+  } w{s, m};
+  q2_mind::pursue(m, w);
 }
 
 // The players' trail, at the monsters' frame: a mark where a player stood at the last one, once
@@ -961,13 +942,13 @@ void trail_frame(Q2Server& s) {
       p.trail_last = at;
       continue;
     }
-    const int newest = (s.trail_head + 7) % 8;
+    const int newest = q2_mind::newest_mark(s.trail_head);
     if (map_trace(s, player_eye(p), {}, {}, s.trail_at[newest], kOpaque, -1).fraction < 1) {
       const int i = s.trail_head;
       s.trail_at[i] = p.trail_last;
       s.trail_time[i] = s.level_time;
       s.trail_yaw[i] = yaw_to(p.trail_last - s.trail_at[newest]);
-      s.trail_head = (i + 1) % 8;
+      s.trail_head = (i + 1) % q2_mind::kTrailMarks;
     }
     p.trail_last = at;
   }
@@ -1018,9 +999,9 @@ void think(Q2Server& s, Q2Monster& m) {
   if (m.enemy == -1 && m.sound_target) {  // to the noise; within 64 it stands, 5 s on forgets it
     sh::Vec3f d = m.sound_at - e.origin;
     d.z = 0;
-    if (sh::length(d) <= 64) {
+    if (sh::length(d) <= q2_mind::kSoundNear) {
       turn(e, k, yaw_to(d));
-      if (s.level_time > m.sound_time + 5) m.sound_target = false;
+      if (s.level_time > m.sound_time + q2_mind::kSoundForget) m.sound_target = false;
       return;
     }
     go_to(s, m, m.sound_at, k.run);
