@@ -365,6 +365,21 @@ TEST(a_classic_monster_flinches_again_after_its_own_wait_under_q2_rules) {
   CHECK_MSG(h->m().pain_at > first, std::to_string(h->m().pain_at));
 }
 
+TEST(a_classic_scrag_slides_square_to_him_when_near_under_q2_rules) {
+  auto h = open_hall({monster("monster_wizard", "-300 0 40", "180")});  // 300 off, facing him
+  run(*h, 10);
+  bool slid = false;
+  float sideways = 0;
+  const float y0 = h->e().origin.y;
+  for (int i = 0; i < 8 * kSecond && h->p().alive; i++) {
+    run(*h, 1);
+    slid = slid || h->m().slide;
+    sideways = std::max(sideways, std::abs(h->e().origin.y - y0));
+  }
+  CHECK(slid);
+  CHECK_MSG(sideways > 16, std::to_string(sideways));  // off the line to him
+}
+
 TEST(the_classic_spawn_bursts_on_whoever_is_near_under_q2_rules) {
   auto h = open_hall({monster("monster_tarbaby", "-560 0 40", "180")});
   run(*h, 2);
