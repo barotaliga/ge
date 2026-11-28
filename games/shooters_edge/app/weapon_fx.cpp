@@ -137,6 +137,104 @@ gr::BlastLook make_billow() {
   return l;
 }
 
+// THE ROCKET'S BLASTS, one dealt to each blast off its seed: the common ball (make_blast), a tall
+// one that rises fast in tight lobes, a wide flat one with large ragged billows, and a hot one that
+// flares brighter and is gone sooner with less smoke.
+gr::BlastLook make_tall() {
+  gr::BlastLook l = make_blast();
+  l.id = "se.blast.tall";
+  l.radius_m = 1.2;
+  l.rise = 1.7;
+  l.smoke_grow = 0.7;
+  l.fire_s = 0.34;
+  l.billows = 1.2;
+  l.billow_size = 0.8;
+  l.smoke = 0.7;
+  return l;
+}
+gr::BlastLook make_wide() {
+  gr::BlastLook l = make_blast();
+  l.id = "se.blast.wide";
+  l.radius_m = 1.55;
+  l.grow_s = 0.04;
+  l.rise = 0.75;
+  l.core_k = 2350;
+  l.billows = 0.75;
+  l.billow_size = 1.45;
+  l.fray = 0.55;
+  l.smoke = 0.85;
+  return l;
+}
+gr::BlastLook make_hot() {
+  gr::BlastLook l = make_blast();
+  l.id = "se.blast.hot";
+  l.radius_m = 1.3;
+  l.core_k = 2700;
+  l.cool_s = 0.22;
+  l.fire_s = 0.26;
+  l.flash = 0.65;
+  l.smoke = 0.6;
+  l.smoke_s = 2.0;
+  l.billows = 1.05;
+  l.fray = 0.3;
+  return l;
+}
+
+// THE GRENADE'S BLASTS burn less than a rocket's: less fire for a shorter time, cooler, a dimmer
+// flash, and more smoke with dust in it (paler, browner) that builds sooner; more chunks thrown.
+// Three of them: the common one, a dusty one that hangs low, and a squat one in broad lobes.
+gr::BlastLook make_grenade() {
+  gr::BlastLook l = make_blast();
+  l.id = "se.blast.grenade";
+  l.radius_m = 1.25;
+  l.fire = 0.6;
+  l.fire_s = 0.11;
+  l.core_k = 2200;
+  l.cool_k = 1200;
+  l.cool_s = 0.14;
+  l.flash = 0.4;
+  l.smoke = 0.95;
+  l.smoke_in_s = 0.15;
+  l.smoke_albedo = 0.2;
+  l.smoke_tint[0] = 0.92f, l.smoke_tint[1] = 0.86f, l.smoke_tint[2] = 0.78f;
+  l.debris = 10;
+  l.debris_hot = 0.4;
+  l.scorch_m = 2.6;
+  return l;
+}
+gr::BlastLook make_dusty() {
+  gr::BlastLook l = make_grenade();
+  l.id = "se.blast.grenade.dusty";
+  l.smoke = 1.15;
+  l.smoke_albedo = 0.3;
+  l.rise = 0.65;
+  l.smoke_grow = 0.7;
+  l.fray = 0.55;
+  return l;
+}
+gr::BlastLook make_squat() {
+  gr::BlastLook l = make_grenade();
+  l.id = "se.blast.grenade.squat";
+  l.radius_m = 1.1;
+  l.grow_s = 0.035;
+  l.rise = 0.6;
+  l.billow_size = 1.35;
+  l.billows = 1.1;
+  return l;
+}
+// A grenade blast's billows: the rocket's, burning less.
+gr::BlastLook make_grenade_billow() {
+  gr::BlastLook l = make_billow();
+  l.id = "se.blast.grenade.billow";
+  l.fire = 0.55;
+  l.fire_s = 0.09;
+  l.core_k = 2200;
+  l.cool_s = 0.12;
+  l.smoke = 0.75;
+  l.smoke_albedo = 0.2;
+  return l;
+}
+
 gr::BlastLook make_huge() {
   gr::BlastLook l = make_blast();
   l.id = "se.blast.huge";
@@ -243,6 +341,18 @@ const gr::BlastLook& billow_look() {
   static const gr::BlastLook l = make_billow();
   return l;
 }
+std::span<const gr::BlastLook> rocket_looks() {
+  static const gr::BlastLook l[] = {blast_look(), make_tall(), make_wide(), make_hot()};
+  return l;
+}
+std::span<const gr::BlastLook> grenade_looks() {
+  static const gr::BlastLook l[] = {make_grenade(), make_dusty(), make_squat()};
+  return l;
+}
+const gr::BlastLook& grenade_billow_look() {
+  static const gr::BlastLook l = make_grenade_billow();
+  return l;
+}
 const gr::BlastLook& huge_look() {
   static const gr::BlastLook l = make_huge();
   return l;
@@ -276,10 +386,25 @@ const gr::BeamLook& prong_arc_look() {
 void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
            std::vector<gr::Blast>* blasts, Particles* births, BlastOf of) {
   Rng r = ge::core::make_rng(seed);
-  const double size = of == BlastOf::big ? kBigBlast : of == BlastOf::huge ? kHugeBlast : 1;
+  // Dealt off the seed, the same draws for every kind: which of its kind's looks, its size, how
+  // many billows round it and how much it throws, so no two blasts look alike.
+  const bool grenade = of == BlastOf::grenade;
+  const std::span<const gr::BlastLook> dealt = grenade ? grenade_looks() : rocket_looks();
+  const gr::BlastLook& pick =
+      dealt[std::min(size_t(rnd(r, 0, double(dealt.size()))), dealt.size() - 1)];
+  const double jitter = rnd(r, 1 - kBlastJitter, 1 + kBlastJitter);
+  const int billows = std::min(kBillows, kMinBillows + int(rnd(r, 0, kBillows - kMinBillows + 1)));
+  const double throws = rnd(r, 0.7, 1.3) * (grenade ? kGrenadeThrows : 1);
+  const bool varied = of == BlastOf::common || grenade || of == BlastOf::bare;
+  const double size = of == BlastOf::big    ? kBigBlast
+                      : of == BlastOf::huge ? kHugeBlast
+                      : varied              ? jitter
+                                            : 1;
   const gr::BlastLook& look = of == BlastOf::huge   ? huge_look()
                               : of == BlastOf::dark ? dark_look()
+                              : varied              ? pick
                                                     : blast_look();
+  const gr::BlastLook& billow = grenade ? grenade_billow_look() : billow_look();
   gr::Blast main;
   for (int k = 0; k < 3; ++k) main.at[k] = p[k];
   if (normal != nullptr) {
@@ -292,7 +417,7 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
   main.born_s = now_s;
   if (blasts) blasts->push_back(main);
   // The billows: smaller balls born round it a moment later, so the cloud is lobed.
-  for (int i = 0; i < kBillows; ++i) {
+  for (int i = 0; i < (varied ? billows : kKindBillows); ++i) {
     double d[3];
     unit(r, d);
     d[1] = std::abs(d[1]) * 0.6 + 0.2;  // up and out more than down
@@ -301,11 +426,10 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
     b.on_surface = false;  // round the dome, in the air
     const double out = rnd(r, 0.55, 0.95);
     for (int k = 0; k < 3; ++k) b.at[k] = p[k] + d[k] * out * size;
-    b.look =
-        of == BlastOf::common || of == BlastOf::big || of == BlastOf::bare ? &billow_look() : &look;
+    b.look = varied || of == BlastOf::big ? &billow : &look;
     b.scale = rnd(r, 0.8, 1.2) * size * (b.look == &look ? 0.5 : 1);
     b.seed = seed * 7919u + static_cast<uint32_t>(i) + 1u;
-    b.born_s = now_s + kBillowsBy * (i + 1) / kBillows * rnd(r, 0.4, 1.0);
+    b.born_s = now_s + kBillowsBy * (i + 1) / billows * rnd(r, 0.4, 1.0);
     for (int k = 0; k < 3; ++k) b.v[k] = d[k] * rnd(r, 0.8, 1.8) * size;
     if (blasts) blasts->push_back(b);
   }
@@ -338,7 +462,8 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
   for (size_t i = 0; i < n; ++i) births->push_back(gr::spark_particle(thrown[i]));
   // The classic's ember ball: fast embers flung out that fall, slow ones that hang and drift
   // (toned down a little from a fuller ball: fewer and finer, so they read as sparks, not squares).
-  for (int i = 0; i < int(160 * size); ++i) {
+  const double many = size * (varied ? throws : 1);
+  for (int i = 0; i < int(160 * many); ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
@@ -348,7 +473,7 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
     e.size = float(rnd(r, 0.035, 0.055));
     births->push_back(e);
   }
-  for (int i = 0; i < int(85 * size); ++i) {
+  for (int i = 0; i < int(85 * many); ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
@@ -361,7 +486,7 @@ void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
     births->push_back(e);
   }
   // White-hot sparks, fast and streaked.
-  for (int i = 0; i < int(40 * size); ++i) {
+  for (int i = 0; i < int(40 * many); ++i) {
     double d[3];
     unit(r, d);
     if (normal != nullptr) away_from(normal, d);
