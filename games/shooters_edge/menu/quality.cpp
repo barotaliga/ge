@@ -1,23 +1,26 @@
 // Shooter's Edge's picture quality: the table, a column a level.
 //
-// What each level adds over the one under it (the prices are the Mac's span at 2560x1440 on dm3,
-// docs/perf.md; the `se-quality` lab draws each level and times it on the machine it runs on):
+// The levels are spaced for an even step in frame rate: each about a fifth faster than the one
+// above, by the M3 Max's GPU span at 2560x1440 on dm3 (the `se-timedemo` lab's --price-cvars,
+// docs/perf.md). The picture's size (r_scale 1, 0.5, 0.25) is the steepest lever, so the levels
+// under 5 draw at half or a quarter of the window and buy back what they can at that size; 5 is
+// the first at full size and the dear rows start again over it.
 //
-//  1  the modern look at a quarter of the window's size, crisp: the enhanced textures, skins and
-//     2D art, the rebaked light, the live flames' light, the glowing texels.
-//  2  drawn at half the window's size, crisp (a quarter of the pixels of the full picture).
-//  3  smoothed and sharpened (r_scale_smooth, r_scale_sharpen 0.8); the effects as ours (fire,
-//     explosions, trails, hits, blood, shells, beams, the monsters' attacks...), the marks on the
-//     walls, the surfaces' relief, lava, slime, teleporters, fog, weather, wind and bloom.
-//  4  drawn at the window's size (r_scale 1: about 3.3 ms).
-//  5  the shadows (the walls' alone), our water (still) and our sky (its mean cloud), the surfaces'
-//     depth, the heat haze and the fumes (about 1 ms).
-//  6  the cloud layer, the water's chop and the room reflected in it, the glossy floors'
-//     reflections (about 0.7 ms).
-//  7  the contact shade, the figures' shadows hard-edged (about 0.8 ms).
-//  8  the room mirrored whole in the water, the sun's caustics and shafts under it, the far land
-//     round the map (about 0.5 ms, and the frames under water: about 4 ms of the slowest).
-//  9  the shadows soft by each flame's size and from every light (about 0.5 ms): every default.
+//  0  the classic look: the packs as they are, at a quarter of the window's size.
+//  1  the modern look at a quarter size, crisp: the enhanced textures, skins and 2D art, the
+//     rebaked light, the live flames' light, the glowing texels, our effects and the marks.
+//  2  drawn at half the window's size, crisp.
+//  3  smoothed and sharpened (r_scale_smooth, r_scale_sharpen 0.8); the surfaces' relief, fog,
+//     weather and bloom.
+//  4  the shadows (the walls'), our water (still) and sky (its mean cloud), the surfaces' depth,
+//     the heat haze and the fumes, at half size.
+//  5  the window's full size, without those.
+//  6  the walls' shadows, our water and sky, the depth, the haze and the fumes again.
+//  7  the cloud layer, the water's chop and the room reflected in it, the glossy floors'
+//     reflections.
+//  8  the contact shade, the figures' shadows hard-edged.
+//  9  the shadows soft and from every light, the room mirrored whole in the water, the sun's
+//     caustics and shafts under it, the far land: every default.
 //  10 every map light throwing the figures' shadows (r_fill_shadows).
 //
 // ge:summary Shooter's Edge's picture quality: the table of the eleven levels, the command
@@ -37,59 +40,61 @@ using ge::console::PresetRow;
 //                            0       1      2      3      4      5      6      7      8      9      10
 constexpr PresetRow kRows[] = {
     {"r_look",             "classic modern modern modern modern modern modern modern modern modern modern"},
-    {"r_scale",            "0.25    0.25   0.5    0.5    1      1      1      1      1      1      1"},
-    {"r_scale_smooth",     "0       0      0      1      0      0      0      0      0      0      0"},
-    {"r_scale_sharpen",    "0.5     0.5    0.5    0.8    0.5    0.5    0.5    0.5    0.5    0.5    0.5"},
-    {"r_fill_shadows",     "0       0      0      0      0      0      0      0      0      0      1"},
-    {"ce_enabled",         "1       1      1      1      1      1      1      1      1      1      1"},
+    {"r_scale",            "0.25   0.25   0.5    0.5    0.5    1      1      1      1      1      1"},
+    {"r_scale_smooth",     "0      0      0      1      1      0      0      0      0      0      0"},
+    {"r_scale_sharpen",    "0.5    0.5    0.5    0.8    0.8    0.5    0.5    0.5    0.5    0.5    0.5"},
+    {"r_fill_shadows",     "0      0      0      0      0      0      0      0      0      0      1"},
+    {"ce_enabled",         "1      1      1      1      1      1      1      1      1      1      1"},
     // The enhanced pack: from 1.
-    {"ce_textures",        "0       1      1      1      1      1      1      1      1      1      1"},
-    {"ce_pictures",        "0       1      1      1      1      1      1      1      1      1      1"},
-    {"ce_models",          "0       1      1      1      1      1      1      1      1      1      1"},
-    {"ce_smooth",          "0       1      1      1      1      1      1      1      1      1      1"},
-    {"ce_weapons",         "0       1      1      1      1      1      1      1      1      1      1"},
-    {"ce_rebake",          "0       1      1      1      1      1      1      1      1      1      1"},
-    {"ce_flicker",         "0       1      1      1      1      1      1      1      1      1      1"},
-    {"ce_glow",            "0       1      1      1      1      1      1      1      1      1      1"},
-    // Our effects and the world's dressing: from 3.
-    {"ce_relief",          "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_decals",          "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_lava",            "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_slime",           "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_wade",            "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_teleports",       "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_flames",          "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_bonfires",        "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_muzzles",         "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_explosions",      "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_trails",          "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_hits",            "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_blood",           "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_shells",          "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_flares",          "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_bubbles",         "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_beams",           "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_warps",           "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_respawns",        "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_monsters",        "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_burning",         "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_fog",             "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_weather",         "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_wind",            "0       0      0      1      1      1      1      1      1      1      1"},
-    {"ce_bloom",           "0       0      0      1      1      1      1      1      1      1      1"},
-    // The dear ones, each at its stop (look.hpp's Stops: low, medium, high; low while it is off).
-    {"ce_shadows",         "0       0      0      0      0      1      1      1      1      1      1"},
-    {"ce_shadows_quality", "low     low    low    low    low    low    low    medium medium high   high"},
-    {"ce_water",           "0       0      0      0      0      1      1      1      1      1      1"},
-    {"ce_water_quality",   "low     low    low    low    low    low    medium medium high   high   high"},
-    {"ce_skies",           "0       0      0      0      0      1      1      1      1      1      1"},
-    {"ce_skies_quality",   "low     low    low    low    low    low    medium medium high   high   high"},
-    {"ce_parallax",        "0       0      0      0      0      1      1      1      1      1      1"},
-    {"ce_heathaze",        "0       0      0      0      0      1      1      1      1      1      1"},
-    {"ce_fumes",           "0       0      0      0      0      1      1      1      1      1      1"},
-    {"ce_clouds",          "0       0      0      0      0      0      1      1      1      1      1"},
-    {"ce_reflections",     "0       0      0      0      0      0      1      1      1      1      1"},
-    {"ce_ao",              "0       0      0      0      0      0      0      1      1      1      1"},
+    {"ce_textures",        "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_pictures",        "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_models",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_smooth",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_weapons",         "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_rebake",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_flicker",         "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_glow",            "0      1      1      1      1      1      1      1      1      1      1"},
+    // Our effects and the marks on the walls: from 1 (they cost little where the picture is small).
+    {"ce_decals",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_lava",            "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_slime",           "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_wade",            "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_teleports",       "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_flames",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_bonfires",        "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_muzzles",         "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_explosions",      "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_trails",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_hits",            "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_blood",           "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_shells",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_flares",          "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_bubbles",         "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_beams",           "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_warps",           "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_respawns",        "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_monsters",        "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_burning",         "0      1      1      1      1      1      1      1      1      1      1"},
+    {"ce_wind",            "0      1      1      1      1      1      1      1      1      1      1"},
+    // The surfaces' relief, fog, weather and bloom: from 3.
+    {"ce_relief",          "0      0      0      1      1      1      1      1      1      1      1"},
+    {"ce_fog",             "0      0      0      1      1      1      1      1      1      1      1"},
+    {"ce_weather",         "0      0      0      1      1      1      1      1      1      1      1"},
+    {"ce_bloom",           "0      0      0      1      1      1      1      1      1      1      1"},
+    // The dear ones at their lowest stops: at 4 (half size), then from 6 (full size).
+    {"ce_shadows",         "0      0      0      0      1      0      1      1      1      1      1"},
+    {"ce_shadows_quality", "low    low    low    low    low    low    low    low    medium high   high"},
+    {"ce_water",           "0      0      0      0      1      0      1      1      1      1      1"},
+    {"ce_water_quality",   "low    low    low    low    low    low    low    medium medium high   high"},
+    {"ce_skies",           "0      0      0      0      1      0      1      1      1      1      1"},
+    {"ce_skies_quality",   "low    low    low    low    low    low    low    medium medium high   high"},
+    {"ce_parallax",        "0      0      0      0      1      0      1      1      1      1      1"},
+    {"ce_heathaze",        "0      0      0      0      1      0      1      1      1      1      1"},
+    {"ce_fumes",           "0      0      0      0      1      0      1      1      1      1      1"},
+    // From 7 and 8.
+    {"ce_clouds",          "0      0      0      0      0      0      0      1      1      1      1"},
+    {"ce_reflections",     "0      0      0      0      0      0      0      1      1      1      1"},
+    {"ce_ao",              "0      0      0      0      0      0      0      0      1      1      1"},
 };
 // clang-format on
 

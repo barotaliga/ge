@@ -4,12 +4,11 @@
 // - LEVEL 0 is the classic look: the packs as they are, every classic-enhance switch off. LEVEL 9
 //   is the picture as it ships, every default (a fresh config reads 9). LEVEL 10 adds what the
 //   defaults leave out for its cost: every map light throwing the figures' shadows.
-// - EACH STEP DOWN gives up the dearest thing left for the least of the look, by the measured
-//   price of each setting (the perf cost table in docs/perf.md and the `se-quality` lab), and each
-//   is a change a player sees: the shadows' soft edges, the mirrored water and the far land, the
-//   contact shade and the figures' shadows, the cloud and the reflections, then shadows, water
-//   and sky altogether; then the picture drawn at half the window's size and at a quarter, the
-//   effects going back to the pack's own on the way.
+// - EACH STEP DOWN is about the same gain in frame rate (a fifth), by the measured price of each
+//   setting (docs/perf.md, the `se-timedemo` lab), and each is a change a player sees: the soft
+//   shadows with the mirrored water and the far land, the contact shade, the cloud and the
+//   reflections, the shadows, water and sky; under 5 the picture is drawn at half the window's
+//   size and then a quarter (quality.cpp says what each level adds).
 // - `r_quality <level>` WRITES the cvars and nothing else: each is the player's to change after,
 //   and a config saves them as it saves any. `r_quality` alone, and the menu's row, read the level
 //   back from the cvars (`preset_level`): the level they match, else CUSTOM.

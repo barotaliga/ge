@@ -69,9 +69,9 @@ TEST(each_level_differs_from_its_neighbours_and_zero_is_classic) {
 
 TEST(a_level_writes_the_settings_and_they_stay_the_players) {
   Window w;
-  w.con.execute("r_quality 4");
+  w.con.execute("r_quality 5");
   CHECK(w.picture.render_scale == 1 && !w.picture.ce.shadows && !w.picture.ce.water);
-  CHECK(gc::preset_level(w.con.cvars(), sm::quality_table()) == 4);
+  CHECK(gc::preset_level(w.con.cvars(), sm::quality_table()) == 5);
   w.con.execute("r_quality 0");
   CHECK(w.picture.look == "classic" && !w.picture.ce.textures);
   w.con.execute("ce_textures 1");  // the player's own change holds: no override
@@ -87,7 +87,9 @@ TEST(the_menu_row_shows_the_level_or_custom) {
   sm::Host host{.console = &w.con};
   sm::refresh(m, host);
   const ge::ui::Item* row = m.page("video")->find("r_quality");
-  CHECK(row != nullptr && !row->disabled);
+  CHECK(row != nullptr);
+  if (row == nullptr) return;
+  CHECK(!row->disabled);
   CHECK(row->choice == sm::kQualityShipped && row->choices.size() == sm::kQualityLevels);
   w.con.execute("ce_ao 0");
   sm::refresh(m, host);
