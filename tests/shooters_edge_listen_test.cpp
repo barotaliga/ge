@@ -712,8 +712,11 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sin
 TEST(a_quake_ii_recording_s_hand_holds_the_weapon_its_view_model_names) {
   cl::DemoState s;
   s.format = cl::DemoFormat::q2;
-  s.models = {"", "maps/base1.bsp", "models/weapons/v_blast/tris.md2",
-              "models/weapons/v_shotg/tris.md2", "models/weapons/v_boomer/tris.md2",
+  s.models = {"",
+              "maps/base1.bsp",
+              "models/weapons/v_blast/tris.md2",
+              "models/weapons/v_shotg/tris.md2",
+              "models/weapons/v_boomer/tris.md2",
               "models/monsters/soldier/tris.md2"};
   const auto row = [](std::string_view model) {
     for (int k = 0; k < shooters_edge::server::kSqWeaponCount; k++)
