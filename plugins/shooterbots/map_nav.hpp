@@ -238,10 +238,12 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
                    std::string& error,
                    const ge::shooterbots::NavSettings& set = ge::shooterbots::NavSettings{});
 // The grid a campaign's map is built on: its corridors narrower than the grid get nodes
-// (`NavSettings::squeeze`), so a narrow way out of a room does not seal a bot in it.
+// (`NavSettings::squeeze`), so a narrow way out of a room does not seal a bot in it, and so do
+// its slots (`NavSettings::pockets`).
 inline ge::shooterbots::NavSettings campaign_nav_settings() {
   ge::shooterbots::NavSettings set;
   set.squeeze = true;
+  set.pockets = true;
   return set;
 }
 // Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its

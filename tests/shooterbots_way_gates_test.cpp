@@ -6,7 +6,8 @@
 //
 // ge:summary Tests for gates woken by a monster's death and the buttons that blow a map up
 // ge:keywords test way_gates way_gate_names way_wake_gates gate_dead deathtarget
-// ge:keywords button_dooms killbox biggun button_spins func_rotating boss2 door_is_lever lever mine4
+// ge:keywords button_dooms killbox biggun button_spins func_rotating boss2
+// ge:keywords door_is_lever lever mine4
 // ge:skill shooterbots testing
 #include <memory>
 #include <string>

@@ -185,9 +185,8 @@ bool door_is_lever(const std::vector<sb::EntityBlock>& blocks, const sb::EntityB
   const char* cn = sb::block_value(b, "classname");
   const char* target = sb::block_value(b, "target");
   const char* health = sb::block_value(b, "health");
-  if (!cn || std::strcmp(cn, "func_door_rotating") != 0 ||
-      sb::block_value(b, "targetname") || !target || !target[0] ||
-      (health && std::atof(health) > 0))
+  if (!cn || std::strcmp(cn, "func_door_rotating") != 0 || sb::block_value(b, "targetname") ||
+      !target || !target[0] || (health && std::atof(health) > 0))
     return false;
   for (const sb::EntityBlock& d : blocks) {
     const char* dn = sb::block_value(d, "targetname");

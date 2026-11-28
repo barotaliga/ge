@@ -102,6 +102,7 @@ TEST(a_step_off_a_walkway_on_his_own_route_down_is_let_be) {
   p.k = 0;
   bool turned = true;
   const sh::MoveCmd off = t.keys(0, 400, turned);
-  CHECK_MSG(!turned && off.forward == 400,
-            "his own route down off the walkway was braked at its edge (way_edge in way_hands.cpp)");
+  CHECK_MSG(
+      !turned && off.forward == 400,
+      "his own route down off the walkway was braked at its edge (way_edge in way_hands.cpp)");
 }
