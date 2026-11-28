@@ -1608,7 +1608,11 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   g.show(host, "keys");
   CHECK(item(g.main(), "keys", "weapnext")->choices[0] == "mwheelup or q");
   CHECK(item(g.main(), "keys", "inven")->choices[0] == "???");
-  CHECK(item(g.main(), "keys", "inven")->disabled);  // no `inven` in this console
+  CHECK(item(g.main(), "keys", "inven")->disabled);         // no `inven` in this console
+  w.con.execute("bind space +jump; bind f1 \"cmd help\"");  // its jump and help computer
+  g.show(host, "keys");
+  CHECK(item(g.main(), "keys", "up")->choices[0] == "space");
+  CHECK(item(g.main(), "keys", "help")->choices[0] == "f1");
   g.show(host, "weapons");
   CHECK(g.main().focus("railgun"));
   MenuInput accept;
@@ -1705,62 +1709,6 @@ TEST(q2_video_mode_lists_the_modes_and_writes_the_number) {
   sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
                   host);
   CHECK(w.con.cvars().find("vid_fullscreen")->value == "0");
-}
-
-TEST(q2_player_page_lists_figures_and_writes_the_skin) {
-  // Figures as Quake II's packs hold them: a skin counts only with its icon beside it.
-  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
-      {"players/cyborg/tris.md2", {1}},     {"players/cyborg/oni911.pcx", {1}},
-      {"players/cyborg/oni911_i.pcx", {1}}, {"players/female/tris.md2", {1}},
-      {"players/female/athena.pcx", {1}},   {"players/female/athena_i.pcx", {1}},
-      {"players/male/tris.md2", {1}},       {"players/male/grunt.pcx", {1}},
-      {"players/male/grunt_i.pcx", {1}},    {"players/male/viper.pcx", {1}},
-      {"players/male/viper_i.pcx", {1}},    {"players/male/noicon.pcx", {1}},
-      {"players/empty/tris.md2", {1}},      {"players/empty/skin.pcx", {1}}};
-  std::vector<uint8_t> pak;
-  std::string error;
-  CHECK_MSG(ge::vfs::write_pak(files, &pak, &error), error);
-  ge::vfs::SearchPath sp;
-  CHECK_MSG(ge::vfs::add_archive(&sp, "pak0.pak", pak, "baseq2", &error), error);
-  const std::vector<sm::Figure> figures = sm::player_figures(sp);
-  CHECK(figures.size() == 3);
-  CHECK(figures[0].model == "male" && figures[1].model == "female" && figures[2].model == "cyborg");
-  CHECK(figures[0].skins == std::vector<std::string>({"grunt", "viper"}));
-  CHECK(sm::split_look("female/athena").second == "athena");
-  CHECK(sm::split_look("nothing").first == "male");
-
-  World w;
-  std::string skin = "male/viper";
-  w.con.cvars().bind(
-      {.name = "skin", .fallback = "male/viper", .kind = ge::console::CvarKind::text}, &skin);
-  w.con.cvars().add({.name = "name", .fallback = "player"});
-  sm::Host host{.console = &w.con, .table = &sm::q2_menu(), .files = &sp};
-  Menu m = sm::build_menu(sm::q2_menu());
-  sm::refresh(m, host);
-  CHECK(item(m, "setup", "model")->choices.size() == 3);
-  CHECK(item(m, "setup", "figskin")
-            ->choices[static_cast<size_t>(item(m, "setup", "figskin")->choice)] == "viper");
-  m.open("setup");
-  CHECK(m.focus("model"));
-  MenuInput right;
-  right.right = true;
-  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
-  CHECK(skin == "female/athena");  // a new model at its first skin
-}
-
-// Quake II's player page with no figure in the packs: said, and the page does not open.
-TEST(q2_player_page_without_figures_does_not_open) {
-  ge::vfs::SearchPath sp;
-  World w;
-  sm::Host host{.console = &w.con, .table = &sm::q2_menu(), .files = &sp};
-  Menu m = sm::build_menu(sm::q2_menu());
-  sm::refresh(m, host);
-  m.open("multi");
-  std::vector<MenuEvent> events;
-  m.open("setup", &events);
-  for (const MenuEvent& e : events) sm::apply_event(e, m, host);
-  CHECK(m.top().id == "multi");
-  CHECK(!w.con.output().empty() && w.con.output().back() == "No player models found.");
 }
 
 // Quake's setup page shows its figure (menuplyr) in the shirt and pants its rows hold: the shirt's

@@ -3,15 +3,18 @@
 //
 // - `cmd <line>`: the line as it is, to whichever game is played (a mod's own commands).
 // - Quake II's screens and inventory (server/q2_screens.hpp): `score`, `inven`, `putaway`,
-//   `invnext`, `invprev`, `invnextw`, `invprevw`, `invnextp`, `invprevp`, `invuse` and `invdrop`.
-//   They go to Quake II's rules only; in another game they do nothing, so a key Quake II's
-//   own config binds to one (TAB to `inven`) costs Quake nothing. `help` alone in a Quake II
-//   game is the help computer, sent to its rules; `help <name>` explains the console's words.
+//   `invnext`, `invprev`, `invnextw`, `invprevw`, `invnextp`, `invprevp`, `invuse` and `invdrop`,
+//   and its weapon steps `weapnext` and `weapprev` (so its Key Bindings page can bind them). They
+//   go to Quake II's rules only, the server joined's or the window's own game's; in another game
+//   they do nothing, so a key Quake II's own config binds to one (TAB to `inven`) costs Quake
+//   nothing. `help` alone in a Quake II game is the help computer, sent to its rules; `help <name>`
+//   explains the console's words.
 //
 // `add_server_commands` adds these and the administrator's words (qw_admin.hpp).
 //
 // ge:summary The game's own commands from the window's console: cmd, Quake II's screen words
 // ge:keywords cmd client-command forward score inven putaway invnext invprev invuse invdrop
+// ge:keywords weapnext weapprev
 // ge:keywords q2 game-commands console-words
 // ge:skill shooter console
 // ge:test tests/shooters_edge_game_commands_test.cpp
@@ -31,9 +34,9 @@ namespace shooters_edge::net {
 struct Remote;
 
 // Quake II's words (above), in the order `add_server_commands` adds them.
-inline constexpr const char* kQ2Words[] = {"score",    "inven",    "putaway",  "invnext",
-                                           "invprev",  "invnextw", "invprevw", "invnextp",
-                                           "invprevp", "invuse",   "invdrop"};
+inline constexpr const char* kQ2Words[] = {
+    "score",    "inven",    "putaway", "invnext", "invprev",  "invnextw", "invprevw",
+    "invnextp", "invprevp", "invuse",  "invdrop", "weapnext", "weapprev"};
 
 // `line` to the game played as the player's command: to the server `r` joined, else to the match
 // `l` hosts; false when there is neither.
