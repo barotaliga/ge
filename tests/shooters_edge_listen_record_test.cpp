@@ -236,6 +236,14 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   CHECK(found_bytes == bytes);
   cl::Demo d;
   CHECK_MSG(cl::open_demo(found_bytes, d, error), error);
+  std::vector<uint8_t> q2_bytes;
+  // Quake II's maps record a replay file (`.ged`): its bare name finds it the same way.
+  std::ofstream(fs::path(files.folder) / "q2match.ged", std::ios::binary) << "replay";
+  CHECK_MSG(
+      cl::find_demo(files, "q2match", shooters_edge::profiles::find_game("q2")->demo_extensions,
+                    q2_bytes, found, error),
+      error);
+  CHECK_MSG(found.find("q2match.ged") != std::string::npos, found);
   // Unpacked with demo_pack 0.
   s.pack = 0;
   con.execute("record plain1");
