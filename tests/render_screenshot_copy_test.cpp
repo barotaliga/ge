@@ -115,6 +115,8 @@ TEST(a_copy_destroyed_in_flight_waits_for_its_picture) {
   }  // ASan holds this: the map's callback must not land on a freed readback
   d->instance.ProcessEvents();
   CHECK(d->errors.load() == 0);
+  // `screenshot` then `quit`: the picture still in flight is not lost, it goes to the writer.
+  CHECK_MSG(kept.written == 1, std::to_string(kept.written));
 }
 
 TEST(the_engines_writer_takes_it_to_a_file_and_says_so) {

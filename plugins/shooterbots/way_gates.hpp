@@ -5,6 +5,8 @@
 // ge:summary Triggers a button wakes: the names that wake one, touch doors, the near side's node
 // ge:keywords way_gate_names way_wake_gates way_touch_opened way_trigger_sides triggered gate
 // ge:keywords trigger-multiple touch-door wake bunk1 way_shot_sides shot-button force-field
+// ge:keywords way_key_monsters way_key_prey trigger_counter monster-target hip1m2
+// ge:keywords way_lit_bridge force-bridge togglewall lit-bridge
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #pragma once
@@ -14,6 +16,7 @@
 
 #include "shooter/entity.hpp"
 #include "shooterbots/entities.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/nav.hpp"
 #include "shooterbots/way_through.hpp"
 
@@ -48,5 +51,21 @@ void way_trigger_sides(WayThrough& w, const NavGraph& g);
 // not got into) is shot from the nearest node he reaches that sees it within kShotFrom (bunk1's
 // switch behind its force field, shot from the corridor through the room's far door).
 void way_shot_sides(WayThrough& w, Fighter& f, const NavGraph& g, const BotView& s, double t);
+
+// THE MONSTERS A DOOR WAITS ON: those whose `target` opens one of the doors only something else
+// opens (`WayThrough::locked`), straight or through a counter or a relay (hip1m2's four soldiers
+// on counter t125, the door *98 to the rest of the map). Even on the way through alone
+// (`complete` off), with nothing else he reaches to do, the nearest of them he reaches and that
+// is alive is hunted (`way_key_prey`): with none hunted he explored the same rooms for 800 s.
+void way_key_monsters(WayThrough& w, const BotView& s, const std::vector<EntityBlock>& blocks);
+// The nearest such monster alive whose node he reaches (`w.search`): its edict, its node in
+// `node` and the way's cost in `cost`; -1 when none.
+int way_key_prey(const WayThrough& w, const BotView& s, const NavGraph& g, int32_t& node,
+                 double& cost);
+// A LIT BRIDGE (map_nav.hpp `NavBridge::lit`): wall `e`, off at the start, as a floor shut to him
+// till it is solid (`kLockedLit`), its nodes shut with it (hip1m2's force bridge to the silver
+// keycard: left out of the nav, the keycard and all past it were out of his reach). False when `e`
+// is no lit bridge (a force field instead).
+bool way_lit_bridge(WayThrough& w, const MapNav& nav, int e);
 
 }  // namespace ge::shooterbots

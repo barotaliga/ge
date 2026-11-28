@@ -84,6 +84,10 @@ struct NavBridge {
   // shut while its angles are still `spawn_angles`.
   bool turns = false;
   ge::shooter::Vec3f spawn_angles;
+  // A LIT BRIDGE: a wall its name switches on that starts off (`func_togglewall`, starting off),
+  // a plate across a gap (hip1m2's force bridge over the flooded hall, lit by the button up the
+  // lift from the tunnel). Its nodes stand where the map drew it, shut while it is not solid.
+  bool lit = false;
   // Where its origin stands all the way out: where the map drew it ({0}), or (a SLIDE-OUT
   // bridge, `slides_out`: a slab drawn in its slot that a button runs out over a gap) its rest
   // plus its travel.
