@@ -1,4 +1,4 @@
-// Cfg files: the startup order, the server's, the dump of every player setting, a cheat never saved.
+// Cfg files: the startup order, the server's, the dump of every player setting, no cheat saved.
 //
 // ge:summary Tests cfg files: default, config, autoexec, then +commands; server.cfg; the dump
 // ge:keywords test cfg start start_server autoexec config dump_text describe
