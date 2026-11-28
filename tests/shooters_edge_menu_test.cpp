@@ -108,10 +108,27 @@ TEST(menu_has_the_classic_pages_and_rows) {
     CHECK_MSG(item(m, e.page, e.id) != nullptr, std::string(e.page) + "." + std::string(e.id));
 }
 
+TEST(play_rows_dim_until_a_game_is_open) {
+  World w;
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con, .game_open = false};
+  sm::refresh(m, host);
+  // Shooter's Edge has no game of its own: SINGLE PLAYER and MULTIPLAYER wait for SELECT GAME.
+  CHECK(item(m, "main", "single")->disabled);
+  CHECK(item(m, "main", "multi")->disabled);
+  CHECK(!item(m, "main", "games")->disabled);
+  CHECK(!item(m, "main", "options")->disabled);
+  CHECK(!item(m, "main", "quit")->disabled);
+  host.game_open = true;
+  sm::refresh(m, host);
+  CHECK(!item(m, "main", "single")->disabled);
+  CHECK(!item(m, "main", "multi")->disabled);
+}
+
 TEST(rows_dim_until_the_console_knows_what_they_need) {
   World w;
   Menu m = sm::build_menu();
-  sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
+  sm::Host host{.console = &w.con, .maps = {"start", "e1m1"}};
   sm::refresh(m, host);
   CHECK(item(m, "single", "new")->disabled);   // no single-player program: no `newgame`
   CHECK(item(m, "single", "load")->disabled);  // no `load` yet
@@ -796,7 +813,7 @@ TEST(both_looks_lay_every_page_out_clean) {
   World w;
   sm::GameMenu g;
   g.add_cvars(w.con);
-  sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
+  sm::Host host{.console = &w.con, .maps = {"start", "e1m1"}};
   host.saves = {"", "the hall, kills 3/12", "a line longer than the label column holds"};
   sm::ClassicArt art;
   std::string error;
@@ -934,7 +951,7 @@ TEST(q2_s_menu_is_drawn_in_its_plates_and_banners) {
   World w;
   sm::GameMenu g;
   g.add_cvars(w.con);
-  sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
+  sm::Host host{.console = &w.con, .maps = {"start", "e1m1"}};
   g.set_art(art);
   CHECK(g.classic());
   for (const char* page :
@@ -1106,7 +1123,7 @@ TEST(enhanced_pictures_draw_at_the_classic_sizes) {
   World w;
   sm::GameMenu g;
   g.add_cvars(w.con);
-  sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
+  sm::Host host{.console = &w.con, .maps = {"start", "e1m1"}};
   g.set_art(std::move(art));
   g.show(host, "main");
   const sm::ClassicLayout a = sm::layout_classic(g.main(), g.art(), 1280, 720);

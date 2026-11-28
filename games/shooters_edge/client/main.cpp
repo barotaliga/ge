@@ -445,18 +445,21 @@ int run_main(int argc, char** argv) {
   remote.snap_grab = [&shots](int w, int h, int q) { return shots.grab(w, h, q); };  // snap
   remote.snap_take = [&shots](std::vector<uint8_t>& out) { return shots.take_grab(out); };
   std::string error;
-  // No packs and no `+map`: the built-in arena (the start map below falls back to it).
+  // No packs: the title and the menu, SELECT GAME first; Shooter's Edge has no game of its own.
+  // Only an explicit `+map arena` starts the built-in arena (the tests' and labs' fixture).
   const bool opened = cl::open_game_dir(args.basedir, args.game, files, error,
                                         sp::content_of(sp::game_or_quake(args.profile)));
   files.own = own_files;
+  // A game is open when its packs are on the search path (an empty folder of our own is not one).
+  const bool game_open = opened && !cl::archive_paths(files).empty();
   if (!opened) {
     if (!next_map.empty() && next_map != "arena") {
       out::error("shooters_edge: the game folder did not open: " + error +
                  "; see docs/shooters-edge.md § Playing it");
       return 2;
     }
-    out::warn("shooters_edge: no game folder, so the built-in arena: " + error +
-              "; see docs/shooters-edge.md § Playing it");
+    out::status("shooters_edge: no game folder yet: " + error +
+                "; pick one on SELECT GAME (docs/shooters-edge.md § Playing it)");
     // Its sounds: the game's own recordings under the names the mod plays (own_sounds.hpp).
 #ifdef SE_CONTENT_DIR
     const std::string content = cl::find_content_dir(SE_CONTENT_DIR);
@@ -601,8 +604,8 @@ int run_main(int argc, char** argv) {
   game_menu.demos().set_check([&adapter](const std::string& p, std::string& f, std::string& why) {
     return cl::check_demo_line(p, adapter, f, why);
   });
-  menu_host.maps.emplace_back("arena");
   menu_host.table = &game_menu.set_table(adapter.menu(adapter), &files.vfs);  // the game's pages
+  menu_host.game_open = game_open;  // none: SELECT GAME, DEMOS, OPTIONS and QUIT alone
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
@@ -632,7 +635,10 @@ int run_main(int argc, char** argv) {
       });
   // The programs, the campaign and the first map the folder holds (client/game_folder.hpp).
   cl::GameContent game_content;
-  if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game)) {
+  const bool loaded_programs =
+      cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game);
+  if (!game_open) game_content.first_map.clear();  // no game: nothing loads behind the title
+  if (!loaded_programs) {
     out::error("shooters_edge: the mod did not load: " + error +
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
@@ -1059,6 +1065,7 @@ int run_main(int argc, char** argv) {
     cl::switch_game_cvars(console, game_cvars, *adapter.game, bindings);
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
     menu_host.table = &game_menu.set_table(adapter.menu(adapter), &files.vfs);
+    menu_host.game_open = true;  // a game's folder opened above
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
     cl::run_game_settings(console, args.basedir, args.game, *content);  // its own meanings
     switch_step("Loading the game's rules...");
@@ -1071,7 +1078,6 @@ int run_main(int argc, char** argv) {
     cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
     cl::add_adapter_commands(console, adapter, files, basedir);
     menu_host.maps = adapter.list_maps(adapter, files);
-    menu_host.maps.emplace_back("arena");
     switch_step("Loading the game's pictures...");
     pictures_enhanced = load_pictures(true);
     switch_step("Loading the weapons...");  // the console in the new game's look from here
@@ -1417,9 +1423,15 @@ int run_main(int argc, char** argv) {
     }
     if (!elsewhere) {
       bool fresh = false;
+      const bool was_loading = cl::busy(loader);
       if (const int code = cl::take_load(loader, window_at(t), listen, console, measured, t, world,
                                          world_current, fresh))
         return code;
+      // A map that did not load with nothing playing: back to the title and its menu.
+      if (was_loading && !cl::busy(loader) && !listen.map && !measured && !on_title) {
+        on_title = true;
+        game_menu.show(menu_host);
+      }
       if (fresh) forget_seen();
       if (fresh && listen.map) cl::level_music(music, listen.map->spec.entities);
     }
