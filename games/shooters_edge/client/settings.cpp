@@ -15,7 +15,9 @@
 #include "console/binds.hpp"
 #include "console/catalog.hpp"
 #include "console/cfg.hpp"
+#include "core/num_text.hpp"
 #include "core/output.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -223,7 +225,10 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   const bool q2 = l.rules != nullptr && (shooters_edge::server::q2_of(*l.rules) != nullptr ||
                                          shooters_edge::server::native_q2_of(*l.rules) != nullptr);
   const ge::console::Cvar* lens = con.cvars().find("cl_fov");
-  const std::string fov = q2 && lens != nullptr ? lens->value : info.sent_fov;
+  const std::string fov =
+      q2 && lens != nullptr
+          ? ge::core::num::to_string(q2_own_fov(std::strtod(lens->value.c_str(), nullptr)))
+          : info.sent_fov;
   if (l.server == info.sent_to && name == info.name && info.top == info.sent_top &&
       info.bottom == info.sent_bottom && info.skin == info.sent_skin &&
       info.model == info.sent_model && fov == info.sent_fov)

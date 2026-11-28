@@ -95,6 +95,8 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_impact, kTypeFloat)      \
   X(sq_impact_at, kTypeVector)  \
   X(sq_health, kTypeFloat)      \
+  X(lefty, kTypeFloat)          \
+  X(last_health, kTypeFloat)    \
   X(coop_taken, kTypeFloat)
 
 // QUAKE II'S MONSTERS the campaign runs (classic remix, campaign_q2.hpp): each kind's
@@ -214,6 +216,7 @@ namespace shooters_edge::server::rules::campaign {
   X(monster_zombie, "monster_zombie")                 \
   X(wizard_spit, "wizard_spit")                       \
   X(wizard_missile, "wizard_missile")                 \
+  X(wizard_check, "wizard_check")                     \
   X(wizard_flinch, "wizard_flinch")                   \
   X(wizard_pain, "wizard_pain")                       \
   X(wizard_die, "wizard_die")                         \
@@ -342,7 +345,7 @@ constexpr float kMovetypeStep = 4, kMovetypeFly = 5;
 constexpr int kFlFly = 1, kFlSwim = 2, kFlMonster = 32, kFlNotarget = 128, kFlWaterjump = 2048;
 constexpr float kSvcKilledmonster = 27, kSvcFinale = 31;
 constexpr float kDropShells = 1, kDropCells = 2, kDropRockets = 3;
-constexpr float kAsStraight = 1, kAsMelee = 3, kAsMissile = 4;
+constexpr float kAsStraight = 1, kAsSlide = 2, kAsMelee = 3, kAsMissile = 4;
 constexpr float kRangeMelee = 0, kRangeNear = 1, kRangeMid = 2, kRangeFar = 3;
 constexpr int kSpawnAmbush = 1;
 constexpr float kForever = 100000000;
