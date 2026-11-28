@@ -211,11 +211,36 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
   // colour for the game playing, half for the one remixed, grey for the rest; its edition in the
   // glyphs under it. Then ADD GAME in the big glyphs.
   const float name_h = art.plates() ? 32.0f : 20.0f;
+  const float edition = art.plates() ? 2.0f : 4.0f;  // the edition's line under the name
+  // Each row's step at its ease and at its tightest (the glyphs 8 px tall touching): when the
+  // games and their packs at ease run into the foot, every step gives up the same share of its
+  // slack, so two games with all their packs still end above it.
+  const auto kind = [&](int i) {
+    const bool game = i < static_cast<int>(rows_.size());
+    return !game ? 2 : rows_[static_cast<size_t>(i)].pack.empty() ? 0 : 1;  // game, pack, add
+  };
+  const auto step = [&](int k, float share) {
+    const float ease = k == 0 ? name_h + (art.plates() ? 12 : 14) + 8 : k == 1 ? 16.0f : 12.0f;
+    const float tight = k == 0 ? name_h + edition + 8 : 10.0f;
+    return tight + (ease - tight) * share;
+  };
+  const float room = (note_.empty() ? 180.0f : 172.0f) - 2 - kListTop;
+  float at_ease = 0, at_tightest = 0;
+  for (int i = 0; i < count(); i++) {
+    at_ease += step(kind(i), 1);
+    at_tightest += step(kind(i), 0);
+  }
+  const float share = at_ease <= room       ? 1.0f
+                      : at_tightest >= room ? 0.0f
+                                            : (room - at_tightest) / (at_ease - at_tightest);
+  if (at_tightest > room)
+    problems_.push_back("the games run into the foot on the classic page (" +
+                        std::to_string(count()) + " rows)");
   float y = kListTop;
   for (int i = 0; i < count(); i++) {
     const bool game = i < static_cast<int>(rows_.size());
     const bool pack = game && !rows_[static_cast<size_t>(i)].pack.empty();
-    const float tall = game && !pack ? name_h + (art.plates() ? 12 : 14) : 12;
+    const float tall = step(kind(i), share);
     cells_.push_back(pen.at(kListLeft, y, kListRight - kListLeft, tall));
     if (i == selected_) classic_cursor(pen, game && !pack ? y + name_h / 2 - 4 : y, t);
     if (!game) {
@@ -225,7 +250,7 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
     const GameRow& g = rows_[static_cast<size_t>(i)];
     if (pack) {  // a mission pack: its title in the glyphs, set in under its game
       pen.text(glyph_safe(g.pack_name), x + 16, y, g.playing);
-      y += tall + 4;
+      y += tall;
       continue;
     }
     // The name cut from the menu strips' own carved letters where they were measured, else its
@@ -238,9 +263,8 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
         picture(list, name, r.x, r.y, r.h, 1, {shade, shade, shade, 1}) <= 0)
       pen.text(g.id, x, y + 6, false);
     // The edition under the name, clear of the Q's tail (row 23 of the carved line).
-    if (!g.edition.empty())
-      pen.text(glyph_safe(g.edition), x, y + name_h + (art.plates() ? 2 : 4), false);
-    y += tall + 8;
+    if (!g.edition.empty()) pen.text(glyph_safe(g.edition), x, y + name_h + edition, false);
+    y += tall;
   }
   // Why the last folder did not load (two lines at most), else whose the games are.
   const std::string n = glyph_safe(note_);
