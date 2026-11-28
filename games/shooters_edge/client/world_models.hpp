@@ -107,6 +107,7 @@ struct Placed {
   bool bobs = false;      // Quake II's bob bit: rising and sinking 5 units
   // Quake II's render bits: lit full whatever the room, or never darker than a tenth.
   bool full_bright = false, min_light = false;
+  bool bolt = false;       // a Quake II blaster's bolt (its trail bit): InPlace::full_lit_once
   bool no_shadow = false;  // Quake II's render bit: it casts no ground shadow (model_shadow.hpp)
   // Seen through infra-red goggles: its skin times pure red, no light of the room, no glow.
   bool infra_red = false;
@@ -436,6 +437,10 @@ struct InPlace {
   int shadows = 0;
   // gl_flashblend: each of the moment's lights drawn as a glow disc (classic/flash_blend.hpp).
   bool flash_blend = false;
+  // The modern look (ce_beams): Quake II's blaster bolt drawn in its painted colour at the eye's
+  // white, its glowing texels not added again on top, so the picture's tone keeps its yellow and
+  // red instead of washing a doubled red to pink and white (its streak and glow are the beam's).
+  bool full_lit_once = false;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a

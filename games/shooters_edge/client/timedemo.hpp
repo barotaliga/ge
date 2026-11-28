@@ -34,6 +34,7 @@
 // ge:summary The demo benchmark: a recording played flat out, one demo frame a drawn frame
 // ge:keywords timedemo benchmark demo fps frame-rate average max min one-percent-low low
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
+// ge:keywords attract_words
 // ge:keywords demo_benchmarkdumps timedemo-log bench_dump
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
@@ -246,6 +247,12 @@ const DemoState& demo_drawn(Timedemo& t);
 // step.
 bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& t,
                     std::string& error, const GameAdapter& game = qw_adapter());
+
+// The title loop's recordings in `list` that the game's files hold, in order: a game's own list
+// names every release's (Quake II's demo release has one, the full game two of its own), and each
+// install holds only some. None held: the whole list, so the first one's absence is told.
+std::vector<std::string> attract_words(const std::string& list, const SearchPath& files,
+                                       const GameAdapter& game);
 
 // WHAT A PLAYED DEMO GIVES WAY TO: something else asked for this frame (a map, a save, a game
 // folder, a server joined, another demo). A demo playing is stopped for it; a title demo asked

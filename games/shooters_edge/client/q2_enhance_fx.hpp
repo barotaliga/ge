@@ -33,6 +33,9 @@ constexpr effects::BlastOf q2_blast_of(int code) {
     case 35:  // the plain one and explosion1 without particles
     case 54:
       return effects::BlastOf::bare;
+    case 8:  // a grenade's, in the air or in water
+    case 18:
+      return effects::BlastOf::grenade;
     default:
       return effects::BlastOf::common;
   }

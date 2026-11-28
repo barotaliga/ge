@@ -178,6 +178,7 @@ TEST(the_mission_packs_blasts_hits_and_heat_beams_under_classic_enhance) {
   CHECK(cl::q2_blast_of(53) == fx::BlastOf::big && cl::q2_blast_of(51) == fx::BlastOf::huge);
   CHECK(cl::q2_blast_of(47) == fx::BlastOf::dark && cl::q2_blast_of(35) == fx::BlastOf::bare);
   CHECK(cl::q2_blast_of(54) == fx::BlastOf::bare && cl::q2_blast_of(17) == fx::BlastOf::common);
+  CHECK(cl::q2_blast_of(8) == fx::BlastOf::grenade && cl::q2_blast_of(18) == fx::BlastOf::grenade);
   cl::Q2PackHit h;
   CHECK(!cl::q2_pack_hit_of(0, &h) && !cl::q2_pack_hit_of(9, &h));
   CHECK(cl::q2_pack_hit_of(30, &h) && h.hit.rgb[1] > h.hit.rgb[0] && !h.flick);  // green

@@ -34,10 +34,13 @@ TEST(a_blast_is_a_ball_and_its_later_billows_the_same_for_the_same_seed) {
   fx::blast(at, nullptr, 7, 10.0, &a, &pa);
   fx::blast(at, nullptr, 7, 10.0, &b, &pb);
   fx::blast(at, nullptr, 8, 10.0, nullptr, &pc);
-  CHECK(a.size() == size_t(1 + fx::kBillows));
+  CHECK(a.size() >= size_t(1 + fx::kMinBillows) && a.size() <= size_t(1 + fx::kBillows));
   CHECK(same(pa, pb));
   CHECK(!same(pa, pc));
-  CHECK(a[0].born_s == 10.0 && a[0].look == &fx::blast_look());
+  const auto looks = fx::rocket_looks();
+  CHECK(a[0].born_s == 10.0 && a[0].look >= looks.data() &&
+        a[0].look < looks.data() + looks.size());
+  CHECK(std::abs(a[0].scale - 1) <= fx::kBlastJitter);
   for (size_t i = 1; i < a.size(); ++i) {
     CHECK(a[i].look == &fx::billow_look());
     CHECK(a[i].born_s > 10.0 && a[i].born_s <= 10.0 + fx::kBillowsBy);
@@ -45,7 +48,42 @@ TEST(a_blast_is_a_ball_and_its_later_billows_the_same_for_the_same_seed) {
   }
   int hot = 0;
   for (const auto& p : pa) hot += p.kelvin > 2000 ? 1 : 0;
-  CHECK(hot >= 250);  // the ember ball and the sparks (245 embers and 40 sparks thrown)
+  CHECK(hot >= 150);  // the ember ball and the sparks (245 embers and 40 sparks, by 0.7 to 1.3)
+}
+
+// No two blasts alike: off a dozen seeds a rocket's are dealt every one of its looks, at sizes
+// and with billows and embers that differ; a grenade's are its own looks, burning less (shorter
+// fire, cooler, a dimmer flash, more smoke) and throwing fewer embers.
+TEST(blasts_differ_by_seed_and_a_grenades_burns_less) {
+  const double at[3] = {0, 0, 0};
+  bool rocket_seen[8] = {}, grenade_seen[8] = {};
+  double small = 9, large = 0;
+  size_t fewest = 1u << 30, most = 0, grenade_most = 0;
+  const auto rockets = fx::rocket_looks();
+  const auto grenades = fx::grenade_looks();
+  for (uint32_t seed = 1; seed <= 24; ++seed) {
+    std::vector<gr::Blast> rb, gb;
+    fx::Particles rp, gp;
+    fx::blast(at, nullptr, seed, 0.0, &rb, &rp);
+    fx::blast(at, nullptr, seed, 0.0, &gb, &gp, fx::BlastOf::grenade);
+    rocket_seen[rb[0].look - rockets.data()] = true;
+    CHECK(gb[0].look >= grenades.data() && gb[0].look < grenades.data() + grenades.size());
+    grenade_seen[gb[0].look - grenades.data()] = true;
+    for (size_t i = 1; i < gb.size(); ++i) CHECK(gb[i].look == &fx::grenade_billow_look());
+    small = std::min(small, rb[0].scale), large = std::max(large, rb[0].scale);
+    fewest = std::min(fewest, rp.size()), most = std::max(most, rp.size());
+    grenade_most = std::max(grenade_most, gp.size());
+  }
+  for (size_t i = 0; i < rockets.size(); ++i) CHECK(rocket_seen[i]);
+  for (size_t i = 0; i < grenades.size(); ++i) CHECK(grenade_seen[i]);
+  CHECK(large - small > fx::kBlastJitter);  // sizes spread
+  CHECK(most > fewest + 50);                // and what each throws
+  CHECK(grenade_most < most);               // a grenade throws fewer embers
+  for (const gr::BlastLook& g : grenades) {
+    const gr::BlastLook& r = fx::blast_look();
+    CHECK(g.fire_s < r.fire_s && g.core_k < r.core_k && g.flash < r.flash);
+    CHECK(g.fire < r.fire && g.smoke >= r.smoke);
+  }
 }
 
 TEST(a_blast_off_a_surface_is_a_dome_that_throws_away_from_it) {
@@ -82,7 +120,7 @@ TEST(a_blasts_kinds_scale_whiten_darken_or_bare_the_common_one) {
   fx::blast(at, nullptr, 5, 0.0, &huge, &ph, fx::BlastOf::huge);
   fx::blast(at, nullptr, 5, 0.0, &dark, &pd, fx::BlastOf::dark);
   fx::blast(at, nullptr, 5, 0.0, &bare, &pn, fx::BlastOf::bare);
-  CHECK(common[0].scale == 1 && pc.size() == pa.size());
+  CHECK(std::abs(common[0].scale - 1) <= fx::kBlastJitter && pc.size() == pa.size());
   CHECK(std::memcmp(pc.data(), pa.data(), pc.size() * sizeof(pc[0])) == 0);
   CHECK(big[0].scale == fx::kBigBlast && pb.size() > pc.size());
   CHECK(huge[0].scale == fx::kHugeBlast && huge[0].look == &fx::huge_look());
@@ -396,4 +434,22 @@ TEST(quake_twos_rail_trail_beams_take_its_colour_width_and_fade) {
   CHECK(core.light_cd == 0 && core.hit_cd == 0);  // no light of its own
   const gr::BeamLook spiral = fx::q2_rail_trail_look(0.05f, 0.075f, red, 0);
   CHECK(spiral.braid_m == 0.075f && spiral.twist > 0 && spiral.release_s > 0);
+}
+
+TEST(a_bolt_trails_soft_orange_specks_and_its_streak_stays_yellow) {
+  const double from[3] = {0, 0, 0}, to[3] = {0, 0, 1.5};
+  fx::Particles specks;
+  fx::plasma_sheds(from, to, 7, &specks);
+  // A speck each kBoltSpeckM, a glow at the bolt and at most one wisp of haze.
+  const auto beads = static_cast<size_t>(1.5 / fx::kBoltSpeckM);
+  CHECK(specks.size() >= beads + 1 && specks.size() <= beads + 2);
+  for (const auto& p : specks) {
+    CHECK(p.glow == 1);                                      // soft and round, never a square
+    CHECK(p.kelvin < 0 && p.kelvin >= -1.6f);                // shining, but a few whites at most
+    CHECK(p.tint[0] >= p.tint[1] && p.tint[1] > p.tint[2]);  // yellow to orange, never white
+  }
+  // The streak riding it: held to a few times the eye's white, yellow in an orange sheath.
+  const gr::BeamLook& l = fx::plasma_look();
+  CHECK(l.core_keys > 0 && l.core_keys < 2 && l.glow_keys > 0 && l.glow_keys < 1);
+  CHECK(l.core_rgb[2] < 0.3f && l.glow_rgb[1] < 0.5f && l.filaments == 1);
 }

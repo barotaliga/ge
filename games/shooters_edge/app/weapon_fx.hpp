@@ -51,6 +51,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -76,9 +77,21 @@ const gr::BeamLook& bolt_look();
 // prongs' 30 cm) and thinner, as it is a hand's breadth from the eye.
 const gr::BeamLook& prong_arc_look();
 
-// Billows round a blast's main ball, and when the last is born after it, s.
-inline constexpr int kBillows = 3;
+// Billows round a blast's main ball (a common or a grenade's blast kMinBillows to kBillows, dealt
+// off its seed; the other kinds kKindBillows), and when the last is born after it, s.
+inline constexpr int kMinBillows = 2, kBillows = 4, kKindBillows = 3;
 inline constexpr double kBillowsBy = 0.12;
+// NO TWO ALIKE: a rocket's blast is dealt one of `rocket_looks` (the common ball, a tall one that
+// rises fast in tight lobes, a wide flat ragged one, a hot one that flares and is gone sooner) and
+// a grenade's one of `grenade_looks` (the common one, a dusty one that hangs low, a squat one in
+// broad lobes), each off its seed; its size by up to kBlastJitter either way, its billows' count,
+// and its embers and sparks by 0.7 to 1.3. A grenade's burn less than a rocket's (less fire for a
+// shorter time, cooler, a dimmer flash, more smoke with dust in it, `grenade_billow_look` round
+// them) and throw kGrenadeThrows of a rocket's embers and sparks.
+inline constexpr double kBlastJitter = 0.12, kGrenadeThrows = 0.55;
+std::span<const gr::BlastLook> rocket_looks();  // the first is blast_look()
+std::span<const gr::BlastLook> grenade_looks();
+const gr::BlastLook& grenade_billow_look();
 
 // An explosion at `at` (world m) at `now_s`: its fireball and its billows into `blasts` (each
 // drawn while blast_life says), its embers, sparks and chunks into `births` (once).
@@ -90,8 +103,8 @@ inline constexpr double kBillowsBy = 0.12;
 // lights a whole hall (`huge_look`: hotter, brighter, its smoke paler dust); `dark` a ball that
 // swallows light (`dark_look`: barely burning, a sooty cloud that is gone in a second) and pulls
 // black specks in to its heart rather than throwing embers out; `bare` the ball alone, nothing
-// thrown.
-enum class BlastOf : uint8_t { common, big, huge, dark, bare };
+// thrown; `grenade` a grenade's (`grenade_looks`).
+enum class BlastOf : uint8_t { common, big, huge, dark, bare, grenade };
 inline constexpr double kBigBlast = 1.8, kHugeBlast = 3.2;
 const gr::BlastLook& huge_look();
 const gr::BlastLook& dark_look();
@@ -235,8 +248,10 @@ int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 //   faintly glowing line circling it (`rail_coil_look`), both held a moment and fading over
 //   kRailFadeS, a soft blue light along the line lighting the room round it (`rail_lights`),
 //   and a pale vapour that rises where the slug burnt the air (`ion_trail`);
-// - the BOLTS (blaster, hyperblaster) in the modern look: a streak of two plasma strands wound
-//   round each other riding each bolt (`plasma_look`), shedding sparks (`plasma_sheds`);
+// - the BOLTS (blaster, hyperblaster) in the modern look: the classic bolt kept, a short yellow
+//   streak in an orange sheath riding it (`plasma_look`, held to a few times the eye's white so
+//   it stays yellow, never a white ball), and the classic's line of specks as soft glowing beads
+//   that hang, drift and dim to orange (`plasma_sheds`, one each kBoltSpeckM);
 // - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`; Ground Zero's green bolt's
 //   in green); the BFG's burst: a green
 //   ball of specks (`bfg_burst`) under the engine's blast.
@@ -250,7 +265,8 @@ inline constexpr double kRailFadeS = 1.0;
 inline constexpr int kRailLights = 8;
 inline constexpr double kRailLightEveryM = 2.5, kRailLightM = 3, kRailLightLevel = 0.8;
 inline constexpr double kPlasmaFadeS = 0.08;  // a bolt's streak fading once it stops
-inline constexpr double kPlasmaTailM = 0.9;   // the streak behind a bolt
+inline constexpr double kPlasmaTailM = 0.6;   // the streak behind a bolt
+inline constexpr double kBoltSpeckM = 0.15;   // the bolt's trail: a bead each this far
 // The light riding a glowing shot at `at`: `rgb` at `level`, reaching `radius_m`, on `entity` (so
 // the shot's own model is not lit by it).
 Light shot_glow(const double at[3], const float rgb[3], double radius_m, double level, int entity);
