@@ -633,7 +633,16 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
     // body on it, its height its whole way less its lip (rmine1's pillar up to the mine's upper
     // floors, sent down by the soldier who guards it; unknown to the nav, no ride up was found).
     const bool plat2 = spec.brushes && std::strcmp(cn, "func_plat2") == 0;
-    const bool plat = std::strcmp(cn, "func_plat") == 0 || plat2;
+    // Dissolution of Eternity's plat ridden by touch (`new_plat_ride`).
+    const int nm = std::atoi(model + 1);
+    const float new_rise =
+        nm > 0 && static_cast<size_t>(nm) < model_count(spec)
+            ? sb::new_plat_ride(cn, sb::block_value(b, "spawnflags"), sb::block_value(b, "height"),
+                                sb::block_value(b, "targetname"),
+                                model_box(spec, nm).maxs.z - model_box(spec, nm).mins.z)
+            : 0.f;
+    const bool new_plat = new_rise > 0;
+    const bool plat = std::strcmp(cn, "func_plat") == 0 || plat2 || new_plat;
     const bool train = std::strcmp(cn, "func_train") == 0;
     if (!door && !plat && !train) continue;
     if (door && start_open(b)) continue;  // a floor to the nav (open_doors_as_floor)
@@ -658,10 +667,11 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       const char* sp = sb::block_value(b, "speed");
       const char* lp = spec.brushes ? sb::block_value(b, "lip") : nullptr;
       const float lip = lp ? static_cast<float>(std::atof(lp)) : plat2 ? 0.f : 8.f;
-      const float rise = plat2
-                             ? (h ? static_cast<float>(std::atof(h)) : bm.maxs.z - bm.mins.z) - lip
-                         : h ? static_cast<float>(std::atof(h))
-                             : (bm.maxs.z - bm.mins.z) - lip;
+      const float hv = h ? static_cast<float>(std::atof(h)) : 0.f;
+      const float rise = new_plat ? new_rise
+                         : plat2  ? (h ? hv : bm.maxs.z - bm.mins.z) - lip
+                         : h      ? hv
+                                  : (bm.maxs.z - bm.mins.z) - lip;
       const float fallback = spec.brushes ? 200.f : 150.f;
       const float speed = sp ? static_cast<float>(std::atof(sp)) : fallback;
       if (spec.brushes) {
@@ -673,7 +683,8 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
       // A named one waits raised until something fires it, then lowers and rides like any other
       // (bunk1's by its first buttons): its rest is down there, where it stands from then on.
-      if (sb::block_value(b, "targetname") != nullptr && mv.rest.z > -rise / 2) {
+      // Dissolution's resting at the top the same: it is boarded at the bottom of its ride.
+      if ((sb::block_value(b, "targetname") != nullptr || new_plat) && mv.rest.z > -rise / 2) {
         mv.rest.z -= rise;
         mv.absmin.z -= rise;
         mv.absmax.z -= rise;
@@ -1276,6 +1287,16 @@ std::vector<sb::NavMover> map_movers(const ge::shooterbots::BotView& s,
                                      const ge::shooter::MapSpec& spec,
                                      ge::brush::BrushTracer* tracer) {
   return movers_of(s, spec, tracer, entity_blocks(spec));
+}
+
+float new_plat_ride(const char* classname, const char* spawnflags, const char* height,
+                    const char* targetname, float built_height) {
+  if (classname == nullptr || std::strcmp(classname, "func_new_plat") != 0 || targetname != nullptr)
+    return 0;
+  const int flags = spawnflags ? std::atoi(spawnflags) : 0;
+  if ((flags & 7) != 0 || (flags & 16) == 0) return 0;  // a mode of its own picked first
+  const float h = height ? static_cast<float>(std::atof(height)) : 0.f;
+  return h > 0 ? h : h < 0 ? -h : built_height - 8;
 }
 
 int64_t mark_crusher_harm(const NavGraph& g, const std::vector<NavMover>& movers,

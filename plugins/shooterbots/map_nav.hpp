@@ -182,6 +182,14 @@ std::vector<ge::shooter::Vec3f> crawl_path(const MapCrawl& c, int a, int b);
 std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView& s,
                                                   const ge::shooter::MapSpec& spec,
                                                   ge::brush::BrushTracer* tracer = nullptr);
+// DISSOLUTION OF ETERNITY'S PLAT RIDDEN BY TOUCH (a `func_new_plat` with spawnflag 16 and none of
+// 1, 2 or 4, which pick its other modes: the elevator, the toggle, the drop-and-wait): called and
+// ridden like a plat, built at the top of its ride. Its travel in units: its height's size (a
+// positive height rests at the top, a negative one at the bottom), its built height less 8 with
+// none. 0 for anything else, and for one with a name: it answers no touch until its first use,
+// which moves nothing, so nothing the bot sees says when it rides (r2m6's, stood on for minutes).
+float new_plat_ride(const char* classname, const char* spawnflags, const char* height,
+                    const char* targetname, float built_height);
 // (`crusher`) Marks in `harm` the nodes of `g` a crushing train (one with a `dmg` and an
 // `end_stop`) pins for good: those a standing player would share with its box where it comes to
 // rest for good. One standing on its top there is free (it is the way on). A crusher that only

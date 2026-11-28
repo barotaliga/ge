@@ -5,10 +5,10 @@
 // there the rest of the map; e1m3's ceiling comes down and goes back up.
 //
 // ge:summary Tests for the crushers and killing triggers the nav avoids: the floor under a
-// ge:summary crusher's last stop, a trigger_hurt pit
+// ge:summary crusher's last stop, a trigger_hurt pit, Dissolution of Eternity's plat
 // ge:keywords test map_nav mark_crusher_harm crusher train dmg end_stop harm e1m4 e1m3
 // ge:keywords mark_hurt_harm trigger_hurt rboss push_carries_into trigger_push cut_hurt_links
-// ge:keywords pit-lip func_rotating wheel
+// ge:keywords pit-lip func_rotating wheel new_plat_ride func_new_plat dissolution
 // ge:skill shooterbots testing
 #include <cstdint>
 #include <vector>
@@ -184,4 +184,19 @@ TEST(a_walk_across_a_killing_strip_is_cut_and_one_beside_it_stays) {
   pit.links = {drop};
   pit.nodes[0].links = 1;
   CHECK(sb::cut_hurt_links(pit, strip) == 0);
+}
+
+// Dissolution of Eternity's plat ridden by touch (`new_plat_ride`): its travel the size of its
+// height either way, its built height less 8 with none; its other modes, and one with a name
+// (no touch till a use that moves nothing), are no plat to the nav.
+TEST(a_dissolution_plat_rides_its_heights_size_and_its_other_modes_do_not) {
+  CHECK(sb::new_plat_ride("func_new_plat", "16", "-448", nullptr, 462) == 448);  // r1m7's shaft
+  CHECK(sb::new_plat_ride("func_new_plat", "16", "192", nullptr, 206) == 192);   // rests on top
+  CHECK(sb::new_plat_ride("func_new_plat", "48", nullptr, nullptr, 118) == 110);
+  CHECK(sb::new_plat_ride("func_new_plat", "112", "130", nullptr, 139) == 130);
+  CHECK(sb::new_plat_ride("func_new_plat", "18", "296", nullptr, 310) == 0);  // the toggle
+  CHECK(sb::new_plat_ride("func_new_plat", "4", "200", nullptr, 14) == 0);    // the elevator
+  CHECK(sb::new_plat_ride("func_new_plat", "0", "200", nullptr, 14) == 0);    // never moves
+  CHECK(sb::new_plat_ride("func_new_plat", "16", "-128", "steak", 30) == 0);  // r2m6's
+  CHECK(sb::new_plat_ride("func_plat", "16", "-128", nullptr, 30) == 0);
 }
