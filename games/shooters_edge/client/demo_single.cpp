@@ -113,7 +113,6 @@ enum : uint32_t {
   kIdealPitch = 1 << 1,
   kPunch1 = 1 << 2,
   kVelocity1 = 1 << 5,
-  kItems = 1 << 9,
   kWeaponFrame = 1 << 12,
   kArmour = 1 << 13,
   kWeapon = 1 << 14,
@@ -249,7 +248,9 @@ void client_data(DemoState& s, DemoMsg& m) {
     (i == 0 ? s.velocity.x : i == 1 ? s.velocity.y : s.velocity.z) = v;
   }
   s.velocity_read = true;
-  if ((bits & kItems) != 0) s.stats[kStatItems] = m.i32();
+  // The items word comes every time, whatever its bit says: Scourge of Armagon's recordings leave
+  // the bit clear and send it anyway.
+  s.stats[kStatItems] = m.i32();
   s.weapon_frame = (bits & kWeaponFrame) != 0 ? m.u8() : 0;
   s.stats[kStatArmour] = (bits & kArmour) != 0 ? m.u8() : 0;
   s.stats[kStatWeapon] = (bits & kWeapon) != 0 ? m.u8() : 0;
