@@ -1416,8 +1416,10 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     }
     if (g.host != nullptr) g.host->room = g.room.get();
   }
-  // With no lobby, `team <name>` keeps Quake's meaning: the player's team in his user info.
-  if (!g.room && g.qw && (line == "team" || line.starts_with("team ")) && slot >= 0 && slot < 32) {
+  // With no lobby, `team <name>` keeps Quake's meaning: the player's team in his user info, in a
+  // room of bots (`sv_bots`, `addbot`) as much as alone.
+  if ((!g.room || g.settings.lobby == 0) && g.qw && (line == "team" || line.starts_with("team ")) &&
+      slot >= 0 && slot < 32) {
     std::string name = line.substr(4);
     name.erase(0, name.find_first_not_of(" \t\""));
     name.erase(std::min(name.size(), name.find_first_of('"')));
