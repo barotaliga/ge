@@ -115,7 +115,7 @@ bool nav_on_mover_top(std::span<const NavMover> now, Vec3f p) {
   constexpr float kUnder = 24;  // and the top this far under the feet still under them (a step)
   const float feet = p.z - kFeet;
   for (const NavMover& m : now)
-    if (ridden(m) && p.x > m.absmin.x - kOn && p.x < m.absmax.x + kOn && p.y > m.absmin.y - kOn &&
+    if (p.x > m.absmin.x - kOn && p.x < m.absmax.x + kOn && p.y > m.absmin.y - kOn &&
         p.y < m.absmax.y + kOn && m.absmax.z <= feet + kStepHeight && m.absmax.z >= feet - kUnder)
       return true;
   return false;

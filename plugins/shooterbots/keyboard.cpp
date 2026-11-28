@@ -14,6 +14,7 @@
 #include "core/math.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooter/world.hpp"
+#include "shooterbots/pilot_parts.hpp"
 #include "shooterbots/traits.hpp"
 
 namespace sb = ge::shooterbots;
@@ -172,22 +173,32 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
           kMashView)
     curve = p.curve_keys;
   // The brink's keys on the ground, and in the air only where the feet are free (as the brink
-  // guard's, fighter.cpp) when the air's keys carry the flight (`air_carries`: Quake II's): a
-  // jump's flight is the pilot's own there, and one over lava let go of its keys lands in it
-  // (mintro's jump to the ledge over the pit fell short so). Under a capped air the keys move
-  // the flight little and the guard stays on.
+  // guard's, fighter.cpp): a jump's flight is the pilot's own, and one over lava let go of its
+  // keys lands in it (mintro's jump to the ledge over the pit fell short so). A capped air
+  // (Quake's) is no exception: its cap is on the speed gained along the wish, not on the speed
+  // lost, and the keys against the run braked hip2m3's jump over the lava cleft from 320 units/s to
+  // a stop.
   const sb::PilotMode pm = p.mode;
   const bool free_feet = pm == sb::PilotMode::walk || pm == sb::PilotMode::strafe ||
                          pm == sb::PilotMode::hop || pm == sb::PilotMode::idle ||
                          pm == sb::PilotMode::arrived || pm == sb::PilotMode::wait;
   // Nor on a jump's run at its start (the nav proved it, over lava or not): the run at a jump over
   // a lava pit let go of W short of the start, and stood there for 50 s (Ground Zero's rmine1).
-  const bool at_jump = onground && pm == sb::PilotMode::jump;
+  bool at_jump = onground && pm == sb::PilotMode::jump;
+  // Nor on the walk's last steps to such a jump's start at the lip (a step of the guard's length
+  // ends in the pit the jump crosses): e1m4's walk off the sunk gate t72 to the jump over the
+  // slime let go of W there and walked to and fro on the gate to the end of the run.
+  if (onground && pm == sb::PilotMode::walk && p.g != nullptr && p.k + 2 < p.route.size()) {
+    const sb::NavLink* next = sb::pilot_parts::link_of(*p.g, p.route[p.k + 1], p.route[p.k + 2]);
+    const sh::Vec3f st = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])].origin;
+    const float dx = st.x - origin.x, dy = st.y - origin.y;
+    if (next != nullptr && next->kind == sb::NavKind::jump &&
+        dx * dx + dy * dy < kBrinkStep * kBrinkStep)
+      at_jump = true;
+  }
   const KeysNear near{f.bot.pilot.world, p.g, origin, f.bot.pilot.now};
   press_keys(f.keys, f.features, cmd, velocity, onground, curve,
-             (onground || free_feet || !sb::air_carries(p.g->move)) && !p.brink_free && !at_jump
-                 ? &near
-                 : nullptr);
+             (onground || free_feet) && !p.brink_free && !at_jump ? &near : nullptr);
 }
 
 void press_keys(KeyHand& keys, const sb::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,

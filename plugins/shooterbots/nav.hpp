@@ -505,9 +505,10 @@ int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side = 72,
 // Whether the player's box swept from `p` toward `to` (a wall stops it; a stair's step or two
 // climbed), then dropped to the floor (400 units at most), stands in lava or slime.
 bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to);
-// Whether a player standing at `p` (its origin) would stand on a ridden mover's top as `now` has
-// them (a platform's box now; no part of the static world the harm checks trace): the guards that
-// keep a player off lava take a step onto boss1's ferry over it for the floor it is.
+// Whether a player standing at `p` (its origin) would stand on a mover's top as `now` has them (a
+// platform's or a door's box now; no part of the static world the harm checks trace): the guards
+// that keep a player off lava take a step onto boss1's ferry over it for the floor it is, and the
+// top of a door sunk into its slot (e1m4's gate t72 beside the slime) the same.
 bool nav_on_mover_top(std::span<const NavMover> now, Vec3f p);
 // THE VOID (`nav_floor_in_void`, nav_void.cpp): whether a floor at `p` (the player's origin on it)
 // lies wholly in the world's point-hull rock and its open player hull runs on to the world's edge
