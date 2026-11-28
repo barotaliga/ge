@@ -30,6 +30,10 @@ constexpr float kStepHeight = 18;  // the move climbs a step this high without a
 constexpr float kArriveUp = 2;     // a proof arrives within this up or down, units
 constexpr float kStall_s = 0.25f;  // a proof getting no nearer for this long is refused
 constexpr float kNearestUp = 64;   // nav_nearest's reach up and down, units
+// A ridden mover's top node is the nearest only within this far across, units: with no floor node
+// round him, a fall through space's open shaft took the dish's top 2700 away at his height for
+// his place, and the route from it steered him off the ledge he was falling onto.
+constexpr float kNearestTopAcross = 256;
 constexpr int32_t kSwimUnder = 2;  // and a swimmer's swim node looked for this many cells down
 constexpr float kGapUp = 24;  // a floor this near the straight line between two nodes bridges it
 // A jump may land this short of its target on the target's floor (a stair's tread), units.
@@ -263,7 +267,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     for (int32_t j = 0; j < g.rows; j++) {
       const float x = g.lo.x + set.spacing * (static_cast<float>(i) + 0.5f);
       const float y = g.lo.y + set.spacing * (static_cast<float>(j) + 0.5f);
-      column_floors(world, x, y, top, bottom, floors, set.squeeze ? &pocket : nullptr);
+      column_floors(world, x, y, top, bottom, floors, set.pockets ? &pocket : nullptr);
       std::erase_if(floors, [&](Vec3f f) { return nav_floor_in_void(world, f, unsealed); });
       col_floors[col_of(i, j)] = floors;
       for (const Vec3f p : pocket)
@@ -911,6 +915,7 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
   for (size_t n = tops; n < tops_end; n++) {
     const Vec3f d = g.nodes[n].origin - p;
     if (d.z > kNearestUp || d.z < -kNearestUp) continue;
+    if (d.x * d.x + d.y * d.y > kNearestTopAcross * kNearestTopAcross) continue;
     const float dd = dot(d, d);
     if (best < 0 || dd < best_d) {
       best = static_cast<int32_t>(n);

@@ -10,5 +10,6 @@ plays: every creature, its projectiles, and a debug noise maker. List every stri
 multiplayer game logic and the client's own code pass to a sound, a precache or a model call,
 then follow each one that names a creature's file to its caller: a wall trap firing a creature's
 laser sound, or a deathmatch bonus playing a boss's cry, is in scope under a name of its own,
-while a landing thud only creature physics plays is not. Keep the rest in the registry as
-`skip` rather than deleting it, so a later single-player mode starts from the list.
+while a landing thud only creature physics plays is not. Leave the rest out of the registry: on
+2026-11-28 the `skip` rows (95 creature sounds, 26 models) were deleted when Shooter's Edge
+stopped standing in for a classic game, and no single-player mode of its own is planned.

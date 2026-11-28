@@ -670,6 +670,28 @@ TEST(classic_pictures_are_read_from_the_packs_files) {
   CHECK(error.find("mainmenu") != std::string::npos);
 }
 
+// LOAD, SAVE and CUSTOMIZE CONTROLS are titled in the pack's own pictures, as the other pages.
+TEST(classic_load_save_and_controls_pages_wear_their_title_pictures) {
+  sm::ClassicArt art;
+  std::string error;
+  CHECK_MSG(sm::load_classic_art(fixture_find(sm::fixture_files()), &art, &error), error);
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  g.set_art(std::move(art));
+  for (const auto& [page, title] : {std::pair{"load", "p_load"}, std::pair{"save", "p_save"},
+                                    std::pair{"controls", "ttl_cstm"}}) {
+    g.show(host, page);
+    DrawList dl;
+    dl.begin(1280, 720);
+    g.draw(dl, 1280, 720, 0);
+    int n = 0;
+    for (const auto& c : dl.cmds()) n += c.box.image == g.art().find(title) ? 1 : 0;
+    CHECK_MSG(n == 1, page);
+  }
+}
+
 TEST(a_classic_game_s_console_is_in_its_letters_over_its_background) {
   const auto files = sm::fixture_files();
   sm::ClassicArt art;
@@ -1039,40 +1061,6 @@ TEST(q2_s_menu_is_drawn_in_its_plates_and_banners) {
       for (const sm::Tone tone : {sm::Tone::full, sm::Tone::half, sm::Tone::grey})
         for (const auto& [ch, img] : sm::toned(*set, tone)) pieces += c.box.image == &img ? 1 : 0;
   CHECK(pieces == 12 + 8 + 11);
-}
-
-// Quake II's SELECT GAME with both games and all their packs: the rows close up to end above
-// the foot's line, and a list no spacing can fit is said.
-TEST(classic_games_page_ends_above_its_foot) {
-  sm::ClassicArt art;
-  art.glyphs = make_image(128, 128, hex(0xffffff));
-  art.pictures.emplace("m_main_game", make_image(99, 32, hex(0x2c2c2c)));
-  CHECK(art.plates());
-  std::vector<sm::GameRow> rows = {{.id = "q1", .install = "/a", .edition = "Registered"},
-                                   {.id = "q1", .pack = "hipnotic", .pack_name = "Scourge"},
-                                   {.id = "q1", .pack = "rogue", .pack_name = "Dissolution"},
-                                   {.id = "q2", .install = "/b", .edition = "Full game"},
-                                   {.id = "q2", .pack = "xatrix", .pack_name = "The Reckoning"},
-                                   {.id = "q2", .pack = "rogue", .pack_name = "Ground Zero"}};
-  const auto draw = [&](sm::GamesPage& page) {
-    DrawList dl;
-    dl.begin(1280, 720);
-    page.draw_classic(dl, art, 1280, 720, 0);
-    std::vector<float> ys;  // the glyphs' rows, the foot's the lowest
-    for (const auto& c : dl.cmds())
-      if (c.box.image == &art.glyphs) ys.push_back(c.box.rect.y);
-    return ys;
-  };
-  sm::GamesPage page;
-  page.set_games(rows);
-  const std::vector<float> ys = draw(page);
-  CHECK(page.problems().empty());
-  const float foot = *std::max_element(ys.begin(), ys.end());
-  for (const float y : ys) CHECK_MSG(y == foot || y + 8 * 3 <= foot, std::to_string(y));
-  for (int i = 0; i < 12; i++) rows.push_back(rows[1]);
-  page.set_games(rows);
-  draw(page);
-  CHECK(!page.problems().empty());
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {

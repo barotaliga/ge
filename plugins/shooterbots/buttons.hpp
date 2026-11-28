@@ -64,6 +64,13 @@ constexpr float kDoomDmg = 1000;  // a blast that hurts this much kills anyone i
 // way through (`way_init`).
 bool button_spins(const std::vector<ge::shooterbots::EntityBlock>& blocks, const char* target);
 
+// Whether door block `b` is a lever, pressed like a button (mine4's, beside the carts' track: a
+// turning door with no name, opened by a touch, whose target starts the carts the way on rides):
+// a turning door with no name and no health whose `target` names something other than an area
+// portal (a sliding door's target is most often its portal, or a trap it springs).
+bool door_is_lever(const std::vector<ge::shooterbots::EntityBlock>& blocks,
+                   const ge::shooterbots::EntityBlock& b);
+
 // Whether what a button's `target` fires (`button_fires`) reaches a killbox or a blast no one lives
 // through: biggun's evacuate button, two relays and 22 s on, sets off both over the whole base.
 bool button_dooms(const std::vector<ge::shooterbots::EntityBlock>& blocks, const char* target);

@@ -181,6 +181,22 @@ std::vector<std::string> button_fires(const std::vector<sb::EntityBlock>& blocks
   return names;
 }
 
+bool door_is_lever(const std::vector<sb::EntityBlock>& blocks, const sb::EntityBlock& b) {
+  const char* cn = sb::block_value(b, "classname");
+  const char* target = sb::block_value(b, "target");
+  const char* health = sb::block_value(b, "health");
+  if (!cn || std::strcmp(cn, "func_door_rotating") != 0 || sb::block_value(b, "targetname") ||
+      !target || !target[0] || (health && std::atof(health) > 0))
+    return false;
+  for (const sb::EntityBlock& d : blocks) {
+    const char* dn = sb::block_value(d, "targetname");
+    const char* dc = sb::block_value(d, "classname");
+    if (dn && dc && std::strcmp(dn, target) == 0 && std::strcmp(dc, "func_areaportal") != 0)
+      return true;
+  }
+  return false;
+}
+
 bool button_dooms(const std::vector<sb::EntityBlock>& blocks, const char* target) {
   for (const std::string& n : button_fires(blocks, target))
     for (const sb::EntityBlock& b : blocks) {
@@ -266,10 +282,13 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
     const char* cn = sb::block_value(b, "classname");
     const char* target = sb::block_value(b, "target");
     const char* model = sb::block_value(b, "model");
-    if (!cn || std::strcmp(cn, "func_button") != 0 || !model) continue;
+    const bool lever = door_is_lever(blocks, b);
+    if (!cn || (std::strcmp(cn, "func_button") != 0 && !lever) || !model) continue;
     ButtonSpot bs;
     bs.ent = entity_on(model);
     if (bs.ent < 0) continue;
+    bs.lever = lever;
+    if (lever) bs.rest_angles = s.sv.edicts[static_cast<size_t>(bs.ent)].angles;
     bs.at = middle(s.world.entities[static_cast<size_t>(bs.ent)]);
     const char* health = sb::block_value(b, "health");
     bs.shoot = health && std::atof(health) > 0;

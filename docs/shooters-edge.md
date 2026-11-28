@@ -1,10 +1,18 @@
 # Shooter's Edge
 
-The plan for the engine's second game: **Shooter's Edge**, a fast multiplayer arena shooter in
-modern C++ on this engine, compatible with the mods, maps, servers and clients of the classic
-multiplayer shooter whose formats and protocol it speaks. It starts once Fall Line is on the
-engine (`docs/goals.md` M18 follows M10–M13 and M17k). Until a row lands, this page is the plan;
-change it in the same PR that changes the plan.
+The plan for the engine's second game: **Shooter's Edge**, a SHELL for the classic first-person
+shooters the player owns, in modern C++ on this engine. It has no game of its own: no maps, no
+weapons, no single player and no free stand-in for any classic game. What a player sees is its menu
+over the moon backdrop; from there it loads Quake, QuakeWorld or Quake II from the player's own
+folders, enhances them (classic-enhance) and remixes them (classic remix), and it is compatible with
+the mods, maps, servers and clients of those games, whose formats and protocol it speaks. It starts
+once Fall Line is on the engine (`docs/goals.md` M18 follows M10–M13 and M17k). Until a row lands,
+this page is the plan; change it in the same PR that changes the plan.
+
+**The built-in arena is a fixture, not a game.** The classic packs are never committed, so the
+headless tests and labs run a free match of their own: the arena rules in C++ (`rules/arena*.cpp`),
+the plans in `content/maps/`, the free sounds and the eight built held weapons in `content/`. No
+player starts it, and nothing of it is ever shown in place of a classic game's own content.
 
 The game lives in `games/shooters_edge/`. The games it plays are called by their names (§ The
 games' names); the community clients, servers and tools whose source is GPL are named only in the
@@ -934,7 +942,7 @@ package, and loaded through `engine/mod`. Its half of the ABI is
 ## Profiles: the shell and the classic games
 
 Shooter's Edge itself is a **shell**: the window, the menu, the console, the HUDs, the network,
-the bots and a small free arena of its own. The fun is in loading the classic games the player
+the bots and the moon backdrop behind the menu; it has no game of its own. All of the playing is in loading the classic games the player
 owns into it. Each classic game is a **profile**, and a match is three independent choices,
 so the games can be mixed (one game's maps with another's movement and a third's models; the
 weapons and armour are a fourth choice, § Weapons and armour):
@@ -946,7 +954,7 @@ weapons and armour are a fourth choice, § Weapons and armour):
 | **Movement** | the player move: `sv_playermove arena`, `original`, or a profile's own | both (M18s) | Quake II's move |
 
 ```
- shell (games/shooters_edge)  window · menu · console · HUDs · net · bots · free arena
+ shell (games/shooters_edge)  window · menu · console · HUDs · net · bots · moon backdrop
    │
    ├─ profile  (games/shooters_edge/profiles/<id>)  data: packs · dirs · formats · rules
    │     classic game (29) ─────────── Quake II (38) ───────── third (46)
@@ -1041,7 +1049,7 @@ classic row with no offset; lab `se-held`); when its files lack one, no weapon i
 status line names the missing file. The HUD's pictures are the game's own the same way
 (`hud_art_of`: no choice of the free art while a classic game is loaded), and the main menu is
 the game's own table of pages (`menu::MenuTable`, the adapter's `menu`). Shooter's Edge's own weapons, HUD art and other assets are
-for its own content (its own maps and mod), never a stand-in for a classic game's, so changing
+for the built-in arena the headless tests run (its plans and mod), never shown to a player and never a stand-in for a classic game's, so changing
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
@@ -1428,7 +1436,7 @@ free content (§ Content and test data).
 - **Fixtures of our own**: the tests write their own tiny archives, maps (a box, two rooms and a
   door, a ramp, water) and models with writers in the test support code, so a unit test needs
   no download.
-- **Our own sounds and models**: `games/shooters_edge/content/` holds the game's registry of every sound and model it needs under our own names (`sounds.tsv`, `models.tsv`), `classic.assetmap` from the classic content's names to ours (read by the map cloner and the game), and free CC0 replacements credited in `CREDITS.md` (M18n, the `free-assets` skill). A player's own data still wins when the player points the game at it.
+- **The built-in arena's sounds and weapons**: `games/shooters_edge/content/` holds the free sounds the arena's mod is heard by (`sounds.tsv`, mapped from the classic sound names by `classic.assetmap`) and the eight held weapons built in Blender (`models.tsv`, `models/view/`), credited in `CREDITS.md` (the `free-assets` skill). They exist for the headless tests and labs only: Shooter's Edge ships no stand-in for a classic game's models, and a classic game always plays its own content.
 - **A player's own data**: the client reads the base game directory and any mod from a directory the player
   chooses; nothing in a test depends on it.
 

@@ -249,15 +249,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   };
   // A name nothing fires (e3m5's trigger hung in the pit, named but never a target): touched,
   // like one with no name.
-  const auto fired = [&](const char* n) {
-    if (!n) return false;
-    for (const sb::EntityBlock& d : blocks)
-      for (const char* key : {"target", "killtarget"}) {
-        const char* v = sb::block_value(d, key);
-        if (v && std::strcmp(v, n) == 0) return true;
-      }
-    return false;
-  };
+  const auto fired = [&](const char* n) { return name_fired(blocks, n); };
   const auto avoided = [&](std::string_view map) {
     for (const std::string& a : w.avoid)
       if (map == a) return true;
@@ -1004,6 +996,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       const sh::Edict& be = s.sv.edicts[static_cast<size_t>(bs.ent)];
       // A shot trigger (`model` kept) never moves: answered, it is removed or touches nothing.
       const bool pressed = dist(be.origin, st.lo) > 0.5f || button_looks_pressed(bs, s) ||
+                           (bs.lever && dist(be.angles, bs.rest_angles) > 0.5f) ||
                            (!bs.model.empty() && (be.free || be.solid == sh::kSolidNot));
       bool all = !bs.doors.empty();
       for (const int d : bs.doors) all = all && door_open(d);

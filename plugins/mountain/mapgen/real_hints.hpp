@@ -112,6 +112,11 @@ std::span<const HintData* const> baked_hints();
 // The face `id`'s hints decoded, or nothing for an id no hints are baked for.
 std::optional<RealHints> real_hints(std::string_view id);
 
+// The face `id` and its hints decoded into `opts` (`face`, `real`, `real_hints`) for
+// `generate_level`; false, with `opts.face` set and nothing decoded, for an id no face is baked
+// for (the generator then refuses it with the place to look).
+bool lay_real_face(GenerateOptions& opts, std::string_view id);
+
 // The packed data decoded, or nothing when it is torn or runs on past its end. `encode_hints` is
 // its inverse over hints already on the grain.
 std::optional<RealHints> decode_hints(std::string_view data);

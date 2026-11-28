@@ -84,10 +84,13 @@ struct NavSettings {
   // found the yellow armour's south tread but cost frags elsewhere (many new standing jumps);
   // a key item's last steps are a scripted route's (bots/item_routes) instead.
   bool treads = false;
-  // Floors in a corridor narrower than the grid get nodes (`nav_add_squeezes`), and so do the
-  // floors of slots no column's box fits (nav_columns.hpp's pockets). Off by default: the
-  // campaign's maps turn it on, where a way out missed seals a bot in its room.
+  // Floors in a corridor narrower than the grid get nodes (`nav_add_squeezes`). Off by default:
+  // the campaign's maps turn it on, where a way out missed seals a bot in its room.
   bool squeeze = false;
+  // The floors of slots no column's box fits get nodes (nav_columns.hpp's pockets: boss2's escape
+  // pods). Off by default: both games' campaigns turn it on, apart from the squeezes (Quake II's
+  // campaign keeps those off).
+  bool pockets = false;
 };
 
 // `ride`: stand on a mover's top at rest and be carried to its far end (a plat). `swim`: through
@@ -349,8 +352,8 @@ NavProof prove_head_jump(const MoveWorld& world, const MoveSettings& move, Vec3f
 void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const MoveSettings& move,
                const NavSettings& set, NavGraph& g);
 
-// The node nearest `p` among the columns round it, the ridden movers' top nodes and the swim node
-// of the cell `p` is in, within 64 units up or down; -1 when none.
+// The node nearest `p` among the columns round it, the ridden movers' top nodes (within 256
+// across) and the swim node of the cell `p` is in, within 64 units up or down; -1 when none.
 int32_t nav_nearest(const NavGraph& g, Vec3f p);
 
 // A link a map adds that no proof finds (a teleporter: from every node its trigger holds to the

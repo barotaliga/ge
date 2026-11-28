@@ -304,18 +304,12 @@ Level generate_level(double seed, const GenerateOptions& opts) {
   GE_ZONE("mapgen");
   // R25 — a real face: its heights decoded once, its region the map's, and more attempts (its
   // later ones give the dealt peak, valley and stations back).
-  std::shared_ptr<const RealFace> face;
-  std::shared_ptr<const RealHints> hints;
-  if (opts.face) {
-    std::optional<RealFace> decoded = real_face(*opts.face);
-    if (!decoded) {
-      throw GenerateError("level " + num::to_string(seed) + ": no real face \"" + *opts.face +
-                          "\"; pass an id from real_face_crops.hpp (kFaceCrops)");
-    }
-    face = std::make_shared<const RealFace>(std::move(*decoded));
-    if (std::optional<RealHints> h = real_hints(*opts.face)) {
-      hints = std::make_shared<const RealHints>(std::move(*h));
-    }
+  const std::shared_ptr<const RealFace> face = opts.real;
+  const std::shared_ptr<const RealHints> hints = opts.real_hints;
+  if (opts.face && (!face || face->crop == nullptr || face->crop->id != *opts.face)) {
+    throw GenerateError("level " + num::to_string(seed) + ": no real face \"" + *opts.face +
+                        "\" laid; lay it with lay_real_face(opts, id) and an id from "
+                        "real_face_crops.hpp (kFaceCrops)");
   }
   const int attempts = opts.attempts.value_or(face ? resort_rules::massif::real::attempts : 16);
   const int laps = opts.laps.value_or(rules::race::laps);
@@ -339,6 +333,7 @@ Level generate_level(double seed, const GenerateOptions& opts) {
         reasons.push_back("#" + std::to_string(a) + ": " + *why);
         continue;
       }
+      level.hints = hints;
       if (!reasons.empty()) {
         ge::core::output::debug(name + ": accepted attempt " + std::to_string(a) + " after " +
                                 join(reasons, "; "));
