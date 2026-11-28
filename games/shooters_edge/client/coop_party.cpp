@@ -25,7 +25,8 @@ bool ensure_graph(Party& p, const sv::Campaign& c, const sv::MapSpec& map, std::
     return false;
   }
   auto nav = std::make_unique<bots::MapNav>();
-  if (!bots::build_map_nav(*q, map, bots::quake_maps(), "info_player_start", *nav, error)) {
+  if (!bots::build_map_nav(*q, map, bots::quake_maps(), "info_player_start", *nav, error,
+                           bots::campaign_nav_settings())) {
     error += ". Bots can't play on this map; try coop on another.";
     return false;
   }
