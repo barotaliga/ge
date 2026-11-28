@@ -338,8 +338,8 @@ NavProof prove_head_jump(const MoveWorld& world, const MoveSettings& move, Vec3f
 void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const MoveSettings& move,
                const NavSettings& set, NavGraph& g);
 
-// The node nearest `p` among the columns round it, the ridden movers' top nodes and the swim node
-// of the cell `p` is in, within 64 units up or down; -1 when none.
+// The node nearest `p` among the columns round it, the ridden movers' top nodes (within 256
+// across) and the swim node of the cell `p` is in, within 64 units up or down; -1 when none.
 int32_t nav_nearest(const NavGraph& g, Vec3f p);
 
 // A link a map adds that no proof finds (a teleporter: from every node its trigger holds to the
