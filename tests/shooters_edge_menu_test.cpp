@@ -1041,6 +1041,40 @@ TEST(q2_s_menu_is_drawn_in_its_plates_and_banners) {
   CHECK(pieces == 12 + 8 + 11);
 }
 
+// Quake II's SELECT GAME with both games and all their packs: the rows close up to end above
+// the foot's line, and a list no spacing can fit is said.
+TEST(classic_games_page_ends_above_its_foot) {
+  sm::ClassicArt art;
+  art.glyphs = make_image(128, 128, hex(0xffffff));
+  art.pictures.emplace("m_main_game", make_image(99, 32, hex(0x2c2c2c)));
+  CHECK(art.plates());
+  std::vector<sm::GameRow> rows = {{.id = "q1", .install = "/a", .edition = "Registered"},
+                                   {.id = "q1", .pack = "hipnotic", .pack_name = "Scourge"},
+                                   {.id = "q1", .pack = "rogue", .pack_name = "Dissolution"},
+                                   {.id = "q2", .install = "/b", .edition = "Full game"},
+                                   {.id = "q2", .pack = "xatrix", .pack_name = "The Reckoning"},
+                                   {.id = "q2", .pack = "rogue", .pack_name = "Ground Zero"}};
+  const auto draw = [&](sm::GamesPage& page) {
+    DrawList dl;
+    dl.begin(1280, 720);
+    page.draw_classic(dl, art, 1280, 720, 0);
+    std::vector<float> ys;  // the glyphs' rows, the foot's the lowest
+    for (const auto& c : dl.cmds())
+      if (c.box.image == &art.glyphs) ys.push_back(c.box.rect.y);
+    return ys;
+  };
+  sm::GamesPage page;
+  page.set_games(rows);
+  const std::vector<float> ys = draw(page);
+  CHECK(page.problems().empty());
+  const float foot = *std::max_element(ys.begin(), ys.end());
+  for (const float y : ys) CHECK_MSG(y == foot || y + 8 * 3 <= foot, std::to_string(y));
+  for (int i = 0; i < 12; i++) rows.push_back(rows[1]);
+  page.set_games(rows);
+  draw(page);
+  CHECK(!page.problems().empty());
+}
+
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {
   // An upgrade with four times the pixels for the glyph sheet and the main strip; every other
   // picture is the pack's, scaled up nearest to the same density.
