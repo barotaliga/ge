@@ -111,6 +111,7 @@ void q2_placed(const DemoEntity& e, Placed& p) {
   p.spinning = look.spinning;
   p.bobs = look.bobs;
   p.full_bright = look.full_bright;
+  p.bolt = look.missile == Q2Look::Missile::bolt;
   p.min_light = look.min_light;
   p.no_shadow = look.no_shadow;
   p.alpha *= look.alpha;

@@ -1102,7 +1102,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .roll_hack = f.picture->q2fx.roll_hack,
                            .self = fx.has_self ? fx.self.entity : 0,
                            .shadows = f.picture->model_shadows,
-                           .flash_blend = f.picture->flash_blend};
+                           .flash_blend = f.picture->flash_blend,
+                           .full_lit_once = on.beams};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
