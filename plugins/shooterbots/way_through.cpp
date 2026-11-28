@@ -762,7 +762,6 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
                                 at.y < de.absmax.y && at.z > de.absmin.z && at.z < de.absmax.z);
       }
     }
-    // One that only sets a blade spinning (`button_spins`) is no step: it shut him in.
     if (!car_back && (st.opens || !button_spins(blocks, target))) w.steps.push_back(st);
   }
   // (`complete`) Quake's boss the lightning kills: the electrodes, the buttons that move them, the
