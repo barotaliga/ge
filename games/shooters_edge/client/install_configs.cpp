@@ -435,29 +435,32 @@ std::string mod_startdemos(const std::string& basedir, const std::string& game,
   const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
   const fs::path dir = entry_named(root, folders.front());
   if (dir.empty()) return std::string(fallback);
-  constexpr std::string_view kStartFile = "quake.rc";
-  std::string text;
-  const std::vector<std::string> archives =
-      ge::vfs::game_archives(root.string(), dir.filename().string(), load_order_of(content).layout);
-  for (const std::string& pack : archives | std::views::reverse) {  // the winner first
-    std::vector<uint8_t> bytes;
-    if (!ge::vfs::read_from_pack(pack, kStartFile, &bytes, nullptr)) continue;
-    text.assign(bytes.begin(), bytes.end());
-    break;
-  }
-  if (text.empty()) {
-    const fs::path loose = entry_named(dir, kStartFile);
-    if (loose.empty()) return std::string(fallback);
+  // A start file's text: the winning pack's copy, else a loose one; "" when there is none.
+  const auto start_file = [&](std::string_view name) {
+    std::string text;
+    const std::vector<std::string> archives = ge::vfs::game_archives(
+        root.string(), dir.filename().string(), load_order_of(content).layout);
+    for (const std::string& pack : archives | std::views::reverse) {  // the winner first
+      std::vector<uint8_t> bytes;
+      if (!ge::vfs::read_from_pack(pack, name, &bytes, nullptr)) continue;
+      text.assign(bytes.begin(), bytes.end());
+      return text;
+    }
+    const fs::path loose = entry_named(dir, name);
+    if (loose.empty()) return text;
     std::ifstream f(loose, std::ios::binary);
     text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
-  }
+    return text;
+  };
   std::string list;
-  for (const con::Line& line : con::split_commands(text)) {
+  for (const con::Line& line : con::split_commands(start_file("quake.rc"))) {
     const std::vector<std::string> words = con::tokenize(line.text);
     if (words.size() < 2 || lower(words.front()) != "startdemos") continue;
     list.clear();  // the last one wins, as it would run last
     for (size_t i = 1; i < words.size(); ++i) list += (i > 1 ? " " : "") + words[i];
   }
+  // Quake II's packs name theirs in their own default.cfg's demo aliases instead.
+  if (list.empty()) list = ge::classic::content::title_demos(start_file("default.cfg"));
   return list.empty() ? std::string(fallback) : list;
 }
 

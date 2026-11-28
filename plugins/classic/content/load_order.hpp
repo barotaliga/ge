@@ -19,7 +19,7 @@
 // ge:keywords load-order startup-order search-order game-layout archives-over-loose pkz
 // ge:keywords pak-names underscore-off pack-order
 // ge:keywords load_order_of start-step defaults-in-packs root-archive q2game-kpf
-// ge:keywords new_game_map newgame-alias first-map
+// ge:keywords new_game_map newgame-alias first-map title_demos demomap title-loop
 // ge:skill classic shooter console vfs
 // ge:test tests/shooters_edge_install_configs_test.cpp
 #pragma once
@@ -74,5 +74,10 @@ const LoadOrder& load_order_of(const ge::classicenhance::Profile& content);
 // map. The level string's shows (`+` joined), its new-unit `*` and its spawn spot (`$...`) are
 // left off; "" when the text has no such alias.
 std::string new_game_map(std::string_view config);
+
+// The recordings a game's title loop plays, read off a config's demo aliases (Quake II's
+// default.cfg: `alias d2 "demomap xdemo1.dm2 ; set nextserver d3"`), in the file's order, space
+// between and the extension left off; the cinematics between them are skipped. "" when it has none.
+std::string title_demos(std::string_view config);
 
 }  // namespace ge::classic::content

@@ -17,7 +17,7 @@
 //
 // ge:summary The weapon in hand: whose set, which one, a shot, the look, the stride
 // ge:keywords held-weapon hand step_held attack_finished shot weapon-switch viewmodel stride
-// ge:keywords load_held_set classic-weapons game-weapons
+// ge:keywords load_held_set classic-weapons game-weapons q2_demo_weapon gun-model
 // ge:skill shooter render
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -86,6 +86,10 @@ bool load_held_set(const GameAdapter& game, const SearchPath& files,
 view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           const view::ViewSettings& settings,
                           std::span<const ge::viewmodel::HeldModel> models, double t, double dt);
+
+// The weapon a Quake II recording's player holds, by its view model's name (the level's model the
+// frame names): its row in the rules' table, the held set's order; 0, the blaster, for none known.
+int q2_demo_weapon(const DemoState& s);
 
 // The hand in a recorded game whose frame is `frame` (timedemo.hpp's demo_view): the weapon the
 // recording's HUD shows at the view's eye and look; not drawn while the recorder holds no view
