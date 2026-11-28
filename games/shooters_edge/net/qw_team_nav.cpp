@@ -55,7 +55,7 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sb::BotView& seen, in
   f.bot.view_book = tn.view_book;
   f.bridges.clear();
   for (const bt::NavBridge& br : nav.bridges)
-    if (!br.turns) {  // a turning bridge is the way through's (way_through.hpp), not a match's
+    if (!br.turns && !br.lit) {  // a turning or lit bridge is the way through's, not a match's
       f.bridges.push_back(
           {br.ent, br.spawn,
            f.features[ge::shooterbots::Feature::bridgeseen] && !br.floor ? br.own : br.nodes,

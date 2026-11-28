@@ -70,6 +70,7 @@ constexpr float kWaySeen = 192;        // a node this near where he has stood is
 
 constexpr uint8_t kLockedOut = 2;   // `locked_turns`: a bridge open only once all the way out
 constexpr uint8_t kLockedGone = 3;  // `locked_turns`: a wall open once it is no longer solid
+constexpr uint8_t kLockedLit = 4;   // `locked_turns`: a lit bridge open once it is solid
 constexpr double kWayTour_s = 30;   // (`complete`) the tour worked out again this often, s
 constexpr int kWayTourMax = 96;     // and over the nearest this many stops at most
 constexpr float kWayStill = 96;     // (`complete`) no further than this, units, in
@@ -184,7 +185,8 @@ struct WayThrough {
   };
   std::vector<ExitLink> exit_links;
   int exit_step_was = -2;
-  std::vector<int> walls;  // the secret walls among `locked`
+  std::vector<int> walls;         // the secret walls among `locked`
+  std::vector<int> key_monsters;  // monsters whose death opens one of `locked` (way_gates.hpp)
   // A floor door that starts open and closes when fired (e3m2's over the key's pillar, shut as the
   // pillar sinks): its edict, where it spawned, and (found the first time it stands closed) the
   // links through it, shut while it is away from where it spawned (`closed_shut`).

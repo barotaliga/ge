@@ -8,7 +8,8 @@
 #include "shooterbots/way_gates.hpp"
 
 #include <cmath>
-#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <string>
 
 #include "shooter/trace.hpp"
@@ -161,6 +162,82 @@ void way_shot_sides(WayThrough& w, Fighter& f, const NavGraph& g, const BotView&
     }
     if (best >= 0) st.node = bs.node = best;
   }
+}
+
+void way_key_monsters(WayThrough& w, const BotView& s, const std::vector<EntityBlock>& blocks) {
+  w.key_monsters.clear();
+  // Whether name `t` names a door of `locked`.
+  const auto locked_door = [&](const char* t) {
+    for (const EntityBlock& d : blocks) {
+      const char* dn = block_value(d, "targetname");
+      const char* model = block_value(d, "model");
+      if (!dn || !model || std::strcmp(dn, t) != 0) continue;
+      const int e = way_parts::edict_of(s, model);
+      for (const int l : w.locked)
+        if (e >= 0 && l == e) return true;
+    }
+    return false;
+  };
+  for (const EntityBlock& m : blocks) {
+    const char* cn = block_value(m, "classname");
+    const char* target = block_value(m, "target");
+    const char* org = block_value(m, "origin");
+    if (!cn || !target || !org || std::strncmp(cn, "monster_", 8) != 0) continue;
+    bool opens = locked_door(target);
+    for (const EntityBlock& r : blocks) {  // or through a counter or a relay
+      const char* rc = block_value(r, "classname");
+      const char* rn = block_value(r, "targetname");
+      const char* rt = block_value(r, "target");
+      if (opens || !rc || !rn || !rt || std::strcmp(rn, target) != 0) continue;
+      if (std::strcmp(rc, "trigger_counter") == 0 || std::strcmp(rc, "trigger_relay") == 0)
+        opens = locked_door(rt);
+    }
+    if (!opens) continue;
+    // Its edict: the monster standing nearest where the map puts it.
+    sh::Vec3f o;
+    if (std::sscanf(org, "%f %f %f", &o.x, &o.y, &o.z) != 3) continue;
+    int best = -1;
+    float best_d = 64;
+    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      if (d.free || (d.flags & sh::kFlagMonster) == 0) continue;
+      const float dd = way_parts::dist(d.origin, o);
+      if (dd < best_d) {
+        best = e;
+        best_d = dd;
+      }
+    }
+    if (best >= 0) w.key_monsters.push_back(best);
+  }
+}
+
+int way_key_prey(const WayThrough& w, const BotView& s, const NavGraph& g, int32_t& node,
+                 double& cost) {
+  int prey = -1;
+  for (const int e : w.key_monsters) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    if (d.free || d.health <= 0 || d.solid == sh::kSolidNot) continue;
+    const int32_t n = nav_nearest(g, d.origin);
+    if (n < 0 || !w.search.reached(n)) continue;
+    if (prey < 0 || w.search.cost(n) < cost) {
+      prey = e;
+      node = n;
+      cost = w.search.cost(n);
+    }
+  }
+  return prey;
+}
+
+bool way_lit_bridge(WayThrough& w, const MapNav& nav, int e) {
+  for (const NavBridge& br : nav.bridges)
+    if (br.lit && br.ent == e) {
+      w.locked.push_back(e);
+      w.locked_at.push_back(br.spawn);
+      w.locked_turns.push_back(kLockedLit);
+      for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
+      return true;
+    }
+  return false;
 }
 
 }  // namespace ge::shooterbots
