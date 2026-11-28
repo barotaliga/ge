@@ -296,6 +296,8 @@ void run(gl::Lab& lab) {
       static_cast<size_t>(std::clamp(static_cast<int>(lab.arg_num("partners")), 0, 3)),
       ge::shooterbots::AimSkill::expert);
   opt.beside = !lab.arg("beside").empty();
+  opt.share_heals = lab.arg("share") != "0";
+  opt.god = lab.arg("god") != "0";
   // Gear on arrival: the campaign's maps in the order a playthrough first enters them, read off
   // the maps' level changes from its first map; the ones before this map's are the earlier maps.
   const std::string& gear = lab.arg("gear");
@@ -354,8 +356,16 @@ void run(gl::Lab& lab) {
                "damage held", "kept",        "gear after"};
   gl::LabTable h;
   h.title = "Helpers beside him (a person's stand-in)";
-  h.columns = {"map",         "time (s)", "near share",  "farthest",
-               "back to him", "gave way", "exits turned"};
+  h.columns = {"map",
+               "time (s)",
+               "near share",
+               "farthest",
+               "back to him",
+               "gave way",
+               "exits turned",
+               "healed: his/helpers' in his need",
+               "armour in his need",
+               "left to him"};
   int keys = 0, keys_taken = 0, goals = 0, goals_found = 0, finished = 0, maps_played = 0;
   int killed = 0, monsters = 0, secrets_found = 0, secrets = 0;
   bool unit_done = false;
@@ -412,7 +422,11 @@ void run(gl::Lab& lab) {
                           ge::core::num::to_fixed(m.helper_near_share, 3),
                           ge::core::num::to_fixed(m.helper_farthest, 0),
                           std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
-                          std::to_string(m.helper_exits_turned)});
+                          std::to_string(m.helper_exits_turned),
+                          ge::core::num::to_fixed(m.leader_healed, 0) + "/" +
+                              ge::core::num::to_fixed(m.helper_heal_needed, 0),
+                          ge::core::num::to_fixed(m.helper_armour_needed, 0),
+                          std::to_string(m.helper_left_items)});
       for (const std::string& line : m.plan) notes.emplace_back(m.name, line);
       if (!lab.arg("track").empty()) {
         // The track holds a point every 0.2 s (bots/q2_unit.hpp); --track=1 notes one a second.
@@ -509,7 +523,11 @@ const gl::LabSpec kSpec{
       "new: a new game's"},
      {"beside", "",
       "any value: he plays as a person would and the partners are helpers beside him (a hosted "
-      "game's `addbot helper`: leashed to him, the exit his); a table of how they kept to him"}},
+      "game's `addbot helper`: leashed to him, the exit his); a table of how they kept to him"},
+     {"god", "1", "0: the party mortal (hurt, healed and killed as people are), not in god mode"},
+     {"share", "1",
+      "with --beside, 0: the helpers take health and armour as a bot alone does, not leaving it "
+      "to him when he needs it more (the before of party.hpp `party_leave_items`)"}},
     "",
     run,
 };

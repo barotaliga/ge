@@ -153,6 +153,8 @@ void q2_party_packets(Q2Party& p, const sv::RulesRunner& rules, int msec,
     Q2Mate& m = *p.mates[static_cast<size_t>(i)];
     if (m.work)
       sb::party_work_plan(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.round.people);
+    else  // an escort leaves what heals to the people too (party.hpp)
+      sb::party_leave_items(m.fighter, s, i + 1, p.round.people);
     m.cmds[0] = m.cmds[1];
     m.cmds[1] = m.cmds[2];
     const sh::Vec3f view = s.sv.edicts[static_cast<size_t>(i) + 1].v_angle;

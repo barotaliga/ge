@@ -73,6 +73,10 @@ struct ListenRecorder {
   size_t prints_seen = 0, explosions_seen = 0;
   std::array<int, 32> frags{};
   std::array<std::array<int32_t, 16>, 32> stats{};
+  // Each slot's player as last written (its user id and info; "" none): one who comes in or goes
+  // while the recording runs (a companion seated by `addbot`) is written as he changes, so the
+  // recording names him and a viewer can follow him.
+  std::array<std::string, 32> who{};
   // The file side's (record_tick):
   std::string path;  // the file being written
   std::ofstream file;

@@ -71,6 +71,9 @@ struct EpisodeOptions {
   // the party) and the partners are HELPERS beside him, as a hosted co-op game's `addbot helper`
   // (party.hpp's `PartyWork` round the people): leashed to him by kPartyLeash, the exit his.
   bool beside = false;
+  // (`beside`) the helpers leave what heals to him when he needs it more (party.hpp
+  // `party_leave_items`); off: they take it as a bot alone does (the lab's before)
+  bool share_heals = true;
   sb::AimSkill leader = sb::AimSkill::expert;
   int skill = 1;  // the campaign's `skill`
   uint32_t seed = 1;
@@ -131,6 +134,12 @@ struct EpisodeMap {
   double helper_near_share = 0;
   float helper_farthest = 0;
   int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
+  // (`beside`) WHAT HEALS, SHARED (party.hpp `party_leave_items`): the health and the armour
+  // (points stopped) the helpers took while the leader had no more than the taker and could use it
+  // (taken from a person who needed it more), what the leader took himself, and the plans a helper
+  // left an item to him.
+  double helper_heal_needed = 0, helper_armour_needed = 0, leader_healed = 0;
+  int64_t helper_left_items = 0;
   int leader_deaths = 0, mate_deaths = 0;
   double near_share = 0;  // the companions' share of the time within kEscortFar of him
   float farthest = 0;

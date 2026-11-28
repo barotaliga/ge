@@ -311,6 +311,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     Census census;
     if (opt.census) census_look(census, em, c.server, true);
     std::vector<bool> alive(static_cast<size_t>(mates) + 1, true);
+    std::vector<sb::PartyHeld> held(static_cast<size_t>(partners) + 1), held_after = held;
+    sb::PartyHealTally heals;
     int64_t near = 0, counted = 0;
     int64_t helper_near = 0, helper_counted = 0;
     sb::PartyOptions people;
@@ -356,13 +358,21 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
           people.facing.assign(1, now.world.entities[1].view_angles.y);
           people.leash = sb::kPartyLeash;
           people.exit_held = true;
+          const sb::PartyHeld lh = sb::party_held(now, 1);
+          people.health.assign(1, lh.health);
+          people.armour.assign(1, lh.armour);
         }
         sb::party_share(m.party, m.members, *m.nav, now, people);
       }
       for (int k = 0; k <= partners; k++) {
         WayThrough& way = m.ways[static_cast<size_t>(k)];
         const int64_t plans = way.stats.plans;
+        const int left =
+            opt.beside && opt.share_heals && k > 0
+                ? sb::party_leave_items(m.players[static_cast<size_t>(k)], now, k + 1, people)
+                : 0;
         way_plan(way, m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, t);
+        if (left > 0 && way.stats.plans != plans) em.helper_left_items++;
         if (opt.beside && k > 0 &&
             sb::party_stay(m.players[static_cast<size_t>(k)], *m.nav, now, k + 1, people) &&
             way.stats.plans != plans)
@@ -402,6 +412,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         }
         in_grenade = grenade;
       }
+      // What the leader and his partners hold before the frame (the sharing's count, below).
+      for (int k = 0; opt.beside && k <= partners; k++)
+        held[static_cast<size_t>(k)] = sb::party_held(now, k + 1);
       if (!sv::campaign_frame(c, packets.data(), mates + 1, r.error)) {
         r.error = "run_coop_episode: " + em.name + ": " + r.error;
         return r;
@@ -453,6 +466,11 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       if (opt.census && frame % 6 == 0) census_look(census, em, c.server, false);
       const sv::WorldEntity& L = after.world.entities[1];
       const bool leader_live = L.health > 0;
+      if (opt.beside) {  // what heals, taken by whom (party.hpp)
+        for (int k = 0; k <= partners; k++)
+          held_after[static_cast<size_t>(k)] = sb::party_held(after, k + 1);
+        sb::party_heal_tally(heals, held, held_after);
+      }
       if (alive[0] && !leader_live) em.leader_deaths++;
       alive[0] = leader_live;
       for (int k = 1; k <= mates; k++) {
@@ -536,6 +554,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     em.helper_near_share =
         helper_counted > 0 ? static_cast<double>(helper_near) / static_cast<double>(helper_counted)
                            : 0;
+    em.leader_healed = heals.person_healed;
+    em.helper_heal_needed = heals.health_in_need;
+    em.helper_armour_needed = heals.armour_in_need;
     em.way = m.ways[0].stats;
     em.party = m.party.stats;
     for (int k = 1; k <= partners; k++) {

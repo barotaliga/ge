@@ -19,8 +19,10 @@
 
 #include "check.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/net/qw_game.hpp"
@@ -282,6 +284,44 @@ TEST(a_companion_in_single_player_turns_the_game_cooperative_until_it_leaves) {
   if (coop_global >= 0) CHECK(ge::progs::global_float(q.q.vm, coop_global) == 0.0f);
   CHECK(cl::listen_save_problem(l) == alone);
   CHECK(l.prints.back() == "You play alone again.\n");
+}
+
+TEST(a_single_player_game_records_and_a_companion_added_is_in_the_recording) {
+  // `record` in single player, then `addbot`: the recording is a multiview one, and the companion
+  // comes into it named, with his own frames, so a viewer can follow his view.
+  ge::progs::Progs stub;
+  std::string error;
+  CHECK_MSG(sv::build_campaign_stub(stub, error), error);
+  cl::Listen l;
+  cl::ListenOptions opt;
+  opt.console = {"deathmatch 0"};
+  CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
+  cl::ListenRecorder r;
+  cl::record_listen_begin(r, l, 0);
+  std::vector<uint8_t> bytes;
+  int played = 0;
+  const auto frame = [&] {
+    if (l.server == nullptr || l.map_changed) return;  // the stub's level over: nothing to record
+    cl::listen_frame(l, {});
+    if (l.server == nullptr || l.map_changed) return;
+    played++;
+    cl::record_listen_frame(r, l);
+    bytes.insert(bytes.end(), r.ready.begin(), r.ready.end());
+    r.ready.clear();
+  };
+  for (int i = 0; i < 3; i++) frame();
+  CHECK(cl::listen_lobby(l, "addbot"));
+  for (int i = 0; i < 8; i++) frame();
+  cl::record_listen_end(r);
+  bytes.insert(bytes.end(), r.ready.begin(), r.ready.end());
+  cl::Demo d;
+  CHECK_MSG(cl::open_demo(bytes, d, error), error);
+  CHECK(d.state.format == cl::DemoFormat::multiview);
+  int frames = 0;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) frames++;
+  CHECK_MSG(played >= 8 && frames >= played, std::to_string(played) + " " + std::to_string(frames));
+  CHECK(d.state.names.size() > 1 && !d.state.names[1].empty());
+  CHECK(d.state.players.size() > 1 && d.state.players[1].present);
 }
 
 TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {

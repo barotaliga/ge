@@ -234,10 +234,70 @@ void party_work_init(PartyWork& w, Fighter& f, const MapNav& nav, const BotView&
   way_init(w.way, f, nav, s, spec);
 }
 
+PartyHeld party_held(const BotView& s, int ent) {
+  const sh::PlayerNumbers& n = s.world.clients[static_cast<size_t>(ent) - 1].numbers;
+  return {s.world.entities[static_cast<size_t>(ent)].health > 0 ? n.health : 0,
+          n.armour * n.armour_type};
+}
+
+void party_heal_tally(PartyHealTally& t, std::span<const PartyHeld> before,
+                      std::span<const PartyHeld> after) {
+  if (before.empty() || after.size() != before.size()) return;
+  const PartyHeld pb = before[0], pa = after[0];
+  if (pb.health > 0 && pa.health > pb.health) t.person_healed += pa.health - pb.health;
+  if (pb.health <= 0 || pa.health <= 0) return;
+  for (size_t k = 1; k < before.size(); k++) {
+    const PartyHeld b = before[k], a = after[k];
+    if (b.health <= 0) continue;  // a respawn's full health is no pickup
+    if (a.health > b.health && pb.health <= b.health && pb.health < 100)
+      t.health_in_need += a.health - b.health;
+    if (a.armour > b.armour && pb.armour <= b.armour) t.armour_in_need += a.armour - b.armour;
+  }
+}
+
+int party_leave_items(Fighter& f, const BotView& s, int me, const PartyOptions& opt) {
+  f.left_to_people.assign(f.items.size(), 0);
+  if (opt.health.size() != opt.humans.size() || f.arsenal == nullptr) return 0;
+  const Stats st = read_stats(s, me, *f.arsenal);
+  if (st.health <= kPartyOwnNeed) return 0;
+  const float mine = st.armor * st.armortype;
+  const float leash2 =
+      (opt.leash > 0 ? opt.leash : kPartyLeash) * (opt.leash > 0 ? opt.leash : kPartyLeash);
+  int left = 0;
+  for (size_t i = 0; i < f.items.size(); i++) {
+    const ItemSpot& it = f.items[i];
+    const bool health = it.kind == ItemKind::health || it.kind == ItemKind::mega;
+    const bool armour =
+        it.kind == ItemKind::armor1 || it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3;
+    if (!health && !armour) continue;
+    for (size_t h = 0; h < opt.humans.size(); h++) {
+      const float hp = opt.health[h];
+      if (hp <= 0 || dist2(opt.humans[h], it.at) > leash2) continue;
+      // A box heals only to 100 (the mega over it); armour is always worth it to one with less.
+      const bool needs = health ? hp <= st.health && (it.kind == ItemKind::mega || hp < 100)
+                                : h < opt.armour.size() && opt.armour[h] <= mine;
+      if (needs) {
+        f.left_to_people[i] = 1;
+        left++;
+        break;
+      }
+    }
+  }
+  // A goal now a person's is let go: the next think chooses again.
+  if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.left_to_people.size() &&
+      f.left_to_people[static_cast<size_t>(f.goal_item)] != 0) {
+    f.goal_item = -1;
+    f.next_think = 0;
+  }
+  return left;
+}
+
 void party_work_plan(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s, int me,
                      double t, const PartyOptions& opt) {
   const int64_t plans = w.way.stats.plans;
+  const int left = party_leave_items(f, s, me, opt);
   way_plan(w.way, f, nav, s, me, t);
+  if (left > 0 && w.way.stats.plans != plans) w.left_items++;
   // Kept to the people each frame, counted once a plan.
   if (party_stay(f, nav, s, me, opt) && w.way.stats.plans != plans) w.stays++;
 }
@@ -262,6 +322,8 @@ void party_round(PartyRound& r, const MapNav* nav, const BotView& s, std::span<c
   r.members.clear();
   r.people.humans.clear();
   r.people.facing.clear();
+  r.people.health.clear();
+  r.people.armour.clear();
   r.people.leash = kPartyLeash;
   r.people.exit_held = true;
   const int slots = std::min({static_cast<int>(s.sv.clients.size()), static_cast<int>(bot.size()),
@@ -272,6 +334,9 @@ void party_round(PartyRound& r, const MapNav* nav, const BotView& s, std::span<c
     if (!bot[static_cast<size_t>(i)]) {
       r.people.humans.push_back(e.origin);
       r.people.facing.push_back(s.world.entities[static_cast<size_t>(i) + 1].view_angles.y);
+      const PartyHeld held = party_held(s, i + 1);
+      r.people.health.push_back(held.health);
+      r.people.armour.push_back(held.armour);
     } else if (WayThrough* way = helpers[static_cast<size_t>(i)]; way != nullptr) {
       r.members.push_back({way, i + 1, e.health > 0});
     }

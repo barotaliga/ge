@@ -277,3 +277,63 @@ TEST(a_recording_keeps_the_place_names_it_was_played_with) {
   CHECK(cl::next_frame(none, error) == cl::DemoRead::frame);
   CHECK(none.state.places.points.empty());
 }
+
+TEST(a_player_who_comes_in_while_recording_is_named_and_followed) {
+  // A companion seated by `addbot` after `record`: the recording writes his info as he comes in
+  // and his frames after it, so a viewer names him and can follow his view; his leaving writes an
+  // empty slot.
+  const cl::SearchPath files = halls_files();
+  cl::Listen l;
+  if (!start(l, files)) return;
+  cl::ListenRecorder r;
+  cl::record_listen_begin(r, l, 0);
+  std::vector<uint8_t> bytes;
+  const auto take = [&] {
+    bytes.insert(bytes.end(), r.ready.begin(), r.ready.end());
+    r.ready.clear();
+  };
+  sh::MoveCmd idle;
+  for (int i = 0; i < 10; i++) {
+    cl::listen_frame(l, idle);
+    cl::record_listen_frame(r, l);
+    take();
+  }
+  // The second slot taken as a companion is (the server's own seat, read as the recorder reads it).
+  auto& c = l.server->clients[1];
+  const auto was = c;
+  c.active = true;
+  c.bot = true;
+  c.userid = 77;
+  c.userinfo = {{"name", "helper"}, {"team", "1"}};
+  l.server->sv.edicts[2].origin = {200, 192, 40};
+  cl::record_listen_frame(r, l);
+  take();
+  cl::record_listen_frame(r, l);  // nothing changed: written once
+  take();
+  cl::Demo d;
+  std::string error;
+  {
+    CHECK_MSG(cl::open_demo(bytes, d, error), error);
+    while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+    }
+    CHECK_MSG(d.state.names.size() > 1 && d.state.names[1] == "helper",
+              d.state.names.size() > 1 ? d.state.names[1] : "none");
+    CHECK(d.state.players.size() > 1 && d.state.players[1].present);
+    CHECK_MSG(std::abs(d.state.players[1].origin.x - 200) <= 0.125f,
+              std::to_string(d.state.players[1].origin.x));
+  }
+  int infos = 0;  // updateuserinfo for slot 1 carrying the name: written once
+  for (size_t i = 0; i + 2 < bytes.size(); i++)
+    if (bytes[i] == 40 && bytes[i + 1] == 1 && bytes[i + 2] == 77) infos++;
+  CHECK_MSG(infos == 1, std::to_string(infos));
+  // He leaves: the slot written empty.
+  c = was;
+  cl::record_listen_frame(r, l);
+  cl::record_listen_end(r);
+  take();
+  cl::Demo after;
+  CHECK_MSG(cl::open_demo(bytes, after, error), error);
+  while (cl::next_frame(after, error) == cl::DemoRead::frame) {
+  }
+  CHECK(after.state.names.size() > 1 && after.state.names[1].empty());
+}
