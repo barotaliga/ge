@@ -8,6 +8,7 @@
 //
 // ge:summary Tests: the nav graph's nodes, link kinds, reach, routes, mover tags and bits
 // ge:keywords test nav nav-graph prove_link build_nav nav_route nav_nearest nav_reach golden
+// ge:keywords pocket column_floors escape-pod boss2
 // ge:skill shooter bots testing
 #include <cstdio>
 #include <cstdlib>
@@ -208,6 +209,38 @@ TEST(a_tread_between_two_columns_gets_a_node_only_when_asked) {
   CHECK_MSG(on_tread(g) > 0 && g.counts.treads > 0,
             "treads on, still no node on the 16-deep tread at feet 28: read the TREADS pass in "
             "nav.cpp's build_nav");
+}
+
+// A slot 44 wide between two walls 64 high, its middle at x 0 and the grid's columns at x -16 and
+// 16 (boss2's escape pods): no column's box fits in it, only one slid 16 to its middle.
+TEST(a_slot_narrower_than_the_grids_offset_gets_a_node_on_its_floor) {
+  const auto box = [](sh::Vec3f lo, sh::Vec3f hi) {
+    sh::Brush b;
+    b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+    return b;
+  };
+  const std::vector<sh::Brush> brushes = {box({-256, -128, -64}, {256, 128, 0}),
+                                          box({-256, -128, 0}, {-22, 128, 64}),
+                                          box({22, -128, 0}, {256, 128, 64})};
+  const sh::HullData point = sh::build_point_hull(brushes);
+  const sh::HullData clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+  sh::MoveWorld world;
+  world.solids[0].point_hull = point.hull();
+  world.solids[0].clip_hull = clip.hull();
+  world.solids[0].mins = {-256, -128, -64};
+  world.solids[0].maxs = {256, 128, 256};
+  world.count = 1;
+  sb::NavGraph g;
+  sb::NavSettings with;
+  with.squeeze = true;  // the campaign's navs
+  sb::build_nav(world, {}, sh::MoveSettings{}, with, g);
+  int in_slot = 0;
+  for (const sb::NavNode& nd : g.nodes)
+    in_slot += nd.origin.z < 30 && nd.origin.x > -7 && nd.origin.x < 7 ? 1 : 0;
+  CHECK_MSG(in_slot > 0,
+            "no node on the floor of a slot 44 wide: read the pocket in nav_columns.cpp's "
+            "column_floors (a column's box slid off the grid into it)");
 }
 
 // Two rooms joined by a corridor 56 wide: the player's box has 24 units of room in it, all of it

@@ -1,10 +1,13 @@
-// Cfg files: the startup order, the server's, the dump of every player setting, no cheat saved.
+// Cfg files: the startup order, the server's, the dump of every player setting, no cheat saved,
+// the binds saved as the player's changes alone.
 //
 // ge:summary Tests cfg files: default, config, autoexec, then +commands; server.cfg; the dump
 // ge:keywords test cfg start start_server autoexec config dump_text describe
 // ge:skill console testing
 #include <filesystem>
 #include <map>
+#include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "console/cfg.hpp"
@@ -158,4 +161,33 @@ TEST(an_archived_cheat_is_left_out_of_the_saved_config) {
   const std::string saved = c.save_text();
   CHECK_MSG(saved.find("cl_kick") == std::string::npos, saved);
   CHECK(saved.find("seta cl_fov \"90\"") != std::string::npos);
+}
+
+// Only the player's changes to the binds: no `unbindall`, the defaults left out, a key bound
+// anew, rebound or unbound; read back over other defaults, they lay the same changes on those.
+TEST(saving_only_the_bind_changes_keeps_each_game_s_defaults) {
+  Console c;
+  c.execute("bind space +jump");
+  c.execute("bind tab +showscores");
+  c.execute("bind -menu escape togglemenu");
+  c.binds().keep_defaults();
+  c.execute("bind f +attack");
+  c.execute("bind space +moveup");
+  c.execute("unbind tab");
+  const std::string text = c.save_text({.binds = true, .bind_changes = true});
+  CHECK_MSG(text.find("unbindall") == std::string::npos, text);
+  CHECK_MSG(text.find("escape") == std::string::npos, text);  // a default as it was
+  CHECK_MSG(text.find("bind f \"+attack\"") != std::string::npos, text);
+  CHECK_MSG(text.find("bind space \"+moveup\"") != std::string::npos, text);
+  CHECK_MSG(text.find("unbind tab") != std::string::npos, text);
+  Console other;
+  other.execute("bind tab inven");
+  other.execute("bind 1 \"use Blaster\"");
+  other.binds().keep_defaults();
+  other.execute(text);
+  CHECK(other.binds().get(BindMode::game, "1") == "use Blaster");
+  CHECK(other.binds().get(BindMode::game, "tab").empty());
+  CHECK(other.binds().get(BindMode::game, "f") == "+attack");
+  const std::vector<BindChange> changes = other.binds().changes();
+  CHECK_MSG(changes.size() == 3, std::to_string(changes.size()));
 }

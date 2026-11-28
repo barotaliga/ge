@@ -111,6 +111,9 @@ struct Button {
 // and each game's own file are two parts of one console's settings.
 struct SaveScope {
   bool binds = true;  // `unbindall`, the binds and the aliases
+  // With `binds`: only the player's changes to the binds (binds.hpp § THE DEFAULTS), each key
+  // bound or unbound, and no `unbindall`, so the file lays them over a game's own defaults.
+  bool bind_changes = false;
   // The layers whose settings are written; empty: every layer.
   std::function<bool(std::string_view layer)> layers = {};
   // The game scopes whose own values are written (`<scope>:<name>`, cvar.hpp § SCOPES); empty:

@@ -252,6 +252,14 @@ yet starts from the defaults and is made by the first save.
 The backquote key (under the tilde) is bound to `toggleconsole` in the game and console modes
 by default.
 
+**A game's own keys and the player's.** Once a game's defaults have run, its binds are kept as
+its defaults (`Binds::keep_defaults`), and a config saved with `bind_changes` holds only what the
+player changed from them: each key bound anew or rebound (`bind`), each default key unbound
+(`unbind`), and no `unbindall`. Shooter's Edge's series config is saved so (client/settings.hpp):
+each classic game keeps its own default keys (Quake's weapons on 1 to 8 and its scores on TAB,
+Quake II's `use` commands and inventory there) and the player's changes are laid over them, at the
+start and again when another game is loaded.
+
 ## Built-in commands
 
 ### Variables

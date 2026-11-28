@@ -58,6 +58,12 @@ std::vector<std::string> button_fires(const std::vector<ge::shooterbots::EntityB
 
 constexpr float kDoomDmg = 1000;  // a blast that hurts this much kills anyone in its reach
 
+// Whether a button's target, or what that fires in turn, sets a `func_rotating` spinning (boss2's
+// id Gallery: a blade across a doorway, started by a button that opens nothing, shut him in the
+// room behind it for the rest of the map). Such a button that opens no door is no step of the
+// way through (`way_init`).
+bool button_spins(const std::vector<ge::shooterbots::EntityBlock>& blocks, const char* target);
+
 // Whether what a button's `target` fires (`button_fires`) reaches a killbox or a blast no one lives
 // through: biggun's evacuate button, two relays and 22 s on, sets off both over the whole base.
 bool button_dooms(const std::vector<ge::shooterbots::EntityBlock>& blocks, const char* target);

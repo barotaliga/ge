@@ -13,6 +13,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,7 @@
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
 #include "shooter/controls.hpp"
+#include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "vfs/pak.hpp"
@@ -341,4 +343,66 @@ TEST(a_quake_ii_pack_s_default_cfg_names_the_title_s_demos) {
   fs::create_directories(root / "plain");
   CHECK(cl::mod_startdemos(root.string(), "plain", q2, "q2demo1") == "q2demo1");
   fs::remove_all(root);
+}
+
+// The series' one config keeps only the keys the player changed: Quake II's own defaults (its
+// weapons on 1, SPACE on +moveup) never reach Quake, whose own defaults stand under the player's
+// one change, at the start and when the game changes to Quake II again.
+TEST(the_series_config_keeps_the_player_s_binds_never_a_game_s_defaults) {
+  const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
+  const std::string base(two.base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_binds";
+  fs::remove_all(root);
+  write(root / base / "pak0.pak", "");
+  write(root / base / "default.cfg", "unbindall\nbind 1 \"use Blaster\"\nbind space +moveup\n");
+  write(root / "id1" / "pak0.pak", "");
+  write(root / "id1" / "default.cfg",
+        "unbindall\nbind 1 \"impulse 1\"\nbind space +jump\nbind tab +showscores\n");
+  const fs::path series = root / "series" / "config.cfg";
+  const cl::SeriesConfig run_series{{series}, {}};
+  const auto bound = [](const ge::console::Console& c, const char* key) {
+    return c.binds().get(ge::console::BindMode::game, key);
+  };
+  {  // Quake II played: the player binds F to fire and unbinds SPACE; the settings saved.
+    Marks q2;
+    q2.con.set_search_path(cl::config_dirs(root.string(), base, two));
+    (void)cl::start_configs(q2.con, root.string(), base, two, {}, run_series);
+    CHECK(bound(q2.con, "1") == "use Blaster");
+    q2.con.execute("bind f +attack");
+    q2.con.execute("bind 1 \"use Shotgun\"");
+    q2.con.execute("unbind space");
+    CHECK(cl::save_settings(q2.con, series));
+  }
+  std::string text;
+  {
+    std::ifstream in(series, std::ios::binary);
+    text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  }
+  CHECK_MSG(text.find("unbindall") == std::string::npos, text);
+  CHECK_MSG(text.find("+moveup") == std::string::npos, text);  // its default, never written
+  CHECK_MSG(text.find("bind f \"+attack\"") != std::string::npos, text);
+  CHECK_MSG(text.find("unbind space") != std::string::npos, text);
+  // Quake then: its own keys, with the player's changes over them.
+  Marks q1;
+  q1.con.set_search_path(cl::config_dirs(root.string(), "id1", first()));
+  (void)cl::start_configs(q1.con, root.string(), "id1", first(), {}, run_series);
+  CHECK(bound(q1.con, "tab") == "+showscores");
+  CHECK(bound(q1.con, "f") == "+attack");
+  CHECK(bound(q1.con, "space").empty());       // the player unbound it
+  CHECK(bound(q1.con, "1") == "use Shotgun");  // the player's own, whatever the game
+  // Back to Quake II in the same session: its defaults, the player's changes still over them.
+  q1.con.execute("bind g +jump");
+  q1.con.set_search_path(cl::config_dirs(root.string(), base, two));
+  (void)cl::run_game_settings(q1.con, root.string(), base, two);
+  CHECK(bound(q1.con, "tab").empty());  // Quake's default left behind
+  CHECK(bound(q1.con, "g") == "+jump");
+  CHECK(bound(q1.con, "f") == "+attack");
+  CHECK(bound(q1.con, "1") == "use Shotgun");
+  CHECK(bound(q1.con, "space").empty());
+  // RESET TO DEFAULTS: the loaded game's own keys again, none of the player's.
+  cl::reset_binds(q1.con);
+  CHECK(bound(q1.con, "space") == "+moveup");
+  CHECK(bound(q1.con, "1") == "use Blaster");
+  CHECK(bound(q1.con, "f").empty());
+  CHECK(q1.con.binds().changes().empty());
 }

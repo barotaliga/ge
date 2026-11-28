@@ -19,7 +19,8 @@
 // layer that first registered it, with the player's value when they set one and that layer's own
 // otherwise; a name no accepted layer defines is left out. So a series' one config (every layer
 // but the loaded game's) never takes a game's own meaning of a shared name, and the game's own
-// file holds only those.
+// file holds only those. The binds may be only the player's changes (`bind_changes`,
+// binds.hpp § THE DEFAULTS), so the series' config keeps no game's default keys.
 //
 // ge:summary Cfg files: the startup order (default, config, autoexec, +commands), saving, help
 // ge:keywords cfg config cfg_save config-cfg autoexec default-cfg server-cfg start
