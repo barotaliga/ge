@@ -132,7 +132,8 @@ void cars_away(Pilot& p, std::vector<NavExtraLink>& away) {
     p.car_ons_g = p.g;
     for (size_t a = 0; a < g.nodes.size(); a++)
       for (int32_t k = 0; k < g.nodes[a].links; k++) {
-        const NavLink& l = g.links[static_cast<size_t>(g.nodes[a].first_link + k)];
+        const NavLink& l =
+            g.links[static_cast<size_t>(g.nodes[a].first_link) + static_cast<size_t>(k)];
         const NavNode& nb = node(g, l.to);
         const NavMover* m = nb.stop >= 0 ? mover_of(g.movers, nb.mover) : nullptr;
         if (m != nullptr && elevator(*m) && g.nodes[a].mover != nb.mover)
