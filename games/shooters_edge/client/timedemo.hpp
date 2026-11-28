@@ -208,6 +208,10 @@ struct Timedemo {
   std::string found;  // where it was read from
   Demo demo;
   Demo start;  // the demo as opened, which a seek back starts again from
+  // A demo series (demo.hpp's DemoSeries): each next recording becomes `start`, and the timeline
+  // where it began is where a seek back to its start lands.
+  DemoTimeline entry_timeline;
+  bool entry_begun = false;  // a series' next recording began: the window scans it again
   // Snapshots every `snap_every_s` of the timeline as the frames are read (`cl_demosnaps`; 0
   // none), in timeline order: a seek back starts from the last one before it.
   std::vector<DemoSnap> snaps;

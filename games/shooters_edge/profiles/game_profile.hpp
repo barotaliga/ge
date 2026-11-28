@@ -128,8 +128,8 @@ struct GameProfile {
 
 inline constexpr ProgramFile kQ1Multiplayer[] = {{.name = "qwprogs.dat"}, {.name = "progs.dat"}};
 inline constexpr ProgramFile kQ1SinglePlayer[] = {{.name = "progs.dat"}};
-inline constexpr std::string_view kQ1Demos[] = {".dem",  ".mvd",   ".qwdv",  ".mvdv", ".mvdz",
-                                                ".qwdz", ".mvdvz", ".qwdvz", ".ged",  ".dz"};
+inline constexpr std::string_view kQ1Demos[] = {
+    ".dem", ".mvd", ".qwdv", ".mvdv", ".mvdz", ".qwdz", ".mvdvz", ".qwdvz", ".ged", ".geds", ".dz"};
 
 inline constexpr std::string_view kQ1Held[] = {
     "progs/v_axe.mdl",   "progs/v_shot.mdl", "progs/v_shot2.mdl", "progs/v_nail.mdl",
@@ -149,7 +149,8 @@ inline constexpr ProgramFile kQ2Programs[] = {
     {.name = "gamei386.so", .form = ProgramForm::game_library}};
 // Gzipped recordings play as they are (open_demo peels them), so a bare name finds them too; a
 // match recorded on our own server is a replay file (`.ged`, listen_record.cpp).
-inline constexpr std::string_view kQ2Demos[] = {".dm2", ".mvd2", ".dm2.gz", ".mvd2.gz", ".ged"};
+inline constexpr std::string_view kQ2Demos[] = {".dm2",     ".mvd2", ".dm2.gz",
+                                                ".mvd2.gz", ".ged",  ".geds"};
 // By Quake II's weapon keys (1 blaster, 2 shotgun, 3 super shotgun, 4 machinegun, 5 chaingun,
 // 6 hand grenades, 7 grenade launcher, 8 rocket launcher, 9 hyperblaster, 10 railgun, 11 BFG):
 // 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the shotguns,

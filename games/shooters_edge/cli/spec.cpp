@@ -2,7 +2,7 @@
 //
 // ge:summary Shooter's Edge's player CLI: the Spec's functions and the demos commands
 // ge:keywords secli locate join_words listen_words demos demos-play demos-pack
-// ge:keywords demos-unpack ged replay-v2
+// ge:keywords demos-unpack ged replay-v2 demos-split demos-merge geds demo-series
 // ge:skill shooter agent-interface
 // ge:test tests/gamecli_cli_test.cpp
 #include "shooters_edge/cli/spec.hpp"
@@ -22,6 +22,7 @@
 #include "console/view.hpp"
 #include "core/json_write.hpp"
 #include "progs/cli/commands.hpp"
+#include "replay/series.hpp"
 #include "replay/stream.hpp"
 #include "server/process.hpp"
 #include "shooters_edge/cli/mod_run.hpp"
@@ -532,6 +533,160 @@ int cmd_demos_unpack(gc::Ctx& ctx) {
       "secli demos play " + out.filename().string());
 }
 
+// A recording's bytes as a replay file or a series: kept as they are when they are one, else
+// unpacked when packed and packed as a replay file (`demos pack`'s way, checked to come back).
+bool as_series_part(const fs::path& file, std::vector<uint8_t>& bytes, std::string& error) {
+  if (!read_bytes(file, bytes)) {
+    error = "cannot read " + file.string();
+    return false;
+  }
+  if (ge::replay::is_stream(bytes) || ge::replay::is_series(bytes)) return true;
+  if (ge::vfs::wrapping_of(bytes) != ge::vfs::Wrapping::none) {
+    ge::vfs::Unpacked u;
+    if (!ge::vfs::unpack_one(std::move(bytes), u, error)) {
+      error = file.string() + " does not unpack: " + error;
+      return false;
+    }
+    bytes = std::move(u.bytes);
+    if (ge::replay::is_stream(bytes) || ge::replay::is_series(bytes)) return true;
+  }
+  std::vector<uint8_t> packed, back;
+  if (!client::pack_demo(bytes, packed, error) || !client::unpack_demo(packed, back, error) ||
+      back != bytes) {
+    error = file.string() + " does not pack as a replay file: " + error;
+    return false;
+  }
+  bytes = std::move(packed);
+  return true;
+}
+
+// The name an entry of a recording keeps: its file's name less every extension.
+std::string entry_name(const fs::path& file) {
+  std::string n = file.filename().string();
+  if (const size_t dot = n.find('.'); dot != std::string::npos && dot > 0) n.resize(dot);
+  return n;
+}
+
+// `demos split <series> [<n>...]`: a demo series' recordings written beside it as replay files,
+// `<series>-<n>-<entry>.ged`, each the very bytes merged into it (only entries `n`, from 1, when
+// named).
+int cmd_demos_split(gc::Ctx& ctx) {
+  if (ctx.words.empty())
+    return gc::refuse(ctx, 2, "demos split takes a demo series (.geds) and, if you like, entries",
+                      "secli demos split final.geds   or   secli demos split final.geds 2 3");
+  if (!gc::need_places(ctx)) return 1;
+  fs::path file = find_demo_file(ctx, ctx.words[0] + ".geds");
+  if (file.empty()) file = find_demo_file(ctx, ctx.words[0]);
+  std::vector<uint8_t> bytes;
+  if (file.empty() || !read_bytes(file, bytes))
+    return gc::refuse(ctx, 1, "no demo series is called '" + ctx.words[0] + "'", "secli demos");
+  ge::replay::SeriesView v;
+  std::string error;
+  if (!ge::replay::read_series(bytes, v, error))
+    return gc::refuse(ctx, 1, file.string() + ": " + error,
+                      "secli demos merge <series> <recordings...> makes one");
+  std::vector<size_t> pick;
+  for (size_t i = 1; i < ctx.words.size(); i++) {
+    char* end = nullptr;
+    const long n = std::strtol(ctx.words[i].c_str(), &end, 10);
+    if (end == ctx.words[i].c_str() || *end != 0 || n < 1 ||
+        static_cast<size_t>(n) > v.entries.size())
+      return gc::refuse(ctx, 2,
+                        "'" + ctx.words[i] + "' is not an entry: the series holds 1 to " +
+                            std::to_string(v.entries.size()),
+                        "secli demos split " + ctx.words[0]);
+    pick.push_back(static_cast<size_t>(n - 1));
+  }
+  if (pick.empty())
+    for (size_t i = 0; i < v.entries.size(); i++) pick.push_back(i);
+  const std::string stem = entry_name(file);
+  std::vector<std::string> rows;
+  std::string text;
+  for (const size_t i : pick) {
+    const ge::replay::SeriesEntry& e = v.entries[i];
+    const std::string n = (i < 9 ? "0" : "") + std::to_string(i + 1);
+    std::string leaf = stem;
+    leaf.append("-").append(n).append("-").append(e.name).append(".ged");
+    const fs::path out = file.parent_path() / leaf;
+    if (fs::exists(out))
+      return gc::refuse(ctx, 1, out.string() + " is already there",
+                        "delete or rename it, then split again");
+    if (!write_bytes(out, e.bytes))
+      return gc::refuse(ctx, 1, "cannot write " + out.string(), "check the folder's permissions");
+    rows.push_back(json_obj({{"entry", json_num(static_cast<long long>(i) + 1)},
+                             {"name", json_str(e.name)},
+                             {"map", json_str(ge::replay::meta_get(e.meta, "map"))},
+                             {"file", json_str(out.string())},
+                             {"bytes", json_num(static_cast<long long>(e.bytes.size()))}}));
+    text += out.string() + "  " + kib(e.bytes.size()) + "\n";
+  }
+  return gc::answer(ctx, json_obj({{"files", json_arr(rows)}, {"cut", json_str(v.cut)}}), text,
+                    std::to_string(rows.size()) + " of " + std::to_string(v.entries.size()) +
+                        " recordings split out of " + file.filename().string() +
+                        (v.cut.empty() ? std::string() : "; the rest was not whole: " + v.cut),
+                    "secli demos play <file> watches one");
+}
+
+// `demos merge <series> <recording>...`: the recordings, replay files and series in order as one
+// demo series (`<series>.geds`); a classic recording is packed as a replay file first.
+int cmd_demos_merge(gc::Ctx& ctx) {
+  if (ctx.words.size() < 2)
+    return gc::refuse(ctx, 2, "demos merge takes the series to write and the recordings in order",
+                      "secli demos merge clanfight dm2.ged dm3.ged e1m2.mvd");
+  if (!gc::need_places(ctx)) return 1;
+  fs::path out = ctx.words[0];
+  if (out.extension() != ".geds") out += ".geds";
+  if (!out.has_parent_path()) {
+    const cl::Args a = folders(ctx);
+    out = fs::path(a.basedir) / a.game / "demos" / out;
+  }
+  if (fs::exists(out))
+    return gc::refuse(ctx, 1, out.string() + " is already there",
+                      "delete or rename it, or merge into another name");
+  std::vector<std::vector<uint8_t>> held(ctx.words.size() - 1);
+  std::vector<ge::replay::SeriesPart> parts;
+  for (size_t i = 1; i < ctx.words.size(); i++) {
+    const fs::path file = find_demo_file(ctx, ctx.words[i]);
+    if (file.empty())
+      return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[i] + "'", "secli demos");
+    std::string error;
+    if (!as_series_part(file, held[i - 1], error))
+      return gc::refuse(ctx, 1, error, "leave it out, or report it with the file");
+    parts.push_back({entry_name(file), held[i - 1]});
+  }
+  ge::replay::Meta meta;
+  if (ctx.has("title")) meta.emplace_back(ge::replay::kSeriesTitle, ctx.flag("title"));
+  std::vector<uint8_t> series;
+  std::string error;
+  if (!ge::replay::series_merge(parts, meta, series, error))
+    return gc::refuse(ctx, 1, error, "split a damaged series first, then merge its files");
+  ge::replay::SeriesView v;
+  ge::replay::read_series(series, v, error);
+  std::error_code ec;
+  fs::create_directories(out.parent_path(), ec);
+  if (!write_bytes(out, series))
+    return gc::refuse(ctx, 1, "cannot write " + out.string(), "check the folder's permissions");
+  std::vector<std::string> rows;
+  std::string text = out.string() + "  " + kib(series.size()) + "\n";
+  for (size_t i = 0; i < v.entries.size(); i++) {
+    const ge::replay::SeriesEntry& e = v.entries[i];
+    const std::string map = ge::replay::meta_get(e.meta, "map");
+    rows.push_back(json_obj({{"entry", json_num(static_cast<long long>(i) + 1)},
+                             {"name", json_str(e.name)},
+                             {"map", json_str(map)},
+                             {"bytes", json_num(static_cast<long long>(e.bytes.size()))}}));
+    text += "  " + std::to_string(i + 1) + ". " + e.name + (map.empty() ? "" : "  " + map) + "  " +
+            kib(e.bytes.size()) + "\n";
+  }
+  return gc::answer(
+      ctx,
+      json_obj({{"file", json_str(out.string())},
+                {"bytes", json_num(static_cast<long long>(series.size()))},
+                {"entries", json_arr(rows)}}),
+      text, std::to_string(v.entries.size()) + " recordings merged into " + out.filename().string(),
+      "secli demos play " + out.filename().string());
+}
+
 gc::Spec make() {
   gc::Spec s;
   s.game = "shooters_edge";
@@ -593,6 +748,15 @@ gc::Spec make() {
                         "demos convert demo1.dem demo1.mvd", "shooters_edge", cmd_demos_convert});
   s.commands.push_back({"demos unpack", "<name>", "a replay file (.ged) back to the recording",
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
+  s.commands.push_back({"demos split", "<series> [<n>...]",
+                        "a demo series (.geds) split into its replay files (.ged) beside it",
+                        "demos split clanfight.geds", "shooters_edge", cmd_demos_split});
+  s.commands.push_back(
+      {"demos merge", "<series> <recording>...",
+       "recordings, replay files and series merged in order into one demo series (.geds)",
+       "demos merge clanfight dm2.ged dm3.ged e1m2.mvd", "shooters_edge", cmd_demos_merge});
+  s.command_flags.push_back(
+      {"demos merge", {{"title", "<text>", "the series' title (\"Slackers vs Hell's Fire\")"}}});
   s.commands.push_back(mod_run_command());
   s.command_flags.push_back(mod_run_flags());
   s.flags = {{"fs_basegame", "q1|q2", "the game: Quake or Quake II (default: the window's)"},
@@ -612,7 +776,11 @@ gc::Spec make() {
       "`demos` lists recordings and `demos play <name>` watches one; `demos pack <name>` writes "
       "the replay file (.ged), about half the size of a packed recording; `demos convert <name> "
       "<file>` "
-      "writes it in another format (`demo1.dem` to `demo1.mvd`). `map build <plan|svg>` makes a "
+      "writes it in another format (`demo1.dem` to `demo1.mvd`). `demos merge <series> "
+      "<recordings...>` "
+      "keeps a clan fight's maps or a run's levels in one demo series (.geds) that plays in "
+      "order, and `demos split <series>` gives its replay files back. `map build <plan|svg>` makes "
+      "a "
       "map from a text plan or an SVG floor plan with the install's own textures; put the .bsp in "
       "the game folder's `maps` and start it with `map <name>`. `mod run <package>` plays a C++ "
       "mod "

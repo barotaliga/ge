@@ -17,6 +17,7 @@
 #include <cstring>
 
 #include "classic/vweps.hpp"
+#include "replay/series.hpp"
 #include "replay/stream.hpp"
 
 namespace shooters_edge::client {
@@ -342,6 +343,29 @@ bool voice_name(const std::string& path) {
          ext == voice_extension(DemoFormat::multiview);
 }
 
+int demo_series_next(Demo& d, std::string& error) {
+  if (d.series == nullptr || d.series_at + 1 >= d.series->entries.size()) return 0;
+  std::shared_ptr<const DemoSeries> series = d.series;
+  const size_t at = d.series_at + 1;
+  const DemoFormat format = d.state.format;
+  Demo next;
+  if (!open_demo(series->entries[at], next, error)) {
+    error = "the series' recording " + std::to_string(at + 1) + ", " + series->names[at] +
+            ", does not open: " + error;
+    return -1;
+  }
+  if ((next.state.format == DemoFormat::q2) != (format == DemoFormat::q2)) {
+    error = "the series' recording " + std::to_string(at + 1) + ", " + series->names[at] +
+            ", is of another game, so the series stops here";
+    return -1;
+  }
+  next.track = d.track;
+  next.series = std::move(series);
+  next.series_at = at;
+  d = std::move(next);
+  return 1;
+}
+
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
   out = Demo{};
   if (ge::vfs::wrapping_of(bytes) != ge::vfs::Wrapping::none) {
@@ -365,6 +389,36 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     bytes = std::move(plain);
     out.dzip = true;
     out.inner_name = std::move(name);
+  }
+  if (ge::replay::is_series(bytes)) {  // a demo series (.geds): its first recording, the rest kept
+    ge::replay::SeriesView view;
+    if (!ge::replay::read_series(bytes, view, error)) {
+      error = "the demo series does not open: " + error;
+      return false;
+    }
+    if (view.entries.empty()) {
+      error = "the demo series holds no whole recording" +
+              (view.cut.empty() ? std::string() : " (" + view.cut + ")");
+      return false;
+    }
+    auto series = std::make_shared<DemoSeries>();
+    series->title = ge::replay::meta_get(view.meta, ge::replay::kSeriesTitle);
+    series->cut = view.cut;
+    for (const ge::replay::SeriesEntry& e : view.entries) {
+      series->names.push_back(e.name);
+      series->entries.emplace_back(e.bytes.begin(), e.bytes.end());
+    }
+    std::vector<ge::vfs::Wrapping> layers = std::move(out.layers);
+    const bool truncated = out.truncated || !view.cut.empty();
+    if (!open_demo(series->entries[0], out, error)) {
+      error = "the series' first recording, " + series->names[0] + ", does not open: " + error;
+      return false;
+    }
+    out.layers = std::move(layers);
+    out.truncated = out.truncated || truncated;
+    out.series = std::move(series);
+    out.series_at = 0;
+    return true;
   }
   if (ge::replay::is_stream(bytes)) {  // the replay file version 2 (.ged): back to the recording
     std::vector<uint8_t> plain;

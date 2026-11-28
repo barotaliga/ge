@@ -1,8 +1,12 @@
-// RECORDING THE GAME BEING PLAYED: the console's `record <name>` writes the listen server's match
-// (listen.hpp) as a multiview recording while it plays, and `stop` ends it. Packed by default:
-// `<game folder>/<name>.mvdz`, the recording given to a zstd stream as it is written (the
-// `demo_pack` and `demo_pack_level` cvars, record_cvars.hpp); with `demo_pack 0`, the plain
-// `<name>.mvd`. Either one plays back with `playdemo <name>` (client/demo.hpp unpacks it).
+// RECORDING THE GAME BEING PLAYED: the console's `record <name>` writes the listen server's game
+// (listen.hpp) as a demo series, `<game folder>/<name>.geds` (engine/replay/series.hpp): each level
+// recorded as a multiview recording while it plays (Quake II's maps: its own recording from the
+// player's view), packed as a replay file (`.ged`, demo_v2.hpp) when the level ends and added to
+// the series' file then. A map change or the match's restart ends the level and the next one goes
+// on in the same file; `stop`, a disconnect or quitting the game end the last level and close the
+// file. `playdemo <name>` plays the levels in order (demo.hpp), and `secli demos split` gives the
+// levels back as replay files. A crash loses the level being played: the levels before it are in
+// the file whole.
 //
 // WHAT A RECORDING HOLDS, the multiview form demo.hpp reads:
 //
@@ -25,13 +29,11 @@
 // the file side (`record_tick`) writes them out and empties it. The recorder reads the server and
 // nothing else, so the same session records the same bytes every run.
 //
-// A MAP CHANGE ends the recording (the file is closed and named in the console): the next map
-// is recorded with another `record`.
-//
-// ge:summary The console's record and stop: the listen game written as a packed multiview demo
+// ge:summary The console's record and stop: the listen game, level after level, as a demo series
 // ge:keywords record stop listen-record mvdz mvd multiview packed zstd demo_pack signon frame
 // ge:keywords packetentities playerinfo record_listen_begin record_listen_frame record_listen_end
-// ge:keywords record_tick add_record_commands ready recorded-places loc-lines
+// ge:keywords record_tick add_record_commands ready recorded-places loc-lines geds demo-series
+// ge:keywords record-across-levels
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_listen_record_test.cpp
 #pragma once
@@ -74,9 +76,13 @@ struct ListenRecorder {
   std::array<int, 32> frags{};
   std::array<std::array<int32_t, 16>, 32> stats{};
   // The file side's (record_tick):
-  std::string path;  // the file being written
+  std::string path;  // the series being written
   std::ofstream file;
-  int64_t written = 0;  // bytes written to the file
+  int64_t written = 0;         // bytes written to the file
+  std::vector<uint8_t> level;  // the level's recording so far (plain)
+  std::string level_map;       // the level's map
+  int entries = 0;             // levels added to the series
+  int64_t total_frames = 0;    // frames of the levels added
   // Quake II's rules playing: its own recording (server/q2_wire.hpp) from the player's
   // view, kept whole and written as a replay file (`.ged`) at the stop.
   std::unique_ptr<sv::Q2Recorder> q2;
@@ -94,14 +100,16 @@ void record_listen_frame(ListenRecorder& r, const Listen& l);
 // The recording ended: the disconnect, the stream ended; `on` cleared.
 void record_listen_end(ListenRecorder& r);
 
-// The file `<game folder>/<name>.mvdz` (`.mvd` unpacked) opened and the recording begun. False
+// The series `<game folder>/<name>.geds` opened and the first level's recording begun. False
 // with the reason and the next step when the name, the folder or the server will not do.
 bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
                  const std::string& name, const RecordSettings& s, std::string& error);
-// The recording ended and its file closed; the line to print ("" when none was on).
+// The level being recorded added to the series and the file closed; the line to print ("" when
+// none was on).
 std::string record_close(ListenRecorder& r);
-// After the window's server frames (`frames` of them): a frame recorded and written out, or the
-// recording closed when the map changed (the line printed to `console`).
+// After the window's server frames (`frames` of them): a frame recorded; at a map change or a
+// restart the level added to the series and the next begun; the game gone, the file closed (the
+// lines printed to `console`).
 void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Console& console);
 // RECORDING A GAME JOINED (net/qw_match_record.hpp fills it): while a server is joined,
 // `record` and `stop` reach it, and `easyrecord [name]` names the file by the match

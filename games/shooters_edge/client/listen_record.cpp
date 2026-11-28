@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <system_error>
 
+#include "replay/series.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/match_name.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -327,20 +328,79 @@ void record_listen_end(ListenRecorder& r) {
 
 namespace {
 
-void write_ready(ListenRecorder& r) {
-  if (!r.file.is_open() || r.ready.empty()) return;
-  r.file.write(reinterpret_cast<const char*>(r.ready.data()),
-               static_cast<std::streamsize>(r.ready.size()));
+void write_bytes(ListenRecorder& r, std::span<const uint8_t> b) {
+  r.file.write(reinterpret_cast<const char*>(b.data()), static_cast<std::streamsize>(b.size()));
   r.file.flush();
-  r.written += static_cast<int64_t>(r.ready.size());
+  r.written += static_cast<int64_t>(b.size());
+}
+
+// What the recorder made since, moved onto the level's recording.
+void take_ready(ListenRecorder& r) {
+  r.level.insert(r.level.end(), r.ready.begin(), r.ready.end());
   r.ready.clear();
+}
+
+// A level's recording begun on the map `l` plays now.
+void level_begin(ListenRecorder& r, const Listen& l) {
+  r.level.clear();
+  r.level_map = l.map ? l.map->name : std::string("map");
+  r.frames = 0;
+  if (l.rules && sv::q2_of(*l.rules) != nullptr) {
+    // Quake II's own recording from the player's view (slot 0), packed at the level's end.
+    sv::Q2WireOptions opt;
+    opt.server_count = static_cast<int32_t>(l.maps_started) + 1;
+    if (l.map) opt.map_checksum = sv::q2_map_checksum(l.map->file);
+    if (l.map && l.map->spec.brushes) sv::q2_sky(*l.map->spec.brushes, opt);
+    if (r.places != nullptr) opt.stuffed = ge::classic::recorded_loc_lines(*r.places);
+    r.q2 = std::make_unique<sv::Q2Recorder>();
+    sv::q2_record_start(*r.q2, *l.server, 0, opt);
+    r.on = true;
+    return;
+  }
+  record_listen_begin(r, l, 0);
+  take_ready(r);
+}
+
+// The level's recording ended, packed as a replay file and added to the series' file: the line
+// that says so ("" when nothing was recorded).
+std::string level_end(ListenRecorder& r) {
+  std::vector<uint8_t> plain;
+  int64_t frames = r.frames;
+  if (r.q2) {
+    sv::q2_record_stop(*r.q2);
+    plain = std::move(r.q2->bytes);
+    frames = r.q2->frames;
+    r.q2.reset();
+    r.on = false;
+  } else {
+    record_listen_end(r);
+    take_ready(r);
+    plain = std::move(r.level);
+  }
+  r.level.clear();
+  if (frames <= 0) return "";
+  std::vector<uint8_t> ged, entry;
+  std::string error;
+  if (!pack_demo(plain, ged, error))
+    return "record: " + r.level_map + " was not kept: it did not pack (" + error + ")";
+  const std::string n = (r.entries < 9 ? "0" : "") + std::to_string(r.entries + 1);
+  if (!ge::replay::series_entry(n + "-" + r.level_map, ged, entry, error))
+    return "record: " + r.level_map + " was not kept: " + error;
+  write_bytes(r, entry);
+  if (!r.file)
+    return "record: " + r.level_map + " was not written to " + r.path +
+           ". Check that the disk has room.";
+  r.entries++;
+  r.total_frames += frames;
+  return "record: " + r.level_map + " kept in " + fs::path(r.path).filename().string() + " (" +
+         std::to_string(r.entries) + (r.entries == 1 ? " level" : " levels") + " so far)";
 }
 
 }  // namespace
 
 bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
-                 const std::string& name, const RecordSettings& s, std::string& error) {
-  if (r.on) {
+                 const std::string& name, const RecordSettings&, std::string& error) {
+  if (r.on || r.file.is_open()) {
     error = "Already recording " + r.path + ". Type \"stop\" to end it first.";
     return false;
   }
@@ -361,11 +421,7 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     error = "record: only a match can be recorded (a campaign keeps saves instead)";
     return false;
   }
-  const int level = record_pack_level(s);
-  sv::Q2Server* q2 = l.rules ? sv::q2_of(*l.rules) : nullptr;
-  const fs::path file = fs::path(own_folder(files)) / (name + (q2          ? ".ged"
-                                                               : level > 0 ? ".mvdz"
-                                                                           : ".mvd"));
+  const fs::path file = fs::path(own_folder(files)) / (name + ".geds");
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
   r.file.open(file, std::ios::binary | std::ios::trunc);
@@ -377,61 +433,43 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
   r.path = file.string();
   r.game_dir = fs::path(files.folder).filename().string();
   r.written = 0;
-  if (q2) {
-    // Quake II's own recording from the player's view (slot 0), packed at the stop.
-    sv::Q2WireOptions opt;
-    opt.server_count = static_cast<int32_t>(l.maps_started) + 1;
-    if (l.map) opt.map_checksum = sv::q2_map_checksum(l.map->file);
-    if (l.map && l.map->spec.brushes) sv::q2_sky(*l.map->spec.brushes, opt);
-    if (r.places != nullptr) opt.stuffed = ge::classic::recorded_loc_lines(*r.places);
-    r.q2 = std::make_unique<sv::Q2Recorder>();
-    sv::q2_record_start(*r.q2, *l.server, 0, opt);
-    r.on = true;
-    r.frames = 0;
-    return true;
-  }
-  record_listen_begin(r, l, level);
-  write_ready(r);
+  r.entries = 0;
+  r.total_frames = 0;
+  std::vector<uint8_t> head;
+  ge::replay::series_begin(
+      head, {{std::string(ge::replay::kSeriesKind), l.campaign_host ? "campaign" : "matches"},
+             {std::string(ge::replay::kSeriesTitle), name}});
+  write_bytes(r, head);
+  level_begin(r, l);
   return true;
 }
 
 std::string record_close(ListenRecorder& r) {
   if (!r.on && !r.file.is_open()) return "";
-  if (r.q2) {
-    sv::q2_record_stop(*r.q2);
-    std::vector<uint8_t> file;
-    std::string error;
-    const bool packed = pack_demo(r.q2->bytes, file, error);
-    const std::vector<uint8_t>& out = packed ? file : r.q2->bytes;
-    r.file.write(reinterpret_cast<const char*>(out.data()),
-                 static_cast<std::streamsize>(out.size()));
-    r.file.close();
-    const int64_t frames = r.q2->frames;
-    r.q2.reset();
-    r.on = false;
-    const long kib = std::lround(static_cast<double>(out.size()) / 1024);
-    return "recorded " + r.path + ": " + std::to_string(frames) + " frames, " +
-           std::to_string(kib) + " KiB";
-  }
-  record_listen_end(r);
-  write_ready(r);
+  const std::string kept = r.on ? level_end(r) : std::string();
+  r.on = false;
   r.file.close();
-  const double kib = static_cast<double>(r.written) / 1024;
-  const double plain_kib = static_cast<double>(r.plain) / 1024;
-  const std::string line =
-      "recorded " + r.path + ": " + std::to_string(r.frames) + " frames, " +
-      std::to_string(static_cast<int>(std::lround(kib))) + " KiB" +
-      (r.packed ? " (" + std::to_string(static_cast<int>(std::lround(plain_kib))) + " KiB unpacked)"
-                : "") +
-      "; play it with `playdemo " + r.path + "`";
+  const long kib = std::lround(static_cast<double>(r.written) / 1024);
+  std::string line = "recorded " + r.path + ": " + std::to_string(r.entries) +
+                     (r.entries == 1 ? " level, " : " levels, ") + std::to_string(r.total_frames) +
+                     " frames, " + std::to_string(kib) + " KiB; play it with `playdemo " + r.path +
+                     "`";
+  if (!kept.empty() && kept.rfind("record: ", 0) == 0 &&
+      kept.find(" kept in ") == std::string::npos)
+    line = kept + "\n" + line;
   return line;
 }
 
 void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Console& console) {
   if (!r.on) return;
-  if (l.map_changed || l.restarted || l.server == nullptr) {
-    console.print("record: the map changed, so the recording ends here");
+  if (l.server == nullptr) {  // the game left (a disconnect, the menu's quit): the file closed
+    console.print("record: the game ended, so the recording ends here");
     console.print(record_close(r));
+    return;
+  }
+  if (l.map_changed || l.restarted) {  // the next level goes on in the same series
+    if (const std::string kept = level_end(r); !kept.empty()) console.print(kept);
+    level_begin(r, l);
     return;
   }
   if (frames <= 0) return;
@@ -442,7 +480,7 @@ void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Co
     return;
   }
   record_listen_frame(r, l);
-  write_ready(r);
+  take_ready(r);
 }
 
 namespace {
@@ -516,8 +554,8 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
   if (joined != nullptr) joined->folder = [&files] { return files.folder; };
   console.add_command(
       "record",
-      "record <name>: the match recorded as <game folder>/<name>.mvdz (packed: demo_pack; the "
-      "Quake II's maps: <name>.ged; a server joined: <name>.qwd, Quake II's <name>.dm2) until stop",
+      "record <name>: the game recorded as <game folder>/<name>.geds, level after level, until "
+      "stop, a disconnect or quitting (a server joined: <name>.qwd, Quake II's <name>.dm2)",
       [&r, &listen, &files, &s, joined](Con& c, const CArgs& a) {
         const bool on_server = joined_now(joined);
         if (a.size() < 2) {

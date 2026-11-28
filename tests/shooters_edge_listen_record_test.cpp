@@ -3,8 +3,9 @@
 // plain from the same seed: the packed file unpacks to exactly the plain bytes, is far smaller,
 // and plays back as a multiview recording of the map with the player where the server had him,
 // his stats, his rocket's explosion and as many frames as were recorded. The file side: `record`
-// writes `<game folder>/<name>.mvdz`, `stop` closes it and names it, a bad name or no folder is
-// refused, and the file found by name plays.
+// writes the demo series `<game folder>/<name>.geds`, a level after a map change goes on in it,
+// `stop` closes it and names it, the game left closes it too, a bad name or no folder is refused,
+// and the file found by name plays its levels in order.
 //
 // ge:summary Tests: record and stop on the listen game, packed and plain, played back
 // ge:keywords test record stop listen-record mvdz multiview packed playback round-trip
@@ -14,11 +15,13 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "console/console.hpp"
+#include "replay/series.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -212,43 +215,88 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   con.execute("stop");
   con.execute("record match1");
   CHECK(r.on);
-  CHECK_MSG(r.path == (fs::path(files.folder) / "match1.mvdz").string(), r.path);
+  CHECK_MSG(r.path == (fs::path(files.folder) / "match1.geds").string(), r.path);
   con.execute("record again");
   CHECK_MSG(con.output().back().find("Already recording") != std::string::npos,
             con.output().back());
   play(l, [&] { cl::record_tick(r, l, 1, con); });
+  // A map change: the level is added to the series and the next goes on in the same file.
+  l.map_changed = true;
+  cl::record_tick(r, l, 0, con);
+  l.map_changed = false;
+  CHECK(r.on && r.entries == 1);
+  CHECK_MSG(con.output().back().find("kept in match1.geds (1 level so far)") != std::string::npos,
+            con.output().back());
+  play(l, [&] { cl::record_tick(r, l, 1, con); });
   con.execute("stop");
   CHECK(!r.on);
-  CHECK_MSG(con.output().back().find("recorded ") == 0, con.output().back());
+  CHECK_MSG(con.output().back().find("recorded ") == 0 &&
+                con.output().back().find("2 levels") != std::string::npos,
+            con.output().back());
   CHECK(fs::file_size(r.path) == static_cast<uintmax_t>(r.written));
   std::vector<uint8_t> bytes;
   {
     std::ifstream in(r.path, std::ios::binary);  // closed here: Windows removes no open file
     bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
   }
-  CHECK(r.frames == packed().frames);  // the same session, a frame for each server frame
-  // Played by its name, as `playdemo match1` finds it.
+  CHECK(r.total_frames == 2 * packed().frames);  // the same session twice, a frame a server frame
+  ge::replay::SeriesView series;
+  std::string error;
+  CHECK_MSG(ge::replay::read_series(bytes, series, error), error);
+  CHECK(series.cut.empty() && series.entries.size() == 2);
+  CHECK(ge::replay::meta_get(series.meta, ge::replay::kSeriesTitle) == "match1");
+  CHECK(series.entries.size() == 2 && series.entries[1].name == "02-halls");
+  // Played by its name, as `playdemo match1` finds it: the first level, then the second.
   std::vector<uint8_t> found_bytes;
-  std::string found, error;
+  std::string found;
   CHECK_MSG(cl::find_demo(files, "match1", shooters_edge::profiles::q1_game().demo_extensions,
                           found_bytes, found, error),
             error);
   CHECK(found_bytes == bytes);
   cl::Demo d;
   CHECK_MSG(cl::open_demo(found_bytes, d, error), error);
+  CHECK(d.series != nullptr && d.series_at == 0 && d.state.format == cl::DemoFormat::multiview);
+  int read = 0;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) read++;
+  CHECK_MSG(cl::demo_series_next(d, error) == 1, error);
+  CHECK(d.series_at == 1);
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) read++;
+  CHECK(cl::demo_series_next(d, error) == 0);
+  CHECK_MSG(read >= 2 * packed().frames, std::to_string(read));
+  // The demo player runs on from the first level into the second as a new level of one run.
+  cl::Timedemo t;
+  CHECK_MSG(cl::open_demo(found_bytes, t.demo, error), error);
+  t.start = t.demo;
+  t.active = true;
+  int levels = 0, steps = 0;
+  bool begun = false;
+  for (cl::TimedemoStep st = cl::TimedemoStep::frame; st != cl::TimedemoStep::end && steps < 5000;
+       steps++) {
+    st = cl::timedemo_step(t, error);
+    CHECK_MSG(st != cl::TimedemoStep::error, error);
+    if (st == cl::TimedemoStep::error) break;
+    if (st == cl::TimedemoStep::new_level) levels++;
+    begun = begun || std::exchange(t.entry_begun, false);
+  }
+  CHECK_MSG(levels == 2 && begun && t.demo.series_at == 1, std::to_string(levels));
   std::vector<uint8_t> q2_bytes;
-  // Quake II's maps record a replay file (`.ged`): its bare name finds it the same way.
-  std::ofstream(fs::path(files.folder) / "q2match.ged", std::ios::binary) << "replay";
+  // Quake II's maps record a series the same way: its bare name finds it.
+  std::ofstream(fs::path(files.folder) / "q2match.geds", std::ios::binary) << "series";
   CHECK_MSG(
       cl::find_demo(files, "q2match", shooters_edge::profiles::find_game("q2")->demo_extensions,
                     q2_bytes, found, error),
       error);
-  CHECK_MSG(found.find("q2match.ged") != std::string::npos, found);
-  // Unpacked with demo_pack 0.
-  s.pack = 0;
-  con.execute("record plain1");
-  CHECK_MSG(r.path == (fs::path(files.folder) / "plain1.mvd").string(), r.path);
-  con.execute("stop");
+  CHECK_MSG(found.find("q2match.geds") != std::string::npos, found);
+  // The game left: the recording ends and its file is closed.
+  con.execute("record left1");
+  CHECK(r.on);
+  play(l, [&] { cl::record_tick(r, l, 1, con); });
+  {
+    cl::Listen gone;
+    cl::record_tick(r, gone, 1, con);
+  }
+  CHECK(!r.on && !r.file.is_open());
+  CHECK_MSG(con.output().back().find("1 level,") != std::string::npos, con.output().back());
   // No game folder: refused.
   cl::SearchPath none = halls_files();
   cl::ListenRecorder r2;
