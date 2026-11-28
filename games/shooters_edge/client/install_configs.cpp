@@ -13,6 +13,7 @@
 #include <ranges>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include "console/cfg.hpp"
 #include "console/lex.hpp"
@@ -324,7 +325,13 @@ bool run_game_settings(con::Console& c, const std::string& basedir, const std::s
                        const ge::classicenhance::Profile& content) {
   const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
   ConfigsRun out;
-  if (defaults_wanted(c, {})) run_defaults(c, root, game, content, load_order_of(content), out);
+  if (defaults_wanted(c, {})) {
+    // The player's own binds laid over the new game's defaults, never the last game's defaults.
+    const std::vector<con::BindChange> mine = c.binds().changes();
+    run_defaults(c, root, game, content, load_order_of(content), out);
+    c.binds().keep_defaults();
+    c.binds().apply(mine);
+  }
   const bool ran = run_path(c, settings_dir(basedir, game) / con::kConfigFile);
   const con::Cvar* again = c.cvars().find("fs_autoexec");
   if (again == nullptr || !again->on()) return ran;
@@ -371,6 +378,7 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   };
   // The window's saved settings: the series' one config, then the game's own file.
   const auto run_own = [&] {
+    c.binds().keep_defaults();  // the game's own keys: the series' config holds only the player's
     const auto run_series = [&] {
       for (const fs::path& f : series.files) run_file(f);
     };

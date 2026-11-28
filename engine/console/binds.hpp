@@ -17,12 +17,18 @@
 //     escape togglemenu` binds in one (docs/console.md § Binds).
 //   - A bind starting with `+` runs that command when the key goes down and the same command with
 //     `-` when it comes up (a held button); any other bind runs on the press alone.
+//   - THE DEFAULTS (`keep_defaults`): the binds as the game shipped them, kept once its defaults
+//     have run, so a config can hold only what the player changed (`changes`): a bind of their
+//     own, or a key they unbound. A program that plays several games keeps one config of the
+//     player's changes and lays it over each game's own defaults (`apply`), so one game's default
+//     keys never reach another's.
 //
 // ge:summary Binds: key names, modifiers, the bind tables by mode, press and release
 // ge:keywords bind binds key keys key-name modifier ctrl alt shift mode game menu demo
 // ge:keywords plus-command button held press release normalize_key mouse gamepad
 // ge:keywords uparrow lctrl rctrl kp_home old-key-names
 // ge:keywords usage_key hid usage scancode
+// ge:keywords keep_defaults bind-changes player-binds default-binds
 // ge:skill console
 // ge:test tests/console_binds_test.cpp
 #pragma once
@@ -56,6 +62,12 @@ bool normalize_key(std::string_view name, std::string& out);
 // names. The left and right modifiers both name theirs.
 std::string_view usage_key(uint16_t usage);
 
+// One key's bind the player changed from the defaults: `command` empty when they unbound it.
+struct BindChange {
+  BindMode mode = BindMode::game;
+  std::string key, command;
+};
+
 class Binds {
  public:
   // The command bound to `key` (normalized) in `mode`; empty when none.
@@ -63,13 +75,21 @@ class Binds {
   void set(BindMode mode, const std::string& key, std::string_view command);
   bool remove(BindMode mode, const std::string& key);
   void clear();  // every mode
+  // The binds as they stand become the defaults (THE DEFAULTS, above).
+  void keep_defaults() { defaults_ = tables_; }
+  // Every bind that differs from the defaults, by mode and key: changed, added or unbound.
+  std::vector<BindChange> changes() const;
+  // Each change made: its command bound, or its key unbound.
+  void apply(const std::vector<BindChange>& changes);
+  // Every bind back to the defaults kept; false (nothing changed) when none were kept.
+  bool restore_defaults();
   // Each mode's table, by key.
   const std::map<std::string, std::string>& table(BindMode mode) const {
     return tables_[static_cast<size_t>(mode)];
   }
 
  private:
-  std::array<std::map<std::string, std::string>, kBindModes> tables_;
+  std::array<std::map<std::string, std::string>, kBindModes> tables_, defaults_;
 };
 
 }  // namespace ge::console
