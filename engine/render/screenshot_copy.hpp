@@ -10,9 +10,10 @@
 // written, or why not) are printed to the console. Make it after the GPU device, so its buffers
 // go before the device does; the writer and its `screenshot` command are made before the console
 // runs the command line (capture/screenshot.hpp). Destroyed with a copy still in flight (the
-// window closed right after the key), it waits for that copy first: its map's callback holds the
-// readback's address, so the device must outlive it, as declaring it after the device makes so.
-// That last picture is dropped; the writer has already stopped taking them.
+// window closed right after the key, or `screenshot` then `quit`), it waits for that copy first:
+// its map's callback holds the readback's address, so the device must outlive it, as declaring it
+// after the device makes so. That last picture goes to the last frame's writer, which writes the
+// pictures it still holds when it goes, so the writer must outlive the copy too: make it first.
 //
 // The writer is a template argument (anything with `due`, `request`, `write` and `poll`, as
 // capture::Screenshots has), so the frame core takes no link on the capture library; the game
@@ -40,7 +41,8 @@ class ScreenshotCopy {
   ScreenshotCopy(const ScreenshotCopy&) = delete;
   ScreenshotCopy& operator=(const ScreenshotCopy&) = delete;
   ~ScreenshotCopy() {
-    if (device_ != nullptr) ring_.drain(*device_, picture_, [](gpu::Image&, uint64_t) {});
+    if (device_ == nullptr) return;
+    ring_.drain(*device_, picture_, [this](gpu::Image& img, uint64_t) { write_(writer_, img); });
   }
 
   // `shown`: the frame as drawn (`Surface::frame_target()` between acquire and present).
@@ -48,6 +50,10 @@ class ScreenshotCopy {
   void frame(gpu::Device& device, const gpu::Target& shown, Writer& writer,
              console::Console& console) {
     device_ = &device;
+    writer_ = &writer;
+    write_ = [](void* w, gpu::Image& img) {
+      static_cast<Writer*>(w)->write(img.width, img.height, img.rgba);
+    };
     if (writer.due() && !ring_.capture(device, shown, 0)) writer.request();
     ring_.poll(device, picture_, [&writer](gpu::Image& img, uint64_t) {
       writer.write(img.width, img.height, img.rgba);
@@ -59,6 +65,8 @@ class ScreenshotCopy {
   gpu::ReadbackRing ring_{2};
   gpu::Image picture_;             // the copy that came back, its storage reused
   gpu::Device* device_ = nullptr;  // the last frame's: what a copy still in flight is waited on
+  void* writer_ = nullptr;         // the last frame's writer: where that copy goes
+  void (*write_)(void*, gpu::Image&) = nullptr;
 };
 
 }  // namespace ge::render
