@@ -8,6 +8,7 @@
 #include "shooterbots/way_bosses.hpp"
 #include "shooterbots/way_exits.hpp"
 #include "shooterbots/way_gates.hpp"
+#include "shooterbots/way_keys.hpp"
 #include "shooterbots/way_parts.hpp"
 #include "shooterbots/way_shots.hpp"
 
@@ -34,7 +35,6 @@ namespace ge::shooterbots {
 
 namespace {
 
-constexpr int kKeySilver = 131072, kKeyGold = 262144;  // the keys' item bits
 constexpr float kGateWide = 64;      // an explosive narrower both ways is no way's gate, units
 constexpr float kButtonClose = 320;  // at a button's spot this near, he presses it, units
 constexpr double kPressFor_s = 4;    // and gives the press this long
@@ -291,13 +291,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     return nullptr;
   };
-  bool quake_keys = false;  // the map's keys are Quake's (items), whose doors open to a touch
-  for (const sb::EntityBlock& b : blocks) {
-    const char* cn = sb::block_value(b, "classname");
-    quake_keys = quake_keys || (cn && std::strncmp(cn, "item_key", 8) == 0);
-  }
+  const bool quake_keys = way_quake_keys(blocks);  // keys are items: their doors open to a touch
   w.key_doors.clear();
   std::vector<int> gates;  // the shut doors barred by the links through their shut boxes
+  way_key_hatches(w, s, blocks, gates);
   // The links that pass through secret wall `e` (shut while it is barred).
   // One lying flat (e2m1's slab over the pool's shaft) is crossed through its floor.
   constexpr float kOnSlab = 64;  // a ride's foot this far over a flat wall stands on it, units
