@@ -32,6 +32,9 @@
 
 namespace ge::mountain::mapgen {
 
+struct RealFace;   // real_face.hpp
+struct RealHints;  // real_hints.hpp
+
 // R21 — the kinds of snow country, in the order a card offers them (REGION_IDS).
 enum class RegionId : uint8_t { alpine, fell, continental, maritime };
 
@@ -655,6 +658,9 @@ struct Level {
   RegionId region = RegionId::alpine;
   // R25 — the real face the map is laid off (real_face_crops.hpp's id); absent on a dealt map.
   std::optional<std::string> face;
+  // …and that face's hints (real_hints.hpp), decoded once by whoever laid it; the tarn's mapped
+  // lakes and streams read them here, so a game that never lays a face links no face's data.
+  std::shared_ptr<const RealHints> hints;
   std::optional<PisteGrade> grade;             // the grade built to (R23); absent on v1
   std::optional<ge::core::Heightfield> crust;  // the region's wind crust (R21), if it lays one
   std::optional<ResortMap> resort;             // the ski area (R25–R30); absent on v1
@@ -683,8 +689,13 @@ struct GenerateOptions {
   std::optional<int> version;   // versions.hpp; the current rules when absent or unknown
   std::optional<RegionId> region;
   // R25 — lay the ski area off this real face (its id), in its region; searched over
-  // `massif::real::attempts` unless `attempts` is given.
+  // `massif::real::attempts` unless `attempts` is given. Set it with `lay_real_face`
+  // (real_hints.hpp), which decodes the face and its hints into `real` and `real_hints`: the
+  // generator never looks a face up itself, so the baked faces' data (megabytes) is linked only
+  // into a program that lays one (a web viewer of a game that never does stays small).
   std::optional<std::string> face;
+  std::shared_ptr<const RealFace> real;
+  std::shared_ptr<const RealHints> real_hints;
   // …leaning its lifts and runs onto the real ski area's (real_hints.hpp); false builds the face
   // as if it had none, which is what the hints are measured against.
   bool hints = true;

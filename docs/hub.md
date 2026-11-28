@@ -265,7 +265,9 @@ shows the run itself, to the bit. Each paint seeks to where the clock stands and
 game's own frame (`app/frame.hpp`) from the camera `--view` names (`chase` by default, `high`, or
 one of the map's views). The canvas's keys: Space or K pause, Left and Right skip five seconds,
 Up and Down step the speed from a quarter to sixteen times, 1 and 2 the chase and the high
-camera, Home the start. Within the default limits the ground's and the fog's passes bind lean
+camera, Home the start. The viewer is 4.8 MB (1.8 MB gzipped, what a first visit downloads): the generator
+links the baked real faces (`mountain/mapgen/real_faces/`, megabytes) only into a program that
+lays one (`lay_real_face`), which Fall Line never does; they were 2.9 MB of its 7.7 before. Within the default limits the ground's and the fog's passes bind lean
 parts of group 0 too (`ground`, `fog`), and the snow's material, whose fragment stage reads 18
 textures, gives way to the default material on a device that offers fewer; the rest of the
 frame is the native one.

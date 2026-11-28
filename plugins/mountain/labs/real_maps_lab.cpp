@@ -125,7 +125,7 @@ void run(ge::lab::Lab& lab) {
   int off_faces = 0;
   for (const mg::FaceCrop* c : faces) {
     mg::GenerateOptions opts;
-    opts.face = c->id;
+    mg::lay_real_face(opts, c->id);
     opts.hints = hinted;
     const auto t0 = std::chrono::steady_clock::now();
     std::optional<mg::Level> level;

@@ -7,6 +7,7 @@
 // ge:summary Tests for gates woken by a monster's death and the buttons that blow a map up
 // ge:keywords test way_gates way_gate_names way_wake_gates gate_dead deathtarget
 // ge:keywords button_dooms killbox biggun button_spins func_rotating boss2
+// ge:keywords door_is_lever lever mine4
 // ge:skill shooterbots testing
 #include <memory>
 #include <string>
@@ -177,4 +178,50 @@ TEST(a_button_that_sets_a_blade_spinning_spins_through_its_relays_and_a_door_but
   CHECK(sb::button_spins(blocks, "t21"));
   CHECK(!sb::button_spins(blocks, "t22"));
   CHECK(!sb::button_spins(blocks, nullptr));
+}
+
+// mine4's lever beside the carts' track: a turning door with no name whose target starts the
+// carts is pressed like a button; a door that only names its area portal, one with a name (opened
+// by something else) and a shot one are not levers.
+TEST(a_turning_door_touched_open_that_starts_the_carts_is_a_lever) {
+  const std::vector<sb::EntityBlock> blocks = blocks_of(R"({
+"classname" "worldspawn"
+}
+{
+"classname" "func_door_rotating"
+"model" "*22"
+"target" "t678"
+}
+{
+"classname" "func_train"
+"targetname" "t678"
+}
+{
+"classname" "func_door_rotating"
+"model" "*23"
+"target" "p1"
+}
+{
+"classname" "func_areaportal"
+"targetname" "p1"
+}
+{
+"classname" "func_door_rotating"
+"model" "*24"
+"targetname" "named"
+"target" "t678"
+}
+{
+"classname" "func_door_rotating"
+"model" "*25"
+"health" "10"
+"target" "t678"
+}
+)");
+  CHECK_MSG(sb::door_is_lever(blocks, blocks[1]),
+            "mine4's lever is not taken for one: read door_is_lever in buttons.cpp");
+  CHECK(!sb::door_is_lever(blocks, blocks[2]));  // the train itself
+  CHECK(!sb::door_is_lever(blocks, blocks[3]));  // only its portal
+  CHECK(!sb::door_is_lever(blocks, blocks[5]));  // named: something else opens it
+  CHECK(!sb::door_is_lever(blocks, blocks[6]));  // shot open
 }

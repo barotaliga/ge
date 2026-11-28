@@ -6,6 +6,8 @@
 // ge:test tests/shooterbots_entities_test.cpp
 #include "shooterbots/entities.hpp"
 
+#include <cstring>
+
 #include "brush/read.hpp"
 
 namespace ge::shooterbots {
@@ -20,6 +22,16 @@ const char* block_value(const EntityBlock& b, const char* key) {
   for (const auto& [k, v] : b.pairs)
     if (k == key) return v.c_str();
   return nullptr;
+}
+
+bool name_fired(const std::vector<EntityBlock>& blocks, const char* name) {
+  if (!name) return false;
+  for (const EntityBlock& d : blocks)
+    for (const char* key : {"target", "killtarget", "pathtarget"}) {
+      const char* v = block_value(d, key);
+      if (v && std::strcmp(v, name) == 0) return true;
+    }
+  return false;
 }
 
 }  // namespace ge::shooterbots

@@ -319,7 +319,14 @@ bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotVie
     const sh::HullTrace fall =
         sh::trace_move(s.sv, ahead, sh::kPlayerMins, sh::kPlayerMaxs,
                        ahead - sh::Vec3f{0, 0, kEdgeFall}, sh::kTraceNoMonsters, me);
-    if (fall.fraction < 1 && !trap(sb::nav_nearest(g, fall.endpos))) return false;
+    // A landing with no node near it is no floor with a way back either (space's shaft under
+    // its walkway: the fight's step off it fell 900 units onto the killing floor, where no node
+    // stands), unless his route goes down there.
+    const int32_t land = sb::nav_nearest(g, fall.endpos);
+    if (fall.fraction < 1 && land >= 0 && !trap(land)) return false;
+    if (fall.fraction < 1 && land < 0 && p.k + 1 < p.route.size() &&
+        g.nodes[static_cast<size_t>(p.route[p.k + 1])].origin.z < e.origin.z - kEdgeDrop)
+      return false;
   }
   // Over the lip of a pit he could not climb back out of: the keys let go, and a run into it
   // braked by the wish turned back along it.

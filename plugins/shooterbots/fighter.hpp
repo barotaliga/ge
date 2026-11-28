@@ -153,6 +153,9 @@ struct ButtonSpot {
   // How it looks at rest (its world row's frame and effects, first seen; -1 not yet): one that
   // does not move when pressed shows it by its texture only (`button_looks_pressed`).
   int rest_frame = -1, rest_effects = -1;
+  // A lever (`door_is_lever`): a door touched open, pressed once it turns or moves off its rest.
+  bool lever = false;
+  sh::Vec3f rest_angles{0, 0, 0};
 };
 
 // A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button
