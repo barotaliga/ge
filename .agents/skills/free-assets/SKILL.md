@@ -1,13 +1,16 @@
 ---
 name: free-assets
-description: "Use when a game needs sounds or models it does not have and someone else has made them free: the free sources (Kenney, OpenGameArt, Poly Haven, Quaternius and others), which licences this repository can carry, how to fetch and unpack each source, finding what a game needs (Shooter's Edge's registry from the classic content's maps and game logic), picking a replacement without listening (the match on length, bands and envelope), converting and renaming it to our name, the classic.assetmap the map cloner and the game read, CREDITS.md, and the `ge` commands that do it (`ge source`, `ge sound`, `ge model import`, `ge credits check`, `ge content scan`)."
+description: "Use when a game needs sounds or models it does not have and someone else has made them free: the free sources (Kenney, OpenGameArt, Poly Haven, Quaternius and others), which licences this repository can carry, how to fetch and unpack each source, finding what a game needs (a registry of its own names; Shooter's Edge's built-in arena, the tests' fixture), picking a replacement without listening (the match on length, bands and envelope), converting and renaming it to our name, the classic.assetmap the map cloner and the game read, CREDITS.md, and the `ge` commands that do it (`ge source`, `ge sound`, `ge model import`, `ge credits check`, `ge content scan`)."
 ---
 
 # Free assets
 
 A game here makes most of what it shows in code and its sounds on the synth. Where a game needs
-recorded sounds or authored models (Shooter's Edge first: it must answer every sound and model
-the classic content names), they come from people who gave them away. This skill is where to
+recorded sounds or authored models, they come from people who gave them away. Shooter's Edge has
+no game of its own (it loads the player's classic games and never stands in for their content), so
+its `content/` holds only what the built-in arena, the headless tests' and labs' fixture, plays:
+its sounds and its eight built held weapons. Never add a model or sound there to replace a classic
+game's. This skill is where to
 find them, which ones the repository may carry, and how one becomes ours.
 
 ## The licence rule
@@ -47,16 +50,16 @@ Check each pack's own page every time; a site's default licence is not a pack's.
 Unpacking needs `unzip`, `7z` (`apt-get install p7zip-full`) and for old self-extractors
 `lhasa`; `ffmpeg` reads every audio format met so far (wav, ogg, flac, mp3).
 
-## The procedure (Shooter's Edge)
+## The procedure (Shooter's Edge's arena fixture)
 
 Everything lives in `games/shooters_edge/content/`:
 
 | File | What |
 | --- | --- |
-| `sounds.tsv`, `models.tsv` | THE REGISTRY: one row a sound or model the game needs, by OUR name, with what it is, what plays or shows it, its scope (`game` or `creature`), its status (`replaced`, `open`, or `skip` when no multiplayer code plays or shows it: the game is multiplayer only, so creature content and single-player-only content are listed but not replaced) and its source pack's id |
+| `sounds.tsv`, `models.tsv` | THE REGISTRY: one row a sound or model the game needs, by OUR name, with what it is, what plays or shows it, its scope (`game`), its status (`replaced`) and its source pack's id; only what the arena plays or its labs draw is listed |
 | `classic.assetmap` | The classic name each of ours stands in for, read by the map cloner (`rooms::parse_asset_map`) and by the game: `sound <classic path> <our name>`, `model <classic path> <our name>`, and `set <classname> <key>=<value> <field> <our name>` for the numbered sound sets a map picks by number (doors, buttons, lifts, trains, triggers) or by worldspawn's `worldtype` (locks and keys). The same comment and `# pin` rules as a `.texmap` |
 | `sounds/<our name>.wav` | Mono 16-bit PCM at 22 050 Hz, trimmed, loudness-normalised to -16 LUFS with -1.5 dB true peak |
-| `models/<our name>.glb` | Binary glTF with every texture packed inside, loadable by `assets::load_gltf` |
+| `models/view/<name>/` | The held weapons built in Blender (`held-weapons` skill); a model of any kind is binary glTF with every texture packed inside, loadable by `assets::load_gltf` |
 | `CREDITS.md` | Every committed file: its pack, author, source URL, licence and the source file's name |
 
 1. **Know what is needed.** The registry was built from the shareware data in scratch: every

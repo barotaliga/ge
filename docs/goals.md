@@ -32,7 +32,8 @@ Line Fall Line is in `games/fall_line/` (G8).
    every subsystem (`AGENTS.md`).
 4. **G4: Only what the game needs.** Each component traces back to something Fall Line
    does. Nothing is built for a hypothetical game. Once Fall Line is on the engine, the second game,
-   **Shooter's Edge** (`docs/shooters-edge.md`, M18), justifies a component the same way. A general engine feature earns
+   **Shooter's Edge** (`docs/shooters-edge.md`, M18: a shell that loads, enhances and remixes the classic
+   shooters the player owns, with no game of its own), justifies a component the same way. A general engine feature earns
    its place when the game needs it. G8 decides WHERE a component lives, never WHETHER it is
    built.
 5. **G5: Native on desktop and mobile.** The engine runs as a native app on macOS, Linux
@@ -72,6 +73,9 @@ Line Fall Line is in `games/fall_line/` (G8).
   is the game's own.
 - Music. Fall Line has none by design: its sound is its effects.
 - Changes to the reference sources used while porting. They are read-only from here.
+- A game of Shooter's Edge's own: its maps, weapons, models, sounds or campaign standing in for a
+  classic game's. Shooter's Edge is the menu over the moon backdrop and loads the player's classic
+  games; its free arena exists only as the headless tests' fixture.
 - A web build of a game. The engine's games are native only; the web viewer (G5) only watches.
 
 ## Milestones
