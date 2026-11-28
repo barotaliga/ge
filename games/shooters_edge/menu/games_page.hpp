@@ -19,7 +19,7 @@
 // ge:keywords menu select-game games-page game-names name-picture install add-game browse
 // ge:keywords menu_games
 // ge:skill ui
-// ge:test tests/shooters_edge_menu_test.cpp
+// ge:test tests/shooters_edge_menu_games_page_test.cpp
 #pragma once
 
 #include <cstdint>

@@ -70,6 +70,9 @@ constexpr PageArt kPageArt[] = {
     {"ranked", "p_multi", ""},
     {"options", "p_option", ""},
     {"video", "p_option", ""},
+    {"load", "p_load", ""},
+    {"save", "p_save", ""},
+    {"controls", "ttl_cstm", ""},
 };
 
 // The band of `pa`'s strip that has the words of row `id`, or -1.
