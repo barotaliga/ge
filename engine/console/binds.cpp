@@ -216,4 +216,34 @@ void Binds::clear() {
   for (auto& t : tables_) t.clear();
 }
 
+std::vector<BindChange> Binds::changes() const {
+  std::vector<BindChange> out;
+  for (size_t m = 0; m < tables_.size(); ++m) {
+    const BindMode mode = static_cast<BindMode>(m);
+    for (const auto& [key, cmd] : tables_[m]) {
+      const auto d = defaults_[m].find(key);
+      if (d == defaults_[m].end() || d->second != cmd) out.push_back({mode, key, cmd});
+    }
+    for (const auto& [key, cmd] : defaults_[m])
+      if (tables_[m].count(key) == 0) out.push_back({mode, key, ""});
+  }
+  return out;
+}
+
+void Binds::apply(const std::vector<BindChange>& changes) {
+  for (const BindChange& c : changes) {
+    if (c.command.empty())
+      remove(c.mode, c.key);
+    else
+      set(c.mode, c.key, c.command);
+  }
+}
+
+bool Binds::restore_defaults() {
+  bool any = false;
+  for (const auto& t : defaults_) any = any || !t.empty();
+  if (any) tables_ = defaults_;
+  return any;
+}
+
 }  // namespace ge::console

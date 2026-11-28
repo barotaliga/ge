@@ -101,13 +101,32 @@ bool value_in(const Cvar& v, const std::function<bool(std::string_view)>& keep,
 std::string Console::save_text(const SaveScope& scope) const {
   std::string out = "// written by cfg_save: every archived cvar, alias and bind\n";
   if (scope.binds) {
-    out += "unbindall\n";
-    for (int m = 0; m < kBindModes; ++m) {
-      const BindMode mode = static_cast<BindMode>(m);
-      const std::string flag =
-          mode == BindMode::game ? "" : "-" + std::string(mode_name(mode)) + " ";
-      for (const auto& [k, cmd] : binds_.table(mode))
-        out.append("bind ").append(flag).append(quote(k)).append(" \"").append(cmd).append("\"\n");
+    const auto flag = [](BindMode mode) {
+      return mode == BindMode::game ? std::string() : "-" + std::string(mode_name(mode)) + " ";
+    };
+    if (scope.bind_changes) {
+      for (const BindChange& c : binds_.changes())
+        if (c.command.empty())
+          out.append("unbind ").append(flag(c.mode)).append(quote(c.key)).append("\n");
+        else
+          out.append("bind ")
+              .append(flag(c.mode))
+              .append(quote(c.key))
+              .append(" \"")
+              .append(c.command)
+              .append("\"\n");
+    } else {
+      out += "unbindall\n";
+      for (int m = 0; m < kBindModes; ++m) {
+        const BindMode mode = static_cast<BindMode>(m);
+        for (const auto& [k, cmd] : binds_.table(mode))
+          out.append("bind ")
+              .append(flag(mode))
+              .append(quote(k))
+              .append(" \"")
+              .append(cmd)
+              .append("\"\n");
+      }
     }
     for (const auto& [n, a] : aliases_)
       if (!a.temp) out += "alias " + n + " \"" + a.body + "\"\n";

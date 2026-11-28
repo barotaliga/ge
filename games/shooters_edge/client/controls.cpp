@@ -110,6 +110,8 @@ void default_binds(ge::console::Console& con) {
 
 void reset_binds(ge::console::Console& con) {
   namespace gc = ge::console;
+  // The game's own keys, as its defaults left them (console/binds.hpp § THE DEFAULTS).
+  if (con.binds().restore_defaults()) return;
   // The console's own keys, in every mode, survive: without them nobody could type this again.
   std::vector<std::pair<std::pair<gc::BindMode, std::string>, std::string>> kept;
   for (const gc::BindMode m : {gc::BindMode::game, gc::BindMode::console})

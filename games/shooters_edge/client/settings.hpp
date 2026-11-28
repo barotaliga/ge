@@ -6,8 +6,10 @@
 //   `data/settings/config.cfg` beside the program (`series_settings_files`): its lines run after
 //   and win, and the settings are written to it, so a game kept on a stick or in a shared folder
 //   carries its own settings; `cfg_save_global` writes the player's own instead. They hold the
-//   binds and every setting in our names, which every
-//   classic game reads, a game's own spellings being synonyms of them (client/cvar_layers.hpp).
+//   binds the player changed (never a game's own default keys: each game keeps its own, and the
+//   player's changes are laid over them, console/binds.hpp § THE DEFAULTS) and every setting in
+//   our names, which every classic game reads, a game's own spellings being synonyms of them
+//   (client/cvar_layers.hpp).
 //   Beside each game, `<game folder>/settings/config.cfg` (`settings_dir`, the console's first
 //   search directory) keeps only that game's own meanings of shared names (Quake II's `crosshair`).
 //   Both are written (`save_settings`) when the menu closes, before another game is loaded and

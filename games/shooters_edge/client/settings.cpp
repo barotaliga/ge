@@ -69,8 +69,10 @@ bool save_settings(ge::console::Console& con, const std::filesystem::path& serie
   const std::string own =
       split ? con.save_text({.binds = false, .layers = is_game_layer, .scopes = mine})
             : con.save_text();
-  if (split &&
-      !write_series(series, con.save_text({.binds = true, .layers = outside, .scopes = others}))) {
+  if (split && !write_series(series, con.save_text({.binds = true,
+                                                    .bind_changes = true,
+                                                    .layers = outside,
+                                                    .scopes = others}))) {
     ge::core::output::status("shooters_edge: the settings were not saved: " + series.string() +
                              " cannot be written; next: check the data folder's permissions");
     return false;
