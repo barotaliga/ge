@@ -374,7 +374,8 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           b.f.bot.yaw = b.cmds[2].angles.y;  // he turned to it: his keys follow his view
         } else {
           // A climber is held to the ladder by his pilot: a shove aside takes him off it.
-          if (!b.f.bot.pilot.pilot.climbing) unwedge(b.wedge, s, me, t, b.cmds[2]);
+          const sb::Pilot& bp = b.f.bot.pilot.pilot;
+          if (!bp.climbing) unwedge(b.wedge, s, me, t, b.cmds[2], way_held(bp));
           if (way_edge(*m.nav, b.f, s, me, b.cmds[2])) um.edges++;
         }
         if (opt.beside && k > 0 && sb::party_give_way(s, me, people.humans, b.cmds[2]))

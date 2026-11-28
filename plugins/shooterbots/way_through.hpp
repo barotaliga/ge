@@ -363,7 +363,14 @@ struct Wedge {
   int64_t shoves = 0;      // commands he jumped and stepped aside to come free
   int64_t shots = 0;       // commands he fired at a monster that held him up
 };
-void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd);
+// `held`: his pilot keeps him there on purpose (waiting for a mover, lining up a jump, flying it):
+// no wedge, the stillness counted from now (`way_held`). Shoved off boss1's ledge as the ferry he
+// had waited for came, his jump onto it was thrown aside into the lava.
+void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd,
+             bool held = false);
+inline bool way_held(const ge::shooterbots::Pilot& p) {
+  return p.mode == ge::shooterbots::PilotMode::wait || ge::shooterbots::leaping_mode(p.mode);
+}
 
 // THE PIT'S LIP: on dry ground outside a trap (map_nav.hpp: no way on foot back out), a wish
 // that would carry him over the lip of one (a stride ahead, a floor under it only the trap's, or

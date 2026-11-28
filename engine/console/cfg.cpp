@@ -116,7 +116,10 @@ std::string Console::save_text(const SaveScope& scope) const {
   for (const Cvar* v : cvars_.sorted()) {
     std::string value;
     uint32_t flags = 0;
-    if (!value_in(*v, scope.layers, cvars_.scope(), &value, &flags) || (flags & kArchive) == 0)
+    // A cheat is never written: the file is read before any server allows cheats, so it would
+    // only be refused there, a warning at every start.
+    if (!value_in(*v, scope.layers, cvars_.scope(), &value, &flags) ||
+        (flags & (kArchive | kCheat)) != kArchive)
       continue;
     if ((flags & kUserInfo) == 0)
       out += "seta " + v->name + " " + saved(value) + "\n";
@@ -128,7 +131,7 @@ std::string Console::save_text(const SaveScope& scope) const {
   std::string scoped;
   for (const Cvar* v : cvars_.sorted())
     for (const auto& [game, value] : v->scoped)
-      if ((v->flags & kArchive) != 0 && (!scope.scopes || scope.scopes(game)))
+      if ((v->flags & (kArchive | kCheat)) == kArchive && (!scope.scopes || scope.scopes(game)))
         scoped += "seta " + game + ":" + v->name + " " + saved(value) + "\n";
   return out + info + scoped;
 }

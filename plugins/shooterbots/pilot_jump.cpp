@@ -268,6 +268,12 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
   const float along_v = dot(s.velocity, dir);
   const float cosv = speed > 1 ? along_v / speed : 0;
   const float run_up = p.g->set.run_up;
+  // Onto a moving platform: its top is no part of the world a flight is checked against, so only
+  // on the proof's line (a lip's jump off it from boss1's ledge, at the ferry come to its stop,
+  // flew past its side into the lava; one on it is what keeps a run that overran off the lip).
+  const bool onto_mover =
+      p.k + 1 < p.route.size() && p.g->nodes[static_cast<size_t>(p.route[p.k + 1])].mover >= 0;
+  const bool off_line_onto = onto_mover && (lat_abs > kOnLine || cosv < kJumpAim);
   if (v <= 0) {
     // A standing jump (proven with no run-up: up a stair's tread): to S, then facing T, forward
     // held to the full and the jump pressed, as the proof flew it.
@@ -346,8 +352,9 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
   // AT A LIP ON A JUMP'S RUN (`lipjump`): about to run off its floor at a run (past the start, or
   // turned to line up again with the momentum still on), a plain jump's run jumps there at T: a
   // person never runs off a lip without the jump (a beam's end was run off lining up again).
-  if (plain && p.set.lip_jump && s.onground && !p.jump_pressed && speed > kLipSpeed &&
-      s.world != nullptr && shot_view_ready(p) && lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+  if (plain && !off_line_onto && p.set.lip_jump && s.onground && !p.jump_pressed &&
+      speed > kLipSpeed && s.world != nullptr && shot_view_ready(p) &&
+      lip_ahead(*s.world, s.origin, s.velocity, msec)) {
     p.mode = PilotMode::jump;
     w.jump = true;
     w.forward = 1;
@@ -360,8 +367,8 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
   // FLOWN FROM HERE (`jumpfly`, a plain jump): near the start and not on its line at its speed, a
   // jump whose flight from here lands by T is taken as it is.
   bool flown = false;
-  if (p.mode == PilotMode::jump && plain && p.set.jump_fly && s.onground && !p.jump_pressed &&
-      along >= -kFlyFrom && along <= kPastStart && shot_view_ready(p)) {
+  if (p.mode == PilotMode::jump && plain && !onto_mover && p.set.jump_fly && s.onground &&
+      !p.jump_pressed && along >= -kFlyFrom && along <= kPastStart && shot_view_ready(p)) {
     const bool strict = along >= -2 && lat_abs <= kOnLine && along_v >= kJumpAlong * v &&
                         along_v <= kJumpOver * v + 16 && cosv >= kJumpAim;
     // Over lava or slime, where the air's keys carry the flight (`air_carries`), only on the

@@ -111,7 +111,8 @@ uint32_t keys_off_brink(const KeysNear& n, const sh::MoveCmd& cmd, sh::Vec3f vel
               fy = static_cast<float>(ge::core::libm::sin(yaw));
   const sh::Vec3f o = n.origin;
   const auto falls = [&](float dx, float dy, float d) {
-    return sb::nav_falls_in_harm(*n.world, o, {o.x + dx * d, o.y + dy * d, o.z});
+    const sh::Vec3f to{o.x + dx * d, o.y + dy * d, o.z};
+    return sb::nav_falls_in_harm(*n.world, o, to) && !sb::nav_on_mover_top(n.movers, to);
   };
   // Each key's step: forward along the view, right a quarter turn clockwise of it.
   const struct {
@@ -182,7 +183,7 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   // Nor on a jump's run at its start (the nav proved it, over lava or not): the run at a jump over
   // a lava pit let go of W short of the start, and stood there for 50 s (Ground Zero's rmine1).
   const bool at_jump = onground && pm == sb::PilotMode::jump;
-  const KeysNear near{f.bot.pilot.world, p.g, origin};
+  const KeysNear near{f.bot.pilot.world, p.g, origin, f.bot.pilot.now};
   press_keys(f.keys, f.features, cmd, velocity, onground, curve,
              (onground || free_feet || !sb::air_carries(p.g->move)) && !p.brink_free && !at_jump
                  ? &near

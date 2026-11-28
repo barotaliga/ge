@@ -74,9 +74,10 @@ ConfigsRun start_configs(ge::console::Console& con, const std::string& basedir,
                          const std::string& game, const ge::classicenhance::Profile& content,
                          const std::vector<std::string>& plus, const SeriesConfig& series = {});
 
-// The recordings a mod folder's own start file (`quake.rc`, in the mod's packs or loose) plays at
-// the title (its `startdemos` words, the last such line's), so a mission pack's title loop plays
-// the pack's own demos; `fallback` when `game` is the base folder or the file names none.
+// The recordings a mod folder's own start file plays at the title (in the mod's packs or loose:
+// `quake.rc`'s `startdemos` words, the last such line's, or else default.cfg's demo aliases, as
+// Quake II's packs name theirs), so a mission pack's title loop plays the pack's own demos;
+// `fallback` when `game` is the base folder or the files name none.
 std::string mod_startdemos(const std::string& basedir, const std::string& game,
                            const ge::classicenhance::Profile& content,
                            std::string_view fallback = {});

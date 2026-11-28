@@ -149,7 +149,7 @@ RunResult run_route(const sh::MoveWorld& world, const sb::NavGraph& g, sh::Vec3f
       cmd.angles.y = static_cast<float>(view);
     }
     if (keys != nullptr) {
-      const KeysNear near{&world, &g, st.origin};
+      const KeysNear near{&world, &g, st.origin, {}};
       press_keys(hand, *keys, cmd, st.velocity, st.ground >= 0,
                  p.mode == sb::PilotMode::hop ? p.curve_keys : sb::kNoCurveKeys, &near);
     }

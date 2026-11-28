@@ -61,6 +61,12 @@ constexpr float kDoomDmg = 1000;  // a blast that hurts this much kills anyone i
 // Whether what a button's `target` fires (`button_fires`) reaches a killbox or a blast no one lives
 // through: biggun's evacuate button, two relays and 22 s on, sets off both over the whole base.
 bool button_dooms(const std::vector<ge::shooterbots::EntityBlock>& blocks, const char* target);
+// Whether button `b` shows itself pressed by its look: its world row in `s`'s frame or effects
+// changed from those it first had (`ButtonSpot::rest_frame`, noted on the first call). A button
+// whose travel is all lip never moves: boss1's floor plates by the boss, pressed, show it only by
+// the texture they switch to, and were walked round for minutes as never pressed until he ran off
+// into the lava beside them.
+bool button_looks_pressed(ButtonSpot& b, const ge::shooterbots::BotView& s);
 
 // (`fields`) The map's buttons as the fields' errands (shooterbots/nav_field.hpp), one for each of
 // `f.button_spots` in order (an errand's index is its button's): the node it is pressed or shot
