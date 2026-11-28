@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "classicenhance/profile.hpp"
+#include "console/lex.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -304,6 +305,18 @@ bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& 
   t.start = t.demo;
   t.active = true;
   return true;
+}
+
+std::vector<std::string> attract_words(const std::string& list, const SearchPath& files,
+                                       const GameAdapter& game) {
+  const std::vector<std::string> words = ge::console::tokenize(list);
+  std::vector<std::string> held;
+  for (const std::string& w : words) {
+    std::vector<uint8_t> bytes;
+    std::string found, error;
+    if (game.find_demo(game, files, w, bytes, found, error)) held.push_back(w);
+  }
+  return held.empty() ? words : held;
 }
 
 void DemoTimeline::frame(const DemoState& s, bool new_level) {

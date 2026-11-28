@@ -112,7 +112,6 @@ enum : uint16_t {
   kCdIdealPitch = 1 << 1,
   kCdPunch1 = 1 << 2,
   kCdVelocity1 = 1 << 5,
-  kCdItems = 1 << 9,
   kCdWeaponFrame = 1 << 12,
   kCdArmour = 1 << 13,
   kCdWeapon = 1 << 14,
@@ -576,7 +575,7 @@ struct SingleConvert final : ConvertStream {
               velocity[static_cast<size_t>(i)] =
                   static_cast<int16_t>((bits & (kCdVelocity1 << i)) != 0 ? m.i8() * 16 : 0);
             }
-            if ((bits & kCdItems) != 0) stats[kStatItems] = m.i32();
+            stats[kStatItems] = m.i32();  // sent whatever its bit says (demo_single.cpp)
             weapon_frame = (bits & kCdWeaponFrame) != 0 ? m.u8() : 0;
             stats[kStatArmour] = (bits & kCdArmour) != 0 ? m.u8() : 0;
             stats[kStatWeapon] = (bits & kCdWeapon) != 0 ? m.u8() : 0;

@@ -49,6 +49,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
@@ -243,9 +244,19 @@ TEST(q2_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu)
   const cl::GameAdapter& a = cl::q2_adapter();
   std::vector<uint8_t> bytes;
   std::string found;
-  CHECK_MSG(a.find_demo(a, files, std::string(a.game->attract), bytes, found, error), error);
+  const std::vector<std::string> loop = cl::attract_words(std::string(a.game->attract), files, a);
+  CHECK(loop == std::vector<std::string>{"q2demo1"});
+  CHECK_MSG(a.find_demo(a, files, loop[0], bytes, found, error), error);
   CHECK(bytes.size() == 1 && bytes[0] == 7);
   CHECK_MSG(found.starts_with("demos/q2demo1.dm2"), found);
+  // The full game's packs hold its own two: the title plays those, never asking for the other.
+  CHECK(ge::vfs::write_pak({{"demos/demo1.dm2", {1}}, {"demos/demo2.dm2", {2}}}, &pak, &error));
+  cl::SearchPath full;
+  CHECK_MSG(cl::add_archive(full, "pak0.pak", std::move(pak), error), error);
+  CHECK((cl::attract_words(std::string(a.game->attract), full, a) ==
+         std::vector<std::string>{"demo1", "demo2"}));
+  // None held: the whole list, so the first one's absence is told.
+  CHECK(cl::attract_words("x y", full, a) == (std::vector<std::string>{"x", "y"}));
 }
 
 // Quake II's `demo` plays a name from `demos/` (its extension optional) or, after a leading slash,

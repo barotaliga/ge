@@ -3,7 +3,8 @@
 // entity update run on to its third byte (alpha, scale, the model's and frame's high bytes, the
 // next step's time), the status's high bytes, a sound by a word, the skybox and fog messages.
 // 999: the flags word's coordinates (sixteenths in an i32, or floats) and angles (a short, or a
-// float). Protocol 15's older transparency, and a protocol extension's marker refused.
+// float). Protocol 15's older transparency and its items word sent with its bit clear, and a
+// protocol extension's marker refused.
 //
 // ge:summary Test: single-player demos of protocols 666 and 999 read frame by frame
 // ge:keywords test single-player dem protocol-666 protocol-999 larger-limits alpha scale
@@ -278,6 +279,41 @@ TEST(protocol_15_s_older_transparency_reads_as_an_alpha) {
   const std::vector<Frame> frames = read_all(file, error, last);
   CHECK_MSG(last == cl::DemoRead::end, error);
   CHECK(frames.size() == 1 && frames[0].s.entities[2].alpha == 0.25f);
+}
+
+TEST(protocol_15_s_items_word_is_read_even_when_its_bit_is_clear) {
+  // Scourge of Armagon's recordings send the status with only the weapon's bit, and the items
+  // word anyway; a message read after it must start where it does.
+  std::vector<uint8_t> file = {'-', '1', '\n'};
+  Bytes w{{15, 0}, {}};
+  w.u8(11);
+  w.i32(15);
+  w.u8(1);
+  w.u8(0);
+  w.text("Hall");
+  w.text("maps/hall.bsp");
+  w.text("");
+  w.text("");
+  w.u8(15);
+  w.u16(1 << 14);  // the weapon's bit alone
+  w.i32(0x1101);   // the items word all the same
+  w.u8(7);         // the weapon
+  w.u16(100);      // health
+  for (const int v : {25, 25, 0, 0, 0, 1}) w.u8(v);
+  w.u8(25);  // the signon after it
+  w.u8(3);
+  block(file, w);
+  Bytes end{{15, 0}, {}};
+  end.u8(2);
+  block(file, end);
+  std::string error;
+  cl::DemoRead last{};
+  const std::vector<Frame> frames = read_all(file, error, last);
+  CHECK_MSG(last == cl::DemoRead::end, error);
+  CHECK(frames.size() == 1);
+  const cl::DemoState& s = frames[0].s;
+  CHECK(s.stats[cl::kStatItems] == 0x1101 && s.stats[cl::kStatWeapon] == 7);
+  CHECK(s.stats[cl::kStatHealth] == 100 && s.stats[cl::kStatShells] == 25);
 }
 
 TEST(a_protocol_extension_s_marker_is_refused_in_words) {
