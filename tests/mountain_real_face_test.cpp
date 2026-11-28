@@ -259,7 +259,7 @@ TEST(a_real_face_is_laid_one_to_one) {
 TEST(a_real_face_builds_a_clean_ski_area) {
   const bool write = env_set("GE_GOLDEN_WRITE");
   mg::GenerateOptions opts;
-  opts.face = "fell-1";
+  CHECK(mg::lay_real_face(opts, "fell-1"));
   const mg::Level level = mg::generate_level(1, opts);
   CHECK(level.face == std::optional<std::string>("fell-1"));
   CHECK(level.region == mg::RegionId::fell);
