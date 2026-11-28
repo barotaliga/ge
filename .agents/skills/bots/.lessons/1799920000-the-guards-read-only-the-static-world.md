@@ -21,3 +21,7 @@ concepts: [brink, ferry, moving-platform, lava, poke, dodge, unwedge, floor-plat
   ride a rising platform at its middle.
 - The runs are long (10 min for 900 s); a per-frame print for a 1.5 s window (`t` from the
   rules) found each culprit in one rerun of ~2 min with `timeout`; strip it before the commit.
+- A guard for one map's hazard must name the hazard, not only the place: the dodge held on every
+  ride (`route_on_mover`) cost the arena's novices a fifth of their frags on its lift and failed
+  `shooters_edge_fight_test`; held only on a ride over harm (`nav_harm_near`) it passed. Bisect
+  such a failure with one binary per reverted guard, run side by side (one run per core).

@@ -1621,9 +1621,14 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
   }
 
   keys_mark(f, cmd, keys_was, "button");
-  // Not on or onto a mover's top (`route_on_mover`): its floor unseen by the dodge's check, a
-  // side step and its hop on boss1's ferry over the lava threw him off into it.
-  if (!dead && f.features[sb::Feature::dodge] && !sb::route_on_mover(f.bot.pilot.pilot))
+  // Not on or onto a mover's top over harm (`route_on_mover`, `nav_harm_near`): its floor unseen
+  // by the dodge's check, a side step and its hop on boss1's ferry threw him off into the lava. A
+  // lift over a dry floor keeps the dodge (without it the arena's novices scored a fifth less).
+  const sb::Pilot& dp = f.bot.pilot.pilot;
+  const bool over_harm_ride =
+      sb::route_on_mover(dp) &&
+      sb::nav_harm_near(*dp.g, s.world.entities[static_cast<size_t>(me)].origin, 192);
+  if (!dead && f.features[sb::Feature::dodge] && !over_harm_ride)
     fighter_dodge(f, s, me, t, why, cmd);  // the side steps (footwork.hpp)
   keys_mark(f, cmd, keys_was, "dodge");
 

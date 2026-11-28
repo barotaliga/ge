@@ -241,7 +241,7 @@ TEST(a_key_into_lava_is_not_pressed_with_brinkkeys_but_one_out_of_it_is) {
     fb::key_hand_init(k, 90, 3);
     sb::Features features = sb::features_all();
     features.set(sb::Feature::brinkkeys, guard);
-    const fb::KeysNear near{&world, &g, {0, 30, 24}};
+    const fb::KeysNear near{&world, &g, {0, 30, 24}, {}};
     int pressed = 0;
     for (int n = 0; n < 40; n++) {
       sh::MoveCmd c;
@@ -262,7 +262,7 @@ TEST(a_key_into_lava_is_not_pressed_with_brinkkeys_but_one_out_of_it_is) {
     fb::KeyHand k;
     fb::key_hand_init(k, 90, 3);
     const sb::Features features = sb::features_all();
-    const fb::KeysNear in{&world, &g, {0, -300, -155}};  // afloat, the floor under it
+    const fb::KeysNear in{&world, &g, {0, -300, -155}, {}};  // afloat, the floor under it
     CHECK_MSG(sb::nav_harm_near(g, in.origin, 192), "no harm near in the lava");
     CHECK_MSG(sb::nav_falls_in_harm(world, in.origin, {0, -236, -155}), "no fall in harm ahead");
     int pressed = 0;
