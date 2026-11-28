@@ -32,7 +32,8 @@
 // ge:summary A party of bots splitting a campaign map's work: nearest takes it, shared knowledge
 // ge:keywords party co-op coop split share route mates mates_steps mates_prey mates_help leash
 // ge:keywords humans support campaign 100-percent party_share divide-work walk route-cost
-// ge:keywords helper hosted party_stay party_work exit_held
+// ge:keywords helper hosted party_stay party_work exit_held share-health leave-items
+// ge:keywords party_leave_items left_to_people hurt-person armour
 // ge:skill shooterbots bots
 // ge:test tests/shooterbots_party_test.cpp
 #pragma once
@@ -57,6 +58,7 @@ constexpr float kPartyRun = 320;       // units a second: a straight distance as
 constexpr float kPartyLeash = 768;     // a hosted co-op game's leash round the people, units
 constexpr float kPartyNear = 160;      // a bot sent back to the people stops this near one
 constexpr float kPartyClear = 72;      // nearer a person than this a bot steps away from him
+constexpr float kPartyOwnNeed = 40;    // at or under this health a bot heals beside a hurt person
 
 struct PartyMember {
   WayThrough* way = nullptr;
@@ -69,6 +71,9 @@ struct PartyOptions {
   std::vector<sh::Vec3f> humans;  // the people's places
   std::vector<float> facing;      // (with `humans`) where each looks, degrees of yaw
   bool exit_held = false;         // (people playing) the exit is theirs: no bot's, ever
+  // (with `humans`) each person's health and armour (its points times its kind's share: what it
+  // stops), 0 for one lying dead; none given: nothing is left to them (`party_leave_items`)
+  std::vector<float> health, armour;
 };
 
 struct PartyStats {
@@ -97,6 +102,30 @@ void party_share(Party& p, std::span<PartyMember> party, const MapNav& nav, cons
 // True when it sent him back.
 bool party_stay(Fighter& f, const MapNav& nav, const BotView& s, int me, const PartyOptions& opt);
 
+// WHAT HEALS IS SHARED (people playing): health, the mega health and armour lying within the
+// leash of a living person who has no more of it than the bot (his health no higher, or his
+// armour stopping no more) are left to that person, as people playing co-op leave the health to
+// the one who is hurt: `f.left_to_people` marks them and the fighter's item choice passes them by
+// (`best_item`, `on_the_way`). A bot down to kPartyOwnNeed heals anyway: a helper dead is no help.
+// Weapons and ammunition are not held back (in co-op a weapon stays for every player). Returns how
+// many items it left.
+int party_leave_items(Fighter& f, const BotView& s, int me, const PartyOptions& opt);
+
+// What one player holds that heals: his health (0 lying dead) and what his armour stops (its
+// points times its kind's share).
+struct PartyHeld {
+  float health = 0, armour = 0;
+};
+PartyHeld party_held(const BotView& s, int ent);
+// THE SHARING COUNTED (a lab's): from one frame's holdings to the next (`before`, `after`, a
+// player each, index 0 the person), the health the person took and the health and armour members
+// 1.. took while the person, alive, had no more than the taker and could use it.
+struct PartyHealTally {
+  double person_healed = 0, health_in_need = 0, armour_in_need = 0;
+};
+void party_heal_tally(PartyHealTally& t, std::span<const PartyHeld> before,
+                      std::span<const PartyHeld> after);
+
 // A PARTY MEMBER BESIDE PEOPLE (a "helper" in a hosted co-op game): a fighter playing the map's
 // way through (`complete`) as one of a party leashed to the people, with what the way bot's
 // command needs after its own.
@@ -106,11 +135,13 @@ struct PartyWork {
   int64_t stays = 0;         // plans he went back to the people
   int64_t exits_turned = 0;  // commands turned back from an exit
   int64_t gave_way = 0;      // commands he stepped away from a person
+  int64_t left_items = 0;    // plans that left an item to a person who needed it more
 };
 // The fighter `f` (set up by `fighter_init` on `nav`) made a party member for `spec`'s map.
 void party_work_init(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s,
                      const sh::MapSpec& spec);
-// His plan (entity `me`, at time `t`): the way's, then kept to the people.
+// His plan (entity `me`, at time `t`): what heals left to the people, the way's, then kept to
+// the people.
 void party_work_plan(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s, int me,
                      double t, const PartyOptions& opt);
 // His command after the fighter's own: the water's way, a trigger walked into, a wedge shoved

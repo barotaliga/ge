@@ -135,6 +135,8 @@ void party_packets(Party& p, const sv::RulesCommon& s, int msec, std::vector<sh:
     PartyMate& m = *p.mates[static_cast<size_t>(i)];
     if (m.work)
       sb::party_work_plan(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.round.people);
+    else  // an escort leaves what heals to the people too (party.hpp)
+      sb::party_leave_items(m.fighter, s, i + 1, p.round.people);
     m.cmds[0] = m.cmds[1];
     m.cmds[1] = m.cmds[2];
     m.cmds[2] = bots::fighter_command(m.fighter, s, i, msec);

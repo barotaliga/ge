@@ -468,6 +468,7 @@ void run(gl::Lab& lab) {
       o.single = !party_runs;
       o.partners.assign(static_cast<size_t>(size) - 1, sb::AimSkill::expert);
       o.beside = beside;
+      o.share_heals = lab.arg("share") != "0";
       // Each leg and each map's result said as it happens (stderr, flushed): a run that dies
       // part way still names the map it died on and what the maps before it scored.
       std::fprintf(stderr, "se-q1-campaign: playing from %s (party of %d)\n", leg.first.c_str(),
@@ -583,7 +584,8 @@ void run(gl::Lab& lab) {
   if (beside) {
     gl::LabTable h{"helpers beside the leader (a person's stand-in)",
                    {"map", "bots", "exit s", "kills: his/helpers'", "near share", "farthest",
-                    "back to him", "gave way", "exits turned"},
+                    "back to him", "gave way", "exits turned", "deaths: his/helpers'",
+                    "healed: his/helpers' in his need", "armour in his need", "left to him"},
                    {}};
     for (size_t i = 0; i < maps.size(); i++) {
       const fb::EpisodeMap& m = maps[i];
@@ -592,7 +594,10 @@ void run(gl::Lab& lab) {
            std::to_string(m.killed_by_leader) + "/" + std::to_string(m.killed_by_partners),
            to_fixed(m.helper_near_share, 3), to_fixed(m.helper_farthest, 0),
            std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
-           std::to_string(m.helper_exits_turned)});
+           std::to_string(m.helper_exits_turned),
+           std::to_string(m.leader_deaths) + "/" + std::to_string(m.mate_deaths),
+           to_fixed(m.leader_healed, 0) + "/" + to_fixed(m.helper_heal_needed, 0),
+           to_fixed(m.helper_armour_needed, 0), std::to_string(m.helper_left_items)});
     }
     lab.table(h);
   }
@@ -687,6 +692,9 @@ const gl::LabSpec kSpec{
          "1: the leader plays as a person would and the rest of the party are helpers beside him "
          "(a hosted game's `addbot helper`: leashed to him, the exit his), a table of how they "
          "kept to him"},
+        {"share", "1",
+         "with --beside=1, 0: the helpers take health and armour as a bot alone does, not leaving "
+         "it to him when he needs it more (the before of party.hpp `party_leave_items`)"},
     },
     "--map-seconds=60",
     run,

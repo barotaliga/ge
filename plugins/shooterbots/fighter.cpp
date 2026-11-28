@@ -1147,7 +1147,9 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
                                f.stats.respawns + f.blows;
       const bool kept = f.features[sb::Feature::commit] && f.goal_item >= 0 &&
                         now_news == f.decided_news && t - f.decided_at < kDecide_s &&
-                        f.items[static_cast<size_t>(f.goal_item)].present && !heal;
+                        f.items[static_cast<size_t>(f.goal_item)].present && !heal &&
+                        (static_cast<size_t>(f.goal_item) >= f.left_to_people.size() ||
+                         f.left_to_people[static_cast<size_t>(f.goal_item)] == 0);
       int32_t i = f.goal_item;
       if (!kept) {
         i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);

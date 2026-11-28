@@ -125,6 +125,11 @@ double raw_value(const ItemSpot& it, const Stats& st) {
   return fill;
 }
 
+bool left_to_people(const Fighter& f, int32_t i) {
+  return i >= 0 && static_cast<size_t>(i) < f.left_to_people.size() &&
+         f.left_to_people[static_cast<size_t>(i)] != 0;
+}
+
 bool heals(const ItemSpot& it) {
   return it.kind == ItemKind::health || it.kind == ItemKind::mega || it.kind == ItemKind::armor1 ||
          it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3;
@@ -192,6 +197,7 @@ int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Sta
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
     if (i == skip || it.node < 0 || (heal && !heals(it)) || route_lost(f, i, t)) return 0.0;
+    if (left_to_people(f, i)) return 0.0;  // a hurt person's (party.hpp)
     // Only what it knows of (or sees). One gone is waited for at its time back as the player
     // knows it: exact when timed, a guess (late) when not (knowledge.hpp).
     if (!item_in_mind(f, i)) return 0.0;
@@ -331,6 +337,7 @@ const char* on_the_way_bar(const Fighter& f, const ge::shooterbots::BotView& s, 
   if (i == f.goal_item) return "the goal";
   if (!it.present || it.node < 0 || !item_in_mind(f, i)) return "not known there";
   if (route_lost(f, i, t)) return "its route lost";
+  if (left_to_people(f, i)) return "a person's";
   if (f.reach_at >= 0 && !f.reach.reached(it.node)) return "not reached";
   if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise) return "another floor";
   if (door_shut(s, it)) return "its door shut";

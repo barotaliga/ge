@@ -320,6 +320,8 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     std::vector<bool> took(m.bots[0].way.steps.size(), false);
     sb::PartyOptions people;
     int64_t helper_near = 0, helper_counted = 0;
+    std::vector<sb::PartyHeld> held(static_cast<size_t>(n)), held_after = held;
+    sb::PartyHealTally heals;
     for (; frame < frames && !changed; frame++) {
       const sv::RulesCommon& s = *rules;
       const double t = s.sv.time;
@@ -332,6 +334,9 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           people.facing.assign(1, s.world.entities[1].view_angles.y);
           people.leash = sb::kPartyLeash;
           people.exit_held = true;
+          const sb::PartyHeld lh = sb::party_held(s, 1);
+          people.health.assign(1, lh.health);
+          people.armour.assign(1, lh.armour);
         }
         sb::party_share(m.party, m.members, *m.nav, s, people);
       }
@@ -339,7 +344,10 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
         Bot& b = m.bots[static_cast<size_t>(k)];
         const int me = k + 1;
         const int64_t plans = b.way.stats.plans;
+        const int left =
+            opt.beside && opt.share_heals && k > 0 ? sb::party_leave_items(b.f, s, me, people) : 0;
         way_plan(b.way, b.f, *m.nav, s, me, t);
+        if (left > 0 && b.way.stats.plans != plans) um.helper_left_items++;
         if (opt.beside && k > 0 && sb::party_stay(b.f, *m.nav, s, me, people) &&
             b.way.stats.plans != plans)
           um.helper_stays++;
@@ -394,8 +402,14 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
         pk.sequence = ++sequence;
         for (int i = 0; i < 3; i++) pk.cmds[i] = b.cmds[i];
       }
+      for (int k = 0; opt.beside && k < n; k++)
+        held[static_cast<size_t>(k)] = sb::party_held(s, k + 1);
       rules.frame(packets.data(), n);
       sv::clear_frame(rules.common->out);
+      if (opt.beside) {  // what heals, taken by whom (party.hpp)
+        for (int k = 0; k < n; k++) held_after[static_cast<size_t>(k)] = sb::party_held(s, k + 1);
+        sb::party_heal_tally(heals, held, held_after);
+      }
       h = fold_frame(h, s);
       const int now =
           s.world.entities[1].health > 0 ? static_cast<int>(s.world.entities[1].health) : 0;
@@ -441,6 +455,9 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       }
     }
     um.seconds = static_cast<double>(frame) / kHz;
+    um.leader_healed = heals.person_healed;
+    um.helper_heal_needed = heals.health_in_need;
+    um.helper_armour_needed = heals.armour_in_need;
     um.helper_near_share =
         helper_counted > 0 ? static_cast<double>(helper_near) / static_cast<double>(helper_counted)
                            : 0;

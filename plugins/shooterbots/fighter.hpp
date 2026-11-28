@@ -436,6 +436,9 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // The game's weapons as it reads them (bot_arsenal.hpp), set by `fighter_init`.
   const BotArsenal* arsenal = nullptr;
   std::vector<ItemSpot> items;
+  // (a party beside people, party.hpp `party_leave_items`) by item: left to a person who needs it
+  // more; never gone for while marked
+  std::vector<uint8_t> left_to_people;
   std::vector<sh::Vec3f> spawns;                                // the map's spawn points (ears.hpp)
   std::vector<ShotsHeard> fired = std::vector<ShotsHeard>(33);  // by entity: weapons heard fired
   std::vector<sh::Vec3f> cried_at = std::vector<sh::Vec3f>(33);  // by entity: a pain or death cry

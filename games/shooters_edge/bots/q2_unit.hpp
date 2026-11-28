@@ -69,6 +69,9 @@ struct UnitOptions {
   // are HELPERS beside him, as a hosted co-op game's `addbot helper`: leashed to him by
   // kPartyLeash, the exit his (party.hpp).
   bool beside = false;
+  // (`beside`) the helpers leave what heals to him when he needs it more (party.hpp
+  // `party_leave_items`); off: they take it as a bot alone does (the lab's before)
+  bool share_heals = true;
   // GEAR ON ARRIVAL (arrival_gear.hpp): the maps a playthrough plays before `first`, in order.
   // Each one's pickups are taken and its monsters paid for out of the ammunition on a scratch
   // server, and he enters `first` with that body. Empty: the new game's.
@@ -106,6 +109,11 @@ struct UnitMap {
   double helper_near_share = 0;
   float helper_farthest = 0;
   int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
+  // (`beside`) what heals, shared (party.hpp `party_leave_items`): the health he took, the health
+  // and armour (points stopped) the helpers took while he had no more than the taker and could
+  // use it, and the plans a helper left an item to him.
+  double leader_healed = 0, helper_heal_needed = 0, helper_armour_needed = 0;
+  int64_t helper_left_items = 0;
 };
 
 struct UnitReport {

@@ -127,6 +127,11 @@ std::string user_info(const sv::ClientInfo& c) {
   return s;
 }
 
+// A slot's player as the recording names him: his user id and info, "" when the slot is empty.
+std::string who_of(const sv::ClientInfo& c) {
+  return c.active ? std::to_string(c.userid) + user_info(c) : std::string();
+}
+
 // The list message `id` (the model or sound list) of `names` past their empty first.
 void name_list(Out& m, int id, const std::vector<std::string>& names) {
   m.u8(id);
@@ -199,6 +204,7 @@ void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
   }
   for (int k = 0; k < sh::kMaxClients; k++) {
     const sv::ClientInfo& c = s.clients[k];
+    r.who[static_cast<size_t>(k)] = who_of(c);
     if (!c.active) continue;
     lists.u8(40);  // updateuserinfo
     lists.u8(k);
@@ -223,6 +229,18 @@ void record_listen_frame(ListenRecorder& r, const Listen& l) {
       std::clamp(static_cast<int>(std::lround((s.sv.time - r.last_time) * 1000)), 1, 255);
   r.last_time = s.sv.time;
   Out m;
+  // A player who came in (a companion seated by `addbot`), changed his name or left since the
+  // last frame: his info as it is now (an empty one for a slot left).
+  for (int k = 0; k < sh::kMaxClients; k++) {
+    const sv::ClientInfo& c = s.clients[k];
+    std::string now = who_of(c);
+    if (now == r.who[static_cast<size_t>(k)]) continue;
+    r.who[static_cast<size_t>(k)] = std::move(now);
+    m.u8(40);  // updateuserinfo
+    m.u8(k);
+    m.i32(c.active ? c.userid : 0);
+    m.str(c.active ? user_info(c) : std::string());
+  }
   for (int k = 0; k < sh::kMaxClients; k++) {
     if (!s.clients[k].active) continue;
     const int e = k + 1;
@@ -357,8 +375,8 @@ bool record_open(ListenRecorder& r, const Listen& l, const SearchPath& files,
     error = "record: there is no game folder to keep recordings in (pick the game's folder first)";
     return false;
   }
-  if (l.server == nullptr || l.campaign_host) {
-    error = "record: only a match can be recorded (a campaign keeps saves instead)";
+  if (l.server == nullptr) {
+    error = "record: there is no game running to record (start a map first)";
     return false;
   }
   const int level = record_pack_level(s);
