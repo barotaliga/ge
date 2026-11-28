@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <tuple>
@@ -20,7 +21,9 @@
 #include "shooter/hull.hpp"
 #include "shooter/map_spec.hpp"
 #include "shooter/pmove.hpp"
+#include "shooter/trace.hpp"
 #include "shooter/world.hpp"
+#include "shooterbots/buttons.hpp"
 #include "shooterbots/entities.hpp"
 #include "shooterbots/nav_script.hpp"
 
@@ -1227,6 +1230,7 @@ std::vector<sb::NavExtraLink> ladder_links(const ge::shooterbots::BotView& s, co
       const float oy = o.y < L.mins.y ? L.mins.y - o.y : o.y > L.maxs.y ? o.y - L.maxs.y : 0;
       if ((ox > 0) == (oy > 0) || ox + oy > kLadderBeside) continue;
       const float face = ox > 0 ? (o.x < L.mins.x ? 0.f : 180.f) : (o.y < L.mins.y ? 90.f : 270.f);
+      if (!ladder_climb_clear(s.sv, L.mins, L.maxs, o, face)) continue;
       int32_t best = -1;
       float best_d = 1e30f;
       for (size_t b = 0; b < g.nodes.size(); b++) {
@@ -1414,6 +1418,42 @@ std::vector<sb::HurtBox> hurt_boxes(const ge::shooter::MapSpec& spec,
       continue;
     const ModelBox box = model_box(spec, std::atoi(model + 1));
     if (box.ok) out.push_back({box.mins, box.maxs, false});
+  }
+  // (`hurtbox`) A blade a button starts (a `func_rotating` off, named): the disc it sweeps once
+  // turning, round its axis (flag 4 x, 8 y, else z). boss2's gallery blade turns across a doorway
+  // from a floor plate in front of it, walked over on the way past; he walked on into the turning
+  // blade and stood in it, held, for the rest of the map.
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    if (!cn || std::strcmp(cn, "func_rotating") != 0 || !sb::block_value(b, "targetname")) continue;
+    const char* sf = sb::block_value(b, "spawnflags");
+    const int flags = sf ? std::atoi(sf) : 0;
+    const char* model = sb::block_value(b, "model");
+    if ((flags & 1) || !model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (!box.ok) continue;
+    sh::Vec3f at{};
+    const char* org = sb::block_value(b, "origin");
+    const bool has = org && std::sscanf(org, "%f %f %f", &at.x, &at.y, &at.z) == 3;
+    const sb::HurtBox h = sb::blade_sweep(box.mins, box.maxs, has ? &at : nullptr, flags);
+    out.push_back(h);
+  }
+  // (`hurtbox`) The floor plate that starts such a blade (a touched `func_button` whose relays
+  // reach it, `button_spins`), and a player's half width round it: boss2's in front of the
+  // gallery's doorway, walked over on the way in, started the blade that then shut him in.
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    const char* health = sb::block_value(b, "health");
+    if (!cn || std::strcmp(cn, "func_button") != 0 || !model || model[0] != '*' ||
+        std::atoi(model + 1) <= 0 || (health && std::atof(health) > 0) ||
+        !sb::button_spins(blocks, sb::block_value(b, "target")))
+      continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (box.ok)
+      out.push_back({{box.mins.x - 16, box.mins.y - 16, box.mins.z},
+                     {box.maxs.x + 16, box.maxs.y + 16, box.maxs.z},
+                     false});
   }
   // (`hurtbox`) A current that carries whoever stands in it into one (rboss's: a `trigger_push`
   // running 700 units south into its pit at the end): a level push, always on, at a right angle,
@@ -1851,6 +1891,58 @@ sh::MoveSettings q2_nav_move(float air_accelerate) {
     m.air_wish_cap = 0;
   }
   return m;
+}
+
+bool ladder_climb_clear(const ge::shooter::Server& sv, ge::shooter::Vec3f lmins,
+                        ge::shooter::Vec3f lmaxs, ge::shooter::Vec3f o, float face) {
+  constexpr float kHalf = 16.25f;  // the box's half width, and a little: pressed to the face
+  sh::Vec3f at = o;
+  const auto across = [&](float v, float lo, float hi) {
+    return hi - lo >= 2 * kHalf ? std::clamp(v, lo + kHalf, hi - kHalf) : (lo + hi) * 0.5f;
+  };
+  if (face == 0.f || face == 180.f) {
+    at.x = face == 0.f ? lmins.x - kHalf : lmaxs.x + kHalf;
+    at.y = across(o.y, lmins.y, lmaxs.y);
+  } else {
+    at.y = face == 90.f ? lmins.y - kHalf : lmaxs.y + kHalf;
+    at.x = across(o.x, lmins.x, lmaxs.x);
+  }
+  const float top = lmaxs.z - kLadderClimbClear;
+  if (top <= at.z) return true;
+  const sh::HullTrace tr = sh::trace_move(sv, at, sh::kPlayerMins, sh::kPlayerMaxs,
+                                          {at.x, at.y, top}, sh::kTraceNoMonsters, -1);
+  return !tr.startsolid && !tr.allsolid && tr.fraction >= 1;
+}
+
+ge::shooterbots::HurtBox blade_sweep(ge::shooter::Vec3f mins, ge::shooter::Vec3f maxs,
+                                     const ge::shooter::Vec3f* origin, int flags) {
+  sh::Vec3f o{(mins.x + maxs.x) * 0.5f, (mins.y + maxs.y) * 0.5f, (mins.z + maxs.z) * 0.5f};
+  if (origin != nullptr) {
+    const sh::Vec3f at = *origin;
+    const bool in = at.x >= mins.x && at.x <= maxs.x && at.y >= mins.y && at.y <= maxs.y &&
+                    at.z >= mins.z && at.z <= maxs.z;
+    if (!in) {  // a brush model turned round an origin is built round it: its box is then off it
+      mins = {mins.x + at.x, mins.y + at.y, mins.z + at.z};
+      maxs = {maxs.x + at.x, maxs.y + at.y, maxs.z + at.z};
+    }
+    o = at;
+  }
+  const int axis = (flags & 4) ? 0 : (flags & 8) ? 1 : 2;
+  float r2 = 0;  // the farthest corner off the axis, squared
+  for (int c = 0; c < 8; c++) {
+    const float p[3] = {(c & 1) ? maxs.x : mins.x, (c & 2) ? maxs.y : mins.y,
+                        (c & 4) ? maxs.z : mins.z};
+    const float q[3] = {p[0] - o.x, p[1] - o.y, p[2] - o.z};
+    float d = 0;
+    for (int k = 0; k < 3; k++) d += k == axis ? 0 : q[k] * q[k];
+    r2 = std::max(r2, d);
+  }
+  const float r = std::sqrt(r2);
+  HurtBox h{{o.x - r, o.y - r, o.z - r}, {o.x + r, o.y + r, o.z + r}, false};
+  if (axis == 0) h.mins.x = mins.x, h.maxs.x = maxs.x;
+  if (axis == 1) h.mins.y = mins.y, h.maxs.y = maxs.y;
+  if (axis == 2) h.mins.z = mins.z, h.maxs.z = maxs.z;
+  return h;
 }
 
 }  // namespace ge::shooterbots

@@ -195,6 +195,16 @@ bool button_dooms(const std::vector<sb::EntityBlock>& blocks, const char* target
   return false;
 }
 
+bool button_spins(const std::vector<sb::EntityBlock>& blocks, const char* target) {
+  for (const std::string& n : button_fires(blocks, target))
+    for (const sb::EntityBlock& b : blocks) {
+      const char* cn = sb::block_value(b, "classname");
+      const char* tn = sb::block_value(b, "targetname");
+      if (cn && tn && n == tn && std::strcmp(cn, "func_rotating") == 0) return true;
+    }
+  return false;
+}
+
 std::vector<ge::shooterbots::NavErrand> field_errands(const Fighter& f, const sb::NavGraph& g,
                                                       const ge::shooterbots::BotView& s) {
   std::vector<ge::shooterbots::NavErrand> errands;

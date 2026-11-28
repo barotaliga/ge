@@ -6,7 +6,7 @@
 //
 // ge:summary Tests for gates woken by a monster's death and the buttons that blow a map up
 // ge:keywords test way_gates way_gate_names way_wake_gates gate_dead deathtarget
-// ge:keywords button_dooms killbox biggun
+// ge:keywords button_dooms killbox biggun button_spins func_rotating boss2
 // ge:skill shooterbots testing
 #include <memory>
 #include <string>
@@ -152,4 +152,29 @@ TEST(a_button_whose_relays_reach_a_killbox_dooms_and_one_that_opens_a_door_does_
   CHECK(!sb::button_dooms(blocks, "t5"));
   CHECK(!sb::button_dooms(blocks, "t7"));  // a blast a player lives through
   CHECK(!sb::button_dooms(blocks, nullptr));
+}
+
+TEST(a_button_that_sets_a_blade_spinning_spins_through_its_relays_and_a_door_button_does_not) {
+  // boss2's id Gallery: a button that starts a blade across a doorway and opens nothing.
+  const std::vector<sb::EntityBlock> blocks = blocks_of(R"({
+"classname" "worldspawn"
+}
+{
+"classname" "trigger_relay"
+"targetname" "t20"
+"target" "t21"
+}
+{
+"classname" "func_rotating"
+"targetname" "t21"
+}
+{
+"classname" "func_door"
+"targetname" "t22"
+}
+)");
+  CHECK(sb::button_spins(blocks, "t20"));  // through a relay
+  CHECK(sb::button_spins(blocks, "t21"));
+  CHECK(!sb::button_spins(blocks, "t22"));
+  CHECK(!sb::button_spins(blocks, nullptr));
 }

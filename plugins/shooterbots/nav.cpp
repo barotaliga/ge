@@ -12,12 +12,15 @@
 #include <cmath>
 #include <cstring>
 #include <iterator>
+#include <span>
+#include <utility>
 
 #include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/parallel.hpp"
 #include "shooter/slide.hpp"
+#include "shooterbots/nav_columns.hpp"
 
 namespace ge::shooterbots {
 
@@ -37,8 +40,7 @@ constexpr float kUpAcross = 2.5f;  // a jump up is tried only this many columns 
 constexpr float kJumpShares[3] = {1, 0.5f, 0.25f};  // a jump's speeds, of maxspeed
 constexpr double kDetour = 1.5;  // a walk this many times a straight run's time needs no jump
 constexpr double kDetourSlack_s = 0.25;
-constexpr float kFloorNormal = 0.7f;
-constexpr float kScanStep = 8;   // the column's search for free space below a floor, units
+constexpr float kFloorNormal = kNavFloorNormal;
 constexpr float kTreadStep = 4;  // a tread's search between two columns samples this often, units
 constexpr float kTreadUp = 4;    // a tread stands this far off both columns' floors, units
 
@@ -91,25 +93,6 @@ bool room_to_run_up(const MoveWorld& world, Vec3f from, Vec3f to, float dist) {
   const HullTrace down = player_trace(world, back, {back.x, back.y, back.z - 2});
   return down.fraction < 1 && !down.startsolid && down.plane.normal.z >= kFloorNormal &&
          down.endpos.z >= from.z - 1 && down.endpos.z <= from.z + 1;
-}
-
-// The floors down one grid column at (x, y), top first.
-void column_floors(const MoveWorld& world, float x, float y, float top, float bottom,
-                   std::vector<Vec3f>& out) {
-  out.clear();
-  float z = top;
-  while (z > bottom) {
-    const Vec3f start{x, y, z};
-    if (!box_free(world, start)) {
-      z -= kScanStep;
-      continue;
-    }
-    const HullTrace tr = player_trace(world, start, {x, y, bottom});
-    if (tr.startsolid || tr.fraction == 1) return;
-    if (tr.plane.normal.z >= kFloorNormal) out.push_back(tr.endpos);
-    // Below this floor: past the player's box under it, then scan for free space again.
-    z = tr.endpos.z - (kPlayerMaxs.z - kPlayerMins.z) - 1;
-  }
 }
 
 }  // namespace
@@ -269,7 +252,8 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   // (below), then laid out in column order, top first.
   const float top = g.hi.z - kPlayerMaxs.z - 1;
   const float bottom = g.lo.z;
-  std::vector<Vec3f> floors;
+  std::vector<Vec3f> floors, pocket;
+  std::vector<std::pair<size_t, Vec3f>> pockets;  // (column, floor): the pockets
   std::vector<std::vector<Vec3f>> col_floors(ncol);
   NavVoid unsealed;  // floors in the rock of a map whose player hull is open outside its rooms
   auto col_of = [&](int32_t i, int32_t j) {
@@ -279,11 +263,14 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     for (int32_t j = 0; j < g.rows; j++) {
       const float x = g.lo.x + set.spacing * (static_cast<float>(i) + 0.5f);
       const float y = g.lo.y + set.spacing * (static_cast<float>(j) + 0.5f);
-      column_floors(world, x, y, top, bottom, floors);
+      column_floors(world, x, y, top, bottom, floors, set.squeeze ? &pocket : nullptr);
       std::erase_if(floors, [&](Vec3f f) { return nav_floor_in_void(world, f, unsealed); });
       col_floors[col_of(i, j)] = floors;
+      for (const Vec3f p : pocket)
+        if (!nav_floor_in_void(world, p, unsealed)) pockets.push_back({col_of(i, j), p});
       g.counts.columns++;
     }
+  nav_merge_pockets(world, g.cols, g.rows, pockets, col_floors);
   // TREADS: a stair's tread narrower than the grid falls between two columns' samples, and the
   // nav sees the stair as one riser too high to jump. Between two neighbouring columns' floors
   // more than a step and at most two jumps apart in height, the floor is sampled every
