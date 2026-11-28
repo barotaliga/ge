@@ -29,7 +29,7 @@ constexpr std::string_view kNames[] = {
     "menudot6", "ttl_sgl",  "sp_menu",  "p_multi",  "mp_menu",  "p_option", "help0",    "help1",
     "help2",    "help3",    "help4",    "help5",    "box_tl",   "box_tm",   "box_tr",   "box_ml",
     "box_mm",   "box_mr",   "box_bl",   "box_bm",   "box_br",   "complete", "inter",    "ranking",
-    "conback",  "finale",   "pause",    "loading",  "bigbox"};
+    "conback",  "finale",   "pause",    "loading",  "bigbox",   "p_load",   "p_save",   "ttl_cstm"};
 
 // The big figures the level's end is drawn in, pictures of the glyph sheet's wad.
 constexpr std::string_view kWadNames[] = {"num_0",     "num_1",     "num_2",    "num_3", "num_4",
@@ -400,6 +400,9 @@ std::map<std::string, std::vector<uint8_t>, std::less<>> fixture_files() {
   put("ttl_sgl", plate(128, 24, "SINGLE PLAYER", 13));
   put("p_multi", plate(120, 24, "MULTIPLAYER", 13));
   put("p_option", plate(96, 24, "OPTIONS", 13));
+  put("p_load", plate(96, 24, "LOAD", 13));
+  put("p_save", plate(96, 24, "SAVE", 13));
+  put("ttl_cstm", plate(160, 24, "CONTROLS", 13));
   constexpr std::string_view kMain[] = {"SINGLE PLAYER", "MULTIPLAYER", "OPTIONS", "HELP", "QUIT"};
   constexpr std::string_view kSingle[] = {"NEW GAME", "LOAD", "SAVE"};
   constexpr std::string_view kMulti[] = {"JOIN A GAME", "NEW GAME", "SETUP"};
