@@ -233,7 +233,7 @@ TEST(a_slot_narrower_than_the_grids_offset_gets_a_node_on_its_floor) {
   world.count = 1;
   sb::NavGraph g;
   sb::NavSettings with;
-  with.squeeze = true;  // the campaign's navs
+  with.pockets = true;  // the campaign's navs
   sb::build_nav(world, {}, sh::MoveSettings{}, with, g);
   int in_slot = 0;
   for (const sb::NavNode& nd : g.nodes)
