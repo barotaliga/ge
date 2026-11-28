@@ -1,11 +1,15 @@
 # Shooter's Edge content
 
-The game's own sounds and models, all free to redistribute, and the map from the classic
-content's names to ours. Read `.agents/skills/free-assets/SKILL.md` before changing anything here.
+Shooter's Edge has no game of its own: it is the menu and the moon backdrop, and it loads the classic
+games the player owns (Quake, QuakeWorld, Quake II) and remixes them. What is here exists only for the
+BUILT-IN ARENA, the free match the headless tests and labs run because the classic packs are never
+committed; no player starts it, and a classic game always plays and shows its own content. Read
+`.agents/skills/free-assets/SKILL.md` before changing anything here.
 
 | File | What |
 | --- | --- |
-| `sounds.tsv`, `models.tsv` | The registry: every sound and model the game needs, by our name, with what plays or shows it and whether it has a replacement yet |
-| `classic.assetmap` | The classic names (and the numbered sound sets maps pick) mapped to ours, read by the map cloner and the game |
-| `sounds/`, `models/` | The replacements: mono 16-bit 22 050 Hz WAV; GLB with textures packed |
+| `sounds.tsv`, `models.tsv` | The registry: every sound the arena plays and the held weapons its labs draw, by our name, with what plays or shows it |
+| `classic.assetmap` | The classic sound names (and the numbered sound sets maps pick) mapped to ours, so the arena's mod is heard |
+| `sounds/`, `models/view/` | The files: mono 16-bit 22 050 Hz WAV; the held weapons built in Blender (`ge asset build`) |
+| `maps/` | The arena's plans (`secli map build`), the labs' maps |
 | `CREDITS.md` | Where each file came from, who made it and its licence |

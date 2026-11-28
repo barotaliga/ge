@@ -235,7 +235,7 @@ cut along the brushes' axial sides, for the tests and for the moves that collide
 
 Left to M18b: a picture of a map from the command line.
 
-## Building a map from a plan or a drawing (M32h)
+## Building a map from a plan or a drawing
 
 `plugins/brush/compile/` compiles a level written as an architect draws one into a version 29
 map, so a player, a modder or an agent builds a map for a game on the classic brush maps from a
@@ -283,7 +283,7 @@ from its starts with its own pictures and lightmaps, and a leak refused with its
 
 Left: the visibility (PVS) from the portals, T-junctions mended, and the version 38 writer.
 
-## The map SDK: maps as Python scripts (M32j)
+## The map SDK: maps as Python scripts
 
 An agent writes a map as a **Python script** and the engine builds it. The script is the map's
 source: it reads like instructions ("a room here, a hall into the atrium, the wing mirrored"),

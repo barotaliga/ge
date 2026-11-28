@@ -68,9 +68,9 @@ struct Near {
 
 std::vector<mg::MapStream> mapped_streams(const mg::Level& level) {
   std::vector<mg::MapStream> out;
-  if (!level.face) return out;
-  const std::optional<mg::RealHints> hints = mg::real_hints(*level.face);
-  if (!hints) return out;
+  // The face's hints as the generator kept them (Level::hints): none on a dealt map.
+  const std::shared_ptr<const mg::RealHints>& hints = level.hints;
+  if (!level.face || !hints) return out;
   for (const mg::HintStream& h : hints->streams) {
     if (h.points.size() < 2) continue;
     const bool river = h.kind == mg::HintStreamKind::river;
