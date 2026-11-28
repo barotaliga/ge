@@ -647,7 +647,14 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
     const bool new_plat = new_rise > 0;
     const bool plat = std::strcmp(cn, "func_plat") == 0 || plat2 || new_plat;
     const bool train = std::strcmp(cn, "func_train") == 0;
-    if (!door && !plat && !train) continue;
+    // Dissolution of Eternity's elevator (a func_new_plat in its elevator mode, 4;
+    // `make_elevator`).
+    const char* esf = sb::block_value(b, "spawnflags");
+    const char* ecnt = sb::block_value(b, "cnt");
+    const int eflags = esf ? std::atoi(esf) : 0, floors = ecnt ? std::atoi(ecnt) : 0;
+    const bool lift_car = std::strcmp(cn, "func_new_plat") == 0 && (eflags & 7) == 4 &&
+                          floors >= 2 && floors <= 16 && sb::block_value(b, "targetname");
+    if (!door && !plat && !train && !lift_car) continue;
     if (door && start_open(b)) continue;  // a floor to the nav (open_doors_as_floor)
     const int m = std::atoi(model + 1);
     if (m <= 0 || static_cast<size_t>(m) >= model_count(spec)) continue;
@@ -693,6 +700,11 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       }
       mv.travel = {0, 0, rise};
       mv.ride_s = 1 + rise / (speed > 0 ? speed : fallback);
+    }
+    if (lift_car && !spec.brushes) {
+      mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;
+      if (sb::elevator_of(mv, b, blocks, spec.models))
+        mv.model = &spec.models[static_cast<size_t>(m)];
     }
     // A car whose own button rides inside it (base1's exit) is a hollow door, not a floor.
     bool car = false;
@@ -1842,6 +1854,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     out.hardened =
         sb::nav_harden_jumps(out.world, out.move, graph, risk, 0.9f, 2, 192, 48, out.movers);
   }
+  sb::nav_cut_shafts(out.world, out.move, graph, out.movers);
   // THE GAP TRICKS (the book's): people's speed jumps over a pit as jump links at a hopper's
   // speed, landing where a way back on foot leads to the main part; after the hardening, which
   // would price a jump over lava as a run's miss.

@@ -10,6 +10,7 @@
 // ge:skill shooterbots bots
 // ge:test tests/shooterbots_pilot_test.cpp
 #include <algorithm>
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -123,6 +124,36 @@ bool way_open(const NavGraph& g, std::span<const int32_t> nodes, std::span<const
   return true;
 }
 
+// (an ELEVATOR) The links onto an elevator's top at a floor it stands away from now (`car_ons`).
+void cars_away(Pilot& p, std::vector<NavExtraLink>& away) {
+  const NavGraph& g = *p.g;
+  if (p.car_ons_g != p.g) {
+    p.car_ons.clear();
+    p.car_ons_g = p.g;
+    for (size_t a = 0; a < g.nodes.size(); a++)
+      for (int32_t k = 0; k < g.nodes[a].links; k++) {
+        const NavLink& l = g.links[static_cast<size_t>(g.nodes[a].first_link + k)];
+        const NavNode& nb = node(g, l.to);
+        const NavMover* m = nb.stop >= 0 ? mover_of(g.movers, nb.mover) : nullptr;
+        if (m != nullptr && elevator(*m) && g.nodes[a].mover != nb.mover)
+          p.car_ons.push_back(
+              {nb.mover, nb.stop, {static_cast<int32_t>(a), l.to, l.kind, l.time_s}});
+      }
+  }
+  for (const Pilot::CarOn& c : p.car_ons) {
+    const NavMover* m = mover_of(g.movers, c.ent);
+    const Pilot::MoverSeen* seen = nullptr;
+    for (const Pilot::MoverSeen& v : p.movers_seen)
+      if (v.ent == c.ent) seen = &v;
+    if (m == nullptr || seen == nullptr) continue;
+    const float at = m->rest.z + (seen->z - m->absmin.z);
+    bool standing = false;  // at a floor (one on its way arrives somewhere: nothing is cut)
+    for (const Vec3f& st : m->stops) standing = standing || std::fabs(at - st.z) <= kAtFloor;
+    if (standing && std::fabs(at - m->stops[static_cast<size_t>(c.stop)].z) > kAtFloor)
+      away.push_back(c.link);
+  }
+}
+
 // The nodes from `from` to `goal` round the doors barred and shut and the links cut, missed and
 // given up; empty when there is no way.
 NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
@@ -137,8 +168,11 @@ NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
   for (const double until : p.gaps_off_s) gaps_off = gaps_off || until > p.clock_s;
   // (`bridgeseen`) The links onto a bridge still in shut on every link (they carry no mover).
   const bool shut_every = p.set.shut_every && !p.shut_links.empty();
-  if ((!p.shut_links.empty() && !shut_every) || gaps_off || p.near_cut.from >= 0) {
+  std::vector<NavExtraLink> away;
+  cars_away(p, away);
+  if ((!p.shut_links.empty() && !shut_every) || gaps_off || p.near_cut.from >= 0 || !away.empty()) {
     p.cut_all = p.cut;
+    p.cut_all.insert(p.cut_all.end(), away.begin(), away.end());
     if (!shut_every) p.cut_all.insert(p.cut_all.end(), p.shut_links.begin(), p.shut_links.end());
     for (size_t i = 0; i < p.gaps_off.size(); i++)
       if (p.gaps_off_s[i] > p.clock_s) p.cut_all.push_back(p.gaps_off[i]);
