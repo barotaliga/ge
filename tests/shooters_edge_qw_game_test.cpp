@@ -1140,4 +1140,13 @@ TEST(classic_game_team_with_no_lobby_sets_the_players_team) {
   for (const std::string& info : r.client.userinfos)
     blue |= ge::classic::protocol::info_get(info, "team") == "blue";
   CHECK(blue);
+  // The same beside the server's bots (a room, still no lobby).
+  Session b;
+  ServerConfig c = arena();
+  c.bots = 2;
+  run_session(b, c, 700, "", -1, {{500, "team blue"}, {560, "team"}});
+  all.clear();
+  for (const std::string& p : b.client.prints) all += p;
+  CHECK_MSG(all.find("Bad user command: team") == std::string::npos, all);
+  CHECK_MSG(all.find("\"team\" is \"blue\"") != std::string::npos, all);
 }
