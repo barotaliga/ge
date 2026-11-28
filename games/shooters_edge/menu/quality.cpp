@@ -10,18 +10,23 @@
 //  1  the modern look at a quarter size, crisp: the enhanced textures, skins and 2D art, the
 //     rebaked light, the live flames' light, the glowing texels, our effects and the marks.
 //  2  drawn at half the window's size, crisp.
-//  3  smoothed and sharpened (r_scale_smooth, r_scale_sharpen 0.8); the surfaces' relief, fog,
-//     weather and bloom.
-//  4  the shadows (the walls'), our water (still) and sky (its mean cloud), the surfaces' depth,
-//     the heat haze and the fumes, at half size.
-//  5  the window's full size, without those.
+//  3  smoothed and sharpened (r_scale_smooth, r_scale_sharpen 0.8); the surfaces' relief and
+//     depth, fog, weather, bloom; the walls' shadows, our water (still) and sky (its mean cloud),
+//     the heat haze and the fumes.
+//  4  the cloud layer, the water's chop and reflection, the glossy floors', the contact shade and
+//     the figures' shadows, still at half size.
+//  5  the window's full size, without the shadows, water, sky, haze and fumes.
 //  6  the walls' shadows, our water and sky, the depth, the haze and the fumes again.
-//  7  the cloud layer, the water's chop and the room reflected in it, the glossy floors'
-//     reflections.
+//  7  the cloud layer, the water's chop and reflection, the glossy floors' reflections.
 //  8  the contact shade, the figures' shadows hard-edged.
 //  9  the shadows soft and from every light, the room mirrored whole in the water, the sun's
 //     caustics and shafts under it, the far land: every default.
 //  10 every map light throwing the figures' shadows (r_fill_shadows).
+//
+// Measured (the span, ms; 56bd669c7's levels, which had 4 and 5 apart): 9 6.54, 8 5.68, 7 4.87,
+// 6 4.15, 5 3.67, 1 1.33, 0 1.14. Under about 2 ms a frame the CPU and the present decide the
+// frame rate more than the GPU: the classic look at 0 draws on the GPU in less than 1 but its
+// frame took longer (1.49 ms against 1.12).
 //
 // ge:summary Shooter's Edge's picture quality: the table of the eleven levels, the command
 // ge:keywords quality r_quality quality_table add_quality preset-table
@@ -54,7 +59,7 @@ constexpr PresetRow kRows[] = {
     {"ce_rebake",          "0      1      1      1      1      1      1      1      1      1      1"},
     {"ce_flicker",         "0      1      1      1      1      1      1      1      1      1      1"},
     {"ce_glow",            "0      1      1      1      1      1      1      1      1      1      1"},
-    // Our effects and the marks on the walls: from 1 (they cost little where the picture is small).
+    // Our effects and the marks on the walls: from 1 (cheap where the picture is small).
     {"ce_decals",          "0      1      1      1      1      1      1      1      1      1      1"},
     {"ce_lava",            "0      1      1      1      1      1      1      1      1      1      1"},
     {"ce_slime",           "0      1      1      1      1      1      1      1      1      1      1"},
@@ -81,20 +86,19 @@ constexpr PresetRow kRows[] = {
     {"ce_fog",             "0      0      0      1      1      1      1      1      1      1      1"},
     {"ce_weather",         "0      0      0      1      1      1      1      1      1      1      1"},
     {"ce_bloom",           "0      0      0      1      1      1      1      1      1      1      1"},
-    // The dear ones at their lowest stops: at 4 (half size), then from 6 (full size).
-    {"ce_shadows",         "0      0      0      0      1      0      1      1      1      1      1"},
-    {"ce_shadows_quality", "low    low    low    low    low    low    low    low    medium high   high"},
-    {"ce_water",           "0      0      0      0      1      0      1      1      1      1      1"},
-    {"ce_water_quality",   "low    low    low    low    low    low    low    medium medium high   high"},
-    {"ce_skies",           "0      0      0      0      1      0      1      1      1      1      1"},
-    {"ce_skies_quality",   "low    low    low    low    low    low    low    medium medium high   high"},
-    {"ce_parallax",        "0      0      0      0      1      0      1      1      1      1      1"},
-    {"ce_heathaze",        "0      0      0      0      1      0      1      1      1      1      1"},
-    {"ce_fumes",           "0      0      0      0      1      0      1      1      1      1      1"},
-    // From 7 and 8.
-    {"ce_clouds",          "0      0      0      0      0      0      0      1      1      1      1"},
-    {"ce_reflections",     "0      0      0      0      0      0      0      1      1      1      1"},
-    {"ce_ao",              "0      0      0      0      0      0      0      0      1      1      1"},
+    // The dear rows: 3 and 4 at half size, again from 6 at full size.
+    {"ce_shadows",         "0      0      0      1      1      0      1      1      1      1      1"},
+    {"ce_shadows_quality", "low    low    low    low    medium low    low    low    medium high   high"},
+    {"ce_water",           "0      0      0      1      1      0      1      1      1      1      1"},
+    {"ce_water_quality",   "low    low    low    low    medium low    low    medium medium high   high"},
+    {"ce_skies",           "0      0      0      1      1      0      1      1      1      1      1"},
+    {"ce_skies_quality",   "low    low    low    low    medium low    low    medium medium high   high"},
+    {"ce_parallax",        "0      0      0      1      1      0      1      1      1      1      1"},
+    {"ce_heathaze",        "0      0      0      1      1      0      1      1      1      1      1"},
+    {"ce_fumes",           "0      0      0      1      1      0      1      1      1      1      1"},
+    {"ce_clouds",          "0      0      0      0      1      0      0      1      1      1      1"},
+    {"ce_reflections",     "0      0      0      0      1      0      0      1      1      1      1"},
+    {"ce_ao",              "0      0      0      0      1      0      0      0      1      1      1"},
 };
 // clang-format on
 
