@@ -48,6 +48,8 @@ constexpr Kind kKinds[] = {{fx::BlastOf::common, "common"},
                            {fx::BlastOf::huge, "huge"},
                            {fx::BlastOf::dark, "dark"},
                            {fx::BlastOf::bare, "bare"}};
+// The blasts pictured off six seeds: a rocket's and a grenade's.
+constexpr Kind kSeeded[] = {{fx::BlastOf::common, "rocket"}, {fx::BlastOf::grenade, "grenade"}};
 constexpr int kHitCodes[] = {30, 43, 44, 46, 55};
 constexpr const char* kHitNames[] = {"green bolt", "heat sparks", "heat steam", "electric",
                                      "flechette"};
@@ -126,6 +128,33 @@ void run(gl::Lab& lab) {
          "bare: the ball with no embers or sparks",
          {}},
         es::sheet_of(pics, names, 3), Det::measured);
+  }
+  {
+    // The same blast six times off six seeds, a rocket's and a grenade's, at its fullest: no two
+    // alike (the look each is dealt, its size, its billows, what it throws).
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    for (const Kind& k : kSeeded) {
+      for (const double m : {0.2, 0.8}) {
+        for (uint32_t seed = 1; seed <= 6; ++seed) {
+          std::vector<gr::Blast> blasts;
+          fx::Particles births;
+          fx::blast(floor_at, up, seed * 977u, 0.0, &blasts, &births, k.of);
+          pics.push_back(at_moment(*device, s, blasts, births,
+                                   es::eye_at(es::kMid, 1.8, 109, 0.12, -0.05, 0, 0), m, settle));
+          names.push_back(std::string(k.name) + " " + std::to_string(seed) + " " + fixed(m, 1) +
+                          " S");
+        }
+      }
+    }
+    lab.shot({"seeds",
+              "ONE BLAST, SIX SEEDS",
+              "A rocket's blast and a grenade's each off six seeds on the floor 7 m ahead at "
+              "dusk, 0.2 s and 0.8 s on.",
+              "no two alike: their size, the lobes round the ball, the fire and smoke and what "
+              "each throws differ; the grenade's burn less, more smoke and dust",
+              {}},
+             es::sheet_of(pics, names, 6), Det::measured);
   }
   {
     std::vector<gl::Picture> pics;

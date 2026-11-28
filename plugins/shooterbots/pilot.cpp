@@ -1191,6 +1191,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         if (const NavMover* nm = mover_of(s.movers, l.mover); nm != nullptr) {
           spot = B - rm->stops[static_cast<size_t>(l.stop)] + platform_at(*rm, *nm);
           platform = true;
+          // One that rises up a shaft is ridden at its middle (boss1's pillar up to the boss,
+          // ridden near its edge from the top node's place there, jammed 40 units up under the
+          // shaft's rim and stood there for good).
+          Vec3f lo, hi;
+          if (rises(*rm, lo, hi))
+            spot = {(nm->absmin.x + nm->absmax.x) * 0.5f, (nm->absmin.y + nm->absmax.y) * 0.5f,
+                    spot.z};
         }
       // A plat still at its rest starts up only for a rider in the field over its middle (its
       // edges are left out of it): with `under_plat`, onto its middle first (bunk1's small

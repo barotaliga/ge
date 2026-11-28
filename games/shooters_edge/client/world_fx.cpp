@@ -230,6 +230,21 @@ bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Fli
   return true;
 }
 
+// Whether the shot that flew nearest `at` (map units), within kStruckU, was a grenade.
+bool grenade_near(const std::unordered_map<int, FxState::Flight>& flights, const sh::Vec3f& at) {
+  const FxState::Flight* best = nullptr;
+  float nearest = kStruckU * kStruckU;
+  for (const auto& [e, f] : flights) {
+    const float dx = f.at.x - at.x, dy = f.at.y - at.y, dz = f.at.z - at.z;
+    const float d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < nearest) {
+      nearest = d2;
+      best = &f;
+    }
+  }
+  return best != nullptr && best->grenade;
+}
+
 // The floor under a hit at `at` (map units) by a round from `shooter`: the first solid a line
 // straight down from two units back along the round's line meets, as world y (m); far below when
 // none is within kFloorReachU.
@@ -1025,9 +1040,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
       s.flights_next[m.entity] = {
           m.origin, len > 0.5f ? sh::Vec3f{d.x / len, d.y / len, d.z / len} : f->second.dir,
-          !m.rocket && !m.bolt && !m.bfg};
+          !m.rocket && !m.bolt && !m.bfg, m.grenade};
     } else {
-      s.flights_next[m.entity] = {m.origin, {0, 0, 0}, !m.rocket && !m.bolt && !m.bfg};
+      s.flights_next[m.entity] = {m.origin, {0, 0, 0}, !m.rocket && !m.bolt && !m.bfg, m.grenade};
     }
     double to[3];
     put(at, to);
@@ -1206,8 +1221,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (!against) against = l.map && surface_near(*l.map, boom, normal, &off);
       const size_t first = s.blasts.size();
       const size_t thrown = out.births.size();
-      fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births,
-                l.q2_arms ? q2_blast_of(code) : fx::BlastOf::common);
+      // A grenade's (Quake II's by its code; Quake's by the grenade that flew nearest it) burns
+      // less than a rocket's.
+      const fx::BlastOf of = l.q2_arms                       ? q2_blast_of(code)
+                             : grenade_near(s.flights, boom) ? fx::BlastOf::grenade
+                                                             : fx::BlastOf::common;
+      fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births, of);
       if (no_specks) out.births.resize(thrown);
       // What it throws that falls meets what the frame draws (the pool collides); one flung out of
       // the view has the floor under the blast to come down on, and hops there.

@@ -667,6 +667,16 @@ struct Pilot {
   PilotStats stats;
 };
 
+// Whether the route has the pilot on, onto or along a mover's top now (the link's either end on
+// one): its floor is no part of the static world the brink guards look at, all lava under boss1's
+// ferries, so they keep off then (a ride's is the nav's).
+inline bool route_on_mover(const Pilot& p) {
+  if (p.g == nullptr || p.mode == PilotMode::idle || p.mode == PilotMode::wait) return false;
+  for (size_t k = p.k; k < p.k + 2 && k < p.route.size(); k++)
+    if (p.g->nodes[static_cast<size_t>(p.route[k])].mover >= 0) return true;
+  return false;
+}
+
 // A pilot on `g` (kept alive and unmoved) with `hands` (from pilot_hands), its wander off `seed`.
 void pilot_init(Pilot& p, const NavGraph& g, const PilotSettings& set,
                 std::span<const ai::AxisHands> hands, double hz, uint32_t seed);

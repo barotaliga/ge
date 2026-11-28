@@ -59,6 +59,7 @@ struct KeysNear {
   const sh::MoveWorld* world = nullptr;
   const sb::NavGraph* g = nullptr;
   sh::Vec3f origin;
+  std::span<const sb::NavMover> movers;  // the movers as they stand: a step onto a top is no fall
 };
 void press_keys(KeyHand& k, const sb::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,
                 bool onground, int8_t curve = sb::kNoCurveKeys, const KeysNear* near = nullptr);

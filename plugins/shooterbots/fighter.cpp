@@ -1621,7 +1621,14 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
   }
 
   keys_mark(f, cmd, keys_was, "button");
-  if (!dead && f.features[sb::Feature::dodge])
+  // Not on or onto a mover's top over harm (`route_on_mover`, `nav_harm_near`): its floor unseen
+  // by the dodge's check, a side step and its hop on boss1's ferry threw him off into the lava. A
+  // lift over a dry floor keeps the dodge (without it the arena's novices scored a fifth less).
+  const sb::Pilot& dp = f.bot.pilot.pilot;
+  const bool over_harm_ride =
+      sb::route_on_mover(dp) &&
+      sb::nav_harm_near(*dp.g, s.world.entities[static_cast<size_t>(me)].origin, 192);
+  if (!dead && f.features[sb::Feature::dodge] && !over_harm_ride)
     fighter_dodge(f, s, me, t, why, cmd);  // the side steps (footwork.hpp)
   keys_mark(f, cmd, keys_was, "dodge");
 
@@ -1927,7 +1934,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
     if (free_feet && d.waterlevel == 0 && !f.bot.pilot.pilot.brink_free) {
       const sb::BrinkGuard bg =
           sb::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd,
-                          f.features[sb::Feature::brinkfall]);
+                          f.features[sb::Feature::brinkfall], f.bot.pilot.now);
       if (bg.ran)
         f.brink_note = bg.ways + (bg.fall_in ? 20 : bg.run_in ? 10 : 0) + (bg.changed ? 100 : 0);
       if (bg.changed) {

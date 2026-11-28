@@ -2,11 +2,13 @@
 // braked and its jump let go of, a key along the lip or away from it is kept, and far from any
 // harm nothing changes; the nav marks the walks along a lip and no other, and a walk whose side
 // step falls into lava far below; a run off a stair's step whose flight lands in the lava is
-// braked in the air (`fall`), and one that lands on a wide step left alone.
+// braked in the air (`fall`), and one that lands on a wide step left alone; a moving platform's
+// top over the pit, passed in as it stands, is a floor to step onto.
 //
 // ge:summary Tests: the brink guard's keys by a lava pit, and the nav's brink links
 // ge:keywords test brink brink_guard over_harm nav_mark_harm nav_harm_near lava-lip lava pit
 // ge:keywords fall_into_harm stair-fall nav_hurt_at hurt_boxes dry-pit trigger_hurt
+// ge:keywords nav_on_mover_top ferry moving-platform-floor
 // ge:skill shooter testing
 #include <algorithm>
 #include <vector>
@@ -264,4 +266,32 @@ TEST(a_dry_pit_a_killing_trigger_fills_is_kept_off_by_its_box) {
   // walked (the marks, not the box, held him still in rboss's grinder pit for 600 s).
   c = keys(0, 320, 0);
   CHECK(!sb::brink_guard(b.sv, g, -1, {300, 0, -104}, {}, c).changed);
+}
+
+TEST(a_step_onto_a_ferry_over_the_pit_is_a_floor_and_one_past_it_is_not) {
+  Bench b;
+  pit(b);
+  const sb::NavGraph g = graph({{16, 0, -104}, {-600, 0, 24}}, {});
+  // A moving platform's top level with the floor, over the lava from the lip to x 96 (boss1's
+  // ferry: no part of the world the guard traces, so its box as it stands now is passed in).
+  static const sb::BrushModel model{};
+  sb::NavMover ferry;
+  ferry.model = &model;
+  ferry.absmin = {0, -32, -16};
+  ferry.absmax = {96, 32, 0};
+  const std::vector<sb::NavMover> now{ferry};
+  CHECK(sb::nav_on_mover_top(now, {24, 0, 24}));
+  CHECK(!sb::nav_on_mover_top(now, {24, 96, 24}));  // beside it
+  CHECK(!sb::nav_on_mover_top(now, {24, 0, 104}));  // far over it
+  // Facing it at the lip, forward full: kept with the ferry there, let go of without it.
+  sh::MoveCmd c = keys(0, 320, 0);
+  sb::brink_guard(b.sv, g, -1, {-24, 0, 24}, {}, c, false, now);
+  CHECK(c.forward == sh::quantize_axis(320));
+  c = keys(0, 320, 0);
+  sb::brink_guard(b.sv, g, -1, {-24, 0, 24}, {}, c);
+  CHECK(c.forward <= 0);
+  // On it, at its east end: a step on east (past its end, into the lava) is let go of.
+  c = keys(0, 320, 0);
+  sb::brink_guard(b.sv, g, -1, {88, 0, 24}, {}, c, false, now);
+  CHECK(c.forward <= 0);
 }

@@ -8,6 +8,7 @@
 #include "shooterbots/way_bosses.hpp"
 #include "shooterbots/way_exits.hpp"
 #include "shooterbots/way_gates.hpp"
+#include "shooterbots/way_keys.hpp"
 #include "shooterbots/way_parts.hpp"
 #include "shooterbots/way_shots.hpp"
 
@@ -34,7 +35,6 @@ namespace ge::shooterbots {
 
 namespace {
 
-constexpr int kKeySilver = 131072, kKeyGold = 262144;  // the keys' item bits
 constexpr float kGateWide = 64;      // an explosive narrower both ways is no way's gate, units
 constexpr float kButtonClose = 320;  // at a button's spot this near, he presses it, units
 constexpr double kPressFor_s = 4;    // and gives the press this long
@@ -291,13 +291,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     return nullptr;
   };
-  bool quake_keys = false;  // the map's keys are Quake's (items), whose doors open to a touch
-  for (const sb::EntityBlock& b : blocks) {
-    const char* cn = sb::block_value(b, "classname");
-    quake_keys = quake_keys || (cn && std::strncmp(cn, "item_key", 8) == 0);
-  }
+  const bool quake_keys = way_quake_keys(blocks);  // keys are items: their doors open to a touch
   w.key_doors.clear();
   std::vector<int> gates;  // the shut doors barred by the links through their shut boxes
+  way_key_hatches(w, s, blocks, gates);
   // The links that pass through secret wall `e` (shut while it is barred).
   // One lying flat (e2m1's slab over the pool's shaft) is crossed through its floor.
   constexpr float kOnSlab = 64;  // a ride's foot this far over a flat wall stands on it, units
@@ -1001,10 +998,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     if (st.kind == WayKind::button) {
       // A button that opens doors is done while they stand open (one that shuts again, a lift
       // called, is pressed again); one that opens none (a counter's) once it is pressed.
-      const ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
+      ButtonSpot& bs = f.button_spots[static_cast<size_t>(st.button)];
       const sh::Edict& be = s.sv.edicts[static_cast<size_t>(bs.ent)];
       // A shot trigger (`model` kept) never moves: answered, it is removed or touches nothing.
-      const bool pressed = dist(be.origin, st.lo) > 0.5f ||
+      const bool pressed = dist(be.origin, st.lo) > 0.5f || button_looks_pressed(bs, s) ||
                            (!bs.model.empty() && (be.free || be.solid == sh::kSolidNot));
       bool all = !bs.doors.empty();
       for (const int d : bs.doors) all = all && door_open(d);

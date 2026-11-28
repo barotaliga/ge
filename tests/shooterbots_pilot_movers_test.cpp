@@ -3,10 +3,12 @@
 // in the way; a jump down off a ledge over a door sunk level with the ledge (e1m4's trap room, its
 // door lowered into the slime pit the bot jumps across) is not held by it, while a jump up past a
 // door standing over the take-off still is. A platform that rises is waited for clear of its
-// whole way; a ferry on the level is not.
+// whole way; a ferry on the level is not. The route on or onto a mover is known (its floor unseen
+// by the guards that read the static world), but not while it is waited for.
 //
 // ge:summary Tests for the pilot's door check: sunk doors walked over and jumped from
 // ge:keywords test pilot door leaf sunk jump drop take-off leaf_in_way mover_in_way trap lift rises
+// ge:keywords route_on_mover ferry
 // ge:skill shooterbots testing
 #include "check.hpp"
 #include "shooterbots/pilot_movers.hpp"
@@ -60,3 +62,24 @@ TEST(a_platform_that_rises_is_waited_for_clear_of_its_whole_way_and_a_ferry_is_n
 }
 
 }  // namespace
+
+TEST(the_route_on_or_onto_a_mover_is_known_and_a_wait_for_it_is_not) {
+  // Three nodes: the ledge, a ferry's top, the ledge beyond (boss1's ferries over the lava).
+  sb::NavGraph g;
+  g.nodes.resize(3);
+  g.nodes[1].mover = 368;
+  sb::Pilot p;
+  p.g = &g;
+  p.route = {0, 1, 2};
+  p.mode = sb::PilotMode::walk;
+  p.k = 0;
+  CHECK(sb::route_on_mover(p));  // onto it
+  p.k = 1;
+  CHECK(sb::route_on_mover(p));  // off it
+  p.route = {0, 2};
+  p.k = 0;
+  CHECK(!sb::route_on_mover(p));  // no mover on the way
+  p.route = {0, 1, 2};
+  p.mode = sb::PilotMode::wait;  // waited for: the guards keep him on the ledge
+  CHECK(!sb::route_on_mover(p));
+}

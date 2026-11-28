@@ -250,7 +250,7 @@ void party_work_command(PartyWork& w, Fighter& f, const MapNav& nav, const BotVi
     f.bot.yaw = cmd.angles.y;  // he turned to it: his keys follow his view
   } else {
     // A climber is held to the ladder by his pilot: a shove aside takes him off it.
-    if (!f.bot.pilot.pilot.climbing) unwedge(w.wedge, s, me, t, cmd);
+    if (!f.bot.pilot.pilot.climbing) unwedge(w.wedge, s, me, t, cmd, way_held(f.bot.pilot.pilot));
     way_edge(nav, f, s, me, cmd);
   }
   if (party_give_way(s, me, opt.humans, cmd)) w.gave_way++;

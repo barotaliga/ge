@@ -113,7 +113,7 @@ bool fall_into_harm(const Server& sv, Vec3f origin, Vec3f velocity, float ground
 }
 
 BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin, Vec3f velocity,
-                       MoveCmd& cmd, bool fall) {
+                       MoveCmd& cmd, bool fall, std::span<const NavMover> movers) {
   BrinkGuard out;
   const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
   const bool near = nav_harm_near(g, origin, kNear);
@@ -132,8 +132,9 @@ BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin
     const double a = k * (core::kPi / 4);
     const float dx = static_cast<float>(core::libm::cos(a)),
                 dy = static_cast<float>(core::libm::sin(a));
-    if (!over_harm(sv, origin, {origin.x + dx * kLook, origin.y + dy * kLook, origin.z}, me, &g))
-      continue;
+    const Vec3f step{origin.x + dx * kLook, origin.y + dy * kLook, origin.z};
+    // A mover's top there is the floor (boss1's ferries over the lava: no part of what is traced).
+    if (!over_harm(sv, origin, step, me, &g) || nav_on_mover_top(movers, step)) continue;
     // A crack between two floors, the box over it no wider than kCrack, is walked across, not a
     // pit: the floor stands dry just past it (rmine1's catwalks over the lava, a crack between
     // two of them, stood him still at its lip for the whole run).
@@ -151,9 +152,8 @@ BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin
   if (speed > kRunMin) {
     const float ahead = speed * kRun_s < kRunMost ? speed * kRun_s : kRunMost;
     const float vx = velocity.x / speed, vy = velocity.y / speed;
-    out.run_in =
-        near &&
-        over_harm(sv, origin, {origin.x + vx * ahead, origin.y + vy * ahead, origin.z}, me, &g);
+    const Vec3f to{origin.x + vx * ahead, origin.y + vy * ahead, origin.z};
+    out.run_in = near && over_harm(sv, origin, to, me, &g) && !nav_on_mover_top(movers, to);
     if (!out.run_in && fly && fall_into_harm(sv, origin, velocity, ahead, me, &g))
       out.run_in = out.fall_in = true;
     if (out.run_in) {

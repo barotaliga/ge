@@ -303,6 +303,7 @@ struct FxState {
   struct Flight {
     sh::Vec3f at, dir;
     bool nail = false;  // a nail (no rocket, grenade or glowing shot)
+    bool grenade = false;
   };
   std::unordered_map<int, Flight> flights, flights_next;
   std::unordered_map<int, Flight> flights_was;  // the frame before's (a nail's last place: blood)
