@@ -247,7 +247,7 @@ TEST(the_settings_are_bound_kept_and_their_change_asks_for_the_game) {
   CHECK_MSG(why.find("next start") != std::string::npos, why);
 }
 
-TEST(a_folder_with_no_game_plays_the_baseline_mod_on_the_fallback_map) {
+TEST(a_folder_with_no_game_loads_the_baseline_mod_and_no_map) {
   const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::q1_game());
   cl::SearchPath files;
   cl::GameContent c;
@@ -255,7 +255,7 @@ TEST(a_folder_with_no_game_plays_the_baseline_mod_on_the_fallback_map) {
   CHECK_MSG(cl::load_programs(adapter, files, "", c, error), error);
   CHECK(c.campaign == nullptr);
   CHECK(!c.registered);
-  CHECK(c.first_map == shooters_edge::profiles::q1_game().fallback_map);
+  CHECK(c.first_map.empty());  // nothing loads: the title and its menu
   CHECK(c.start_map == ge::classicenhance::q1_profile().start_map);
   // Packs holding the start map start on it.
   std::vector<uint8_t> pack;
