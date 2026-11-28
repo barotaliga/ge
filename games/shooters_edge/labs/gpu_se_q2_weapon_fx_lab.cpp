@@ -86,9 +86,12 @@ struct Shot {
   // With `wall`: the picture from half a metre above the spent shells the gun threw, wherever
   // they came to lie (ce_shells).
   bool shells = false;
+  int after = 1;  // `eye`: the picture this many frames after the shot left the muzzle
 };
 constexpr Shot kShots[] = {
     {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
+    {"blaster-near", "the bolt close, just out of the gun: a yellow streak, not a ball", 5,
+     sv::SqWeapon::blaster},
     {"shotgun", "the pellets' sparks where they hit", 12, sv::SqWeapon::shotgun},
     {"super-shotgun", "a wider spray of sparks", 6, sv::SqWeapon::super_shotgun},
     {"machinegun", "a line of bullet sparks walking up the wall", 30, sv::SqWeapon::machinegun},
@@ -106,6 +109,12 @@ constexpr Shot kShots[] = {
      sv::SqWeapon::machinegun, false, false, true},
     {"rocket-launcher-flash", "the rocket's flare at the muzzle, the launcher kicked", 40,
      sv::SqWeapon::rocket_launcher, false, false, true},
+    {"blaster-flash", "the bolt leaving the muzzle, its yellow light on the gun", 40,
+     sv::SqWeapon::blaster, false, false, true},
+    {"blaster-away",
+     "the bolt flying away from the eye: a yellow spark in an orange glow, never "
+     "a white ball, its specks behind it",
+     40, sv::SqWeapon::blaster, false, false, true, 4, false, false, 6},
     {"railgun-flash", "the rail's blue light on the gun as it fires, the gun kicked", 40,
      sv::SqWeapon::railgun, false, false, true},
     {"super-shotgun-marks", "a bullet hole where each pellet struck, spread as the shot spread",
@@ -467,7 +476,7 @@ void run(gl::Lab& lab) {
         // From the eye: the picture a frame after the shot leaves the muzzle (the flash lasts a
         // few hundredths of a second; the hand steps once a rules frame).
         if (shot.eye && hand.fired) fired_at = i;
-        if (shot.eye && fired_at >= 0 && i >= fired_at + 1) break;
+        if (shot.eye && fired_at >= 0 && i >= fired_at + shot.after) break;
       }
       if (std::string_view(look_name) == "modern" && !shot.wall && !shot.eye)
         report(lab, shot, l, seen);
@@ -528,7 +537,10 @@ void run(gl::Lab& lab) {
                       : shot.wall ? " look at the floor a few steps ahead, seen from the eye "
                       : shot.eye  ? " look, seen from the eye "
                                   : " look, seen from a step ahead and beside the player ") +
-                     (shot.eye ? std::string("a frame after the shot left the muzzle.")
+                     (shot.eye ? (shot.after == 1
+                                      ? std::string("a frame after the shot left the muzzle.")
+                                      : std::to_string(shot.after) +
+                                            " frames after the shot left the muzzle.")
                                : std::to_string(shot.ticks) + " frames after the trigger."),
            shot.look_for,
            {{"map", map_name}, {"weapon", shot.id}, {"look", look_name}}},

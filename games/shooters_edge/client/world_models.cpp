@@ -64,6 +64,9 @@ constexpr double kSpinDegPerS = 100;    // how fast
 constexpr float kAmbientShare = 0.75f;  // of the floor's light, from every side
 constexpr float kShadeShare = 0.6f;     // and from above and ahead
 constexpr float kRelightUnits = 1;      // a move that takes the light again
+// Quake II's blaster bolt in the modern look (InPlace::full_lit_once): its painted colour at
+// this many times the eye's white, bright enough to bloom, low enough that the tone keeps its hue.
+constexpr float kBoltLevel = 1.8f;
 // The 38 family's rule for a model's light: the floor's light in full from every side,
 // as much again toward a light fixed 45 degrees above the map's +x, and a face turned away from it
 // losing 0.3 of that; a floor looked for up to 8192 units down.
@@ -627,6 +630,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
         p.spinning = look.spinning;
         p.bobs = look.bobs;
         p.full_bright = look.full_bright;
+        p.bolt = look.missile == Q2Look::Missile::bolt;
         p.min_light = look.min_light;
         p.no_shadow = look.no_shadow;
         p.shell = look.shell;
@@ -1549,6 +1553,10 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     for (int c = 0; c < 3; c++) g.shade_dir[c] = float(sd[c] / sl);
     g.outdoor = 0;
     g.glow = 1;
+    if (in_place.full_lit_once && p.bolt) {  // its painted colour, hot but not washed out
+      g.glow = 0;
+      for (int c = 0; c < 3; c++) g.ambient[c] = kBoltLevel * p.colormod[c], g.shade[c] = 0;
+    }
     g.smooth = smooth;
     g.light_in_white = true;
     PowerIn power_in{.q2 = q2,

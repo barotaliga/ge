@@ -1043,22 +1043,27 @@ const gr::BeamLook& plasma_look() {
   static const gr::BeamLook l = [] {
     gr::BeamLook a;
     a.step_m = 0.04f;
-    a.wander = 0.004f;  // a little restless: a streak of plasma, not a rod
+    a.wander = 0;  // one straight hot streak, as the bolt is
     a.pull = 1;
-    a.filaments = 2;
-    a.braid_m = 0.018f;  // two strands wound tight round each other
-    a.twist = 7.0f;
-    a.spin_hz = 9;
+    a.filaments = 1;
+    a.braid_m = 0;
+    a.twist = 0;
+    a.spin_hz = 0;
     a.fork_chance = 0;
     a.strike_hz = 0;
-    a.core_m = 0.022f;
-    a.glow_m = 0.2f;
-    a.core_rgb[0] = 1.0f, a.core_rgb[1] = 0.78f, a.core_rgb[2] = 0.35f;
-    a.glow_rgb[0] = 1.0f, a.glow_rgb[1] = 0.42f, a.glow_rgb[2] = 0.05f;
+    // A yellow core in an orange sheath, held to a few times the eye's white so the picture's
+    // tone keeps them yellow and orange: seen end on as it flies away it is a yellow spark in an
+    // orange glow, never a white ball.
+    a.core_m = 0.03f;
+    a.glow_m = 0.11f;
+    a.core_keys = 1.1f;
+    a.glow_keys = 0.45f;
+    a.core_rgb[0] = 1.0f, a.core_rgb[1] = 0.68f, a.core_rgb[2] = 0.16f;
+    a.glow_rgb[0] = 1.0f, a.glow_rgb[1] = 0.42f, a.glow_rgb[2] = 0.04f;
     a.flash = 0;
     a.flash_s = 0;
-    a.flicker = 0.25f;
-    a.shimmer = 0.35f;
+    a.flicker = 0.1f;
+    a.shimmer = 0.15f;
     a.attack_s = 0.004f;
     a.release_s = float(kPlasmaFadeS);
     a.light_cd = 0;  // the shot's own light rides it (shot_glow)
@@ -1141,15 +1146,43 @@ void ion_trail(const double from[3], const double to[3], uint32_t seed, Particle
 
 void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Particles* out) {
   Rng r = ge::core::make_rng(seed);
-  for (int i = 0; i < 3; ++i) {
-    const double t = rnd(r, 0, 1);
-    const double p[3] = {from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t,
-                         from[2] + (to[2] - from[2]) * t};
-    double d[3];
-    unit(r, d);
-    Particle q = ember(p, d, rnd(r, 0.3, 1.2), 2400, 0.1, rnd(r, 0.12, 0.3), r);
-    q.size = float(rnd(r, 0.012, 0.022));
+  static constexpr float kHot[3] = {1.0f, 0.78f, 0.22f};    // fresh off the bolt
+  static constexpr float kEmber[3] = {1.0f, 0.36f, 0.05f};  // the most of them, cooler
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  if (len < 1e-4) return;
+  // The classic's line of specks, one each kBoltSpeckM, as soft glowing beads that hang where
+  // the bolt passed, drift a little and dim from yellow to a dull orange.
+  const int n = std::min(64, std::max(1, int(len / kBoltSpeckM)));
+  for (int i = 0; i < n; ++i) {
+    const double t = (i + rnd(r, 0, 1)) / n;
+    const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
+    const bool hot = rnd(r, 0, 1) < 0.25;
+    Particle q =
+        shine(p, hot ? kHot : kEmber, hot ? 1.5 : 1.0, hot ? 0.045 : 0.055, rnd(r, 0.3, 0.5), r);
+    double v[3];
+    unit(r, v);
+    set_v(q, v, rnd(r, 0.15, 0.45));
+    q.drag = 1.5f;
+    q.fall = 0.08f;  // a slight sag as it fades
+    q.glow = 1.0f;
     out->push_back(q);
+  }
+  // A small yellow glow round the bolt where it is now, gone by the next frame's: seen end on as
+  // it flies away, a hot spark, never a ball.
+  Particle head = shine(to, kHot, 1.4, 0.09, 0.03, r);
+  for (float& v : head.v) v = 0;
+  head.glow = 1.0f;
+  out->push_back(head);
+  // A faint orange haze along the line, the air it heated.
+  if (rnd(r, 0, 1) < std::min(1.0, len / 0.3)) {
+    const double t = rnd(r, 0, 1);
+    const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
+    Particle h = shine(p, kEmber, 0.18, 0.1, rnd(r, 0.25, 0.4), r);
+    h.grow = 0.25f;
+    h.opacity = 0.5f;
+    h.glow = 1.0f;
+    out->push_back(h);
   }
 }
 
