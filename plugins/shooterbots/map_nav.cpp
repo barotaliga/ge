@@ -23,6 +23,7 @@
 #include "shooter/pmove.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/world.hpp"
+#include "shooterbots/buttons.hpp"
 #include "shooterbots/entities.hpp"
 #include "shooterbots/nav_script.hpp"
 
@@ -1436,6 +1437,23 @@ std::vector<sb::HurtBox> hurt_boxes(const ge::shooter::MapSpec& spec,
     const bool has = org && std::sscanf(org, "%f %f %f", &at.x, &at.y, &at.z) == 3;
     const sb::HurtBox h = sb::blade_sweep(box.mins, box.maxs, has ? &at : nullptr, flags);
     out.push_back(h);
+  }
+  // (`hurtbox`) The floor plate that starts such a blade (a touched `func_button` whose relays
+  // reach it, `button_spins`), and a player's half width round it: boss2's in front of the
+  // gallery's doorway, walked over on the way in, started the blade that then shut him in.
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    const char* health = sb::block_value(b, "health");
+    if (!cn || std::strcmp(cn, "func_button") != 0 || !model || model[0] != '*' ||
+        std::atoi(model + 1) <= 0 || (health && std::atof(health) > 0) ||
+        !sb::button_spins(blocks, sb::block_value(b, "target")))
+      continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (box.ok)
+      out.push_back({{box.mins.x - 16, box.mins.y - 16, box.mins.z},
+                     {box.maxs.x + 16, box.maxs.y + 16, box.maxs.z},
+                     false});
   }
   // (`hurtbox`) A current that carries whoever stands in it into one (rboss's: a `trigger_push`
   // running 700 units south into its pit at the end): a level push, always on, at a right angle,

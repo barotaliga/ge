@@ -19,8 +19,10 @@ concepts: [nav-grid, column-floors, pocket, escape-pod, ladder, overhang, func-r
   (`ladder_climb_clear`).
 - A button whose relays only start a `func_rotating` opens nothing and can shut the way behind the
   bot (boss2's gallery blade): such a button is no step (`button_spins`). A floor plate starts it
-  too when walked over, so its sweep is harm (`blade_sweep`); a brush model turned round an
-  `origin` has its box built round that origin, off it: move it there first.
+  too when walked over, so its sweep and the plate are harm (`blade_sweep`, `hurt_boxes`); a brush
+  model turned round an `origin` has its box built round that origin, off it: move it there first.
+- One seed is chaos: a nav change that moves one seed of a fragile map (e2m1) needs two more seeds
+  run with and without it (a temporary env toggle in one binary) before it is called a regression.
 - Check a moved map against today's main before calling it a regression: of eight maps worse than
   a day-old baseline, six moved the same on main.
 - `brush slice` shows only solid and liquid; a bevel or a slope the box lands on needs `se-spot`'s

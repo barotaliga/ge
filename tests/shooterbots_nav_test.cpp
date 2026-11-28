@@ -232,13 +232,63 @@ TEST(a_slot_narrower_than_the_grids_offset_gets_a_node_on_its_floor) {
   world.solids[0].maxs = {256, 128, 256};
   world.count = 1;
   sb::NavGraph g;
-  sb::build_nav(world, {}, sh::MoveSettings{}, sb::NavSettings{}, g);
+  sb::NavSettings with;
+  with.squeeze = true;  // the campaign's navs
+  sb::build_nav(world, {}, sh::MoveSettings{}, with, g);
   int in_slot = 0;
   for (const sb::NavNode& nd : g.nodes)
     in_slot += nd.origin.z < 30 && nd.origin.x > -7 && nd.origin.x < 7 ? 1 : 0;
   CHECK_MSG(in_slot > 0,
-            "no node on the floor of a slot 44 wide: read the POCKET in nav.cpp's "
+            "no node on the floor of a slot 44 wide: read the pocket in nav_columns.cpp's "
             "column_floors (a column's box slid off the grid into it)");
+}
+
+// Two rooms joined by a corridor 56 wide: the player's box has 24 units of room in it, all of it
+// between two rows of the grid's columns (their middles at y 16 and 48), as hip2m3's ways out of
+// its start arena are.
+struct NarrowCorridor {
+  sh::HullData point, clip;
+  sh::MoveWorld world;
+  NarrowCorridor() {
+    const auto box = [](sh::Vec3f lo, sh::Vec3f hi) {
+      sh::Brush b;
+      b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                  {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+      return b;
+    };
+    const std::vector<sh::Brush> brushes = {box({-256, -128, -64}, {256, 128, 0}),
+                                            box({-64, -128, 0}, {64, 4, 256}),
+                                            box({-64, 60, 0}, {64, 128, 256})};
+    point = sh::build_point_hull(brushes);
+    clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+    world.solids[0].point_hull = point.hull();
+    world.solids[0].clip_hull = clip.hull();
+    world.solids[0].mins = {-256, -128, -64};
+    world.solids[0].maxs = {256, 128, 256};
+    world.count = 1;
+  }
+};
+
+TEST(a_corridor_narrower_than_the_grid_gets_nodes_only_when_asked) {
+  const NarrowCorridor nc;
+  const auto crosses = [&](const sb::NavSettings& set, sb::NavGraph& g) {
+    sb::build_nav(nc.world, {}, sh::MoveSettings{}, set, g);
+    const int32_t west = sb::nav_nearest(g, {-200, 0, 24});
+    const int32_t east = sb::nav_nearest(g, {200, 0, 24});
+    if (west < 0 || east < 0) return false;
+    ge::ai::Search search;
+    sb::nav_reach(g, west, search);
+    return search.reached(east);
+  };
+  sb::NavGraph g;
+  CHECK_MSG(!crosses(sb::NavSettings{}, g),
+            "the grid found the narrow corridor by itself: the fixture no longer leaves the box "
+            "less room than a column; read NarrowCorridor");
+  sb::NavSettings with;
+  with.squeeze = true;
+  CHECK_MSG(crosses(with, g) && g.counts.squeezes > 0,
+            "squeeze on, the west room still does not reach the east one through the corridor: "
+            "read plugins/shooterbots/nav_squeeze.cpp");
 }
 
 TEST(a_scripted_way_hops_up_narrow_stairs_in_one_flow) {

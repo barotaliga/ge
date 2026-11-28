@@ -84,6 +84,10 @@ struct NavSettings {
   // found the yellow armour's south tread but cost frags elsewhere (many new standing jumps);
   // a key item's last steps are a scripted route's (bots/item_routes) instead.
   bool treads = false;
+  // Floors in a corridor narrower than the grid get nodes (`nav_add_squeezes`), and so do the
+  // floors of slots no column's box fits (nav_columns.hpp's pockets). Off by default: the
+  // campaign's maps turn it on, where a way out missed seals a bot in its room.
+  bool squeeze = false;
 };
 
 // `ride`: stand on a mover's top at rest and be carried to its far end (a plat). `swim`: through
@@ -263,6 +267,7 @@ struct NavCounts {
   int64_t refused = 0;              // candidates no kind reached
   int64_t no_run_up = 0;            // jumps that reached but had no room to run up
   int64_t treads = 0;               // tread nodes added between columns
+  int64_t squeezes = 0;             // squeeze nodes added in corridors narrower than the grid
   int64_t by_kind[kNavKinds] = {};  // links kept, by NavKind
 };
 
@@ -514,6 +519,11 @@ struct NavVoid {
   std::vector<uint8_t> cell;
 };
 bool nav_floor_in_void(const MoveWorld& world, Vec3f p, NavVoid& cache);
+// SQUEEZES (`nav_add_squeezes`, nav_squeeze.cpp; `NavSettings::squeeze`): the floors of a corridor
+// narrower than the grid, found off the columns beside each floor of `col_floors` (by column, i
+// times the rows plus j) and added to the column that holds each; how many.
+int64_t nav_add_squeezes(const MoveWorld& world, const NavGraph& g,
+                         std::vector<std::vector<Vec3f>>& col_floors);
 
 // REPAIRING POCKETS (`nav_bridge_pockets`): after the build (and the water, the teleporters),
 // a POCKET is a set of nodes, joined by links among themselves, that the map's main part (the

@@ -263,7 +263,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     for (int32_t j = 0; j < g.rows; j++) {
       const float x = g.lo.x + set.spacing * (static_cast<float>(i) + 0.5f);
       const float y = g.lo.y + set.spacing * (static_cast<float>(j) + 0.5f);
-      column_floors(world, x, y, top, bottom, floors, &pocket);
+      column_floors(world, x, y, top, bottom, floors, set.squeeze ? &pocket : nullptr);
       std::erase_if(floors, [&](Vec3f f) { return nav_floor_in_void(world, f, unsealed); });
       col_floors[col_of(i, j)] = floors;
       for (const Vec3f p : pocket)
@@ -351,6 +351,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
               }
           }
   }
+  if (set.squeeze) g.counts.squeezes = nav_add_squeezes(world, g, col_floors);
   for (int32_t i = 0; i < g.cols; i++)
     for (int32_t j = 0; j < g.rows; j++) {
       std::vector<Vec3f>& fl = col_floors[col_of(i, j)];
