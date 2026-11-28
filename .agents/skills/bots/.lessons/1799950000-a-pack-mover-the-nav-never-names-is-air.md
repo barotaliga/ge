@@ -16,4 +16,7 @@ concepts: [func_new_plat, func_train2, mission-pack, movers, plat, dissolution, 
   q1-rogue-things.md): a named one waits for a use that moves nothing, so the bot stood on it for
   minutes when it was taken as a plat.
 - Judge such a change on the pack's whole set of maps, not one: single maps move up and down by
-  route changes alone (r2m5 16 to 55 kills, r2m4 35 to 24 on a door that has nothing to do with it).
+  route changes alone (r2m4 35 to 27 kills on a door that has nothing to do with it). Compare on
+  one binary built from the merged tree, the change switched by an environment variable: after a
+  merge of main, r2m5 went from a finish to 13 kills, on a top-resting lift the first runs' routes
+  had never met.

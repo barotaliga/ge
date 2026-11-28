@@ -188,14 +188,14 @@ TEST(a_walk_across_a_killing_strip_is_cut_and_one_beside_it_stays) {
   CHECK(sb::cut_hurt_links(pit, strip) == 0);
 }
 
-// Dissolution of Eternity's plat ridden by touch (`new_plat_ride`): its travel the size of its
-// height either way, its built height less 8 with none; its other modes, and one with a name
-// (no touch till a use that moves nothing), are no plat to the nav.
+// Dissolution of Eternity's plat ridden by touch (`new_plat_ride`): one resting at the bottom
+// travels its height's size, its built height less 8 with none; one resting at the top, its other
+// modes, and one with a name (no touch till a use that moves nothing) are no plat to the nav.
 TEST(a_dissolution_plat_rides_its_heights_size_and_its_other_modes_do_not) {
   CHECK(sb::new_plat_ride("func_new_plat", "16", "-448", nullptr, 462) == 448);  // r1m7's shaft
-  CHECK(sb::new_plat_ride("func_new_plat", "16", "192", nullptr, 206) == 192);   // rests on top
+  CHECK(sb::new_plat_ride("func_new_plat", "16", "149", nullptr, 166) == 0);     // r2m5's pillar
   CHECK(sb::new_plat_ride("func_new_plat", "48", nullptr, nullptr, 118) == 110);
-  CHECK(sb::new_plat_ride("func_new_plat", "112", "130", nullptr, 139) == 130);
+  CHECK(sb::new_plat_ride("func_new_plat", "112", "-130", nullptr, 139) == 130);
   CHECK(sb::new_plat_ride("func_new_plat", "18", "296", nullptr, 310) == 0);  // the toggle
   CHECK(sb::new_plat_ride("func_new_plat", "4", "200", nullptr, 14) == 0);    // the elevator
   CHECK(sb::new_plat_ride("func_new_plat", "0", "200", nullptr, 14) == 0);    // never moves

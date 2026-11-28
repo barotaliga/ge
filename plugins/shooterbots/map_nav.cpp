@@ -686,8 +686,7 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
       // A named one waits raised until something fires it, then lowers and rides like any other
       // (bunk1's by its first buttons): its rest is down there, where it stands from then on.
-      // Dissolution's resting at the top the same: it is boarded at the bottom of its ride.
-      if ((sb::block_value(b, "targetname") != nullptr || new_plat) && mv.rest.z > -rise / 2) {
+      if (sb::block_value(b, "targetname") != nullptr && mv.rest.z > -rise / 2) {
         mv.rest.z -= rise;
         mv.absmin.z -= rise;
         mv.absmax.z -= rise;
@@ -1300,7 +1299,9 @@ float new_plat_ride(const char* classname, const char* spawnflags, const char* h
   const int flags = spawnflags ? std::atoi(spawnflags) : 0;
   if ((flags & 7) != 0 || (flags & 16) == 0) return 0;  // a mode of its own picked first
   const float h = height ? static_cast<float>(std::atof(height)) : 0.f;
-  return h > 0 ? h : h < 0 ? -h : built_height - 8;
+  // One resting at the top (a positive height) is ridden down, and called from below only by a
+  // walk under it into its shaft: r2m5's, a pillar on the floor, is called from nowhere below.
+  return h > 0 ? 0 : h < 0 ? -h : built_height - 8;
 }
 
 int64_t mark_crusher_harm(const NavGraph& g, const std::vector<NavMover>& movers,

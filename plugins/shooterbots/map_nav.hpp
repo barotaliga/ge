@@ -184,10 +184,12 @@ std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView
                                                   ge::brush::BrushTracer* tracer = nullptr);
 // DISSOLUTION OF ETERNITY'S PLAT RIDDEN BY TOUCH (a `func_new_plat` with spawnflag 16 and none of
 // 1, 2 or 4, which pick its other modes: the elevator, the toggle, the drop-and-wait): called and
-// ridden like a plat, built at the top of its ride. Its travel in units: its height's size (a
-// positive height rests at the top, a negative one at the bottom), its built height less 8 with
-// none. 0 for anything else, and for one with a name: it answers no touch until its first use,
-// which moves nothing, so nothing the bot sees says when it rides (r2m6's, stood on for minutes).
+// ridden like a plat, built at the top of its ride. Its travel in units, for one resting at the
+// bottom: its height's size for a negative height, its built height less 8 with none. 0 for
+// anything else; for one resting at the top (a positive height), ridden down and called from
+// below only from under it (r2m5's pillar, called from nowhere: the bot waited at its foot); and
+// for one with a name, which answers no touch until its first use, a use that moves nothing, so
+// nothing the bot sees says when it rides (r2m6's, stood on for minutes).
 float new_plat_ride(const char* classname, const char* spawnflags, const char* height,
                     const char* targetname, float built_height);
 // (`crusher`) Marks in `harm` the nodes of `g` a crushing train (one with a `dmg` and an
@@ -251,6 +253,12 @@ inline ge::shooterbots::NavSettings campaign_nav_settings() {
   ge::shooterbots::NavSettings set;
   set.squeeze = true;
   return set;
+}
+// Quake II's campaign keeps the plain grid: its narrow ways were never what sealed a bot in, and
+// base1's 298 squeeze nodes moved its route onto a wedge it stood in from 60 s (it had finished at
+// 479 s).
+inline ge::shooterbots::NavSettings q2_campaign_nav_settings() {
+  return ge::shooterbots::NavSettings{};
 }
 // Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are Quake's already), and its air: with the
