@@ -342,11 +342,11 @@ const gr::BlastLook& billow_look() {
   return l;
 }
 std::span<const gr::BlastLook> rocket_looks() {
-  static const gr::BlastLook l[] = {blast_look(), make_tall(), make_wide(), make_hot()};
+  static const std::vector<gr::BlastLook> l = {blast_look(), make_tall(), make_wide(), make_hot()};
   return l;
 }
 std::span<const gr::BlastLook> grenade_looks() {
-  static const gr::BlastLook l[] = {make_grenade(), make_dusty(), make_squat()};
+  static const std::vector<gr::BlastLook> l = {make_grenade(), make_dusty(), make_squat()};
   return l;
 }
 const gr::BlastLook& grenade_billow_look() {
