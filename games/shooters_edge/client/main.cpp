@@ -998,8 +998,9 @@ int run_main(int argc, char** argv) {
   // LOAD GAME's folder, `import` or the settings (client/game_folder.hpp): the install opened in
   // place of the one playing (the old world and servers let go first), its first map started where
   // the map changes, enhanced in the background, kept. False, nothing changed, when it does not
-  // open. `pack_ask`: SELECT GAME's mission pack over it; `install_ask`: fs_basegame's, none set.
-  std::string folder_ask = copy_first, pack_ask;  // copy_in: the copy into the data folder
+  // open. `pack_ask`: SELECT GAME's mission pack over it, or -game's over a copy still to come in
+  // (copy_in, the copy into the data folder); `install_ask`: fs_basegame's, none set.
+  std::string folder_ask = copy_first, pack_ask = copy_first.empty() ? "" : args.game;
   cl::TakeIn copy_in;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
@@ -1047,6 +1048,7 @@ int run_main(int argc, char** argv) {
     args.game = game_folder;
     files.own = base.own_files(args.profile, basedir, args.game);  // saves, recordings, pictures
     game_menu.set_screenshots(shots.set_dir(files.own + "/screenshots"));
+    con_view.set_dump_folder(files.own);  // condump's, as at the start
     places.locs = {};
     places.map.clear();
     places.game_dir = std::filesystem::path(basedir) / args.game;
@@ -1297,9 +1299,8 @@ int run_main(int argc, char** argv) {
           ge::platform::set_relative_mouse(*window, true, controls.mouse.raw);
         break;
     }
-    // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
-    // screen; on the screen F5 and F6 a bot more or less, ENTER the start), on every frame, a
-    // server's joined as the window's own.
+    // The lobby's keys every frame, a server's joined as the window's own: F1 ready or break, F2
+    // the other team, F4 the warmup or the screen, there F5 and F6 a bot more or less, ENTER start.
     {
       using ge::platform::Key;
       const bool keys = !con_keys.held && !con_view.open() && !game_menu.open();

@@ -16,6 +16,8 @@ TEST(key_names) {
   CHECK(normalize_key("alt+f12", k) && k == "alt+f12");
   CHECK(normalize_key("mouse8", k) && normalize_key("kp_0", k) && normalize_key("pad_rt", k));
   CHECK(normalize_key("-", k) && k == "-");
+  CHECK(normalize_key("+", k) && k == "shift+=");  // typed as shift and =
+  CHECK(normalize_key("ctrl++", k) && k == "ctrl+shift+=");
   CHECK(!normalize_key("f13", k) && !normalize_key("f0", k) && !normalize_key("mouse9", k));
   CHECK(!normalize_key("f01", k) && !normalize_key("meta+a", k) && !normalize_key("ctrl+", k));
   CHECK(!normalize_key("", k) && k.empty());

@@ -235,7 +235,8 @@ yet starts from the defaults and is made by the first save.
     `pad_back`, `pad_start`, `pad_ls`, `pad_rs`, `pad_up`, `pad_down`, `pad_left`, `pad_right`.
   - older spellings in players' configs are read as the key they name: `uparrow` and the other
     arrows written out, `lctrl` and `rctrl` (both `ctrl`, as are the alt and shift pairs),
-    `kp_home` (`kp_7`) and the other keypad keys by their arrows, `~` (`` ` ``), `esc`.
+    `kp_home` (`kp_7`) and the other keypad keys by their arrows, `~` (`` ` ``), `esc`; `+`
+    (as in Quake II's own config) is `shift+=`, the keys it is typed with.
 - **Modifiers** come before the key: `ctrl+s`, `alt+shift+f1` (kept in the order ctrl, alt,
   shift). A key held with modifiers runs its modified bind if it has one, else its own.
 - **Modes**: `game` (the default), `console`, `menu` and `demo` each keep their own table.

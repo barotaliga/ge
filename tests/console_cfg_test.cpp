@@ -1,4 +1,4 @@
-// Cfg files: the startup order, the server's, the dump of every player setting.
+// Cfg files: the startup order, the server's, the dump of every player setting, a cheat never saved.
 //
 // ge:summary Tests cfg files: default, config, autoexec, then +commands; server.cfg; the dump
 // ge:keywords test cfg start start_server autoexec config dump_text describe
@@ -147,4 +147,15 @@ TEST(saving_one_part_writes_each_setting_with_its_value_there) {
            return !game(l);
          }}).find("seta centertime \"4\"") != std::string::npos);
   CHECK(c.save_text() == c.save_text({}));
+}
+
+// A CHEAT IS NEVER SAVED: the config is read before a server allows cheats, so it would only be
+// refused there, a warning at every start.
+TEST(an_archived_cheat_is_left_out_of_the_saved_config) {
+  Console c;
+  c.cvars().add({.name = "cl_kick", .fallback = "1", .flags = kArchive | kCheat});
+  c.cvars().add({.name = "cl_fov", .fallback = "90", .flags = kArchive});
+  const std::string saved = c.save_text();
+  CHECK_MSG(saved.find("cl_kick") == std::string::npos, saved);
+  CHECK(saved.find("seta cl_fov \"90\"") != std::string::npos);
 }

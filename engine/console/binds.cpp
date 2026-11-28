@@ -160,7 +160,8 @@ std::string new_name(const std::string& key) {
 bool normalize_key(std::string_view name, std::string& out) {
   out.clear();
   const std::string s = lower(name);
-  // The key is the last part; a `+` alone or at the end is the key "+" (not named: refused).
+  // The key is the last part; a `+` alone or at the end is the key "+", typed as shift and `=`
+  // (a classic game's own config binds it).
   std::vector<std::string> parts;
   size_t start = 0;
   while (true) {
@@ -173,6 +174,10 @@ bool normalize_key(std::string_view name, std::string& out) {
     start = p + 1;
   }
   for (std::string& part : parts) part = new_name(part);
+  if (parts.back() == "+") {
+    parts.back() = "=";
+    parts.insert(parts.end() - 1, "shift");
+  }
   const std::string& key = parts.back();
   if (!known_key(key)) return false;
   bool mods[3] = {false, false, false};
