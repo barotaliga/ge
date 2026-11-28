@@ -137,6 +137,22 @@ TEST(q2_words_open_its_screens_from_the_console) {
   CHECK(!w.g->p(0).inven_open);
 }
 
+// On a Quake II server joined, its words go there as the player's commands, not to the window's
+// own game.
+TEST(q2_words_go_to_the_quake_ii_server_joined) {
+  Window w(false);
+  w.r.active = true;
+  w.r.q2 = std::make_unique<sn::Q2ClientEnd>();
+  w.con.run_now("inven");
+  w.con.run_now("weapnext");
+  const auto& ch = w.r.q2->ch;
+  std::string sent;
+  for (int i = 0; i < ch.pending_count; i++)
+    sent.append(reinterpret_cast<const char*>(ch.pending[i].data), ch.pending[i].size);
+  CHECK_MSG(sent.find("inven") != std::string::npos, sent);
+  CHECK_MSG(sent.find("weapnext") != std::string::npos, sent);
+}
+
 TEST(cmd_sends_the_line_to_the_rules_as_it_is) {
   Window w(true);
   w.con.run_now("cmd score");

@@ -62,14 +62,18 @@ void add_server_commands(ge::console::Console& con, client::Listen& l, Remote& r
         },
         ours.flags);
   }
-  for (const char* word : kQ2Words)
-    con.add_command(word,
-                    std::string(word) + ": Quake II's " +
-                        (std::string(word) == "score" ? "scoreboard" : "inventory") +
-                        " (nothing in another game)",
-                    [&l](Con&, const Args& a) {
-                      if (client::listen_is_q2(l)) client::listen_say(l, a[0]);
+  // Quake II's words, to its rules: the server joined's, else the window's own game's.
+  for (const char* word : kQ2Words) {
+    const std::string w(word);
+    const char* what = w == "score"                         ? "scoreboard"
+                       : w == "weapnext" || w == "weapprev" ? "next or previous weapon"
+                                                            : "inventory";
+    con.add_command(word, w + ": Quake II's " + what + " (nothing in another game)",
+                    [&l, &r](Con&, const Args& a) {
+                      const bool q2 = r.active ? r.q2 != nullptr : client::listen_is_q2(l);
+                      if (q2) send_game_command(l, r, a[0]);
                     });
+  }
 }
 
 }  // namespace shooters_edge::net
