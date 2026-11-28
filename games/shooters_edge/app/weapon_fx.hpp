@@ -51,6 +51,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -76,9 +77,21 @@ const gr::BeamLook& bolt_look();
 // prongs' 30 cm) and thinner, as it is a hand's breadth from the eye.
 const gr::BeamLook& prong_arc_look();
 
-// Billows round a blast's main ball, and when the last is born after it, s.
-inline constexpr int kBillows = 3;
+// Billows round a blast's main ball (a common or a grenade's blast kMinBillows to kBillows, dealt
+// off its seed; the other kinds kKindBillows), and when the last is born after it, s.
+inline constexpr int kMinBillows = 2, kBillows = 4, kKindBillows = 3;
 inline constexpr double kBillowsBy = 0.12;
+// NO TWO ALIKE: a rocket's blast is dealt one of `rocket_looks` (the common ball, a tall one that
+// rises fast in tight lobes, a wide flat ragged one, a hot one that flares and is gone sooner) and
+// a grenade's one of `grenade_looks` (the common one, a dusty one that hangs low, a squat one in
+// broad lobes), each off its seed; its size by up to kBlastJitter either way, its billows' count,
+// and its embers and sparks by 0.7 to 1.3. A grenade's burn less than a rocket's (less fire for a
+// shorter time, cooler, a dimmer flash, more smoke with dust in it, `grenade_billow_look` round
+// them) and throw kGrenadeThrows of a rocket's embers and sparks.
+inline constexpr double kBlastJitter = 0.12, kGrenadeThrows = 0.55;
+std::span<const gr::BlastLook> rocket_looks();  // the first is blast_look()
+std::span<const gr::BlastLook> grenade_looks();
+const gr::BlastLook& grenade_billow_look();
 
 // An explosion at `at` (world m) at `now_s`: its fireball and its billows into `blasts` (each
 // drawn while blast_life says), its embers, sparks and chunks into `births` (once).
@@ -90,8 +103,8 @@ inline constexpr double kBillowsBy = 0.12;
 // lights a whole hall (`huge_look`: hotter, brighter, its smoke paler dust); `dark` a ball that
 // swallows light (`dark_look`: barely burning, a sooty cloud that is gone in a second) and pulls
 // black specks in to its heart rather than throwing embers out; `bare` the ball alone, nothing
-// thrown.
-enum class BlastOf : uint8_t { common, big, huge, dark, bare };
+// thrown; `grenade` a grenade's (`grenade_looks`).
+enum class BlastOf : uint8_t { common, big, huge, dark, bare, grenade };
 inline constexpr double kBigBlast = 1.8, kHugeBlast = 3.2;
 const gr::BlastLook& huge_look();
 const gr::BlastLook& dark_look();
