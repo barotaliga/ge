@@ -254,8 +254,8 @@ inline ge::shooterbots::NavSettings campaign_nav_settings() {
   set.squeeze = true;
   return set;
 }
-// Quake II's campaign keeps the plain grid: its narrow ways were never what sealed a bot in, and
-// base1's 298 squeeze nodes moved its route onto a wedge it stood in from 60 s (it had finished at
+// Quake II's campaign keeps the plain grid: the squeeze nodes were measured on Quake's packs
+// alone, and base1's 298 moved its route onto a wedge it stood in from 60 s (it had finished at
 // 479 s).
 inline ge::shooterbots::NavSettings q2_campaign_nav_settings() {
   return ge::shooterbots::NavSettings{};

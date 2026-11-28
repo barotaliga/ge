@@ -2,7 +2,7 @@
 title: A mission pack's own mover class is air to the nav until it is named in map_nav's movers
 date: 2026-11-28
 scope: plugins/shooterbots/map_nav.cpp, plugins/shooterbots/way_through.cpp
-concepts: [func_new_plat, func_train2, mission-pack, movers, plat, dissolution, census, sweep]
+concepts: [new-plat, train2, mission-pack, movers, plat, dissolution, census, sweep]
 ---
 
 - The nav's movers know a class only by its name (`func_plat`, `func_train`, `func_door`). A pack's
