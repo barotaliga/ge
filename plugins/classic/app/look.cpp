@@ -665,23 +665,6 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "0.3..1.5: that gamma, 1 as drawn and 0.5 the brightest the menu offers (1 "
                   "the default)"},
        &picture.gamma);
-  bind(cv,
-       {.name = "r_quality",
-        .flags = gc::kArchive,
-        .help = "The shadows, the water and the skies set together.",
-        .kind = gc::CvarKind::text,
-        .values = "custom: each ce_ switch and its quality as set (the default); low: the "
-                  "cheapest; medium: between; high: the best but the top; top: everything; "
-                  "auto: the most inside r_budget; 0..1: cheapest to the top, by measured cost"},
-       &picture.quality);
-  bind(cv,
-       {.name = "r_budget",
-        .flags = gc::kArchive,
-        .help = "The GPU time a frame may take with r_quality auto, in ms.",
-        .min = 1,
-        .max = 100,
-        .values = "1..100: that many ms (8.3 the default, for 120 Hz)"},
-       &picture.budget_ms);
   ge::classicenhance::bind_switches(cv, &picture.ce);
   bind(cv,
        {.name = "ce_enabled",

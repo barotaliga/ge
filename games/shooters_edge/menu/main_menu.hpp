@@ -123,6 +123,12 @@ inline constexpr size_t kQuitJokes = 8;
 inline constexpr size_t kQuitJokeLines = 4;
 std::span<const std::string_view, kQuitJokeLines> quit_joke(size_t i);
 
+// The QUALITY row's levels, 0 to 10 (quality.hpp); both games' VIDEO pages show it, and CUSTOM
+// beside them when the settings make none (main_menu.cpp's `quality_row`).
+inline constexpr Choice kQualityChoices[] = {
+    {"0 CLASSIC", "0"}, {"1", "1"}, {"2", "2"}, {"3", "3"}, {"4", "4"},  {"5", "5"},
+    {"6", "6"},         {"7", "7"}, {"8", "8"}, {"9", "9"}, {"10", "10"}};
+
 // Quake's table, every page's rows in order.
 std::span<const Entry> entries();
 // The entry of `page` with `id` in `table`; null when none.

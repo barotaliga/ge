@@ -96,8 +96,8 @@ class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by
   GameMenu& operator=(const GameMenu&) = delete;
   ~GameMenu();
 
-  // Registers `menu_look`, the menu's commands and the `ce_` switches on `con`, which must outlive
-  // the menu.
+  // Registers `menu_look`, the menu's commands, the `ce_` switches and `r_quality` (quality.hpp)
+  // on `con`, which must outlive the menu.
   // `recipes` (the window's -recipes): a recipe's commands too, `menu_press`, `menu_select`,
   // `menu_list` and the console's `sleep` (docs/console.md § Recipes); a player's window has none.
   void add_cvars(ge::console::Console& con, bool recipes = false);

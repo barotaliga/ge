@@ -108,6 +108,7 @@
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
+#include "shooters_edge/menu/quality.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
@@ -661,6 +662,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   ge::console::Console con[2];
   for (int k = 0; k < 2; ++k) {
     shooters_edge::look::add_cvars(con[k], looks[k]);
+    shooters_edge::menu::add_quality(con[k]);  // `--cvars="r_quality 5"`: a level of the preset
     if (remix.figure != nullptr) looks[k].all_figures = remix.figure->folder;
   }
   const std::string before = lab.arg("before");

@@ -25,14 +25,15 @@
 // without the HUD, each run between two all-on runs; each run's frames as a box and what each
 // switch saved off the median frame against the all-on runs either side (timedemo.hpp's `prices`).
 // A pass's own GPU timestamps cannot rank the passes (a tiled GPU overlaps them); the whole frame
-// with one thing gone can. `--price-stops=1` prices the quality ladder's stops the same way
-// (app/ladder.hpp): each row lowered alone to each stop under its top, the presets and the floor.
-// A stop's cost in the ladder's table is its row's `off` saving less its own.
+// with one thing gone can. `--price-stops=1` prices the dear rows' stops the same way (shadows,
+// water, skies: each lowered alone to each stop under its top, then the floor); `--price-cvars`
+// any set of the picture's cvars, a level of the quality preset among them ("q5=r_quality 5").
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
 // ge:keywords slow-frames hitch stall spike frame-tail
-// ge:keywords offscreen price switch-off-pricing cpu-zones frame-in-flight price-stops ladder
+// ge:keywords offscreen price switch-off-pricing cpu-zones frame-in-flight price-stops
+// ge:keywords r_quality quality-levels
 // ge:skill shooter perf labs
 #include <algorithm>
 #include <chrono>
@@ -65,6 +66,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/labs/staged.hpp"
+#include "shooters_edge/menu/quality.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -630,7 +632,7 @@ void run(gl::Lab& lab) {
       return true;
     };
     // THE STOPS (--price-stops=1): each ladder row lowered alone from the top to each stop under
-    // it, then the presets and the floor (every row off), for app/ladder.cpp's price table.
+    // it, then the floor (every row off).
     if (lab.arg("price-stops") == "1") {
       namespace lk = shooters_edge::look;
       struct RowLevel {
@@ -650,11 +652,6 @@ void run(gl::Lab& lab) {
           if (!row("ce_" + std::string(rl.id) + " " + lk::stop_name(st), at, false)) return;
         }
       }
-      for (const char* preset : {"low", "medium", "high"}) {
-        lk::Picture at = picture;
-        at.quality = preset;
-        if (!row("r_quality " + std::string(preset), at, false)) return;
-      }
       lk::Picture floor = picture;
       floor.ce.shadows = floor.ce.water = floor.ce.skies = false;
       if (!row("every row off", floor, false)) return;
@@ -669,6 +666,7 @@ void run(gl::Lab& lab) {
       shooters_edge::look::Picture at = picture;  // the runner's --cvars under the set's
       ge::console::Console con;
       shooters_edge::look::add_cvars(con, at);
+      shooters_edge::menu::add_quality(con);  // "q5=r_quality 5": a level of the quality preset
       con.execute(eq == std::string_view::npos ? item : item.substr(eq + 1));
       if (!row(label, at, false)) return;
     }
@@ -753,16 +751,16 @@ const gl::LabSpec kSpec{
       "with --price=1: price only these switches, ids without the ce_ (relief,parallax); empty: "
       "every drawn one"},
      {"price-stops", "0",
-      "1: price the quality ladder instead (app/ladder.hpp): each of shadows, water and skies "
-      "lowered alone to off, low and medium, then r_quality low, medium and high and every row "
-      "off, each between two all-on runs"},
+      "1: price the dear rows' stops instead: each of shadows, water and skies lowered alone to "
+      "off, low and medium, then every row off, each between two all-on runs"},
      {"price-stride", "1",
       "with a price: draw only every Nth of the demo's frames in the priced runs (the rest "
       "stepped), so a long demo's whole set of switches fits in a sitting"},
      {"price-cvars", "",
       "label=cvars|label=cvars: price these sets of the picture's cvars instead (as the console "
-      "takes them: \"water low=ce_water_quality low|no mirror shadows=...\"), each between two "
-      "all-on runs"}},
+      "takes them: \"water low=ce_water_quality low|no mirror shadows=...\", or a quality level: "
+      "\"q5=r_quality 5\"), each "
+      "between two all-on runs"}},
     "--size=320,180",
     run,
 };

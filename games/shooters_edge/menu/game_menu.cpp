@@ -8,6 +8,7 @@
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/game_menu.hpp"
+#include "shooters_edge/menu/quality.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -107,6 +108,7 @@ void GameMenu::add_cvars(ge::console::Console& con, bool recipes) {
   // cfg's or the console's ce_ line reaches the menu's and the bake's copy as well.
   ce::bind_switches(con.cvars(), &switches_, ge::console::Overlap::same);
   ce::sync_switches(enhance_, switches_);
+  add_quality(con);  // r_quality 0..10 over the picture's cvars, the VIDEO page's QUALITY row
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   const auto opener = [this](std::string_view page) {  // a page's id, a literal

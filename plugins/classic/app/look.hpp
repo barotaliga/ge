@@ -13,8 +13,8 @@
 // HIGH (its `ce_<id>_quality`, high the default and the whole of it). A stop sets the passes'
 // parameters or leaves a pass out, never a code path of its own (`world_options`,
 // client/world_extras.hpp, the sky's `cloud_at` and `far_land_at` in client/world_draw.cpp).
-// `r_quality` picks all three off the game's quality ladder instead (app/ladder.hpp's
-// `picture_stops`).
+// A game's quality preset writes them with the rest of the picture (Shooter's Edge's
+// menu/quality.hpp).
 //
 // The player tunes the picture with the r_ cvars `add_cvars` registers over a `Picture`: r_look
 // picks the look, and r_fx_lights, r_fx_glow and r_bloom set how much light the effects throw, how
@@ -119,10 +119,6 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // ce_shadows_quality, ce_water_quality, ce_skies_quality: low, medium or high, each its
   // switch's level when on (Stops).
   std::string shadows_quality = "high", water_quality = "high", skies_quality = "high";
-  // r_quality: custom (each ce_ switch and level as set), a preset of the ladder (low, medium,
-  // high, top), auto (the most inside r_budget) or 0..1; r_budget: the ms a frame `auto` fits.
-  std::string quality = "custom";
-  double budget_ms = 8.3;
   ge::brush::app::WeatherCvars weather;  // r_weather and its kin: the rain and the storm
   // r_farland: the land round the map seen over its walls from high up (render/far_land.hpp):
   // auto (a kind dealt to suit the map's sky), off, or a kind's name; read when the world is made.
@@ -291,7 +287,7 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
 // r_fastsky, r_skycolor, r_lightmap, r_fullbright, r_dynamic, r_rocketlight, r_explosionlight,
 // r_powerupglow, r_waterwarp, r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_fakeshaft,
-// cl_gibfilter, cl_deadbodyfilter, ce_bubbles_share, ce_water_specks, r_quality, r_budget, every
+// cl_gibfilter, cl_deadbodyfilter, ce_bubbles_share, ce_water_specks, every
 // ce_ switch, the three ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the
 // weather's cvars over `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
 // Each cvar's default is the value `picture` holds now (a game's own; above).
@@ -323,7 +319,7 @@ bool parse_forced_colours(std::string_view top, std::string_view bottom, int* ou
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);
 
-// The stops as the player set them, r_quality aside: each switch, then its level (a word it does
+// The stops as the player set them: each switch, then its level (a word it does
 // not know: high).
 Stops custom_stops(const Picture& picture);
 // The world renderer's options in `look`, over `base` (the game's other settings), at `stops`

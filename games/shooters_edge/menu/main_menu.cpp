@@ -16,6 +16,7 @@
 #include "shooters_edge/menu/episodes.hpp"
 #include "shooters_edge/menu/figures.hpp"
 #include "shooters_edge/menu/player_view.hpp"
+#include "shooters_edge/menu/quality.hpp"
 
 namespace shooters_edge::menu {
 
@@ -576,6 +577,15 @@ constexpr Entry kEntries[] = {
      .step = 32},
     {.page = "remix", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
+    {.page = "video",
+     .id = "r_quality",
+     .text = "QUALITY",
+     .kind = ItemKind::choice,
+     .hint = "The whole picture at once, from the classic look (0) to every enhancement (10); "
+             "lower draws faster. CUSTOM: your own mix of the settings.",
+     .needs = "r_quality",
+     .target = Target::client,
+     .choices = kQualityChoices},
     {.page = "video",
      .id = "r_look",
      .text = "WORLD LOOK",
@@ -1480,6 +1490,21 @@ void tie_levels(ge::ui::Page& page, const Host& host, std::string_view from) {
 
 }  // namespace
 
+namespace {
+
+// The QUALITY row: the level the picture's settings make now (quality.hpp's `preset_level`), or
+// CUSTOM after the levels when they make none.
+void quality_row(const Entry& e, ge::ui::Item& it, const Host& host) {
+  it.choices.clear();
+  for (const Choice& c : e.choices) it.choices.emplace_back(c.text);
+  if (host.console == nullptr || it.disabled) return;
+  const int level = ge::console::preset_level(host.console->cvars(), quality_table());
+  if (level < 0) it.choices.emplace_back("CUSTOM");
+  it.choice = level >= 0 ? level : static_cast<int>(it.choices.size()) - 1;
+}
+
+}  // namespace
+
 void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
   for (const PageTitle& p : table_of(host).pages) {
     const std::string_view id = p.id;
@@ -1566,6 +1591,10 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
           e->page == "addresses") {  // a text cvar
         const std::string name = host_value(host, e->needs);
         it.text = name.empty() ? std::string(e->text) : std::string(e->text) + "  " + name;
+        continue;
+      }
+      if (e->id == quality_table().name) {
+        quality_row(*e, it, host);
         continue;
       }
       if (e->target == Target::none || it.disabled) continue;
@@ -1691,6 +1720,11 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.kind == ge::ui::EventKind::changed) {
     if (entry->target == Target::client) {
       const std::string v = item_text(*entry, *it);  // "" quoted: set to nothing, not shown
+      if (entry->id == quality_table().name) {       // a level writes the settings: show them all
+        if (!v.empty()) con.execute(std::string(entry->id) + " " + v);
+        refresh(menu, host);
+        return Outcome::none;
+      }
       con.execute(std::string(entry->id) + " " + (v.empty() ? std::string("\"\"") : v));
     } else if (entry->target == Target::server && e.page != "host")  // START sets the host page's
       con.execute("sv " + std::string(entry->id) + " " + item_text(*entry, *it));

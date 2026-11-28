@@ -2831,7 +2831,7 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
   its size and its floor) and its named presets; and it turns a pick into its own passes' options
   (Fall Line's `apply_picture`). The fit, the machine's scale, the presets by name and the quality
   setting are the engine's, the same for every game.
-- **The player's word for it** is `r_quality`, the same in every game (`quality_pick`; Fall Line
+- **The player's word for it** in Fall Line is `r_quality` (`quality_pick`; Fall Line
   binds it with `r_budget` in `cfg/cvars.cpp` and applies it over its individual `r_` settings in
   `frame_options`): `custom` (the default: the game's own settings as set), a preset by name, a
   number from 0 to 1 (the picture of most worth inside a budget that share of the way from every
@@ -2846,20 +2846,24 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
 
 The table's costs are the reference machine's (an Apple M3 Max at 1920 × 1080, by the span; the
 numbers and how they were measured are beside the table in `ladder.cpp`).
-- **Shooter's Edge's ladder** (`games/shooters_edge/app/ladder.hpp`) is the same concept over its
-  three dearest enhancements: SHADOWS, WATER and SKIES, each `off` (its `ce_` switch off, the
-  classic original) and then on at low, medium and high (`ce_<id>_quality`, high the default and
-  the whole look). Each stop is the passes' parameters, or a pass left out: the shadows' moving
-  casters drawn into cubes or not, their edges soft (the blocker search and the disc of taps) or
-  one compare, and the capsules (`brush::app::Options`); the water's chop, the sun's caustics and
-  shafts, the reflection (the map drawn again in the pool's plane, the screen marched, or the
-  room's light) and the wet band (`render::WaterQuality`, a uniform a body); the sky's cloud layer
-  and its far land. Its prices are a demo's, not a still view's: the `se-timedemo` lab's
-  `--price-stops=1` plays the classic pack's demo at 1440p with each row lowered alone to each
-  stop, between runs with everything on, and the presets and the floor the same way;
-  `--price-cvars` prices any set of cvars so, which is how the parts were found (`docs/perf.md`).
-  Its window applies `r_quality` each frame (the pick worked out again only when the word, the
-  budget or the size changes), so a stop changes on a live frame with no pipeline made.
+- **Shooter's Edge's quality** (`games/shooters_edge/menu/quality.hpp`) is a preset, not a fit:
+  `r_quality 0`..`10` writes the cvars each level owns from one table (`console/preset.hpp`), and
+  nothing sits over them, so every setting stays the player's to change and the menu reads the
+  level back from them (the level they match, else CUSTOM). 0 is the classic look, 9 the
+  defaults, 10 every enhancement; each step down gives up the dearest thing left for the least of
+  the look, and the steps at the bottom draw the picture at half and a quarter of the window
+  (`r_scale`). Its three dearest enhancements, SHADOWS, WATER and SKIES, each go `off` (its `ce_`
+  switch off, the classic original) and then on at low, medium and high (`ce_<id>_quality`, high
+  the default and the whole look). Each stop is the passes' parameters, or a pass left out: the
+  shadows' moving casters drawn into cubes or not, their edges soft (the blocker search and the
+  disc of taps) or one compare, and the capsules (`brush::app::Options`); the water's chop, the
+  sun's caustics and shafts, the reflection (the map drawn again in the pool's plane, the screen
+  marched, or the room's light) and the wet band (`render::WaterQuality`, a uniform a body); the
+  sky's cloud layer and its far land. Prices are a demo's, not a still view's: the `se-timedemo`
+  lab's `--price-stops=1` plays the classic pack's demo with each row lowered alone to each stop,
+  between runs with everything on; `--price-cvars` prices any set of cvars so, a quality level
+  among them (`q5=r_quality 5`), which is how the parts were found (`docs/perf.md`). A stop
+  changes on a live frame with no pipeline made.
 - **The reach and its mist.** `FrameView::reach_m` is how far a picture draws. The ground's
   clipmap draws only the levels that cover it (`clipmap_levels_to`: 1, 2 or 4 km round the eye
   where all eight reach 8 km), the instances' cull drops every one past it (counted with the

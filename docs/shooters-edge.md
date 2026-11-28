@@ -295,9 +295,10 @@ build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/games/classic +map dm6
   (`r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`; the bloom's from the next
   map), every classic-enhance switch (`ce_water 0`, `ce_flames 0`, `ce_shadows 0`, ...;
   `ce_textures` and `ce_bloom` from the next map), the three dearest switches' levels
-  (`ce_shadows_quality`, `ce_water_quality`, `ce_skies_quality`: `low`, `medium` or `high`) and
-  `r_quality` over all three (`custom`, the default, leaves them as set; `low`, `medium`, `high`,
-  `top`, `auto` inside `r_budget` ms, or 0..1: the quality ladder, `app/ladder.hpp`), the
+  (`ce_shadows_quality`, `ce_water_quality`, `ce_skies_quality`: `low`, `medium` or `high`),
+  `r_quality 0`..`10` over the whole picture (a command that writes the settings each level owns,
+  0 the classic look, 9 the defaults, 10 every enhancement; alone, the level they make or custom:
+  `menu/quality.hpp`, the VIDEO page's QUALITY row), the
   weather's (`sv_weather 1` brings the rain) and `quit`.
 - **The campaign** (M18s4): ESCAPE ▸ SINGLE PLAYER ▸ NEW GAME (or `newgame` in the console)
   plays the packs' own single-player program from the map `start`, on the campaign host
