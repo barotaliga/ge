@@ -331,6 +331,30 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
     br.spawn_angles = de.angles;
     bridges.push_back(br);
   }
+  // The walls a name switches on that start off and are plates: a floor where the map drew them,
+  // shut till lit.
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    const char* sf = sb::block_value(b, "spawnflags");
+    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_togglewall") != 0 || !sf ||
+        (std::atoi(sf) & 1) == 0 || !sb::block_value(b, "targetname"))
+      continue;
+    const int m = std::atoi(model + 1);
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
+      continue;
+    const int e = edict_of(s, model);
+    if (e < 0) continue;
+    const ModelBox bm = model_box(spec, m);
+    const sh::Vec3f d = bm.maxs - bm.mins;
+    if (d.z > kTurnPlate || d.x < 48 || d.y < 48) continue;
+    // Where the map drew it: off, it stands far out of the map, not drawn (hip1m2's at 8000).
+    world.solids[world.count++] = model_solid(spec, tracer, m, {});
+    NavBridge br;
+    br.ent = e;
+    br.lit = true;
+    bridges.push_back(br);
+  }
   // The doors that start open, by where the map drew them: a name spreads along touching boxes
   // (doors link as drawn: dm2's two plates over the lava move together off one button).
   std::vector<std::pair<ModelBox, bool>> open_doors;
@@ -1456,7 +1480,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
                             ? s.models[static_cast<size_t>(mi)].c_str()
                             : nullptr;
     AbsBox ab = abs_box(s, spec, br.ent, model);
-    if (br.turns && model != nullptr) {  // turned up now: where the map drew it instead
+    if ((br.turns || br.lit) && model != nullptr) {  // turned up or off now: as the map drew it
       const ModelBox mb = model_box(spec, std::atoi(model + 1));
       ab = {br.spawn + mb.mins, br.spawn + mb.maxs};
     }

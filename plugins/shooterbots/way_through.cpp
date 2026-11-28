@@ -487,8 +487,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       // A wall its name switches off (Scourge of Armagon's force fields: hip1m1's by the button
       // that says "Force field deactivated"): shut to him while it is solid; the nav never saw it,
       // so the links through its box are its crossings.
+      // One that starts off and is a floor is a lit bridge (`way_lit_bridge`).
       const int e = edict_of(s, model);
-      if (e >= 0) {
+      if (e >= 0 && !way_lit_bridge(w, nav, e)) {
         w.locked.push_back(e);
         w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
         w.locked_turns.push_back(kLockedGone);
@@ -886,6 +887,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     if (start >= 0) way_fall_steps(w, nav, s, reach);
   }
   way_exit_links(w, g);  // an exit is walked into only as the step he is on
+  way_key_monsters(w, s, blocks);
 }
 
 void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -1392,6 +1394,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     if (left_to_do) w.busy_at = t;
     left_to_do = left_to_do || t - w.busy_at < kWayDone_s;
   }
+  if (!w.complete) prey = way_key_prey(w, s, g, prey_node, prey_c);  // a door's own monsters
   // A button pressed that blows the place up (`dooms`, pressed last): nothing is left but the exit,
   // the monsters too (biggun's base: he went after one and then a trigger, and was in it at 22 s).
   // Nor a step that opens no door: the triggers its countdown arms (biggun's two strips, armed by
@@ -1649,7 +1652,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   const bool chase =
       calling  ? false
       : toured ? toured == 2
-               : w.complete && prey >= 0 &&
+               : (w.complete || pick < 0) && prey >= 0 &&
                      (pick < 0 || way_exit(w.steps[static_cast<size_t>(pick)]) || prey_c < best);
   if (chase) pick = -1;
   // Its time in all, over every spell he chased it: one he keeps turning to between others (e2m6's
