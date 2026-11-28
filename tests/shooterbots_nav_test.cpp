@@ -8,7 +8,7 @@
 //
 // ge:summary Tests: the nav graph's nodes, link kinds, reach, routes, mover tags and bits
 // ge:keywords test nav nav-graph prove_link build_nav nav_route nav_nearest nav_reach golden
-// ge:keywords pocket column_floors escape-pod boss2
+// ge:keywords pocket column_floors escape-pod boss2 elevator make_elevator
 // ge:skill shooter bots testing
 #include <cstdio>
 #include <cstdlib>
@@ -599,4 +599,35 @@ TEST(a_pocket_a_drop_leads_into_is_outside_the_core_and_a_trap) {
   for (const uint8_t c : split) n += c;
   CHECK(n == 2);  // the pocket 3, 4: the largest part left
   CHECK(split[3] == 1 && split[4] == 1);
+}
+
+TEST(an_elevator_has_a_stop_a_floor_and_each_button_sends_it_from_its_own_floor) {
+  // Three floors 200 apart, the car built at the bottom (its box -135..-121, as r1m7's): an up
+  // button beside its top at the bottom floor, a down and an up one at the middle floor, a down
+  // one at the top, and an up one at the top that can send it nowhere.
+  ge::shooterbots::NavMover m;
+  m.rest = {0, 0, 0};
+  const ge::shooterbots::ElevatorButton buttons[] = {{{-15, 229, -103}, {15, 231, -73}, false},
+                                                     {{57, 289, 97}, {59, 319, 127}, true},
+                                                     {{-59, 289, 97}, {-57, 319, 127}, false},
+                                                     {{-15, 229, 297}, {15, 231, 327}, true},
+                                                     {{-15, 229, 297}, {15, 231, 327}, false}};
+  CHECK(ge::shooterbots::make_elevator(m, 3, 200, false, 0, -128, buttons));
+  CHECK(m.stops.size() == 3 && m.stops[0].z == 0 && m.stops[1].z == 200 && m.stops[2].z == 400);
+  CHECK(m.speed == 150);
+  CHECK(m.calls.size() == 4);
+  CHECK(m.calls[0].stop == 0 && m.calls[0].up);
+  CHECK(m.calls[1].stop == 1 && !m.calls[1].up);
+  CHECK(m.calls[2].stop == 1 && m.calls[2].up);
+  CHECK(m.calls[3].stop == 2 && !m.calls[3].up);
+  // Built at its top floor: the stops run down from where it stands.
+  ge::shooterbots::NavMover top;
+  top.rest = {0, 0, 400};
+  CHECK(ge::shooterbots::make_elevator(top, 3, 200, true, 300, 272, buttons));
+  CHECK(top.stops[0].z == 0 && top.stops[2].z == 400 && top.speed == 300);
+  CHECK(top.calls.size() == 4);
+  // No button: no elevator (a car nothing sends is an obstacle).
+  ge::shooterbots::NavMover none;
+  CHECK(!ge::shooterbots::make_elevator(none, 3, 200, false, 0, -128, {}));
+  CHECK(none.stops.empty() && !ge::shooterbots::elevator(none));
 }

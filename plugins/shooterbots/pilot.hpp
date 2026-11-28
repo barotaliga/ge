@@ -656,7 +656,16 @@ struct Pilot {
   // Hollow doors the caller knows (a lift's car: its nodes on the car's floor, found clear with it
   // at rest): a link between two of its nodes is walked while it rests, never waited out.
   std::vector<int32_t> hollow;
-  std::vector<NavExtraLink> cut_all;                   // cut and shut_links together, for the route
+  std::vector<NavExtraLink> cut_all;  // cut and shut_links together, for the route
+  // (an ELEVATOR) The links onto an elevator's top from beside it, by the stop each boards it at,
+  // found once for graph `car_ons_g`; those at a floor the car stands away from now are cut from
+  // each plan (it moves only for its rider: a way that boards it there waits for good).
+  struct CarOn {
+    int32_t ent = -1, stop = -1;
+    NavExtraLink link;
+  };
+  std::vector<CarOn> car_ons;
+  const NavGraph* car_ons_g = nullptr;
   NavExtraLink near_cut{-1, -1, NavKind::jump, 0, 0};  // (`gapnear`) a gap left out of one plan
   double wanted[3] = {}, pressed[3] = {};              // the last command's yaw, forward, side
   float lane = 0, lane_want = 0, lane_until = 0;       // the lane now, wanted, and until when (s)

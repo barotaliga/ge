@@ -136,12 +136,23 @@ struct NavMover {
   float speed = 100;
   float dmg = 0;          // what it does to whoever it is blocked by (a crusher's), per blow
   int32_t end_stop = -1;  // the stop it stays at for good once there (a corner's wait -1), or -1
+  // An ELEVATOR: a moving platform with a stop at each floor that moves only when its rider
+  // presses one of the buttons beside its top. Each button's box, the stop it is pressed at, and
+  // whether it sends the car a floor up or a floor down. Empty for a train, which moves by itself.
+  struct Call {
+    Vec3f lo, hi;
+    int32_t stop = 0;
+    bool up = true;
+  };
+  std::vector<Call> calls;
 };
 
 // Whether the mover carries a player (a plat of either map family), not only blocks one.
 inline bool ridden(const NavMover& m) { return m.model != nullptr || m.tracer != nullptr; }
 // Whether it is a moving platform (two stops or more).
 inline bool moving_platform(const NavMover& m) { return ridden(m) && m.stops.size() >= 2; }
+// Whether it is an elevator (a moving platform sent from floor to floor by its rider's buttons).
+inline bool elevator(const NavMover& m) { return moving_platform(m) && !m.calls.empty(); }
 // A ridden mover as a solid of a move's world, its model standing at `origin`.
 Solid mover_solid(const NavMover& m, Vec3f origin);
 
@@ -614,6 +625,22 @@ struct NavTrickCounts {
 NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
                               std::span<const NavTrick> tricks, std::span<const uint8_t> back,
                               const NavTrickSettings& set = {});
+
+// ELEVATORS (nav_elevator.cpp). `make_elevator` gives `m` (its `rest` where the car is built) a
+// stop for each of `floors` floors `apart` units apart, from the built floor up (or down, when it
+// is built `at_top`), and a call for each button of `buttons` at a floor it can leave that way
+// (`car_mid_z`: the middle of the car's box as built); false, and no stops, when no button sends
+// it.
+struct ElevatorButton {
+  Vec3f lo, hi;
+  bool down = false;
+};
+bool make_elevator(NavMover& m, int floors, float apart, bool at_top, float speed, float car_mid_z,
+                   std::span<const ElevatorButton> buttons);
+// `nav_cut_shafts`: each link of the graph that crosses an elevator's shaft (not its own) proven
+// again with the car at each floor, cut where one fails; how many were cut.
+int64_t nav_cut_shafts(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
+                       std::span<const NavMover> movers);
 
 // RISKY JUMPS (`nav_harden_jumps`): a jump over a floor that harms (lava, slime: the nodes `harm`
 // marks, one byte a node, in a grid column under the jump's line and below both its ends), or

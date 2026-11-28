@@ -57,6 +57,7 @@
 #include "brush/trace.hpp"
 #include "shooter/map_spec.hpp"
 #include "shooterbots/bot_view.hpp"
+#include "shooterbots/entities.hpp"
 #include "shooterbots/escape.hpp"
 #include "shooterbots/map_book.hpp"
 #include "shooterbots/nav.hpp"
@@ -190,6 +191,13 @@ std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView
 // below only from under it (r2m5's pillar, called from nowhere: the bot waited at its foot); and
 // for one with a name, which answers no touch until its first use, a use that moves nothing, so
 // nothing the bot sees says when it rides (r2m6's, stood on for minutes).
+// Dissolution of Eternity's ELEVATOR `b` (a func_new_plat in its elevator mode, its `rest` set
+// where it is built, `models` the map's brush models): its "cnt" floors "height" apart (unset:
+// its own height less 8), from where it is built up (its top floor when it says 8), at its
+// "speed" (150), and the func_elvtr_button blocks that target it (a down button says 1), given it
+// by `make_elevator`; false when it has none.
+bool elevator_of(NavMover& m, const EntityBlock& b, std::span<const EntityBlock> blocks,
+                 std::span<const ge::shooter::BrushModel> models);
 float new_plat_ride(const char* classname, const char* spawnflags, const char* height,
                     const char* targetname, float built_height);
 // (`crusher`) Marks in `harm` the nodes of `g` a crushing train (one with a `dmg` and an

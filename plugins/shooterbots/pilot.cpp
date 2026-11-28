@@ -1186,6 +1186,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // spot is the top node's place on its top wherever it is now (he stands still on it).
       Vec3f spot = B;
       bool platform = false;
+      bool press = false;  // into an elevator's button
       if (const NavMover* rm = mover_of(g.movers, l.mover);
           rm != nullptr && moving_platform(*rm) && l.stop >= 0)
         if (const NavMover* nm = mover_of(s.movers, l.mover); nm != nullptr) {
@@ -1198,6 +1199,20 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           if (rises(*rm, lo, hi))
             spot = {(nm->absmin.x + nm->absmax.x) * 0.5f, (nm->absmin.y + nm->absmax.y) * 0.5f,
                     spot.z};
+          // An ELEVATOR standing still at a floor short of the one ridden to: walked into the
+          // button beside its top there that sends it that way (it moves only for its rider's
+          // press, a floor at a time).
+          if (elevator(*rm) && silent(p, l.mover)) {
+            const Vec3f at = platform_at(*rm, *nm);
+            const float want = rm->stops[static_cast<size_t>(l.stop)].z;
+            const bool up = want > at.z + kAtFloor, down = want < at.z - kAtFloor;
+            for (const NavMover::Call& c : rm->calls) {
+              const Vec3f d = at - rm->stops[static_cast<size_t>(c.stop)];
+              if (dot(d, d) > kAtFloor * kAtFloor || !(c.up ? up : down)) continue;
+              spot = {(c.lo.x + c.hi.x) * 0.5f, (c.lo.y + c.hi.y) * 0.5f, spot.z};
+              press = true;
+            }
+          }
         }
       // A plat still at its rest starts up only for a rider in the field over its middle (its
       // edges are left out of it): with `under_plat`, onto its middle first (bunk1's small
@@ -1216,6 +1231,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.forward = 0;
         w.side = 0;
         because = "on a moving platform too fast: braking";
+      } else if (press) {
+        w.yaw = unwrap(yaw_at(s.origin, spot), p.yaw);
+        w.forward = facing(w.yaw, p.yaw);
+        because = "on an elevator, pressing its button";
       } else if (d > p.set.arrive) {
         w.yaw = unwrap(yaw_at(s.origin, spot), p.yaw);
         w.forward = facing(w.yaw, p.yaw) * (d < p.set.look * kBrake ? kBrake

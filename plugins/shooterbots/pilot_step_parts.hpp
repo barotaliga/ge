@@ -35,6 +35,7 @@ inline constexpr float kLipSpeed = 200;   // `lipjump`: a hop at this speed or m
 inline constexpr float kUpdraft = 400;    // rising faster than this on a walk or a jump: an updraft
 inline constexpr float kUpdraftHeld = 6;  // and held within this of the link's start across, units
 inline constexpr float kPlatformBrake = 120;  // faster than this on a moving platform: keys let go
+inline constexpr float kAtFloor = 2;  // an elevator this near a floor's stop stands at it, units
 
 // How much of a run toward `want` the view at `now` already faces: all of it within 60 degrees
 // (a hand does not ease off for the lag of its own view round a corner), none past 120, between

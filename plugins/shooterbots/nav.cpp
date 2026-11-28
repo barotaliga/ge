@@ -671,6 +671,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   // the run-up it needs (a short ledge's), and how near a node of its top a jump onto it lands.
   constexpr int32_t kDockSpan = 3;
   constexpr float kDockRunUp = 16, kDockLand = 24;
+  constexpr float kElevatorPress_s = 3;  // an elevator's button pressed and its 2 s lock-out
   constexpr float kDockRisk_s = 2;  // its price over a walk on: a miss is a fall (into lava there)
   // MOVING PLATFORMS: each placed at every stop in turn; the columns over its top there traced
   // for its floor, a node on each where the player's whole box stands on it, walked or jumped
@@ -849,13 +850,20 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         for (size_t step = 1; step < ns; step++) {
           run += leg[(k + step - 1) % ns];
           const size_t j = (k + step) % ns;
+          // An elevator goes straight to the floor, a press and its lock-out at each floor on the
+          // way (it moves a floor a press, and takes no press for a while after each stop).
+          const float floors_on = static_cast<float>(j > k ? j - k : k - j);
+          const Vec3f dz = m.stops[j] - m.stops[k];
+          const float lift_s =
+              root_of(dot(dz, dz)) / (m.speed > 0 ? m.speed : 150.f) + floors_on * kElevatorPress_s;
+          const float ride_s = elevator(m) ? lift_s : run;
           for (const auto& [spot2, b] : tops[j]) {
             const Vec3f d = spot2 - spot;
             if (dot(d, d) > 1) continue;
             NavLink l;
             l.to = b;
             l.kind = NavKind::ride;
-            l.time_s = run;
+            l.time_s = ride_s;
             l.mover = m.ent;
             l.stop = static_cast<int32_t>(j);
             out[static_cast<size_t>(a)].push_back(l);
