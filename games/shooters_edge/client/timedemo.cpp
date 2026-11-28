@@ -350,7 +350,19 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
   for (;;) {
     const DemoRead r = next_frame(t.demo, error);
     if (r == DemoRead::error) return TimedemoStep::error;
-    if (r == DemoRead::end) return TimedemoStep::end;
+    if (r == DemoRead::end) {
+      // A series' recording ended: its next one plays on as a new level of the same run, a seek
+      // back reaching no further than its start (the snapshots are of the recording before).
+      const int next = demo_series_next(t.demo, error);
+      if (next < 0) return TimedemoStep::error;
+      if (next == 0) return TimedemoStep::end;
+      t.start = t.demo;
+      t.entry_timeline = t.timeline;
+      t.snaps.clear();
+      t.levels = 0;
+      t.entry_begun = true;
+      continue;
+    }
     DemoState& s = t.demo.state;
     if (!effects.empty()) {
       effects.insert(effects.end(), s.effects.begin(), s.effects.end());
@@ -430,7 +442,7 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
                          [](double at, const DemoSnap& snap) { return at < snap.timeline.t; });
     if (after == t.snaps.begin()) {
       t.demo = t.start;
-      t.timeline = {};
+      t.timeline = t.entry_timeline;
       t.levels = 0;
     } else {
       const DemoSnap& from = *std::prev(after);

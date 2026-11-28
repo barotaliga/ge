@@ -67,6 +67,29 @@ a demo.
 - **Version 1** (the text replay file of M23b) still loads; a game's classic formats convert to
   version 2 and back byte for byte.
 
+## A demo series
+
+`engine/replay/series.hpp`. A series (`.geds`) keeps replay files in the order they play: a clan
+fight's maps and rounds, a campaign run's levels, a night of matches between the same sides. Each
+entry is a whole `.ged`, unchanged, so splitting a series gives back the very files merged into it.
+
+- **Header.** Magic `geseries`, the version, the series' meta (`kind`: `matches` or `campaign`;
+  `title`; `lineup`).
+- **Entries.** A sync marker, the entry's name, its meta (the replay file's header meta and final
+  meta, read once when it was added, so listing a series opens no replay file), the replay file's
+  bytes and a sum over the entry. There is no end marker: an entry is added by writing it at the
+  file's end, so a recording grows one finished level or match at a time, and a file cut short
+  keeps every whole entry before the cut.
+- **Playing one.** Shooter's Edge's demo player opens a series as its first recording and, at its
+  end, the next as a new level of the same run (`client/demo.hpp`'s `demo_series_next`); a seek
+  back reaches the start of the recording playing.
+- **Recording one.** The window's `record <name>` writes `<name>.geds`: each level recorded while
+  it plays and added to the file when the map changes; `stop`, a disconnect or quitting end the
+  last level and close it (`client/listen_record.hpp`). A crash loses only the level being played.
+- **Splitting and merging.** `secli demos split <series> [<n>...]` writes the entries beside it as
+  `<series>-<n>-<entry>.ged`; `secli demos merge <series> <recording>...` makes one from replay
+  files, series (flattened) and classic recordings (packed as replay files first), in order.
+
 ## The TV node
 
 `engine/tv` (`node.hpp`, `net_link.hpp`). A node takes a source's replay file bytes in any pieces
@@ -726,7 +749,7 @@ through a node with a 2 s delay: it is broadcast at 617 bytes a second against t
 Games played on Quake II's rules record in the same form (`games/shooters_edge/server/q2_wire.hpp`):
 the server side writes protocol 34's messages from the runner's rows for one viewpoint (the signon
 as the game's recorder writes it, then a frame each 100 ms whose player state and entity list are
-deltas against the frame before), and `record <name>` in the window writes them as `<name>.ged`.
+deltas against the frame before), and `record <name>` in the window keeps each level as a `.ged` in `<name>.geds`.
 The map's checksum (configstring 31) is the MD4 of the whole map file with its four words XORed,
 measured against the demo pack's map. The same encoder is what Quake II's own server will send
 real clients (M18v9), so a hosted match broadcasts through TV from it. A match on our server is broadcast

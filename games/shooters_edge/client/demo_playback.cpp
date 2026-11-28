@@ -412,6 +412,28 @@ bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
   return ok;
 }
 
+namespace {
+
+// A series' next recording began (demo.hpp's DemoSeries): said, and its highlights found again.
+void series_entry_begun(DemoPlayback& p, Timedemo& t, std::vector<std::string>& say) {
+  if (!std::exchange(t.entry_begun, false) || t.demo.series == nullptr) return;
+  const DemoSeries& s = *t.demo.series;
+  say.push_back("playdemo: " + s.names[t.demo.series_at] + " (" +
+                std::to_string(t.demo.series_at + 1) + " of " + std::to_string(s.entries.size()) +
+                ")");
+  p.highlights = {};
+  p.markers.clear();
+  p.marked_for = -2;
+  p.plan = {};
+  p.plan_state = 0;
+  p.match_starts = 0;
+  p.watched = MvdStatus{};
+  std::string error;
+  if (!scan_demo(t.start, p.scan, error)) p.scan = DemoScan{};
+}
+
+}  // namespace
+
 TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in, int w, int h,
                            double wall_dt_s, double now_s, std::vector<std::string>& say,
                            std::string& error) {
@@ -509,12 +531,14 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
     p.jumped = true;
     t.seek_prints = p.skip_messages == 0;
     const TimedemoStep step = demo_seek(t, to, error);
+    series_entry_begun(p, t, say);
     p.watched = MvdStatus{};  // what a seek passed over is not known: gathered again from here
     mvd_status_frame(p.watched, t.demo);
     if (t.demo.state.intermission && to > t.timeline.t + 0.5) p.paused = true;  // stopped at one
     return step;
   }
   const TimedemoStep step = playdemo_step(t, wall_dt_s, p.paused ? 0.0 : p.speed * p.rate, error);
+  series_entry_begun(p, t, say);
   mvd_status_frame(p.watched, t.demo);
   if (step != TimedemoStep::end || p.hold_end == 0) return step;
   if (!p.paused) p.shown_until = now_s + kBarShowS;  // held: the bar shows the way back

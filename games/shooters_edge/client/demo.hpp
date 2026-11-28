@@ -55,6 +55,7 @@
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
 // ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
 // ge:keywords print centerprint obituary chat demo-print q2 dm2 q2-demo configstring mvd2
+// ge:keywords demo-series geds series-entry demo_series_next
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -62,6 +63,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -438,8 +440,20 @@ struct DemoSpan {
   uint32_t at = 0, end = 0;
 };
 
+// A demo series (`.geds`, engine/replay/series.hpp) being played: its recordings in play order,
+// each a replay file, shared by every copy of the demo (a seek's snapshots) and never changed.
+struct DemoSeries {
+  std::string title;               // the series' title ("": none)
+  std::vector<std::string> names;  // each entry's name
+  std::vector<std::vector<uint8_t>> entries;
+  std::string cut;  // "": whole; else where its last entry was cut or damaged
+};
+
 struct Demo {
   std::vector<uint8_t> bytes;
+  // Opened from a demo series: the series and the entry these bytes are (null: a lone recording).
+  std::shared_ptr<const DemoSeries> series;
+  size_t series_at = 0;
   std::vector<ge::vfs::Wrapping> layers;  // what open_demo peeled, outermost first
   std::string inner_name;                 // the recording's name inside an archive ("": none)
   bool dzip = false;                      // it came out of a Dzip archive (demo_dzip.hpp)
@@ -556,7 +570,12 @@ struct Demo {
 // `bytes` as a demo of any format (detected), unpacked first when packed or archived
 // (demo_pack.hpp: `layers`, `inner_name` and `truncated` say what was peeled), positioned at its
 // first frame. False with the reason and the next step when it is none.
+// A demo series (`.geds`) opens as its first recording, the rest kept in `Demo::series`.
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error);
+// A series' next recording opened in place of the one that ended, the player tracked kept: 1 when
+// one opened, 0 when there is none (a lone recording or the series' last), -1 with `error` when it
+// does not open or is another game's.
+int demo_series_next(Demo& d, std::string& error);
 // A Quake II protocol number of the extended recordings and servers (3434 to 3436), whose extra
 // bits (custom skins, the view's teleport bit) are read.
 bool q2_extended(int protocol);
