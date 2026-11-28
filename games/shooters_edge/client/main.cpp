@@ -1702,7 +1702,7 @@ int run_main(int argc, char** argv) {
       }
       if (drawn_remote)
         cl::draw_joined_level_end(overlay, ds, game_menu.art(), w, h, win.print_speed);
-      if (bench.paced && !attract && !game_menu.open())
+      if (bench.active && bench.paced && !attract && !game_menu.open())  // none on a game joined
         cl::playback_draw(overlay, playback, bench, w, h, t);
       cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
                        drawn_remote ? sn::remote_net(remote) : nullptr);

@@ -101,7 +101,7 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   m.nav = std::make_unique<MapNav>();
   m.nav->move = q2_nav_move(0);
   if (!build_map_nav(s, map, quake_maps(), "info_player_start", *m.nav, error,
-                     campaign_nav_settings()))
+                     q2_campaign_nav_settings()))
     return false;
   MapNav& nav = *m.nav;
   um.name = map.name;
