@@ -8,12 +8,14 @@
 // ge:summary crusher's last stop, a trigger_hurt pit
 // ge:keywords test map_nav mark_crusher_harm crusher train dmg end_stop harm e1m4 e1m3
 // ge:keywords mark_hurt_harm trigger_hurt rboss push_carries_into trigger_push cut_hurt_links
-// ge:keywords pit-lip func_rotating wheel
+// ge:keywords pit-lip func_rotating wheel ladder ladder_climb_clear overhang boss2
+// ge:keywords blade_sweep blade
 // ge:skill shooterbots testing
 #include <cstdint>
 #include <vector>
 
 #include "check.hpp"
+#include "shooter_loop_bench.hpp"
 #include "shooterbots/map_nav.hpp"
 
 namespace {
@@ -184,4 +186,43 @@ TEST(a_walk_across_a_killing_strip_is_cut_and_one_beside_it_stays) {
   pit.links = {drop};
   pit.nodes[0].links = 1;
   CHECK(sb::cut_hurt_links(pit, strip) == 0);
+}
+
+// A ladder 4 deep on a wall's face at x 64, 256 high, climbed facing +x from a foot on the floor;
+// a ledge out over its front at 150..170 (boss2's pit shaft, 3 units in from the wall below it)
+// stops the climber's head: no ladder link from that foot.
+TEST(a_ladder_under_an_overhang_is_not_climbed_and_one_clear_to_its_top_is) {
+  namespace lb = ge::test::loop;
+  const std::vector<ge::shooter::Brush> open = {lb::box({-512, -512, -64}, {512, 512, 0}),
+                                                lb::box({64, -512, 0}, {512, 512, 400}),
+                                                lb::box({60, -32, 0}, {64, 32, 256})};
+  std::vector<ge::shooter::Brush> under = open;
+  under.push_back(lb::box({56, -64, 150}, {64, 64, 170}));
+  lb::Bench clear, shut;
+  clear.start(open);
+  shut.start(under);
+  const ge::shooter::Vec3f foot{20, 0, 24};
+  CHECK_MSG(sb::ladder_climb_clear(clear.sv, {60, -32, 0}, {64, 32, 256}, foot, 0.f),
+            "a ladder clear to its top reads as blocked: read ladder_climb_clear in map_nav.cpp");
+  CHECK_MSG(!sb::ladder_climb_clear(shut.sv, {60, -32, 0}, {64, 32, 256}, foot, 0.f),
+            "a ladder under a ledge reads as clear: the climber's box is no longer swept up its "
+            "face (ladder_climb_clear in map_nav.cpp)");
+}
+
+// boss2's gallery blade: 128 across and 8 deep, turned round z at its middle; its model built
+// round the origin (a box off it) is moved there first.
+TEST(a_blades_sweep_is_the_disc_round_its_axis_and_a_node_in_it_harms) {
+  const ge::shooter::Vec3f at{-2064, -556, 92};
+  const sb::HurtBox h = sb::blade_sweep({-64, -4, -52}, {64, 4, 76}, &at, 0);
+  CHECK(h.mins.z == 40 && h.maxs.z == 168);
+  CHECK(h.mins.x < -2127 && h.mins.x > -2130 && h.mins.y < -619 && h.maxs.y > -493);
+  CHECK(!h.near);
+  sb::NavGraph g;
+  g.nodes.resize(2);
+  g.nodes[0].origin = {-2080, -570, 56};  // in the doorway, in the turn
+  g.nodes[1].origin = {-2064, -700, 56};  // past the plate, clear of it
+  std::vector<uint8_t> harm(g.nodes.size(), 0);
+  CHECK(sb::mark_hurt_harm(g, {h}, harm) == 1);
+  CHECK_MSG(harm[0] == 1 && harm[1] == 0,
+            "a blade's sweep marks the wrong nodes: read blade_sweep in map_nav.cpp");
 }

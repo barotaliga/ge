@@ -241,4 +241,23 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
 // a lip within 20 over the origin), so the climbs out the swim proves are ones it can make.
 ge::shooter::MoveSettings q2_nav_move(float air_accelerate);
 
+// Whether a climber's box rises clear up the ladder `lmins`..`lmaxs` from the foot at `o`, facing
+// heading `face` (0, 90, 180 or 270: into the ladder): in front of its face (pressed to it, as the
+// climb holds forward) and across it no nearer its sides than his half width, straight up to
+// `kLadderClimbClear` under its top. A ladder that runs on down a sloped wall under an overhang
+// (boss2's shaft out of the pit under the gallery: the shaft 3 units in from the wall the ladder
+// climbs below it) stops the climber's head under the overhang for good, and links nothing.
+constexpr float kLadderClimbClear = 24;
+bool ladder_climb_clear(const ge::shooter::Server& sv, ge::shooter::Vec3f lmins,
+                        ge::shooter::Vec3f lmaxs, ge::shooter::Vec3f o, float face);
+
+// The box a blade sweeps once turning (a `func_rotating`'s brush model `mins`..`maxs`, turned
+// round `origin` or its box's middle, about x for flag 4, y for 8, else z): the disc round the
+// axis through its farthest corner, its own extent along the axis. A box off `origin` is the
+// model built round it, moved there. boss2's gallery blade, started by a floor plate in front of
+// its doorway, held him in its turn for the rest of the map; its sweep is harm (`HurtBox::near`
+// false: only a node in it).
+ge::shooterbots::HurtBox blade_sweep(ge::shooter::Vec3f mins, ge::shooter::Vec3f maxs,
+                                     const ge::shooter::Vec3f* origin, int flags);
+
 }  // namespace ge::shooterbots
