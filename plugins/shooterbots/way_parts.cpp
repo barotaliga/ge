@@ -323,7 +323,9 @@ void say_way(WayThrough& w, const Fighter& f, const sb::NavGraph& g,
       for (int32_t k = 0; k < nd.links; k++) {
         const sb::NavLink& l = g.links[static_cast<size_t>(nd.first_link) + static_cast<size_t>(k)];
         if (l.to != route.nodes[i + 1]) continue;
-        line += std::string(sb::nav_kind_name(l.kind)) + (l.mover >= 0 ? "/mover " : " ");
+        // The mover named by its edict, as the node's is (`m`).
+        line += std::string(sb::nav_kind_name(l.kind)) +
+                (l.mover >= 0 ? "/mover " + std::to_string(l.mover) + " " : " ");
         break;
       }
   }
