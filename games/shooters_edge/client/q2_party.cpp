@@ -35,7 +35,7 @@ bool build_nav(Q2Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, std
   // Quake II's move, its air with no air acceleration (a single-player or co-op game's).
   nav->move = bots::q2_nav_move(0);
   if (!bots::build_map_nav(s, map, bots::quake_maps(), "info_player_start", *nav, error,
-                           bots::campaign_nav_settings())) {
+                           bots::q2_campaign_nav_settings())) {
     error = "Companions can't find their way on " + map.name + ".";
     return false;
   }

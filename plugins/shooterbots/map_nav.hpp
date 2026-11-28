@@ -182,6 +182,16 @@ std::vector<ge::shooter::Vec3f> crawl_path(const MapCrawl& c, int a, int b);
 std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView& s,
                                                   const ge::shooter::MapSpec& spec,
                                                   ge::brush::BrushTracer* tracer = nullptr);
+// DISSOLUTION OF ETERNITY'S PLAT RIDDEN BY TOUCH (a `func_new_plat` with spawnflag 16 and none of
+// 1, 2 or 4, which pick its other modes: the elevator, the toggle, the drop-and-wait): called and
+// ridden like a plat, built at the top of its ride. Its travel in units, for one resting at the
+// bottom: its height's size for a negative height, its built height less 8 with none. 0 for
+// anything else; for one resting at the top (a positive height), ridden down and called from
+// below only from under it (r2m5's pillar, called from nowhere: the bot waited at its foot); and
+// for one with a name, which answers no touch until its first use, a use that moves nothing, so
+// nothing the bot sees says when it rides (r2m6's, stood on for minutes).
+float new_plat_ride(const char* classname, const char* spawnflags, const char* height,
+                    const char* targetname, float built_height);
 // (`crusher`) Marks in `harm` the nodes of `g` a crushing train (one with a `dmg` and an
 // `end_stop`) pins for good: those a standing player would share with its box where it comes to
 // rest for good. One standing on its top there is free (it is the way on). A crusher that only
@@ -245,6 +255,12 @@ inline ge::shooterbots::NavSettings campaign_nav_settings() {
   set.squeeze = true;
   set.pockets = true;
   return set;
+}
+// Quake II's campaign keeps the plain grid: the squeeze nodes were measured on Quake's packs
+// alone, and base1's 298 moved its route onto a wedge it stood in from 60 s (it had finished at
+// 479 s).
+inline ge::shooterbots::NavSettings q2_campaign_nav_settings() {
+  return ge::shooterbots::NavSettings{};
 }
 // Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are Quake's already), and its air: with the
