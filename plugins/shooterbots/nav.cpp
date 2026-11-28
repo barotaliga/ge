@@ -364,6 +364,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
               }
           }
   }
+  if (set.squeeze) g.counts.squeezes = nav_add_squeezes(world, g, col_floors);
   for (int32_t i = 0; i < g.cols; i++)
     for (int32_t j = 0; j < g.rows; j++) {
       std::vector<Vec3f>& fl = col_floors[col_of(i, j)];
