@@ -323,3 +323,22 @@ TEST(a_mod_s_quake_rc_names_the_title_s_demos) {
   CHECK(cl::mod_startdemos(root.string(), "plain", first()) == "own1");
   fs::remove_all(root);
 }
+
+// A Quake II mission pack names its title's recordings in its own default.cfg's demo aliases,
+// the cinematics between them skipped.
+TEST(a_quake_ii_pack_s_default_cfg_names_the_title_s_demos) {
+  const ge::classicenhance::Profile& q2 = *ge::classicenhance::find_profile("q2");
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_q2_demos";
+  fs::remove_all(root);
+  write_pack(root / std::string(q2.base_dir) / "pak0.pak", {{"default.cfg", "bind w +forward\n"}});
+  write_pack(root / "xatrix" / "pak0.pak",
+             {{"default.cfg",
+               "//\tDEMO STUFF\r\nalias   d1      \"demomap idlog.cin ; set nextserver d2\"\r\n"
+               "alias   d2      \"demomap xdemo1.dm2 ; set nextserver d3\"\r\n"
+               "alias\td4\t\"demomap xdemo2.dm2 ; set nextserver d1\"\r\n"}});
+  CHECK_MSG(cl::mod_startdemos(root.string(), "xatrix", q2, "q2demo1") == "xdemo1 xdemo2",
+            cl::mod_startdemos(root.string(), "xatrix", q2, "q2demo1"));
+  fs::create_directories(root / "plain");
+  CHECK(cl::mod_startdemos(root.string(), "plain", q2, "q2demo1") == "q2demo1");
+  fs::remove_all(root);
+}

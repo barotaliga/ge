@@ -106,4 +106,23 @@ std::string new_game_map(std::string_view config) {
   return {};
 }
 
+std::string title_demos(std::string_view config) {
+  std::string list;
+  for (size_t at = 0; at < config.size();) {
+    const size_t end = std::min(config.find('\n', at), config.size());
+    std::string_view line = trimmed(config.substr(at, end - at));
+    at = end + 1;
+    if (!line.starts_with("alias")) continue;
+    for (size_t c = line.find("demomap"); c != std::string_view::npos;
+         c = line.find("demomap", c + 7)) {
+      std::string_view name = trimmed(line.substr(c + 7));
+      name = name.substr(0, name.find_first_of(" \t;\""));
+      if (!name.ends_with(".dm2")) continue;  // a cinematic between them is not a recording
+      name.remove_suffix(4);
+      list += (list.empty() ? "" : " ") + std::string(name);
+    }
+  }
+  return list;
+}
+
 }  // namespace ge::classic::content

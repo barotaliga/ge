@@ -293,6 +293,15 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   return f;
 }
 
+int q2_demo_weapon(const DemoState& s) {
+  const int gun = s.stats[kStatWeapon];  // the view model's index among the level's models
+  if (gun <= 0 || static_cast<size_t>(gun) >= s.models.size()) return 0;
+  const std::string_view name = s.models[static_cast<size_t>(gun)];
+  for (int k = 0; k < server::kSqWeaponCount; k++)
+    if (name == server::kSqWeapons[static_cast<size_t>(k)].view_model) return k;
+  return 0;
+}
+
 view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::ViewSettings& settings,
                                std::span<const ge::viewmodel::HeldModel> models,
                                const ge::render::FrameView& frame, double t, double dt) {
@@ -308,6 +317,7 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
                         : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
                                                                    : 0;
   auto game = static_cast<view::Weapon>(demo_status(s, t).weapon);
+  if (s.format == DemoFormat::q2) game = static_cast<view::Weapon>(q2_demo_weapon(s));
   // r_viewmodellastfired, played back: the weapon that last fired stays drawn while the player
   // flicks through others, until another one fires (or the watched player changes).
   if (!settings.last_fired || !h.recording || s.stats[kStatWeapon] == 0 ||
