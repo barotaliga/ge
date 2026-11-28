@@ -260,7 +260,9 @@ inline ge::shooterbots::NavSettings campaign_nav_settings() {
 // alone, and base1's 298 moved its route onto a wedge it stood in from 60 s (it had finished at
 // 479 s).
 inline ge::shooterbots::NavSettings q2_campaign_nav_settings() {
-  return ge::shooterbots::NavSettings{};
+  ge::shooterbots::NavSettings set;
+  set.pockets = true;  // its slots keep their nodes: boss2's escape pods are the way out
+  return set;
 }
 // Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are Quake's already), and its air: with the
