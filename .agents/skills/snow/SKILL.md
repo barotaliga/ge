@@ -7,7 +7,7 @@ description: "Use for engine/snow in gameengine2: a layer of snow over any groun
 
 `engine/snow/` (`ge_snow`, namespace `ge::snow`) is snow as an engine feature: any game lays a
 layer over any ground and presses whatever crosses it into the snow. `docs/snow.md` is the design
-and the plan (rows M29a–M29l); this skill is how to work on it.
+and the plan (rows M29a–M29k); this skill is how to work on it.
 
 | File | What |
 | --- | --- |

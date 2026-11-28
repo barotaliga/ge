@@ -7,7 +7,7 @@ how far a load sinks, what it costs to push through, what it grips), changes wit
 and the day (new snow, settling, tracks filling in, grooming, melt and crust), and is drawn and
 heard from the same numbers.
 
-The roadmap rows are M29a–M29l in [`goals.md`](goals.md); each row's status is
+The roadmap rows are M29a–M29k in [`goals.md`](goals.md); each row's status is
 `goals/M29<x>.md`. This page is the design those rows build to. Every number in it is a
 starting value: the row that builds it measures it in its lab and corrects it here.
 
@@ -22,7 +22,6 @@ the physics never sees). Each game of the kind the engine is drawn for uses snow
 | Fall Line (skiing) | A mountain's cover: the groomed piste, the powder beside it, drifts across the piste, ground kept clear round the lifts, machine snow; a dial of depth up to a metre of fresh | Skis carve grooves and skid bands; a fall leaves a crater; through a free-ride day the piste is skied up and the powder beside it tracked out; groomers reset it; the day's fall buries it | The packed share and the sink under each ski station; in deep snow, snow that stays pressed and gives under load; a skier following a track finds it firmer |
 | A snowmobile game | Open powder, packed trails, a groomed track | The tread digs a trench and leaves a packed trail a metre wide; the skis cut two lines; a stuck machine digs itself in | A trail is easier to ride than the field; a trench holds the belly; the tread's grip is the snow's shear strength |
 | A rally game | A snow road worn into lines by earlier traffic, the snowbank at its edge, the field beyond | Tyres compress the snow into ruts with walls; the body ploughs in deep snow | The rut is easier to drive and grips worse (packed snow slides, loose snow bites); a rut wall steers a wheel; the cut under the wheels is not the surface's drop |
-| Shooter's Edge (a snowy level) | A courtyard, a roof, a ledge of snow over brush geometry, on several floors | Players leave footprints that give their path away; a body leaves a mark; a blast throws snow | Footprints in step with the players on every client; the footstep's sound by the snow |
 | Any game | `add_layer(world, region, ground, preset)` and a preset by name | One `press` per contact per step | One `sample` per question |
 
 ## Homes (G8)
