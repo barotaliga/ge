@@ -2,7 +2,7 @@
 title: A demo series' next recording swaps the demo, not the run
 date: 2026-11-28
 scope: games/shooters_edge/client/timedemo.cpp, games/shooters_edge/client/demo.cpp, games/shooters_edge/client/demo_playback.cpp
-concepts: [demo-series, geds, timedemo, snapshots, seek, new-level, entry_begun]
+concepts: [demo-series, geds, timedemo, snapshots, seek, new-level, entry-begun]
 ---
 
 Shooter's Edge's demo player keeps snapshots that lend `t.demo.bytes` back rather than copy them,
