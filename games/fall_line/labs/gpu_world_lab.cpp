@@ -81,6 +81,7 @@
 #include "lab/png.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "mountain/mapgen/real_hints.hpp"
 #include "mountain/tarn/brook.hpp"
 #include "mountain/tarn/mapped.hpp"
 #include "mountain/tarn/reservoir.hpp"
@@ -343,7 +344,7 @@ void run(ge::lab::Lab& lab) {
   opts.version = fall_line::app::kMapVersion;
   const std::string& face = lab.arg("face");
   if (!face.empty()) {
-    opts.face = face;
+    ge::mountain::mapgen::lay_real_face(opts, face);  // an unknown id fails in generate_level
     opts.version.reset();  // a face is laid only by a generator that builds a ski area
   }
   if (lab.arg_bool("reservoir")) opts.version.reset();  // the free ride's map, ski area and all
