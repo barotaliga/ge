@@ -279,14 +279,14 @@ constexpr Entry kQ2[] = {
     key("keys", "speed", "run", "+speed"),
     key("keys", "left", "step left", "+moveleft"),
     key("keys", "right", "step right", "+moveright"),
-    key("keys", "up", "up / jump", "+moveup"),
+    key("keys", "up", "up / jump", "+jump"),  // its jump and swim up: our +jump
     key("keys", "down", "down / crouch", "+movedown"),
     key("keys", "inven", "inventory", "inven"),
     key("keys", "invuse", "use item", "invuse"),
     key("keys", "invdrop", "drop item", "invdrop"),
     key("keys", "invprev", "prev item", "invprev"),
     key("keys", "invnext", "next item", "invnext"),
-    key("keys", "help", "help computer", "help"),
+    key("keys", "help", "help computer", "cmd help"),  // as its default.cfg binds F1
     key("keys", "pause", "pause game", "pause"),
     key("keys", "score", "scoreboard", "score"),
     key("keys", "chat", "chat", "messagemode"),
