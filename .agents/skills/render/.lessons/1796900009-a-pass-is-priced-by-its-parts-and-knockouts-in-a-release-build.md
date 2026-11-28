@@ -1,7 +1,7 @@
 ---
 title: What the knockouts found in the brush world's shader and Shooter's Edge's quality stops
 date: 2026-11-02
-scope: plugins/brush/app/bsp.wgsl, plugins/brush/app/bsp_draw.cpp, plugins/brush/app/bsp_views.cpp, engine/render/clouds.wgsl, engine/render/water.cpp, engine/render/sky.cpp, games/shooters_edge/app/ladder.cpp, games/shooters_edge/labs/gpu_se_timedemo_lab.cpp
+scope: plugins/brush/app/bsp.wgsl, plugins/brush/app/bsp_draw.cpp, plugins/brush/app/bsp_views.cpp, engine/render/clouds.wgsl, engine/render/water.cpp, engine/render/sky.cpp, games/shooters_edge/labs/gpu_se_timedemo_lab.cpp
 concepts: [gpu-cost, knockout, price-cvars, quality-ladder, light-loop, scissor, full-screen-pass, planar-mirror, pcss, capsules, clouds, shafts, register-pressure, metal]
 ---
 

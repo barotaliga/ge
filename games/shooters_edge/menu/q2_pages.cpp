@@ -338,6 +338,15 @@ constexpr Entry kQ2[] = {
     spin("video", "intensity", "texture intensity", kIntensity),
     slide("video", "gl_coloredlightmaps", "lightmap saturation", 0, 1, 0.1),
     slide("video", "gl_brightness", "lightmap brightness", 0, 0.3, 0.03),
+    {.page = "video",
+     .id = "r_quality",
+     .text = "quality",
+     .kind = ItemKind::choice,
+     .hint = "The whole picture at once, from the classic look (0) to every enhancement (10); "
+             "lower draws faster. CUSTOM: your own mix of the settings.",
+     .needs = "r_quality",
+     .target = Target::client,
+     .choices = kQualityChoices},
     opens("video", "weapon", "HELD WEAPON", "weapon", "r_drawviewmodel"),
     back("video"),
 

@@ -49,7 +49,6 @@
 #include "render/taa.hpp"
 #include "render/ui_pass.hpp"
 #include "render/viewmodel.hpp"
-#include "shooters_edge/app/ladder.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
 #include "shooters_edge/client/picture_files.hpp"
@@ -68,8 +67,8 @@ namespace gr = ge::render;
 struct WorldDraw {
   const look::Picture* picture = nullptr;
   bool has_map = false;
-  // This frame's stops of the quality ladder's rows (look.hpp's Stops: r_quality's pick, else the
-  // switches and levels as set) and the switches as drawn at them, which the extras read.
+  // This frame's stops of the dear rows (look.hpp's Stops: each switch and its level as set) and
+  // the switches as drawn, which the extras read.
   look::Stops stops;
   ge::classicenhance::Switches on;
   ba::Scene scene;
@@ -151,7 +150,6 @@ struct WorldDraw {
   wgpu::TextureFormat format = wgpu::TextureFormat::Undefined;
   std::span<const ge::viewmodel::HeldModel> weapons;
   std::string build_error;
-  look::KeptStops kept_stops;  // r_quality's pick, kept between frames
 };
 
 void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
@@ -839,15 +837,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   GE_ZONE("world");
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
-  {
-    std::string refused;
-    f.stops = look::picture_stops(*f.picture, f.out_w, f.out_h, f.kept_stops, refused);
-    f.on = look::drawn_switches(f.picture->ce, f.stops);
-    if (!refused.empty())
-      ge::core::output::warn("shooters_edge: the picture's quality word was refused: " + refused +
-                             "; next: set r_quality to custom, low, medium, high, top, auto or "
-                             "0..1 (see docs/shooters-edge.md)");
-  }
+  f.stops = look::custom_stops(*f.picture);
+  f.on = f.picture->ce;
   if (f.picture->gamma != f.gamma) {  // the brightness changed (the menu's slider, `gamma`)
     f.gamma = f.picture->gamma;
     gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
