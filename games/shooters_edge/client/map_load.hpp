@@ -135,12 +135,12 @@ LoadStep step_load(MapLoad& load, ge::gpu::Device& device, uint32_t width, uint3
                    std::span<const ge::viewmodel::HeldModel> weapons, bool wait);
 
 // THE WINDOW'S TURN: one frame's step taken (every step with `measured`): a map read started on
-// `listen` (`game_folder.hpp`'s `start_map`; the arena when a game's first map does not read)
-// and its world asked for; a rebuild that failed said on `con`, the old world kept; a world made
-// warmed up from `at.view` a frame at a time (a measured run: not at all) and then handed over to
-// `world` (`current`: it is the server's map's; `fresh`: a new map's, so what was
-// seen of the last is let go). 0, or the window's exit code (1 the world, 2 the server) with the
-// error line said.
+// `listen` (`game_folder.hpp`'s `start_map`; a game's first map that does not read loads nothing,
+// and the window goes back to its title) and its world asked for; a rebuild that failed said on
+// `con`, the old world kept; a world made warmed up from `at.view` a frame at a time (a measured
+// run: not at all) and then handed over to `world` (`current`: it is the server's map's; `fresh`: a
+// new map's, so what was seen of the last is let go). 0, or the window's exit code (1 the world, 2
+// the server) with the error line said.
 struct LoadWindow {
   ge::gpu::Device* device = nullptr;
   uint32_t width = 0, height = 0;

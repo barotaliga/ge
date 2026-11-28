@@ -26,11 +26,11 @@ TEST(every_game_row_has_its_content_row) {
     CHECK(ge::classicenhance::find_profile(g.id) != nullptr);
     CHECK(&pf::content_of(g) == ge::classicenhance::find_profile(g.id));
     CHECK(!g.multiplayer_programs.empty() && !g.single_player_programs.empty());
-    CHECK(!g.fallback_map.empty());
   }
   CHECK(pf::find_game(pf::q1_game().id) == &pf::q1_game());
   CHECK(pf::find_game("no-such-game") == nullptr);
   CHECK(pf::q1_game().multiplayer_programs[0].name == "qwprogs.dat");
+  CHECK(pf::q1_game().fallback_map.empty());  // no start map: the title, never the arena
   CHECK(pf::q1_game().demo_extensions[0] == ".dem");
   CHECK(std::string(shooters_edge::server::dedicated_game().base_dir) ==
         std::string(ge::classicenhance::q1_profile().base_dir));

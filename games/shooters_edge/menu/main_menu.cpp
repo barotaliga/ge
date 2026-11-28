@@ -75,12 +75,14 @@ constexpr Entry kEntries[] = {
      .id = "single",
      .text = "SINGLE PLAYER",
      .hint = "Play a map on your own.",
-     .opens = "single"},
+     .opens = "single",
+     .needs_game = true},
     {.page = "main",
      .id = "multi",
      .text = "MULTIPLAYER",
      .hint = "Start a match with its rules, or join one.",
-     .opens = "multi"},
+     .opens = "multi",
+     .needs_game = true},
     {.page = "main",
      .id = "demos",
      .text = "DEMOS",
@@ -1207,7 +1209,8 @@ bool same_value(std::string_view a, std::string_view b) {
 std::string_view cvar_of(const Entry& e) { return e.bit >= 0 ? e.needs : e.id; }
 
 bool shown(const Entry& e, const Host& host) {
-  return e.built && (e.needs.empty() || host_knows(host, e.needs));
+  return e.built && (!e.needs_game || host.game_open) &&
+         (e.needs.empty() || host_knows(host, e.needs));
 }
 
 // The value a setting writes from its item now.
