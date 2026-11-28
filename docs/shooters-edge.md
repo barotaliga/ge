@@ -135,7 +135,7 @@ for the full game's maps), and `fs_basegame q1` plays it (§ The game and its in
 Run a game):
 
 ```sh
-make run:shooters_edge                                         # the built-in arena, no packs
+make run:shooters_edge                                         # the menu over the moon, no game yet
 make run:shooters_edge ARGS="+set fs_basegame q1 +set fs_basedir_q1 ~/Games/classic +map dm6"
 ```
 
@@ -143,7 +143,7 @@ make run:shooters_edge ARGS="+set fs_basegame q1 +set fs_basedir_q1 ~/Games/clas
 ENHANCED ▸ LOAD GAME and pick the folder your game is installed in (the one holding
 `id1/pak0.pak`; picking `id1` itself works too). Only an install of Quake is taken: a
 folder without `id1` and its first pack is refused, and LOAD GAME's line says what it lacks. The
-game is opened in place of the arena at once (its start map), its packs are enhanced in the
+game is opened at once (its start map), its packs are enhanced in the
 background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
 with the menu closed), and when the run ends having written anything the world is made again
 from the cache, behind the one drawn. Loading it sets `fs_basegame` and the game's
@@ -281,9 +281,12 @@ build/release/se +set fs_basegame q1 +set fs_basedir_q1 ~/games/classic +map dm6
   (by default the tree's `games/shooters_edge/content/models/view`). Each folder's packs are read in number order (`pak0.pak`, `pak1.pak`,
   ...; any case), then its other packs (a mod's `misc.pak`), zips (`*.pk3`) and unpacked zips (`*.pk3dir`), and a loose file in the
   folder (`maps/mymap.bsp`) overrides them all (`client/files.hpp`, over `engine/vfs/search.hpp`).
-- **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
-  built-in test arena (no packs needed, only the sky drawn). With no `+map`, the map `start`
-  when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`
+- **`+<command>`**: console lines run at start. `+map dm6` loads that map. With no `+map`, the
+  map `start` when the packs have it. With no game's packs open, nothing loads: the window shows
+  the title and the menu over the moon, SINGLE PLAYER and MULTIPLAYER dimmed until SELECT GAME
+  opens a game, and no menu lists the built-in arena; a map that does not load with nothing
+  playing goes back to that title. Only `+map arena` starts the arena, the tests' and labs'
+  fixture (no packs needed, only the sky drawn). `--size=WxH` sets the window's size, `--frames=N`
   quits after N frames.
 - **The keys**: W A S D move, SPACE jumps, the left button fires, 1 to 8 pick a weapon (7 the
   rocket launcher), the wheel the next one. The mouse looks (raw counts, captured) from the

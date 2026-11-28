@@ -85,6 +85,9 @@ struct Entry {                 // NOLINT(clang-analyzer-optin.performance.Paddin
   std::string_view modes_from = {};
   // A text setting (`needs`): its value shown beside its words, typed in the console.
   bool field = false;
+  // Dimmed while no classic game is open (`Host::game_open`): Shooter's Edge has no game of its
+  // own, so there is nothing to play until SELECT GAME opens one.
+  bool needs_game = false;
 };
 
 // A page of a menu: its id and its title ("" for the root, which shows the game's own picture).
@@ -139,6 +142,7 @@ struct Host {
   std::vector<std::string> saves = {};
   const MenuTable* table = nullptr;  // the game's menu (null: classic_menu())
   bool in_level = false;             // a level is being played (ESCAPE opens `in_level`)
+  bool game_open = true;             // a classic game's folder is open (false: `needs_game` dims)
   // In a level, a screen of the rules is up (Quake II's help computer, scoreboard or inventory):
   // ESCAPE sends `putaway` to take it down and opens no menu; held on (`escape_held`, ESCAPE down
   // this frame) to its first repeat, it opens the in-game page after all.

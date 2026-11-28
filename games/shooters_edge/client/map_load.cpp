@@ -197,9 +197,7 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
       return 1;
     } else if (step.failed == LoadFailed::map) {
       con.print("map: " + step.error);
-      listen.pending_map.clear();
-      if (!listen.map)  // a game just loaded and its first map did not: the arena
-        step.map = load_named_map(*at.files, "arena", error);
+      listen.pending_map.clear();  // nothing playing: the window goes back to its title
     }
     if (step.map) {
       for (size_t at_line = 0; at_line < step.said.size();) {  // a line each

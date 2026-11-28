@@ -21,7 +21,8 @@
 //   its packs keep them in (`demo_folder`: Quake II's `demos/`), where a bare name is looked for
 //   too.
 // - **The fallback map**: where the window starts when the content holds no start map (the
-//   content row's `start_map`): the built-in arena.
+//   content row's `start_map`); empty: nowhere, the title and its menu (Quake's: Shooter's Edge
+//   has no game of its own, so the built-in arena is never a player's fallback).
 // - **The full game** is the content row's `full_game` file being in the packs.
 // - **The weapon groups**: what each number key picks with cl_weapongroups 1
 //   (client/weapon_groups.hpp), one list of the game's weapon keys a group, best first.
@@ -86,7 +87,7 @@ struct GameProfile {
   std::string_view id;  // the content row's id (classicenhance/profile.hpp)
   std::span<const ProgramFile> multiplayer_programs;    // looked for in order
   std::span<const ProgramFile> single_player_programs;  // looked for in order
-  std::string_view fallback_map;                        // with no start map in the content
+  std::string_view fallback_map;                        // with no start map; "" none
   std::span<const std::string_view> demo_extensions;    // tried in order on a bare demo name
   // The folder its packs keep their recordings in ("demos/"), where a bare name is also looked
   // for; "": the files' top level only.
@@ -169,7 +170,7 @@ inline constexpr GameProfile kGameProfiles[] = {
     {.id = "q1",
      .multiplayer_programs = kQ1Multiplayer,
      .single_player_programs = kQ1SinglePlayer,
-     .fallback_map = "arena",
+     .fallback_map = "",
      .demo_extensions = kQ1Demos,
      .demo_folder = "",
      .tables = kQ1Tables,
