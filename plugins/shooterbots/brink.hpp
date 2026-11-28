@@ -21,6 +21,8 @@
 // ge:test tests/shooterbots_brink_test.cpp
 #pragma once
 
+#include <span>
+
 #include "shooter/pmove.hpp"
 #include "shooter/server.hpp"
 #include "shooterbots/nav.hpp"
@@ -56,6 +58,6 @@ struct BrinkGuard {
 // every way into a pit, a run into one is braked, and the jump is let go of. With `fall` the run
 // is flown (`fall_into_harm`), from as far out as the flight could carry it.
 BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin, Vec3f velocity,
-                       MoveCmd& cmd, bool fall = false);
+                       MoveCmd& cmd, bool fall = false, std::span<const NavMover> movers = {});
 
 }  // namespace ge::shooterbots

@@ -150,6 +150,9 @@ struct ButtonSpot {
   // (`complete`) A breakable lid over a way (`way_shot_currents`): the links that climb through it
   // are shut to him till it is shot.
   bool lid = false;
+  // How it looks at rest (its world row's frame and effects, first seen; -1 not yet): one that
+  // does not move when pressed shows it by its texture only (`button_looks_pressed`).
+  int rest_frame = -1, rest_effects = -1;
 };
 
 // A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button

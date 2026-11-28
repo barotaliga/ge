@@ -20,6 +20,7 @@
 #include "core/math.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooterbots/dodge.hpp"
 #include "shooterbots/way_parts.hpp"
 #include "shooterbots/way_through.hpp"
 
@@ -212,21 +213,29 @@ int body_against(const ge::shooterbots::BotView& s, int me) {
 
 }  // namespace
 
-void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd) {
+void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd,
+             bool held) {
   const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
-  if (e.health <= 0 || dist(e.origin, w.still_at) > kWayStuck) {
+  if (held || e.health <= 0 || dist(e.origin, w.still_at) > kWayStuck) {
     w.still_at = e.origin;
     w.still_since = t;
     return;
   }
   if (t - w.still_since < kWayStuck_s || (cmd.forward == 0 && cmd.side == 0)) return;
-  w.shoves++;
   const int phase = static_cast<int>(t - w.still_since);  // a side a second
-  cmd.side = static_cast<int16_t>((phase & 1) ? 400 : -400);
+  // Never shoved over a drop or into a liquid: on boss1's walkway between two lava trenches the
+  // shove and its jump threw him in, where there is no way out. The other side, else none.
+  int side = (phase & 1) ? 1 : -1;
+  if (!ge::shooterbots::dodge_clear(s.sv, e.origin, cmd.angles.y, side, me))
+    side = ge::shooterbots::dodge_clear(s.sv, e.origin, cmd.angles.y, -side, me) ? -side : 0;
+  if (side != 0) {
+    w.shoves++;
+    cmd.side = static_cast<int16_t>(side * 400);
+  }
   // Held up by a body (a monster, a barrel), he steps round it but never jumps onto it: a jump
   // there left him standing on a pack of soldiers' heads in base1, as no person would.
   const int body = body_against(s, me);
-  if (body < 0 && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
+  if (side != 0 && body < 0 && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
     cmd.buttons |= sh::kButtonJump;
   // Held up by a monster that is no fight of his (a zombie walking its beat in e1m3's corridor,
   // never his target): shot down out of the way, as a person would, while he steps round it.
