@@ -8,7 +8,7 @@
 // ge:keywords player-setup figures models skins players tris-md2 icon skin-setting split_look
 // ge:keywords player_figures
 // ge:skill ui shooter
-// ge:test tests/shooters_edge_menu_test.cpp
+// ge:test tests/shooters_edge_menu_figures_test.cpp
 #pragma once
 
 #include <string>
