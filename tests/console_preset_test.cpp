@@ -1,7 +1,7 @@
 // Presets: the grid's words, a level applied as plain sets, the level computed back (custom when
 // none matches), the nearest level, the command's answers, locks, and the table's check.
 //
-// ge:summary Tests presets: a level written as cvars, the level computed back, the command, the check
+// ge:summary Tests presets: a level written as cvars, the level computed back, the command
 // ge:keywords test preset apply_preset preset_level nearest_level add_preset_command check_preset
 // ge:skill console testing
 #include "check.hpp"
